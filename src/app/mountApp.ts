@@ -4067,6 +4067,7 @@ export function mountApp(root: HTMLElement) {
   let sidebarCtxPrevLeft = 0;
   let sidebarCtxPrevAt = 0;
   let sidebarCtxHasPrev = false;
+  const SIDEBAR_CTX_SCROLL_MAX_AGE_MS = 8000;
 
   function rememberSidebarCtxScroll() {
     sidebarCtxPrevTop = layout.sidebar.scrollTop;
@@ -4087,14 +4088,18 @@ export function mountApp(root: HTMLElement) {
     if (layout.sidebar.scrollLeft !== left) layout.sidebar.scrollLeft = left;
   }
 
-  function consumeSidebarCtxScroll() {
+  function readSidebarCtxScrollSnapshot() {
     const now = Date.now();
-    const ok = sidebarCtxHasPrev && now - sidebarCtxPrevAt < 1200;
-    sidebarCtxHasPrev = false;
+    const ok = sidebarCtxHasPrev && now - sidebarCtxPrevAt < SIDEBAR_CTX_SCROLL_MAX_AGE_MS;
     return {
       top: ok ? sidebarCtxPrevTop : layout.sidebar.scrollTop,
       left: ok ? sidebarCtxPrevLeft : layout.sidebar.scrollLeft,
     };
+  }
+
+  function restoreSidebarCtxScroll(top: number, left: number) {
+    if (layout.sidebar.scrollTop !== top) layout.sidebar.scrollTop = top;
+    if (layout.sidebar.scrollLeft !== left) layout.sidebar.scrollLeft = left;
   }
 
   layout.sidebar.addEventListener(
@@ -4108,9 +4113,11 @@ export function mountApp(root: HTMLElement) {
       if (!btn) return;
       rememberSidebarCtxScroll();
       stabilizeSidebarFocusOnContextClick(btn);
+      const { top, left } = readSidebarCtxScrollSnapshot();
+      restoreSidebarCtxScroll(top, left);
       ev.preventDefault();
       ev.stopPropagation();
-      armSidebarClickSuppression(220);
+      armSidebarClickSuppression(650);
     },
     true
   );
@@ -4125,21 +4132,53 @@ export function mountApp(root: HTMLElement) {
       if (!btn) return;
       rememberSidebarCtxScroll();
       stabilizeSidebarFocusOnContextClick(btn);
+      const { top, left } = readSidebarCtxScrollSnapshot();
+      restoreSidebarCtxScroll(top, left);
       ev.preventDefault();
       ev.stopPropagation();
-      armSidebarClickSuppression(220);
+      armSidebarClickSuppression(650);
+    },
+    true
+  );
+
+  // Even show/restore scroll *before* our contextmenu handler, if the browser scrolls on mouseup.
+  layout.sidebar.addEventListener(
+    "pointerup",
+    (e) => {
+      const ev = e as PointerEvent;
+      if (ev.pointerType !== "mouse") return;
+      const isContextClick = ev.button === 2 || (ev.button === 0 && ev.ctrlKey);
+      if (!isContextClick) return;
+      const btn = (ev.target as HTMLElement | null)?.closest("button[data-ctx-kind][data-ctx-id]") as HTMLButtonElement | null;
+      if (!btn) return;
+      const { top, left } = readSidebarCtxScrollSnapshot();
+      restoreSidebarCtxScroll(top, left);
+    },
+    true
+  );
+
+  layout.sidebar.addEventListener(
+    "mouseup",
+    (e) => {
+      const ev = e as MouseEvent;
+      const isContextClick = ev.button === 2 || (ev.button === 0 && ev.ctrlKey);
+      if (!isContextClick) return;
+      const btn = (ev.target as HTMLElement | null)?.closest("button[data-ctx-kind][data-ctx-id]") as HTMLButtonElement | null;
+      if (!btn) return;
+      const { top, left } = readSidebarCtxScrollSnapshot();
+      restoreSidebarCtxScroll(top, left);
     },
     true
   );
 
   layout.sidebar.addEventListener("contextmenu", (e) => {
-    const { top: prevTop, left: prevLeft } = consumeSidebarCtxScroll();
+    const { top: prevTop, left: prevLeft } = readSidebarCtxScrollSnapshot();
     const btn = (e.target as HTMLElement | null)?.closest("button[data-ctx-kind][data-ctx-id]") as HTMLButtonElement | null;
     if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
     // In some browsers Ctrl+Click may still generate a click; suppress it so the list doesn't jump/activate.
-    armSidebarClickSuppression(220);
+    armSidebarClickSuppression(650);
 
     const st = store.get();
     if (st.modal) return;
@@ -4150,14 +4189,14 @@ export function mountApp(root: HTMLElement) {
     openContextMenu({ kind, id }, e.clientX, e.clientY);
     // Подстраховка от "скачков" скролла на некоторых браузерах при открытии контекстного меню.
     const restore = () => {
-      if (layout.sidebar.scrollTop !== prevTop) layout.sidebar.scrollTop = prevTop;
-      if (layout.sidebar.scrollLeft !== prevLeft) layout.sidebar.scrollLeft = prevLeft;
+      restoreSidebarCtxScroll(prevTop, prevLeft);
     };
     restore();
     window.requestAnimationFrame(restore);
     window.setTimeout(restore, 0);
     window.setTimeout(restore, 140);
     window.setTimeout(restore, 420);
+    window.setTimeout(restore, 900);
 
     const onFocus = (ev: FocusEvent) => {
       const t = ev.target as HTMLElement | null;

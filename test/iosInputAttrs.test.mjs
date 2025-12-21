@@ -168,18 +168,3 @@ test("el(): выставляет iOS‑friendly дефолты для textarea �
     await helper.cleanup();
   }
 });
-
-test("ui/dom el(): не расходится с helpers/dom/el", async () => {
-  const ui = await loadEl("src/ui/dom.ts");
-  try {
-    withDomStubs(() => {
-      const ta = ui.el("textarea", {});
-      assert.equal(ta.getAttribute("enterkeyhint"), "done");
-      const inp = ui.el("input", { type: "email" });
-      assert.equal(inp.getAttribute("inputmode"), "email");
-    });
-  } finally {
-    await ui.cleanup();
-  }
-});
-

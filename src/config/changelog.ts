@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.59",
+    date: "2025-12-21",
+    fixed: ["ПКМ по контакту/чату в сайдбаре больше не «роняет» скролл списка (стабилизация до/после contextmenu)"],
+  },
+  {
+    version: "0.1.58",
+    date: "2025-12-21",
+    improved: ["Убран неиспользуемый legacy web-код (старые файлы app/state/main/style) — меньше путаницы и «мертвых меню»"],
+  },
+  {
     version: "0.1.57",
     date: "2025-12-21",
     improved: [
