@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.60",
+    date: "2025-12-21",
+    improved: ["Авторизация: добавлены кнопки «показать/скрыть пароль» в окне входа/регистрации"],
+  },
+  {
     version: "0.1.59",
     date: "2025-12-21",
     fixed: ["ПКМ по контакту/чату в сайдбаре больше не «роняет» скролл списка (стабилизация до/после contextmenu)"],

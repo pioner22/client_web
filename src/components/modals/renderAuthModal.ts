@@ -18,6 +18,45 @@ export function renderAuthModal(
   currentSkin: string,
   actions: AuthModalActions
 ): HTMLElement {
+  function wrapWithPasswordToggle(input: HTMLInputElement): HTMLElement {
+    const toggle = el(
+      "button",
+      {
+        class: "btn field-action field-action-eye",
+        type: "button",
+        "aria-label": "Показать пароль",
+        "aria-pressed": "false",
+        title: "Показать пароль",
+      },
+      [""]
+    ) as HTMLButtonElement;
+
+    const apply = (visible: boolean) => {
+      try {
+        input.type = visible ? "text" : "password";
+      } catch {
+        // ignore
+      }
+      toggle.classList.toggle("on", visible);
+      toggle.setAttribute("aria-pressed", visible ? "true" : "false");
+      toggle.setAttribute("aria-label", visible ? "Скрыть пароль" : "Показать пароль");
+      toggle.title = visible ? "Скрыть пароль" : "Показать пароль";
+    };
+
+    toggle.addEventListener("click", () => {
+      const visible = String(input.type || "").toLowerCase() === "password";
+      apply(visible);
+      try {
+        input.focus({ preventScroll: true });
+      } catch {
+        input.focus();
+      }
+    });
+
+    const wrap = el("div", { class: "field-with-action" }, [input, toggle]);
+    return wrap;
+  }
+
   const box = el("div", { class: "modal modal-auth" });
   const tabRegister = el("button", { class: "btn auth-tab", type: "button" }, ["Регистрация"]);
   const tabLogin = el("button", { class: "btn auth-tab", type: "button" }, ["Войти по ID"]);
@@ -61,34 +100,36 @@ export function renderAuthModal(
       el("div", { class: "modal-help" }, ["Если не удаётся войти — выберите «Регистрация» или «Войти по ID»."])
     );
   } else if (mode === "register") {
+    const pw1Input = el("input", {
+      class: "modal-input",
+      id: "auth-pw1",
+      name: "new-password",
+      type: "password",
+      placeholder: "••••••",
+      autocomplete: "new-password",
+      autocorrect: "off",
+      autocapitalize: "off",
+      spellcheck: "false",
+      enterkeyhint: "next",
+    }) as HTMLInputElement;
+    const pw2Input = el("input", {
+      class: "modal-input",
+      id: "auth-pw2",
+      name: "new-password-confirm",
+      type: "password",
+      placeholder: "••••••",
+      autocomplete: "new-password",
+      autocorrect: "off",
+      autocapitalize: "off",
+      spellcheck: "false",
+      enterkeyhint: "done",
+    }) as HTMLInputElement;
     body.append(
       el("div", { class: "modal-title" }, ["Регистрация"]),
       el("label", { class: "modal-label", for: "auth-pw1" }, ["Пароль:"]),
-      el("input", {
-        class: "modal-input",
-        id: "auth-pw1",
-        name: "new-password",
-        type: "password",
-        placeholder: "••••••",
-        autocomplete: "new-password",
-        autocorrect: "off",
-        autocapitalize: "off",
-        spellcheck: "false",
-        enterkeyhint: "next",
-      }),
+      wrapWithPasswordToggle(pw1Input),
       el("label", { class: "modal-label", for: "auth-pw2" }, ["Подтверждение пароля:"]),
-      el("input", {
-        class: "modal-input",
-        id: "auth-pw2",
-        name: "new-password-confirm",
-        type: "password",
-        placeholder: "••••••",
-        autocomplete: "new-password",
-        autocorrect: "off",
-        autocapitalize: "off",
-        spellcheck: "false",
-        enterkeyhint: "done",
-      }),
+      wrapWithPasswordToggle(pw2Input),
       el("div", { class: "modal-help" }, ["После регистрации вы получите новый ID. Сохраните его."])
     );
   } else {
@@ -108,23 +149,25 @@ export function renderAuthModal(
     idInput.addEventListener("input", () => {
       applyLegacyIdMask(idInput);
     });
+    const pwInput = el("input", {
+      class: "modal-input",
+      id: "auth-pw",
+      name: "password",
+      type: "password",
+      placeholder: "••••••",
+      autocomplete: "current-password",
+      autocorrect: "off",
+      autocapitalize: "off",
+      spellcheck: "false",
+      enterkeyhint: "done",
+    }) as HTMLInputElement;
+
     body.append(
       el("div", { class: "modal-title" }, ["Войти по ID"]),
       el("label", { class: "modal-label", for: "auth-id" }, ["ID:"]),
       idInput,
       el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль:"]),
-      el("input", {
-        class: "modal-input",
-        id: "auth-pw",
-        name: "password",
-        type: "password",
-        placeholder: "••••••",
-        autocomplete: "current-password",
-        autocorrect: "off",
-        autocapitalize: "off",
-        spellcheck: "false",
-        enterkeyhint: "done",
-      })
+      wrapWithPasswordToggle(pwInput)
     );
   }
 
