@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.64",
+    date: "2025-12-21",
+    improved: ["Mobile: общий UI‑шрифт стал более «телеграмовским» (system sans), список чатов получил разделители с отступом от аватара"],
+  },
+  {
     version: "0.1.63",
     date: "2025-12-21",
     improved: [

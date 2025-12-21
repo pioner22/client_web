@@ -172,6 +172,17 @@
 
 @media (max-width: 820px) and (pointer: coarse) {
   :root {
+    --font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      Segoe UI,
+      Roboto,
+      Arial,
+      sans-serif;
+    --font-size: 15px;
+    --font-weight: 450;
+
     --header-pad-y: var(--sp-2);
     --header-pad-x: var(--sp-3);
     --header-gap-y: var(--sp-1);
@@ -214,14 +225,7 @@
     --composer-field-radius: 22px;
     --composer-field-border-width: 0px;
     --composer-field-bg: color-mix(in srgb, var(--panel2), transparent 4%);
-    --composer-input-font-family:
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      Segoe UI,
-      Roboto,
-      Arial,
-      sans-serif;
+    --composer-input-font-family: var(--font-family);
   }
 
   /* Telegram-like header: title on top, status under it. */
@@ -324,12 +328,33 @@
     border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 60%);
   }
 
+  .sidebar .row[data-ctx-kind] {
+    border-bottom: 0;
+    position: relative;
+    min-height: 56px;
+  }
+
+  .sidebar .row[data-ctx-kind]::after {
+    content: "";
+    position: absolute;
+    left: calc(var(--row-pad-x) + var(--avatar-size) + var(--row-gap));
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: color-mix(in srgb, var(--line), transparent 70%);
+    pointer-events: none;
+  }
+
   .sidebar .row:hover {
     background: color-mix(in srgb, var(--panel), transparent 25%);
   }
 
   .sidebar .row-sel {
     background: color-mix(in srgb, var(--focus), var(--panel) 92%);
+  }
+
+  .sidebar .row-sel[data-ctx-kind]::after {
+    background: transparent;
   }
 
   .sidebar .row-tail {
