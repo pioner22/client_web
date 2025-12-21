@@ -328,6 +328,8 @@ export function mountApp(root: HTMLElement) {
   let localChatMsgSeq = 0;
   const mobileSidebarMq = window.matchMedia("(max-width: 820px)");
   const coarsePointerMq = window.matchMedia("(pointer: coarse)");
+  const anyFinePointerMq = window.matchMedia("(any-pointer: fine)");
+  const hoverMq = window.matchMedia("(hover: hover)");
   let mobileSidebarOpen = false;
   let mobileSidebarAutoOpened = false;
   let searchDebounceTimer: number | null = null;
@@ -1316,7 +1318,14 @@ export function mountApp(root: HTMLElement) {
     closeMobileSidebar();
     const prev = store.get();
     if (prev.page === "main" && prev.selected && prev.selected.kind === t.kind && prev.selected.id === t.id) {
-      if (shouldAutofocusComposer({ coarsePointer: coarsePointerMq.matches, composerHadFocus })) {
+      if (
+        shouldAutofocusComposer({
+          coarsePointer: coarsePointerMq.matches,
+          composerHadFocus,
+          anyFinePointer: anyFinePointerMq.matches,
+          hover: hoverMq.matches,
+        })
+      ) {
         scheduleFocusComposer();
       }
       return;
@@ -1353,7 +1362,14 @@ export function mountApp(root: HTMLElement) {
     // UX:
     // - Desktop (pointer: fine): после выбора контакта/чата сразу фокусируем ввод, чтобы можно было печатать без лишнего клика.
     // - Touch (pointer: coarse): не форсим фокус (иначе всплывает клавиатура/масштаб «прыгает»), но сохраняем его если пользователь уже печатал.
-    if (shouldAutofocusComposer({ coarsePointer: coarsePointerMq.matches, composerHadFocus })) {
+    if (
+      shouldAutofocusComposer({
+        coarsePointer: coarsePointerMq.matches,
+        composerHadFocus,
+        anyFinePointer: anyFinePointerMq.matches,
+        hover: hoverMq.matches,
+      })
+    ) {
       scheduleFocusComposer();
     }
   }

@@ -214,6 +214,14 @@
     --composer-field-radius: 22px;
     --composer-field-border-width: 0px;
     --composer-field-bg: color-mix(in srgb, var(--panel2), transparent 4%);
+    --composer-input-font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      Segoe UI,
+      Roboto,
+      Arial,
+      sans-serif;
   }
 
   /* Telegram-like header: title on top, status under it. */

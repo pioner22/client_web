@@ -217,7 +217,15 @@
 }
 
 .btn.composer-send:disabled {
-  opacity: 0.75;
+  opacity: 1;
+  background: transparent;
+  border-color: color-mix(in srgb, var(--btn-border-color), transparent 35%);
+  color: var(--btn-text);
+}
+
+.btn.composer-send:disabled::before,
+.btn.composer-send:disabled::after {
+  opacity: 0.35;
 }
 
 .footer {

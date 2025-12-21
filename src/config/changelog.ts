@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.63",
+    date: "2025-12-21",
+    improved: [
+      "Composer: кнопка отправки теперь выглядит «неактивной», когда отправлять нельзя (не вводит в заблуждение)",
+      "Mobile: поле ввода сообщений использует системный sans‑шрифт (ближе к Telegram по ощущению)",
+      "Автофокус composer: на iPad/гибридных устройствах с мышью/трекпадом фокус ставится сразу после выбора чата",
+    ],
+  },
+  {
     version: "0.1.62",
     date: "2025-12-21",
     improved: ["Labs: ios-input-assistant.html теперь содержит атрибуты поля ввода прямо в HTML (проверка работает даже при строгом CSP)"],

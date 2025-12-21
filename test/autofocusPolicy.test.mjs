@@ -35,15 +35,16 @@ async function loadAutofocusPolicy() {
   }
 }
 
-test("autofocusPolicy: shouldAutofocusComposer учитывает pointer coarse и предыдущий фокус", async () => {
+test("autofocusPolicy: shouldAutofocusComposer учитывает pointer coarse, hover/any-pointer и предыдущий фокус", async () => {
   const { shouldAutofocusComposer, cleanup } = await loadAutofocusPolicy();
   try {
     assert.equal(shouldAutofocusComposer({ coarsePointer: false, composerHadFocus: false }), true);
     assert.equal(shouldAutofocusComposer({ coarsePointer: false, composerHadFocus: true }), true);
     assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: false }), false);
     assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: true }), true);
+    assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: false, anyFinePointer: true }), true);
+    assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: false, hover: true }), true);
   } finally {
     await cleanup();
   }
 });
-
