@@ -65,6 +65,35 @@ test("handleServerMessage: message_delivered обновляет queued-сооб�
   }
 });
 
+test("handleServerMessage: message_delivered присваивает msg_id по FIFO (если несколько исходящих без id)", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      conversations: {
+        [key]: [
+          { kind: "out", from: selfId, to: peer, text: "first", ts: 1, id: null, status: "sending" },
+          { kind: "out", from: selfId, to: peer, text: "second", ts: 2, id: null, status: "sending" },
+        ],
+      },
+    });
+
+    handleServerMessage({ type: "message_delivered", to: peer, id: 101 }, getState(), { send() {} }, patch);
+    handleServerMessage({ type: "message_delivered", to: peer, id: 102 }, getState(), { send() {} }, patch);
+
+    const conv = getState().conversations[key];
+    assert.equal(conv[0].id, 101);
+    assert.equal(conv[1].id, 102);
+    assert.equal(conv[0].status, "delivered");
+    assert.equal(conv[1].status, "delivered");
+  } finally {
+    await cleanup();
+  }
+});
+
 test("handleServerMessage: history_result проставляет delivered/queued/read статусы для исходящих DM", async () => {
   const { handleServerMessage, cleanup } = await loadHandleServerMessage();
   try {
@@ -105,4 +134,3 @@ test("handleServerMessage: history_result проставляет delivered/queue
     await cleanup();
   }
 });
-

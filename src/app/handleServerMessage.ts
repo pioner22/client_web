@@ -39,7 +39,9 @@ function oldestLoadedId(msgs: ChatMessage[]): number | null {
 function updateLastOutgoing(state: AppState, key: string, update: (msg: ChatMessage) => ChatMessage): AppState {
   const conv = state.conversations[key];
   if (!conv || conv.length === 0) return state;
-  for (let i = conv.length - 1; i >= 0; i -= 1) {
+  // ACK от сервера приходит в порядке отправки, поэтому обновляем "самое старое" исходящее без id,
+  // иначе при быстрой отправке нескольких сообщений можно перепутать msg_id.
+  for (let i = 0; i < conv.length; i += 1) {
     const msg = conv[i];
     if (msg.kind !== "out") continue;
     if (msg.id !== undefined && msg.id !== null) continue;
