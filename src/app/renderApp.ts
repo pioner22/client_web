@@ -9,6 +9,7 @@ import { renderModal } from "../components/modals/renderModal";
 import { renderToast } from "../components/toast/renderToast";
 import { el } from "../helpers/dom/el";
 import { conversationKey } from "../helpers/chat/conversationKey";
+import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
 import { createSearchPage, type SearchPage } from "../pages/search/createSearchPage";
 import { createProfilePage, type ProfilePage } from "../pages/profile/createProfilePage";
 import { createFilesPage, type FilesPage } from "../pages/files/createFilesPage";
@@ -324,10 +325,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     const pwEl = document.getElementById("auth-pw") as HTMLInputElement | null;
     const pw1El = document.getElementById("auth-pw1") as HTMLInputElement | null;
     const pw2El = document.getElementById("auth-pw2") as HTMLInputElement | null;
-    if (idEl && idEl.value !== prevAuthId) idEl.value = prevAuthId;
-    if (pwEl && pwEl.value !== prevAuthPw) pwEl.value = prevAuthPw;
-    if (pw1El && pw1El.value !== prevAuthPw1) pw1El.value = prevAuthPw1;
-    if (pw2El && pw2El.value !== prevAuthPw2) pw2El.value = prevAuthPw2;
+    preserveAuthModalInputs({
+      hadAuthModal,
+      prev: { id: prevAuthId, pw: prevAuthPw, pw1: prevAuthPw1, pw2: prevAuthPw2 },
+      next: { idEl, pwEl, pw1El, pw2El },
+    });
 
     queueMicrotask(() => {
       const id = document.getElementById("auth-id") as HTMLInputElement | null;
