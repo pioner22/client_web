@@ -38,6 +38,7 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
         class: "chips-entry",
         id: "group-members-entry",
         placeholder: "ID или @handle (можно вставить список)",
+        "data-ios-assistant": "off",
         autocomplete: "off",
         autocorrect: "off",
         autocapitalize: "off",

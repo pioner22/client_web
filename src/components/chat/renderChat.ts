@@ -377,6 +377,7 @@ export function renderChat(target: HTMLElement, state: AppState) {
       id: "chat-search-input",
       type: "search",
       placeholder: "Найти в чате…",
+      "data-ios-assistant": "off",
       autocomplete: "off",
       autocorrect: "off",
       autocapitalize: "off",

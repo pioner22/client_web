@@ -34,8 +34,12 @@ export function applyIosInputAssistantWorkaround(el: HTMLTextAreaElement | HTMLI
   try {
     el.setAttribute("autocorrect", "on");
     el.setAttribute("spellcheck", "true");
+    try {
+      (el as any).spellcheck = true;
+    } catch {
+      // ignore
+    }
   } catch {
     // ignore
   }
 }
-

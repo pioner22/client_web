@@ -279,6 +279,27 @@ export function mountApp(root: HTMLElement) {
   const store = new Store<AppState>(createInitialState());
   const layout = createLayout(root);
   applyIosInputAssistantWorkaround(layout.input);
+  // iOS standalone (PWA): дополнительная попытка уменьшить появление системной панели Undo/Redo/✓
+  // над клавиатурой — применяем workaround при фокусе на текстовые поля.
+  document.addEventListener(
+    "focusin",
+    (e) => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      if (t instanceof HTMLTextAreaElement) {
+        if (t.getAttribute("data-ios-assistant") === "off") return;
+        applyIosInputAssistantWorkaround(t);
+        return;
+      }
+      if (t instanceof HTMLInputElement) {
+        const type = String(t.type || "text").toLowerCase();
+        if (["password", "file", "checkbox", "radio", "button", "submit", "reset", "hidden", "range", "color"].includes(type)) return;
+        if (t.getAttribute("data-ios-assistant") === "off") return;
+        applyIosInputAssistantWorkaround(t);
+      }
+    },
+    true
+  );
   let prevPinnedMessagesRef = store.get().pinnedMessages;
   store.subscribe(() => {
     const st = store.get();

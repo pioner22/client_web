@@ -50,6 +50,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     class: "modal-input",
     type: "text",
     placeholder: "@handle или ID",
+    "data-ios-assistant": "off",
     autocomplete: "off",
     autocorrect: "off",
     autocapitalize: "off",

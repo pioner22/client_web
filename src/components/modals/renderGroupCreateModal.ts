@@ -31,6 +31,7 @@ export function renderGroupCreateModal(message: string | undefined, actions: Gro
       id: "group-members",
       type: "text",
       placeholder: "ID или @handle через пробел/запятую",
+      "data-ios-assistant": "off",
       autocomplete: "off",
       autocorrect: "off",
       autocapitalize: "off",

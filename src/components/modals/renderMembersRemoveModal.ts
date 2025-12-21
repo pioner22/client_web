@@ -28,6 +28,7 @@ export function renderMembersRemoveModal(
       class: "modal-input",
       id: "members-remove-input",
       placeholder: "Например: 123-456-789, @name",
+      "data-ios-assistant": "off",
       autocomplete: "off",
       autocorrect: "off",
       autocapitalize: "off",

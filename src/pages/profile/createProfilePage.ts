@@ -48,6 +48,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     class: "modal-input",
     type: "text",
     placeholder: "@name",
+    "data-ios-assistant": "off",
     autocomplete: "off",
     autocorrect: "off",
     autocapitalize: "off",

@@ -26,6 +26,7 @@ export function renderMembersAddModal(
       class: "chips-entry",
       id: "members-add-entry",
       placeholder: "Например: 123-456-789, @name",
+      "data-ios-assistant": "off",
       autocomplete: "off",
       autocorrect: "off",
       autocapitalize: "off",
