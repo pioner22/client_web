@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0f14" />
+    <title>Yagodka — iOS Input Assistant Repro</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: #0b0f14;
+        color: #e6edf3;
+        font:
+          500 16px/1.35 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+      }
+      h1 {
+        font-size: 16px;
+        margin: 0;
+        letter-spacing: 0.03em;
+      }
+      p {
+        margin: 0;
+        opacity: 0.8;
+        font-size: 14px;
+      }
+      .card {
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        display: grid;
+        gap: 10px;
+      }
+      label {
+        font-size: 13px;
+        opacity: 0.85;
+      }
+      textarea,
+      input,
+      [contenteditable="true"] {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #e6edf3;
+        padding: 12px 12px;
+        font: inherit;
+        font-size: 16px;
+        line-height: 1.35;
+        outline: none;
+      }
+      textarea {
+        min-height: 44px;
+        resize: none;
+      }
+      textarea:focus,
+      input:focus,
+      [contenteditable="true"]:focus {
+        border-color: rgba(236, 72, 153, 0.75);
+        box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.22);
+      }
+      code {
+        font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          "Liberation Mono",
+          "Courier New",
+          monospace;
+        font-size: 12px;
+        opacity: 0.9;
+      }
+      .attrs {
+        display: grid;
+        gap: 2px;
+        opacity: 0.78;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Yagodka — iOS Input Assistant Repro</h1>
+      <p>
+        Откройте страницу в Safari iOS и в PWA (standalone). По очереди сфокусируйтесь на полях ниже и проверьте, появляется ли системная панель
+        <code>Undo/Redo/✓</code> над клавиатурой.
+      </p>
+
+      <section class="card">
+        <label for="ta-off">Textarea (autocorrect=off, spellcheck=false)</label>
+        <textarea
+          id="ta-off"
+          rows="1"
+          placeholder="Сообщение…"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          inputmode="text"
+          enterkeyhint="send"
+        ></textarea>
+        <div class="attrs">
+          <code>autocomplete="off"</code>
+          <code>autocorrect="off"</code>
+          <code>autocapitalize="off"</code>
+          <code>spellcheck="false"</code>
+        </div>
+      </section>
+
+      <section class="card">
+        <label for="ta-on">Textarea (workaround: autocorrect=on, spellcheck=true)</label>
+        <textarea
+          id="ta-on"
+          rows="1"
+          placeholder="Сообщение…"
+          autocomplete="off"
+          autocorrect="on"
+          autocapitalize="off"
+          spellcheck="true"
+          inputmode="text"
+          enterkeyhint="send"
+        ></textarea>
+        <div class="attrs">
+          <code>autocorrect="on"</code>
+          <code>spellcheck="true"</code>
+        </div>
+      </section>
+
+      <section class="card">
+        <label for="in-off">Input type=text (autocorrect=off, spellcheck=false)</label>
+        <input
+          id="in-off"
+          type="text"
+          placeholder="Поиск…"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          inputmode="text"
+          enterkeyhint="done"
+        />
+      </section>
+
+      <section class="card">
+        <label for="ce">Contenteditable (plain)</label>
+        <div
+          id="ce"
+          contenteditable="true"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          role="textbox"
+          aria-multiline="true"
+        >
+          Наберите текст…
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
+

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0f14" />
+    <meta name="application-name" content="Yagodka" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Yagodka" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" sizes="192x192" />
+    <link rel="mask-icon" href="./icons/icon.svg" color="#0b0f14" />
+    <title>Yagodka</title>
+  </head>
+  <body>
+    <div id="app">
+      <div class="boot" aria-live="polite">
+        <div class="boot-brand">Ягодка</div>
+        <div class="boot-sub" id="boot-status">Загрузка…</div>
+        <div class="boot-bar" aria-hidden="true"></div>
+      </div>
+    </div>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: #0b0f14;
+        color: #e6edf3;
+        font:
+          500 16px/1.35 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+      }
+      .boot {
+        min-height: 100dvh;
+        display: grid;
+        place-content: center;
+        padding: 20px;
+        gap: 10px;
+        text-align: center;
+      }
+      .boot-brand {
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-size: 18px;
+      }
+      .boot-sub {
+        opacity: 0.72;
+        font-size: 14px;
+      }
+      .boot-bar {
+        width: min(280px, 72vw);
+        height: 2px;
+        background: rgba(255, 255, 255, 0.14);
+        border-radius: 999px;
+        overflow: hidden;
+        position: relative;
+      }
+      .boot-bar::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        transform: translateX(-60%);
+        background: linear-gradient(90deg, transparent, rgba(236, 72, 153, 0.85), transparent);
+        animation: boot-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes boot-slide {
+        0% {
+          transform: translateX(-60%);
+        }
+        50% {
+          transform: translateX(60%);
+        }
+        100% {
+          transform: translateX(160%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-bar::before {
+          animation: none;
+          opacity: 0.55;
+          transform: none;
+        }
+      }
+    </style>
+    <script src="./boot.js"></script>
+    <script type="module" src="/src/index.ts"></script>
+  </body>
+</html>

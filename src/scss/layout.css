@@ -1,0 +1,217 @@
+.app {
+  height: 100%;
+  width: 100%;
+  max-width: var(--app-max-width);
+  margin: 0 auto;
+  border: var(--app-border-width) solid var(--app-border-color);
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-shadow);
+  overflow: var(--app-overflow);
+  display: grid;
+  grid-template-rows: var(--app-row-header) var(--app-row-main) var(--app-row-composer) var(--app-row-footer);
+}
+
+.hdr {
+  background: var(--header-bg);
+  border-bottom: var(--header-border-width) solid var(--header-border-color);
+  padding: var(--header-pad-y) var(--header-pad-x);
+  padding-top: calc(var(--header-pad-y) + env(safe-area-inset-top));
+  padding-left: calc(var(--header-pad-x) + env(safe-area-inset-left));
+  padding-right: calc(var(--header-pad-x) + env(safe-area-inset-right));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: var(--header-gap-y) var(--header-gap-x);
+}
+
+.hdr-left {
+  color: var(--header-left-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hdr-right {
+  color: var(--header-right-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: var(--header-right-max-width);
+  text-align: right;
+}
+
+.hotkeys {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--hotkeys-gap);
+  overflow-x: auto;
+  padding-bottom: var(--hotkeys-pad-b);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: var(--grid-cols);
+  gap: var(--grid-gap);
+  min-height: 0;
+}
+
+.sidebar {
+  background: var(--sidebar-bg);
+  border-right: var(--sidebar-border-width) solid var(--sidebar-border-color);
+  padding: var(--sidebar-pad);
+  padding-left: calc(var(--sidebar-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--sidebar-pad) + env(safe-area-inset-right));
+  overflow: auto;
+  /* Prevent browser scroll anchoring from jumping the list during re-renders/context menus. */
+  overflow-anchor: none;
+}
+
+.chat {
+  background: var(--chat-bg);
+  padding: var(--chat-pad);
+  padding-left: calc(var(--chat-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--chat-pad) + env(safe-area-inset-right));
+  overflow: auto;
+  overflow-anchor: none;
+  min-height: 0;
+  position: relative;
+}
+
+.input-wrap {
+  display: block;
+  padding: var(--composer-pad-y) var(--composer-pad-x);
+  padding-left: calc(var(--composer-pad-x) + env(safe-area-inset-left));
+  padding-right: calc(var(--composer-pad-x) + env(safe-area-inset-right));
+  padding-bottom: var(--composer-pad-y);
+  border-top: var(--composer-border-width) solid var(--composer-border-color);
+  background: var(--composer-bg);
+}
+
+.composer-field {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--composer-gap);
+  min-height: var(--composer-field-min-h);
+  background: var(--composer-field-bg);
+  border: var(--composer-field-border-width) solid var(--composer-field-border-color);
+  border-radius: var(--composer-field-radius);
+  /* Telegram-like: controls sit inside the pill, so keep vertical padding minimal. */
+  padding: 0 var(--composer-field-pad);
+}
+
+.composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 4px 2px 0;
+  color: var(--prompt-color);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Telegram-like: подсказки/счётчик показываем только когда это реально нужно. */
+.input-wrap:not(.composer-too-long):not(.composer-near-limit) .composer-meta {
+  display: none;
+}
+
+.composer-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.input-wrap.composer-too-long .composer-count {
+  color: var(--bad);
+  opacity: 1;
+}
+
+@media (max-width: 520px) {
+  .composer-hint {
+    display: none;
+  }
+
+  .composer-meta {
+    justify-content: flex-end;
+  }
+}
+
+.btn.composer-send {
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 0;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  position: relative;
+  background: var(--btn-bg);
+  border: var(--btn-border-width) solid var(--btn-border-color);
+  color: var(--btn-text);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 80ms ease;
+}
+
+.btn.composer-send::before {
+  content: "";
+  display: block;
+  width: var(--send-icon-berry-size);
+  height: var(--send-icon-berry-size);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 34% 34%, var(--send-berry-glint) 0 18%, transparent 19%),
+    radial-gradient(circle at 30% 30%, var(--send-berry-light) 0, var(--send-berry) 55%, var(--send-berry-dark) 100%);
+  box-shadow: var(--send-icon-berry-shadow);
+  transform: translateY(1px);
+}
+
+.btn.composer-send::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--send-icon-leaf-size);
+  height: var(--send-icon-leaf-size);
+  border-radius: 999px 999px 999px 2px;
+  background: radial-gradient(circle at 30% 70%, var(--send-leaf-light) 0, var(--send-leaf) 70%, var(--send-leaf-dark) 100%);
+  box-shadow: var(--send-icon-leaf-shadow);
+  transform: translate(-50%, -50%) translate(var(--send-icon-leaf-offset-x), var(--send-icon-leaf-offset-y))
+    rotate(var(--send-icon-leaf-rotate));
+}
+
+.btn.composer-send:not(:disabled) {
+  background: var(--focus);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 10px 25px color-mix(in srgb, var(--focus), transparent 78%);
+}
+
+.btn.composer-send:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--focus), #ffffff 10%);
+}
+
+.btn.composer-send:active:not(:disabled) {
+  background: color-mix(in srgb, var(--focus), #000000 14%);
+  transform: translateY(1px);
+}
+
+.btn.composer-send:disabled {
+  opacity: 0.75;
+}
+
+.footer {
+  padding: var(--footer-pad-y) var(--footer-pad-x);
+  padding-left: calc(var(--footer-pad-x) + env(safe-area-inset-left));
+  padding-right: calc(var(--footer-pad-x) + env(safe-area-inset-right));
+  padding-bottom: calc(var(--footer-pad-y) + env(safe-area-inset-bottom));
+  border-top: var(--footer-border-width) solid var(--footer-border-color);
+  background: var(--footer-bg);
+  color: var(--footer-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

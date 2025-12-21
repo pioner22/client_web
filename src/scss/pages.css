@@ -1,0 +1,220 @@
+.page {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+}
+
+.page.modal-page {
+  align-content: start;
+}
+
+/* Inline-модалки рендерятся внутри .page, поэтому убираем "попап" стили у .modal. */
+.modal-page .modal {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.modal-page .msg.msg-sys {
+  padding: 0;
+}
+
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.avatar-lg {
+  width: 64px;
+  height: 64px;
+  font-size: 18px;
+}
+
+.page-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-3);
+  align-items: center;
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.page-results {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.page-empty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 18px 14px;
+  color: var(--muted);
+  border: 1px dashed color-mix(in srgb, var(--line), transparent 35%);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--panel), transparent 60%);
+}
+
+.page-empty-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.page-empty-sub {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.page-warn {
+  color: var(--bad);
+  min-height: 18px;
+}
+
+.page-warn:not(.hidden):not(:empty) {
+  padding: var(--sp-2) var(--sp-3);
+  border: var(--border-width) solid color-mix(in srgb, var(--bad), transparent 65%);
+  border-radius: var(--field-radius);
+  background: color-mix(in srgb, var(--bad), transparent 92%);
+}
+
+.help-grid {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.help-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+
+.help-kbd {
+  min-width: 86px;
+  justify-self: start;
+}
+
+.help-label {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.result-item {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.result-item:last-child {
+  border-bottom: 0;
+}
+
+.result-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.page-stack {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.files-section {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.files-list {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.file-row {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+
+.file-row.is-error {
+  border-color: var(--bad);
+}
+
+.file-row.is-complete {
+  border-color: var(--good);
+}
+
+.file-main {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.file-name {
+  font-weight: 600;
+}
+
+.file-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.file-progress {
+  height: 6px;
+  background: var(--panel2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.file-progress-bar {
+  height: 100%;
+  background: var(--good);
+  width: 0;
+}
+
+.file-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.file-actions .btn {
+  text-decoration: none;
+}
+
+.file-file-preview {
+  border-color: color-mix(in srgb, var(--line), transparent 10%);
+}
+
+.file-file-img {
+  max-height: 180px;
+}

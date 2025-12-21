@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0b0f14"/>
+  <rect x="48" y="48" width="416" height="416" rx="32" fill="#0f1620" stroke="#223044" stroke-width="8"/>
+  <text x="256" y="250" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace" font-size="54" fill="#cbd5e1">
+    YAGODKA
+  </text>
+  <text x="256" y="316" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace" font-size="26" fill="#94a3b8">
+    web client
+  </text>
+</svg>
+

@@ -1,0 +1,1281 @@
+import type { GatewayClient } from "../lib/net/gatewayClient";
+import type {
+  ActionModalBoardInvite,
+  ActionModalGroupInvite,
+  ActionModalGroupJoinRequest,
+  AppState,
+  BoardEntry,
+  ChatAttachment,
+  ChatMessage,
+  FriendEntry,
+  GroupEntry,
+  SearchResultEntry,
+  UserProfile,
+} from "../stores/types";
+import { dmKey, roomKey } from "../helpers/chat/conversationKey";
+import { nowTs } from "../helpers/time";
+import { parseRoster } from "../helpers/roster/parseRoster";
+import { upsertConversation } from "../helpers/chat/upsertConversation";
+import { mergeMessages } from "../helpers/chat/mergeMessages";
+import {
+  blockSessionAutoAuth,
+  clearSessionAutoAuthBlock,
+  clearStoredSessionToken,
+  getStoredAuthId,
+  storeAuthId,
+  storeSessionToken,
+} from "../helpers/auth/session";
+
+function oldestLoadedId(msgs: ChatMessage[]): number | null {
+  let min: number | null = null;
+  for (const m of msgs) {
+    const id = m.id;
+    if (typeof id !== "number" || !Number.isFinite(id) || id <= 0) continue;
+    if (min === null || id < min) min = id;
+  }
+  return min;
+}
+
+function updateLastOutgoing(state: AppState, key: string, update: (msg: ChatMessage) => ChatMessage): AppState {
+  const conv = state.conversations[key];
+  if (!conv || conv.length === 0) return state;
+  for (let i = conv.length - 1; i >= 0; i -= 1) {
+    const msg = conv[i];
+    if (msg.kind !== "out") continue;
+    if (msg.id !== undefined && msg.id !== null) continue;
+    const next = [...conv];
+    next[i] = update(msg);
+    return { ...state, conversations: { ...state.conversations, [key]: next } };
+  }
+  return state;
+}
+
+function humanizeError(raw: string): string {
+  const code = String(raw ?? "").trim();
+  if (!code) return "ошибка";
+  const map: Record<string, string> = {
+    not_in_group: "Вы не участник этого чата (примите приглашение или попросите добавить вас)",
+    board_post_forbidden: "На доске писать может только владелец",
+    board_check_failed: "Не удалось проверить права на доску",
+    group_check_failed: "Не удалось проверить доступ к чату",
+    broadcast_disabled: "Рассылка всем отключена",
+    message_too_long: "Слишком длинное сообщение",
+    bad_text: "Некорректный текст сообщения",
+    bad_recipient: "Некорректный получатель",
+    rate_limited: "Слишком часто. Попробуйте позже",
+  };
+  return map[code] ?? code;
+}
+
+function parseAttachment(raw: any): ChatAttachment | null {
+  if (!raw || typeof raw !== "object") return null;
+  const kind = String((raw as any).kind ?? "");
+  if (kind !== "file") return null;
+  const fileIdRaw = (raw as any).file_id ?? (raw as any).fileId ?? (raw as any).id ?? null;
+  const fileId = typeof fileIdRaw === "string" && fileIdRaw.trim() ? fileIdRaw.trim() : null;
+  const name = String((raw as any).name ?? "файл");
+  const size = Number((raw as any).size ?? 0) || 0;
+  const mimeRaw = (raw as any).mime;
+  const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw) : null;
+  return { kind: "file", fileId, name, size, mime };
+}
+
+export function handleServerMessage(
+  msg: any,
+  state: AppState,
+  gateway: GatewayClient,
+  patch: (p: Partial<AppState> | ((prev: AppState) => AppState)) => void
+) {
+  const t = String(msg?.type ?? "");
+
+  if (t === "welcome") {
+    const sv = typeof msg?.server_version === "string" ? msg.server_version : state.serverVersion;
+    patch({ serverVersion: sv, status: "Handshake OK" });
+    return;
+  }
+  if (t === "session_replaced") {
+    // Важно: не чистим общий session token в localStorage/cookie — он общий для вкладок/PWA.
+    // Иначе “победившая” вкладка тоже потеряет автовход. Вместо этого блокируем автовход
+    // только для текущей вкладки (sessionStorage) и просим войти вручную, если нужно.
+    blockSessionAutoAuth();
+    patch((prev) => ({
+      ...prev,
+      authed: false,
+      authMode: getStoredAuthId() ? "login" : "register",
+      // “В тишине”: не открываем модалку автоматически.
+      status: "Сессия активна в другом окне. Нажмите «Войти», чтобы продолжить здесь.",
+    }));
+    return;
+  }
+  if (t === "auth_ok") {
+    const selfId = String(msg?.id ?? state.selfId ?? "");
+    const sess = typeof msg?.session === "string" ? msg.session : null;
+    if (selfId) storeAuthId(selfId);
+    if (sess) storeSessionToken(sess);
+    clearSessionAutoAuthBlock();
+    patch({
+      authed: true,
+      selfId,
+      authRememberedId: selfId || state.authRememberedId,
+      ...(sess ? { authMode: "auto" as const } : {}),
+      modal: null,
+      status: "Connected",
+    });
+    gateway.send({ type: "client_info", client: "web", version: state.clientVersion });
+    gateway.send({ type: "group_list" });
+    gateway.send({ type: "board_list" });
+    gateway.send({ type: "profile_get" });
+    return;
+  }
+  if (t === "auth_fail") {
+    const reason = String(msg?.reason ?? "auth_failed");
+    if (reason === "session_invalid" || reason === "session_expired") {
+      clearStoredSessionToken();
+      patch({
+        authMode: getStoredAuthId() ? "login" : "register",
+        // “В тишине”: не открываем модалку сами — только статус, дальше пользователь сам нажмёт «Войти».
+        modal: null,
+        status: "Сессия устарела или недействительна. Нажмите «Войти», чтобы войти снова.",
+      });
+      return;
+    }
+    const message =
+      reason === "no_such_user"
+        ? "Пользователь не найден"
+        : reason === "bad_password"
+          ? "Неверный пароль"
+          : reason === "rate_limited"
+          ? "Слишком много попыток. Попробуйте позже."
+            : "Не удалось выполнить вход";
+    if (state.modal?.kind === "auth") {
+      patch({ modal: { kind: "auth", message }, status: "Auth failed" });
+    } else {
+      patch({ status: message });
+    }
+    return;
+  }
+  if (t === "register_ok") {
+    const selfId = String(msg?.id ?? "");
+    const sess = typeof msg?.session === "string" ? msg.session : null;
+    if (selfId) storeAuthId(selfId);
+    if (sess) storeSessionToken(sess);
+    clearSessionAutoAuthBlock();
+    patch({
+      authed: true,
+      selfId,
+      authRememberedId: selfId || state.authRememberedId,
+      ...(sess ? { authMode: "auto" as const } : {}),
+      modal: null,
+      status: "Registered",
+    });
+    gateway.send({ type: "client_info", client: "web", version: state.clientVersion });
+    gateway.send({ type: "group_list" });
+    gateway.send({ type: "board_list" });
+    gateway.send({ type: "profile_get" });
+    return;
+  }
+  if (t === "register_fail") {
+    const reason = String(msg?.reason ?? "register_failed");
+    const message =
+      reason === "empty_password"
+        ? "Введите пароль для регистрации"
+        : reason === "password_too_short"
+          ? "Пароль слишком короткий"
+          : reason === "password_too_long"
+            ? "Пароль слишком длинный"
+            : reason === "rate_limited"
+              ? "Слишком много попыток. Попробуйте позже."
+              : "Регистрация не удалась";
+    patch({ modal: { kind: "auth", message }, status: "Register failed" });
+    return;
+  }
+  if (t === "roster_full" || t === "roster") {
+    const r = parseRoster(msg);
+    patch({ friends: r.friends, pendingIn: r.pendingIn, pendingOut: r.pendingOut });
+    return;
+  }
+  if (t === "friends") {
+    const raw = Array.isArray(msg?.friends) ? msg.friends : [];
+    const ids: string[] = raw.map((x: any) => String(x || "").trim()).filter((x: string) => Boolean(x));
+    patch((prev) => {
+      const byId = new Map<string, FriendEntry>(prev.friends.map((f) => [f.id, f]));
+      const next: FriendEntry[] = ids.map((id) => byId.get(id) ?? { id, online: false, unread: 0, last_seen_at: null });
+      next.sort((a: FriendEntry, b: FriendEntry) => a.id.localeCompare(b.id));
+      return { ...prev, friends: next };
+    });
+    return;
+  }
+  if (t === "prefs") {
+    const muted = (Array.isArray(msg?.muted) ? msg.muted : []).map((x: any) => String(x || "").trim()).filter(Boolean);
+    const blocked = (Array.isArray(msg?.blocked) ? msg.blocked : []).map((x: any) => String(x || "").trim()).filter(Boolean);
+    const blockedBy = (Array.isArray(msg?.blocked_by) ? msg.blocked_by : [])
+      .map((x: any) => String(x || "").trim())
+      .filter(Boolean);
+    patch({ muted, blocked, blockedBy });
+    return;
+  }
+  if (t === "mute_set_result") {
+    const ok = Boolean(msg?.ok);
+    const peer = String(msg?.peer ?? "").trim();
+    const value = Boolean(msg?.value);
+    if (!peer) return;
+    if (!ok) {
+      patch({ status: `Не удалось изменить mute: ${peer}` });
+      return;
+    }
+    patch((prev) => ({
+      ...prev,
+      muted: value ? Array.from(new Set([...prev.muted, peer])) : prev.muted.filter((x) => x !== peer),
+      status: value ? `Заглушено: ${peer}` : `Звук включён: ${peer}`,
+    }));
+    return;
+  }
+  if (t === "block_set_result") {
+    const ok = Boolean(msg?.ok);
+    const peer = String(msg?.peer ?? "").trim();
+    const value = Boolean(msg?.value);
+    if (!peer) return;
+    if (!ok) {
+      patch({ status: `Не удалось изменить блокировку: ${peer}` });
+      return;
+    }
+    patch((prev) => ({
+      ...prev,
+      blocked: value ? Array.from(new Set([...prev.blocked, peer])) : prev.blocked.filter((x) => x !== peer),
+      status: value ? `Заблокировано: ${peer}` : `Разблокировано: ${peer}`,
+    }));
+    return;
+  }
+  if (t === "blocked_by_update") {
+    const peer = String(msg?.peer ?? "").trim();
+    const value = Boolean(msg?.value);
+    if (!peer) return;
+    patch((prev) => ({
+      ...prev,
+      blockedBy: value ? Array.from(new Set([...prev.blockedBy, peer])) : prev.blockedBy.filter((x) => x !== peer),
+      status: value ? `Вы заблокированы пользователем: ${peer}` : `Разблокировано пользователем: ${peer}`,
+    }));
+    return;
+  }
+  if (t === "chat_cleared") {
+    const ok = Boolean(msg?.ok);
+    const peer = String(msg?.peer ?? "").trim();
+    if (!peer) return;
+    if (!ok) {
+      patch({ status: `Не удалось очистить историю: ${peer}` });
+      return;
+    }
+    patch((prev) => {
+      const key = dmKey(peer);
+      const conv = { ...prev.conversations };
+      delete conv[key];
+      const loaded = { ...prev.historyLoaded };
+      delete loaded[key];
+      return {
+        ...prev,
+        conversations: conv,
+        historyLoaded: loaded,
+        friends: prev.friends.map((f) => (f.id === peer ? { ...f, unread: 0 } : f)),
+        status: `История очищена: ${peer}`,
+      };
+    });
+    return;
+  }
+  if (t === "friend_remove_result") {
+    const ok = Boolean(msg?.ok);
+    const peer = String(msg?.peer ?? "").trim();
+    if (!peer) return;
+    patch({ status: ok ? `Контакт удалён: ${peer}` : `Не удалось удалить контакт: ${peer}` });
+    return;
+  }
+  if (t === "presence_update") {
+    const id = String(msg?.id ?? "");
+    if (!id) return;
+    const online = Boolean(msg?.online);
+    patch((prev) => ({
+      ...prev,
+      friends: prev.friends.map((f) => (f.id === id ? { ...f, online } : f)),
+    }));
+    return;
+  }
+  if (t === "unread_counts") {
+    const raw = msg?.counts && typeof msg.counts === "object" ? msg.counts : {};
+    patch((prev) => ({
+      ...prev,
+      // `counts` is an authoritative snapshot; absent keys mean 0 unread.
+      friends: prev.friends.map((f) => ({ ...f, unread: Number((raw as any)[f.id] ?? 0) || 0 })),
+    }));
+    return;
+  }
+  if (t === "authz_pending") {
+    const raw = msg?.from;
+    const pending = Array.isArray(raw) ? raw.map((x: any) => String(x || "").trim()).filter((x: string) => x) : [];
+    if (!pending.length) return;
+    patch((prev) => ({
+      ...prev,
+      pendingIn: Array.from(new Set([...prev.pendingIn, ...pending])),
+      status: `Ожидают авторизации: ${pending.length}`,
+    }));
+    return;
+  }
+  if (t === "authz_request") {
+    const from = String(msg?.from ?? "").trim();
+    if (!from) return;
+    patch((prev) => ({
+      ...prev,
+      pendingIn: prev.pendingIn.includes(from) ? prev.pendingIn : [...prev.pendingIn, from],
+      status: `Входящий запрос: ${from}`,
+    }));
+    return;
+  }
+  if (t === "authz_request_result") {
+    const ok = Boolean(msg?.ok);
+    const to = String(msg?.to ?? "");
+    if (!ok) {
+      patch({ status: `Запрос не отправлен: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    if (to) {
+      patch((prev) => ({
+        ...prev,
+        pendingOut: prev.pendingOut.includes(to) ? prev.pendingOut : [...prev.pendingOut, to],
+        status: `Запрос отправлен: ${to}`,
+      }));
+    }
+    return;
+  }
+  if (t === "authz_response_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Ответ не принят: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const peer = String(msg?.peer ?? "");
+    if (peer) {
+      patch((prev) => ({
+        ...prev,
+        pendingIn: prev.pendingIn.filter((id) => id !== peer),
+        status: `Ответ отправлен: ${peer}`,
+      }));
+    }
+    return;
+  }
+  if (t === "authz_cancel_result") {
+    const ok = Boolean(msg?.ok);
+    const peer = String(msg?.peer ?? "");
+    if (!ok) {
+      patch({ status: `Отмена не удалась: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    if (peer) {
+      patch((prev) => ({
+        ...prev,
+        pendingOut: prev.pendingOut.filter((id) => id !== peer),
+        status: `Отмена запроса: ${peer}`,
+      }));
+    }
+    return;
+  }
+  if (t === "authz_accepted") {
+    const id = String(msg?.id ?? "").trim();
+    if (!id) return;
+    patch((prev) => ({
+      ...prev,
+      pendingIn: prev.pendingIn.filter((x) => x !== id),
+      pendingOut: prev.pendingOut.filter((x) => x !== id),
+      status: `Запрос принят: ${id}`,
+    }));
+    return;
+  }
+  if (t === "authz_declined") {
+    const id = String(msg?.id ?? "").trim();
+    if (!id) return;
+    patch((prev) => ({
+      ...prev,
+      pendingIn: prev.pendingIn.filter((x) => x !== id),
+      pendingOut: prev.pendingOut.filter((x) => x !== id),
+      status: `Запрос отклонён: ${id}`,
+    }));
+    return;
+  }
+  if (t === "authz_cancelled") {
+    const peer = String(msg?.peer ?? "").trim();
+    if (!peer) return;
+    patch((prev) => ({
+      ...prev,
+      pendingIn: prev.pendingIn.filter((x) => x !== peer),
+      pendingOut: prev.pendingOut.filter((x) => x !== peer),
+      status: `Запрос отменён: ${peer}`,
+    }));
+    return;
+  }
+  if (t === "groups") {
+    const raw = Array.isArray(msg?.groups) ? msg.groups : [];
+    const groups: GroupEntry[] = raw
+      .map((g: any) => ({
+        id: String(g?.id ?? ""),
+        name: (g?.name ?? null) as any,
+        owner_id: (g?.owner_id ?? null) as any,
+        handle: (g?.handle ?? null) as any,
+      }))
+      .filter((g: GroupEntry) => g.id);
+    patch({ groups });
+    return;
+  }
+  if (t === "group_added" || t === "group_updated") {
+    const g = msg?.group ?? null;
+    const upd: GroupEntry | null = g
+      ? { id: String(g?.id ?? ""), name: (g?.name ?? null) as any, owner_id: (g?.owner_id ?? null) as any, handle: (g?.handle ?? null) as any }
+      : null;
+    if (!upd?.id) return;
+    patch((prev) => {
+      const next = prev.groups.filter((x) => x.id !== upd.id);
+      next.push(upd);
+      next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+      return { ...prev, groups: next, pendingGroupInvites: prev.pendingGroupInvites.filter((inv) => inv.groupId !== upd.id) };
+    });
+    return;
+  }
+  if (t === "group_removed") {
+    const id = String(msg?.id ?? msg?.group_id ?? "");
+    if (!id) return;
+    const by = String(msg?.by ?? "").trim();
+    const name = String(msg?.name ?? "").trim();
+    const label = name ? `${name} (${id})` : id;
+    const key = roomKey(id);
+    patch((prev) => {
+      const sel = prev.selected;
+      const selectedRemoved = Boolean(sel && sel.kind === "group" && sel.id === id);
+      const { [key]: _dropConv, ...restConv } = prev.conversations;
+      const { [key]: _dropLoaded, ...restLoaded } = prev.historyLoaded;
+      return {
+        ...prev,
+        groups: prev.groups.filter((g) => g.id !== id),
+        selected: selectedRemoved ? null : prev.selected,
+        conversations: selectedRemoved ? restConv : prev.conversations,
+        historyLoaded: selectedRemoved ? restLoaded : prev.historyLoaded,
+        status: by ? `Удалены из чата: ${label} (by ${by})` : `Удалены из чата: ${label}`,
+      };
+    });
+    return;
+  }
+  if (t === "boards") {
+    const raw = Array.isArray(msg?.boards) ? msg.boards : [];
+    const boards: BoardEntry[] = raw
+      .map((b: any) => ({
+        id: String(b?.id ?? ""),
+        name: (b?.name ?? null) as any,
+        owner_id: (b?.owner_id ?? null) as any,
+        handle: (b?.handle ?? null) as any,
+      }))
+      .filter((b: BoardEntry) => b.id);
+    patch({ boards });
+    return;
+  }
+  if (t === "board_added" || t === "board_updated") {
+    const b = msg?.board ?? null;
+    const upd: BoardEntry | null = b
+      ? { id: String(b?.id ?? ""), name: (b?.name ?? null) as any, owner_id: (b?.owner_id ?? null) as any, handle: (b?.handle ?? null) as any }
+      : null;
+    if (!upd?.id) return;
+    patch((prev) => {
+      const next = prev.boards.filter((x) => x.id !== upd.id);
+      next.push(upd);
+      next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+      return { ...prev, boards: next, pendingBoardInvites: prev.pendingBoardInvites.filter((inv) => inv.boardId !== upd.id) };
+    });
+    return;
+  }
+  if (t === "board_removed") {
+    const id = String(msg?.id ?? msg?.board_id ?? "");
+    if (!id) return;
+    const by = String(msg?.by ?? "").trim();
+    const name = String(msg?.name ?? "").trim();
+    const label = name ? `${name} (${id})` : id;
+    const key = roomKey(id);
+    patch((prev) => {
+      const sel = prev.selected;
+      const selectedRemoved = Boolean(sel && sel.kind === "board" && sel.id === id);
+      const { [key]: _dropConv, ...restConv } = prev.conversations;
+      const { [key]: _dropLoaded, ...restLoaded } = prev.historyLoaded;
+      return {
+        ...prev,
+        boards: prev.boards.filter((b) => b.id !== id),
+        selected: selectedRemoved ? null : prev.selected,
+        conversations: selectedRemoved ? restConv : prev.conversations,
+        historyLoaded: selectedRemoved ? restLoaded : prev.historyLoaded,
+        status: by ? `Удалены из доски: ${label} (by ${by})` : `Удалены из доски: ${label}`,
+      };
+    });
+    return;
+  }
+  if (t === "group_rename_result") {
+    const ok = Boolean(msg?.ok);
+    const gid = String(msg?.group_id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "not_authenticated"
+          ? "Нужно авторизоваться"
+          : reason === "rate_limited"
+            ? "Слишком часто. Попробуйте позже"
+            : reason === "bad_args"
+              ? "Некорректные данные"
+              : reason === "name_too_long"
+                ? "Название слишком длинное"
+                : reason === "forbidden_or_not_found"
+                  ? "Только владелец может переименовать чат"
+                  : "Не удалось переименовать чат";
+      patch((prev) => ({
+        ...prev,
+        modal: prev.modal?.kind === "rename" && prev.modal.targetKind === "group" && (!gid || prev.modal.targetId === gid) ? { ...prev.modal, message } : prev.modal,
+        status: `Переименование не выполнено: ${message}`,
+      }));
+      return;
+    }
+    const name = String(msg?.name ?? "").trim();
+    patch((prev) => ({
+      ...prev,
+      modal: prev.modal?.kind === "rename" && prev.modal.targetKind === "group" && (!gid || prev.modal.targetId === gid) ? null : prev.modal,
+      status: name ? `Чат переименован: ${name}` : "Чат переименован",
+    }));
+    return;
+  }
+  if (t === "board_rename_result") {
+    const ok = Boolean(msg?.ok);
+    const bid = String(msg?.board_id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "not_authenticated"
+          ? "Нужно авторизоваться"
+          : reason === "rate_limited"
+            ? "Слишком часто. Попробуйте позже"
+            : reason === "bad_args"
+              ? "Некорректные данные"
+              : reason === "name_too_long"
+                ? "Название слишком длинное"
+                : reason === "forbidden_or_not_found"
+                  ? "Только владелец может переименовать доску"
+                  : "Не удалось переименовать доску";
+      patch((prev) => ({
+        ...prev,
+        modal: prev.modal?.kind === "rename" && prev.modal.targetKind === "board" && (!bid || prev.modal.targetId === bid) ? { ...prev.modal, message } : prev.modal,
+        status: `Переименование не выполнено: ${message}`,
+      }));
+      return;
+    }
+    const name = String(msg?.name ?? "").trim();
+    patch((prev) => ({
+      ...prev,
+      modal: prev.modal?.kind === "rename" && prev.modal.targetKind === "board" && (!bid || prev.modal.targetId === bid) ? null : prev.modal,
+      status: name ? `Доска переименована: ${name}` : "Доска переименована",
+    }));
+    return;
+  }
+  if (t === "group_disband_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Чат не удалён: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const gid = String(msg?.group_id ?? "").trim();
+    patch({ status: gid ? `Чат удалён: ${gid}` : "Чат удалён" });
+    return;
+  }
+  if (t === "board_disband_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Доска не удалена: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const bid = String(msg?.board_id ?? "").trim();
+    patch({ status: bid ? `Доска удалена: ${bid}` : "Доска удалена" });
+    return;
+  }
+  if (t === "group_remove_result") {
+    const ok = Boolean(msg?.ok);
+    const gid = String(msg?.group_id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "bad_args"
+          ? "Некорректные данные"
+          : reason === "forbidden_or_not_found"
+            ? "Только владелец может удалять участников"
+            : reason === "no_members"
+              ? "Не найдено подходящих участников"
+              : "Не удалось удалить участников";
+      patch((prev) => ({
+        ...prev,
+        modal: prev.modal?.kind === "members_remove" && prev.modal.targetKind === "group" && (!gid || prev.modal.targetId === gid) ? { ...prev.modal, message } : prev.modal,
+        status: `Удаление не выполнено: ${message}`,
+      }));
+      return;
+    }
+    const removed = (Array.isArray(msg?.removed) ? msg.removed : []).map((x: any) => String(x || "").trim()).filter(Boolean);
+    const preview = removed.length <= 3 ? removed.join(", ") : `${removed.slice(0, 3).join(", ")}…`;
+    patch((prev) => ({
+      ...prev,
+      modal: prev.modal?.kind === "members_remove" && prev.modal.targetKind === "group" && (!gid || prev.modal.targetId === gid) ? null : prev.modal,
+      status: removed.length ? `Удалены из чата: ${removed.length} (${preview})` : "Удаление выполнено",
+    }));
+    return;
+  }
+  if (t === "board_remove_result") {
+    const ok = Boolean(msg?.ok);
+    const bid = String(msg?.board_id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "bad_args"
+          ? "Некорректные данные"
+          : reason === "forbidden_or_not_found"
+            ? "Только владелец может удалять участников"
+            : reason === "no_members"
+              ? "Не найдено подходящих участников"
+              : "Не удалось удалить участников";
+      patch((prev) => ({
+        ...prev,
+        modal: prev.modal?.kind === "members_remove" && prev.modal.targetKind === "board" && (!bid || prev.modal.targetId === bid) ? { ...prev.modal, message } : prev.modal,
+        status: `Удаление не выполнено: ${message}`,
+      }));
+      return;
+    }
+    const removed = (Array.isArray(msg?.removed) ? msg.removed : []).map((x: any) => String(x || "").trim()).filter(Boolean);
+    const preview = removed.length <= 3 ? removed.join(", ") : `${removed.slice(0, 3).join(", ")}…`;
+    patch((prev) => ({
+      ...prev,
+      modal: prev.modal?.kind === "members_remove" && prev.modal.targetKind === "board" && (!bid || prev.modal.targetId === bid) ? null : prev.modal,
+      status: removed.length ? `Удалены из доски: ${removed.length} (${preview})` : "Удаление выполнено",
+    }));
+    return;
+  }
+  if (t === "group_create_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "empty_name"
+          ? "Введите название чата"
+          : reason === "name_too_long"
+            ? "Название слишком длинное"
+            : reason === "rate_limited"
+              ? "Слишком часто. Попробуйте позже"
+              : reason === "not_authenticated"
+                ? "Нужно авторизоваться"
+                : "Не удалось создать чат";
+      patch((prev) => ({
+        ...prev,
+        groupCreateMessage: prev.page === "group_create" ? message : prev.groupCreateMessage,
+        status: `Чат не создан: ${message}`,
+      }));
+      return;
+    }
+    const g = msg?.group ?? null;
+    if (g?.id) {
+      patch((prev) => ({
+        ...prev,
+        groups: [...prev.groups.filter((x) => x.id !== String(g.id)), { id: String(g.id), name: g.name ?? null, owner_id: g.owner_id ?? null, handle: g.handle ?? null }],
+        groupCreateMessage: "",
+        page: prev.page === "group_create" ? "main" : prev.page,
+        status: `Чат создан: ${String(g.name || g.id)}`,
+      }));
+    }
+    return;
+  }
+  if (t === "board_create_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "empty_name"
+          ? "Введите название доски"
+          : reason === "name_too_long"
+            ? "Название слишком длинное"
+            : reason === "handle_invalid"
+              ? "Некорректный хэндл"
+              : reason === "handle_taken"
+                ? "Хэндл уже занят"
+                : reason === "rate_limited"
+                  ? "Слишком часто. Попробуйте позже"
+                  : reason === "not_authenticated"
+                    ? "Нужно авторизоваться"
+                    : "Не удалось создать доску";
+      patch((prev) => ({
+        ...prev,
+        boardCreateMessage: prev.page === "board_create" ? message : prev.boardCreateMessage,
+        status: `Доска не создана: ${message}`,
+      }));
+      return;
+    }
+    const b = msg?.board ?? null;
+    if (b?.id) {
+      patch((prev) => ({
+        ...prev,
+        boards: [...prev.boards.filter((x) => x.id !== String(b.id)), { id: String(b.id), name: b.name ?? null, owner_id: b.owner_id ?? null, handle: b.handle ?? null }],
+        boardCreateMessage: "",
+        page: prev.page === "board_create" ? "main" : prev.page,
+        status: `Доска создана: ${String(b.name || b.id)}`,
+      }));
+    }
+    return;
+  }
+  if (t === "group_add_result") {
+    const ok = Boolean(msg?.ok);
+    const gid = String(msg?.group_id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "bad_gid"
+          ? "Некорректный ID чата"
+          : reason === "not_found"
+            ? "Чат не найден"
+            : reason === "forbidden"
+              ? "Только владелец может добавлять участников"
+              : "Не удалось отправить приглашения";
+      patch((prev) => ({
+        ...prev,
+        modal:
+          prev.modal?.kind === "members_add" && prev.modal.targetKind === "group" && (!gid || prev.modal.targetId === gid)
+            ? { ...prev.modal, message }
+            : prev.modal,
+        status: `Приглашения не отправлены: ${message}`,
+      }));
+      return;
+    }
+    const invited = (Array.isArray(msg?.invited) ? msg.invited : []).map((x: any) => String(x || "").trim()).filter(Boolean);
+    if (!invited.length) {
+      const message = "Не найдено подходящих пользователей (существующие + дружба)";
+      patch((prev) => ({
+        ...prev,
+        modal:
+          prev.modal?.kind === "members_add" && prev.modal.targetKind === "group" && (!gid || prev.modal.targetId === gid)
+            ? { ...prev.modal, message }
+            : prev.modal,
+        status: message,
+      }));
+      return;
+    }
+    const preview = invited.length <= 3 ? invited.join(", ") : `${invited.slice(0, 3).join(", ")}…`;
+    patch((prev) => ({
+      ...prev,
+      modal:
+        prev.modal?.kind === "members_add" && prev.modal.targetKind === "group" && (!gid || prev.modal.targetId === gid) ? null : prev.modal,
+      status: `Приглашены в чат: ${invited.length} (${preview})`,
+    }));
+    return;
+  }
+  if (t === "board_add_result") {
+    const ok = Boolean(msg?.ok);
+    const bid = String(msg?.board_id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "bad_id"
+          ? "Некорректный ID доски"
+          : reason === "forbidden_or_not_found"
+            ? "Только владелец может добавлять участников"
+            : reason === "no_members"
+              ? "Не найдено подходящих пользователей"
+              : "Не удалось добавить участников";
+      patch((prev) => ({
+        ...prev,
+        modal:
+          prev.modal?.kind === "members_add" && prev.modal.targetKind === "board" && (!bid || prev.modal.targetId === bid)
+            ? { ...prev.modal, message }
+            : prev.modal,
+        status: `Добавление не выполнено: ${message}`,
+      }));
+      return;
+    }
+    const added = (Array.isArray(msg?.added) ? msg.added : []).map((x: any) => String(x || "").trim()).filter(Boolean);
+    const preview = !added.length ? "" : added.length <= 3 ? added.join(", ") : `${added.slice(0, 3).join(", ")}…`;
+    patch((prev) => ({
+      ...prev,
+      modal:
+        prev.modal?.kind === "members_add" && prev.modal.targetKind === "board" && (!bid || prev.modal.targetId === bid) ? null : prev.modal,
+      status: added.length ? `Добавлены в доску: ${added.length} (${preview})` : "Добавление выполнено",
+    }));
+    return;
+  }
+  if (t === "group_invite") {
+    const group = msg?.group ?? null;
+    const groupId = String(msg?.group_id ?? group?.id ?? "");
+    const from = String(msg?.from ?? "");
+    if (!groupId || !from) return;
+    const entry: ActionModalGroupInvite = {
+      kind: "group_invite",
+      groupId,
+      from,
+      name: (msg?.name ?? group?.name ?? null) as any,
+      handle: (msg?.handle ?? group?.handle ?? null) as any,
+    };
+    patch((prev) => ({
+      ...prev,
+      pendingGroupInvites: prev.pendingGroupInvites.some((inv) => inv.groupId === groupId && inv.from === from)
+        ? prev.pendingGroupInvites
+        : [...prev.pendingGroupInvites, entry],
+      status: `Приглашение в чат: ${groupId}`,
+    }));
+    return;
+  }
+  if (t === "group_invite_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Приглашение не отправлено: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const gid = String(msg?.group_id ?? "");
+    if (gid) patch({ status: `Приглашение отправлено: ${gid}` });
+    return;
+  }
+  if (t === "group_join_request") {
+    const groupId = String(msg?.group_id ?? "");
+    const from = String(msg?.from ?? "");
+    if (!groupId || !from) return;
+    const entry: ActionModalGroupJoinRequest = {
+      kind: "group_join_request",
+      groupId,
+      from,
+      name: (msg?.name ?? null) as any,
+      handle: (msg?.handle ?? null) as any,
+    };
+    patch((prev) => ({
+      ...prev,
+      pendingGroupJoinRequests: prev.pendingGroupJoinRequests.some((req) => req.groupId === groupId && req.from === from)
+        ? prev.pendingGroupJoinRequests
+        : [...prev.pendingGroupJoinRequests, entry],
+      status: `Запрос на вступление: ${groupId}`,
+    }));
+    return;
+  }
+  if (t === "group_join_request_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Запрос не отправлен: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const gid = String(msg?.group_id ?? "");
+    if (gid) patch({ status: `Запрос отправлен: ${gid}` });
+    return;
+  }
+  if (t === "group_join_declined") {
+    const gid = String(msg?.group_id ?? "");
+    if (gid) patch({ status: `Запрос отклонён: ${gid}` });
+    return;
+  }
+  if (t === "group_join_response_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Ответ не принят: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const gid = String(msg?.group_id ?? "");
+    const peer = String(msg?.peer ?? "");
+    if (gid && peer) patch({ status: `Ответ отправлен: ${peer}` });
+    return;
+  }
+  if (t === "board_invite") {
+    const board = msg?.board ?? null;
+    const boardId = String(msg?.board_id ?? board?.id ?? "");
+    const from = String(msg?.from ?? "");
+    if (!boardId || !from) return;
+    const entry: ActionModalBoardInvite = {
+      kind: "board_invite",
+      boardId,
+      from,
+      name: (msg?.name ?? board?.name ?? null) as any,
+      handle: (msg?.handle ?? board?.handle ?? null) as any,
+    };
+    patch((prev) => ({
+      ...prev,
+      pendingBoardInvites: prev.pendingBoardInvites.some((inv) => inv.boardId === boardId && inv.from === from)
+        ? prev.pendingBoardInvites
+        : [...prev.pendingBoardInvites, entry],
+      status: `Приглашение в доску: ${boardId}`,
+    }));
+    return;
+  }
+  if (t === "board_invite_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Инвайт не отправлен: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const bid = String(msg?.board_id ?? "");
+    if (bid) patch({ status: `Инвайт отправлен: ${bid}` });
+    return;
+  }
+  if (t === "board_join_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Не удалось вступить: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const bid = String(msg?.board_id ?? "");
+    if (bid) patch({ status: `Вступление: ${bid}` });
+    return;
+  }
+  if (t === "search_result") {
+    const q = String(msg?.query ?? "").trim();
+    const raw = Array.isArray(msg?.results) ? msg.results : [];
+    const results: SearchResultEntry[] = raw
+      .map((r: any) => ({
+        id: String(r?.id ?? ""),
+        online: r?.online === undefined ? undefined : Boolean(r.online),
+        friend: r?.friend === undefined ? undefined : Boolean(r.friend),
+        group: r?.group === undefined ? undefined : Boolean(r.group),
+        board: r?.board === undefined ? undefined : Boolean(r.board),
+      }))
+      .filter((r: SearchResultEntry) => r.id);
+    patch({ searchQuery: q, searchResults: results, status: results.length ? `Найдено: ${results.length}` : "Ничего не найдено" });
+    return;
+  }
+  if (t === "profile") {
+    const id = String(msg?.id ?? "");
+    if (!id) return;
+    const prof: UserProfile = {
+      id,
+      display_name: (msg?.display_name ?? null) as any,
+      handle: (msg?.handle ?? null) as any,
+      client_version: (msg?.client_version ?? null) as any,
+    };
+    patch((prev) => {
+      const next: AppState = { ...prev, profiles: { ...prev.profiles, [id]: prof } };
+      if (id === prev.selfId) {
+        // Keep drafts in sync unless user is actively editing on the Profile page.
+        if (prev.page !== "profile" || (!prev.profileDraftDisplayName && !prev.profileDraftHandle)) {
+          next.profileDraftDisplayName = String(prof.display_name ?? "");
+          next.profileDraftHandle = String(prof.handle ?? "");
+        }
+      }
+      return next;
+    });
+    return;
+  }
+  if (t === "profile_updated") {
+    const id = String(msg?.id ?? "");
+    if (!id) return;
+    patch((prev) => {
+      const cur = prev.profiles[id] ?? { id };
+      const nextProfile: UserProfile = {
+        ...cur,
+        id,
+        display_name: (msg?.display_name ?? null) as any,
+        handle: (msg?.handle ?? null) as any,
+      };
+      return { ...prev, profiles: { ...prev.profiles, [id]: nextProfile } };
+    });
+    return;
+  }
+  if (t === "profile_set_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "handle_taken"
+          ? "Этот @handle уже занят"
+          : reason === "handle_invalid"
+            ? "Некорректный @handle (только a-z, 0-9, _; длина 3–16)"
+            : reason === "too_long"
+              ? "Имя слишком длинное"
+              : reason === "empty"
+                ? "Имя не должно быть пустым"
+                : reason === "no_such_user"
+                  ? "Пользователь не найден"
+                  : reason === "server_error"
+                    ? "Ошибка сервера"
+                    : reason;
+      patch({ status: `Не удалось сохранить профиль: ${message}` });
+      return;
+    }
+    patch((prev) => {
+      if (!prev.selfId) return { ...prev, status: "Профиль сохранён" };
+      const cur = prev.profiles[prev.selfId] ?? { id: prev.selfId };
+      const displayName = (msg?.display_name ?? null) as any;
+      const handle = (msg?.handle ?? null) as any;
+      const nextProfile: UserProfile = { ...cur, display_name: displayName, handle };
+      return {
+        ...prev,
+        profiles: { ...prev.profiles, [prev.selfId]: nextProfile },
+        profileDraftDisplayName: String(displayName ?? ""),
+        profileDraftHandle: String(handle ?? ""),
+        status: "Профиль сохранён",
+      };
+    });
+    return;
+  }
+  if (t === "message") {
+    const from = String(msg?.from ?? "");
+    const to = msg?.to ? String(msg.to) : undefined;
+    const room = msg?.room ? String(msg.room) : undefined;
+    const text = String(msg?.text ?? "");
+    const ts = Number(msg?.ts ?? nowTs()) || nowTs();
+    const edited = Boolean(msg?.edited);
+    const key = room ? roomKey(room) : dmKey(from === state.selfId ? String(to ?? "") : from);
+    if (!key || key.endsWith(":")) return;
+    const kind = from === state.selfId ? "out" : "in";
+    const attachment = parseAttachment(msg?.attachment);
+    patch((prev) =>
+      upsertConversation(prev, key, { kind, from, to, room, text, ts, id: msg?.id ?? null, attachment, ...(edited ? { edited: true } : {}) })
+    );
+
+    // If we're actively viewing this DM, mark as read immediately to keep unread counters consistent.
+    if (!room && kind === "in" && state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from) {
+      const upToId = typeof msg?.id === "number" ? msg.id : undefined;
+      gateway.send({ type: "message_read", peer: from, ...(upToId === undefined ? {} : { up_to_id: upToId }) });
+    }
+    return;
+  }
+  if (t === "message_delivered") {
+    const to = msg?.to ? String(msg.to) : undefined;
+    const room = msg?.room ? String(msg.room) : undefined;
+    const key = room ? roomKey(room) : to ? dmKey(to) : "";
+    if (!key) return;
+    const rawId = msg?.id;
+    const id = typeof rawId === "number" && Number.isFinite(rawId) ? rawId : null;
+    patch((prev) => {
+      const conv = prev.conversations[key];
+      if (id !== null && Array.isArray(conv) && conv.length) {
+        const idx = conv.findIndex((m) => m.kind === "out" && typeof m.id === "number" && m.id === id);
+        if (idx >= 0) {
+          const next = [...conv];
+          next[idx] = { ...next[idx], status: "delivered" };
+          return { ...prev, conversations: { ...prev.conversations, [key]: next } };
+        }
+      }
+      return updateLastOutgoing(prev, key, (msg) => ({
+        ...msg,
+        id,
+        status: "delivered",
+      }));
+    });
+    return;
+  }
+  if (t === "message_deleted") {
+    const ok = msg?.ok;
+    if (ok === false) {
+      const reason = String(msg?.reason ?? "ошибка");
+      patch({ status: `Не удалось удалить сообщение: ${reason}` });
+      return;
+    }
+    const from = String(msg?.from ?? "");
+    const to = msg?.to ? String(msg.to) : undefined;
+    const room = msg?.room ? String(msg.room) : undefined;
+    const rawId = msg?.id;
+    const id = typeof rawId === "number" && Number.isFinite(rawId) ? rawId : null;
+    if (id === null) return;
+    const key = room ? roomKey(room) : dmKey(from === state.selfId ? String(to ?? "") : from);
+    if (!key) return;
+    patch((prev) => {
+      const conv = prev.conversations[key];
+      if (!Array.isArray(conv) || !conv.length) return prev;
+      const nextConv = conv.filter((m) => m.id !== id);
+      if (nextConv.length === conv.length) return prev;
+      const pinnedIds = prev.pinnedMessages[key];
+      const hadPinned = Array.isArray(pinnedIds) && pinnedIds.includes(id);
+      const nextPinned = hadPinned ? { ...prev.pinnedMessages } : prev.pinnedMessages;
+      const nextActive = hadPinned ? { ...prev.pinnedMessageActive } : prev.pinnedMessageActive;
+      if (hadPinned) {
+        const nextList = pinnedIds.filter((x) => x !== id);
+        if (nextList.length) {
+          nextPinned[key] = nextList;
+          if (nextActive[key] === id || !nextList.includes(nextActive[key])) nextActive[key] = nextList[0];
+        } else {
+          delete nextPinned[key];
+          delete nextActive[key];
+        }
+      }
+      const next = {
+        ...prev,
+        conversations: { ...prev.conversations, [key]: nextConv },
+        pinnedMessages: nextPinned,
+        pinnedMessageActive: nextActive,
+      };
+      if (prev.editing && prev.editing.key === key && prev.editing.id === id) {
+        return { ...next, editing: null, input: prev.editing.prevDraft || "" };
+      }
+      return next;
+    });
+    patch({ status: "Сообщение удалено" });
+    return;
+  }
+  if (t === "message_edited") {
+    const ok = msg?.ok;
+    if (ok === false) {
+      const reason = String(msg?.reason ?? "ошибка");
+      patch({ status: `Не удалось изменить сообщение: ${reason}` });
+      return;
+    }
+    const from = String(msg?.from ?? "");
+    const to = msg?.to ? String(msg.to) : undefined;
+    const room = msg?.room ? String(msg.room) : undefined;
+    const text = String(msg?.text ?? "");
+    const rawId = msg?.id;
+    const id = typeof rawId === "number" && Number.isFinite(rawId) ? rawId : null;
+    if (id === null) return;
+    const key = room ? roomKey(room) : dmKey(from === state.selfId ? String(to ?? "") : from);
+    if (!key) return;
+    patch((prev) => {
+      const conv = prev.conversations[key];
+      if (!Array.isArray(conv) || !conv.length) return prev;
+      const idx = conv.findIndex((m) => typeof m.id === "number" && m.id === id);
+      if (idx < 0) return prev;
+      const next = [...conv];
+      const cur = next[idx];
+      next[idx] = { ...cur, text, edited: true };
+      return { ...prev, conversations: { ...prev.conversations, [key]: next } };
+    });
+    patch({ status: "Сообщение изменено" });
+    return;
+  }
+  if (t === "message_queued") {
+    const to = msg?.to ? String(msg.to) : undefined;
+    if (!to) return;
+    const id = msg?.id ?? null;
+    patch((prev) =>
+      updateLastOutgoing(prev, dmKey(to), (msg) => ({
+        ...msg,
+        id,
+        status: "queued",
+      }))
+    );
+    return;
+  }
+  if (t === "message_blocked") {
+    const to = String(msg?.to ?? "");
+    const reason = String(msg?.reason ?? "blocked");
+    if (!to) return;
+    patch({ status: `Сообщение не отправлено: ${reason}` });
+    patch((prev) =>
+      updateLastOutgoing(prev, dmKey(to), (msg) => ({
+        ...msg,
+        status: "error",
+      }))
+    );
+    patch((prev) =>
+      upsertConversation(prev, dmKey(to), { kind: "sys", from: "", to, text: `[blocked] ${reason}`, ts: nowTs(), id: null })
+    );
+    return;
+  }
+  if (t === "message_read_ack") {
+    const peer = String(msg?.peer ?? "").trim();
+    const rawUpTo = msg?.up_to_id;
+    const upTo = typeof rawUpTo === "number" && Number.isFinite(rawUpTo) ? rawUpTo : null;
+    if (!peer) return;
+    patch((prev) => {
+      const key = dmKey(peer);
+      const conv = prev.conversations[key];
+      if (!conv || conv.length === 0) return prev;
+      let changed = false;
+      const next = conv.map((m) => {
+        if (m.kind !== "out") return m;
+        if (m.id === undefined || m.id === null) return m;
+        if (upTo !== null && Number(m.id) > upTo) return m;
+        if (m.status === "read") return m;
+        changed = true;
+        return { ...m, status: "read" as const };
+      });
+      if (!changed) return prev;
+      return { ...prev, conversations: { ...prev.conversations, [key]: next } };
+    });
+    return;
+  }
+  if (t === "history_result") {
+    const resultRoom = msg?.room ? String(msg.room) : undefined;
+    const resultPeer = msg?.peer ? String(msg.peer) : undefined;
+    const key = resultRoom ? roomKey(resultRoom) : resultPeer ? dmKey(resultPeer) : "";
+    if (!key) return;
+    const beforeIdRaw = msg?.before_id;
+    const hasBefore = beforeIdRaw !== undefined && beforeIdRaw !== null;
+    const hasMore = hasBefore ? Boolean(msg?.has_more) : undefined;
+    const rows = Array.isArray(msg?.rows) ? msg.rows : [];
+    const incoming: ChatMessage[] = [];
+    for (const r of rows) {
+      const from = String(r?.from ?? "");
+      if (!from) continue;
+      const to = r?.to ? String(r.to) : undefined;
+      const room = resultRoom ? resultRoom : r?.room ? String(r.room) : undefined;
+      const text = String(r?.text ?? "");
+      const ts = Number(r?.ts ?? nowTs()) || nowTs();
+      const id = r?.id === undefined || r?.id === null ? null : Number(r.id);
+      const kind: ChatMessage["kind"] = from === state.selfId ? "out" : "in";
+      const hasId = typeof id === "number" && Number.isFinite(id);
+      const delivered = Boolean(r?.delivered);
+      const read = Boolean(r?.read);
+      const edited = Boolean(r?.edited);
+      const status: ChatMessage["status"] | undefined =
+        !room && kind === "out" && hasId ? (read ? "read" : delivered ? "delivered" : "queued") : undefined;
+      const attachment = parseAttachment(r?.attachment);
+      incoming.push({ kind, from, to, room, text, ts, id, attachment, ...(status ? { status } : {}), ...(edited ? { edited: true } : {}) });
+    }
+    patch((prev) => {
+      const nextConv = mergeMessages(prev.conversations[key] ?? [], incoming);
+      const cursor = oldestLoadedId(nextConv);
+      const prevCursor = (prev as any).historyCursor || {};
+      const prevHasMoreMap = (prev as any).historyHasMore || {};
+      const prevLoadingMap = (prev as any).historyLoading || {};
+      return {
+        ...prev,
+        conversations: { ...prev.conversations, [key]: nextConv },
+        historyLoaded: { ...prev.historyLoaded, [key]: true },
+        historyCursor: cursor !== null ? { ...prevCursor, [key]: cursor } : prevCursor,
+        historyHasMore: hasBefore ? { ...prevHasMoreMap, [key]: Boolean(hasMore) } : prevHasMoreMap,
+        historyLoading: { ...prevLoadingMap, [key]: false },
+      };
+    });
+    return;
+  }
+  if (t === "update_required") {
+    const latest = String(msg?.latest ?? "").trim();
+    if (!latest) return;
+    if (state.updateDismissedLatest && state.updateDismissedLatest === latest) return;
+    // “В тишине”: без модалки, только статус + хоткей.
+    patch({ updateLatest: latest, status: `Доступно обновление до v${latest} (Ctrl+U — применить)` });
+    return;
+  }
+  if (t === "error") {
+    const raw = String(msg?.message ?? "error");
+    const friendly = humanizeError(raw);
+    patch({ status: `Ошибка: ${friendly}` });
+
+    const sel = state.selected;
+    if (state.page === "main" && !state.modal && sel) {
+      const sendRelated = new Set([
+        "not_in_group",
+        "board_post_forbidden",
+        "board_check_failed",
+        "group_check_failed",
+        "broadcast_disabled",
+        "message_too_long",
+        "bad_text",
+        "bad_recipient",
+        "rate_limited",
+      ]);
+      if (sendRelated.has(raw)) {
+        const key = sel.kind === "dm" ? dmKey(sel.id) : roomKey(sel.id);
+        patch((prev) =>
+          updateLastOutgoing(prev, key, (msg) => ({
+            ...msg,
+            status: "error",
+          }))
+        );
+        patch((prev) =>
+          upsertConversation(prev, key, {
+            kind: "sys",
+            from: "",
+            ...(sel.kind === "dm" ? { to: sel.id } : { room: sel.id }),
+            text: `[ошибка] ${friendly}`,
+            ts: nowTs(),
+            id: null,
+          })
+        );
+      }
+    }
+    return;
+  }
+
+  // noop for now
+  void gateway;
+}
