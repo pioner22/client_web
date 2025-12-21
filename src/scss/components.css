@@ -966,61 +966,6 @@
   cursor: not-allowed;
 }
 
-.btn.composer-send {
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: 999px;
-  border-color: transparent;
-  font-size: 0;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  background: transparent;
-  color: var(--btn-text);
-}
-
-.btn.composer-send::before {
-  content: "";
-  width: 20px;
-  height: 20px;
-  background: currentColor;
-  opacity: 0.92;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M2 21 23 12 2 3v7l15 2-15 2z'/%3E%3C/svg%3E")
-    no-repeat center / contain;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M2 21 23 12 2 3v7l15 2-15 2z'/%3E%3C/svg%3E")
-    no-repeat center / contain;
-}
-
-.input-wrap.composer-editing .btn.composer-send::before {
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E")
-    no-repeat center / contain;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E")
-    no-repeat center / contain;
-}
-
-.btn.composer-send:not(:disabled) {
-  background: color-mix(in srgb, var(--focus), transparent 78%);
-  border-color: transparent;
-  color: #fff;
-}
-
-.btn.composer-send:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--focus), transparent 70%);
-}
-
-.btn.composer-send:active:not(:disabled) {
-  background: color-mix(in srgb, var(--focus), transparent 62%);
-  transform: translateY(1px);
-}
-
-.btn.composer-send:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  background: transparent;
-}
-
 .input::placeholder {
   color: var(--composer-field-placeholder);
 }

@@ -13,7 +13,11 @@ function isSupportedField(el: CaretTarget): boolean {
     const banned = new Set(["button", "submit", "reset", "checkbox", "radio", "file", "color", "range", "hidden", "password"]);
     if (banned.has(t)) return false;
   }
-  return el.classList.contains("input") || el.classList.contains("modal-input");
+  // Chat composer textarea is multi-line and auto-sized; the custom caret can become jittery there.
+  // Keep native caret for the composer and use fancy caret only for simpler text inputs.
+  if (el.classList.contains("modal-input")) return true;
+  if (el.classList.contains("input")) return el instanceof HTMLInputElement;
+  return false;
 }
 
 function repeatChar(ch: string, count: number): string {

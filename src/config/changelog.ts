@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.57",
+    date: "2025-12-21",
+    improved: [
+      "Composer: кнопка отправки теперь единообразно «ягодка» (без конфликтующих стилей), в режиме редактирования — галочка",
+      "Каретка в поле ввода сообщений: оставили нативную (меньше «скачет» на десктопе)",
+    ],
+  },
+  {
     version: "0.1.56",
     date: "2025-12-21",
     added: ["Info (F1) с журналом изменений и мини‑инструкцией прямо в приложении"],
@@ -27,4 +35,3 @@ export const CHANGELOG: ChangelogEntry[] = [
     improved: ["Workaround для iOS PWA: панель Undo/Redo/✓ появляется реже при вводе текста"],
   },
 ];
-
