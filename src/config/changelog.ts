@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.62",
+    date: "2025-12-21",
+    improved: ["Labs: ios-input-assistant.html теперь содержит атрибуты поля ввода прямо в HTML (проверка работает даже при строгом CSP)"],
+  },
+  {
     version: "0.1.61",
     date: "2025-12-21",
     improved: [

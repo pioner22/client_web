@@ -80,7 +80,17 @@
       <button id="preset-strict" type="button">Preset: strict (autocorrect off)</button>
     </div>
 
-    <textarea id="field" rows="3" placeholder="Напишите что‑нибудь…"></textarea>
+    <textarea
+      id="field"
+      rows="3"
+      placeholder="Напишите что‑нибудь…"
+      autocomplete="off"
+      autocorrect="on"
+      autocapitalize="none"
+      spellcheck="true"
+      inputmode="text"
+      enterkeyhint="send"
+    ></textarea>
     <div class="attrs" id="attrs"></div>
 
     <script>
@@ -120,4 +130,3 @@
     </script>
   </body>
 </html>
-
