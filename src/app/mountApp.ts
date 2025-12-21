@@ -45,6 +45,7 @@ import { defaultToastTimeoutMs } from "../helpers/ui/toast";
 import { shouldAutofocusComposer } from "../helpers/ui/autofocusPolicy";
 import { armCtxClickSuppression, consumeCtxClickSuppression, type CtxClickSuppressionState } from "../helpers/ui/ctxClickSuppression";
 import { applyIosInputAssistantWorkaround } from "../helpers/ui/iosInputAssistant";
+import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 
 function autosizeInput(el: HTMLTextAreaElement) {
   el.style.height = "auto";
@@ -4077,6 +4078,7 @@ export function mountApp(root: HTMLElement) {
   let suppressSidebarClick = false;
   let suppressSidebarClickTimer: number | null = null;
   let sidebarCtxClickSuppression: CtxClickSuppressionState = { key: null, until: 0 };
+  let sidebarCtxMouseFallbackSuppressUntil = 0;
 
   function armSidebarClickSuppression(ms: number) {
     suppressSidebarClick = true;
@@ -4104,7 +4106,8 @@ export function mountApp(root: HTMLElement) {
   let sidebarCtxPrevLeft = 0;
   let sidebarCtxPrevAt = 0;
   let sidebarCtxHasPrev = false;
-  const SIDEBAR_CTX_SCROLL_MAX_AGE_MS = 8000;
+  // Keep this low to avoid restoring a stale snapshot (which would look like a jump).
+  const SIDEBAR_CTX_SCROLL_MAX_AGE_MS = 1200;
 
   function rememberSidebarCtxScroll() {
     sidebarCtxPrevTop = layout.sidebar.scrollTop;
@@ -4113,25 +4116,25 @@ export function mountApp(root: HTMLElement) {
     sidebarCtxHasPrev = true;
   }
 
-  function stabilizeSidebarFocusOnContextClick(btn: HTMLButtonElement) {
-    const top = layout.sidebar.scrollTop;
-    const left = layout.sidebar.scrollLeft;
-    try {
-      btn.focus({ preventScroll: true });
-    } catch {
-      // ignore
-    }
-    if (layout.sidebar.scrollTop !== top) layout.sidebar.scrollTop = top;
-    if (layout.sidebar.scrollLeft !== left) layout.sidebar.scrollLeft = left;
+  function stabilizeSidebarScrollOnContextClick(top: number, left: number) {
+    const restore = () => restoreSidebarCtxScroll(top, left);
+    restore();
+    window.requestAnimationFrame(restore);
+    window.setTimeout(restore, 0);
+    window.setTimeout(restore, 80);
   }
 
   function readSidebarCtxScrollSnapshot() {
-    const now = Date.now();
-    const ok = sidebarCtxHasPrev && now - sidebarCtxPrevAt < SIDEBAR_CTX_SCROLL_MAX_AGE_MS;
-    return {
-      top: ok ? sidebarCtxPrevTop : layout.sidebar.scrollTop,
-      left: ok ? sidebarCtxPrevLeft : layout.sidebar.scrollLeft,
-    };
+    const r = readScrollSnapshot({
+      curTop: layout.sidebar.scrollTop,
+      curLeft: layout.sidebar.scrollLeft,
+      prevTop: sidebarCtxPrevTop,
+      prevLeft: sidebarCtxPrevLeft,
+      prevAt: sidebarCtxPrevAt,
+      hasPrev: sidebarCtxHasPrev,
+      maxAgeMs: SIDEBAR_CTX_SCROLL_MAX_AGE_MS,
+    });
+    return { top: r.top, left: r.left };
   }
 
   function restoreSidebarCtxScroll(top: number, left: number) {
@@ -4148,10 +4151,10 @@ export function mountApp(root: HTMLElement) {
       if (!isContextClick) return;
       const btn = (ev.target as HTMLElement | null)?.closest("button[data-ctx-kind][data-ctx-id]") as HTMLButtonElement | null;
       if (!btn) return;
+      sidebarCtxMouseFallbackSuppressUntil = Date.now() + 250;
       rememberSidebarCtxScroll();
-      stabilizeSidebarFocusOnContextClick(btn);
       const { top, left } = readSidebarCtxScrollSnapshot();
-      restoreSidebarCtxScroll(top, left);
+      stabilizeSidebarScrollOnContextClick(top, left);
       ev.preventDefault();
       ev.stopPropagation();
       armSidebarClickSuppression(650);
@@ -4163,14 +4166,14 @@ export function mountApp(root: HTMLElement) {
     "mousedown",
     (e) => {
       const ev = e as MouseEvent;
+      if (Date.now() < sidebarCtxMouseFallbackSuppressUntil) return;
       const isContextClick = ev.button === 2 || (ev.button === 0 && ev.ctrlKey);
       if (!isContextClick) return;
       const btn = (ev.target as HTMLElement | null)?.closest("button[data-ctx-kind][data-ctx-id]") as HTMLButtonElement | null;
       if (!btn) return;
       rememberSidebarCtxScroll();
-      stabilizeSidebarFocusOnContextClick(btn);
       const { top, left } = readSidebarCtxScrollSnapshot();
-      restoreSidebarCtxScroll(top, left);
+      stabilizeSidebarScrollOnContextClick(top, left);
       ev.preventDefault();
       ev.stopPropagation();
       armSidebarClickSuppression(650);
