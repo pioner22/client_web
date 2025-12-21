@@ -290,7 +290,8 @@
   }
 
   /* На мобилке заголовок чата уже есть в шапке — не дублируем над сообщениями. */
-  .chat > .chat-title {
+  .chat > .chat-title,
+  .chat > .chat-top > .chat-title {
     display: none;
   }
 

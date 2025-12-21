@@ -4325,6 +4325,16 @@ export function mountApp(root: HTMLElement) {
     if (layout.sidebar.scrollLeft !== left) layout.sidebar.scrollLeft = left;
   }
 
+  function lockSidebarCtxScroll(top: number, left: number, durationMs: number) {
+    const start = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+    const tick = () => {
+      restoreSidebarCtxScroll(top, left);
+      const now = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+      if (now - start < durationMs) window.requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
   layout.sidebar.addEventListener(
     "pointerdown",
     (e) => {
@@ -4398,6 +4408,11 @@ export function mountApp(root: HTMLElement) {
     const { top: prevTop, left: prevLeft } = readSidebarCtxScrollSnapshot();
     const btn = (e.target as HTMLElement | null)?.closest("button[data-ctx-kind][data-ctx-id]") as HTMLButtonElement | null;
     if (!btn) return;
+    try {
+      btn.focus({ preventScroll: true });
+    } catch {
+      // ignore
+    }
     e.preventDefault();
     e.stopPropagation();
     // In some browsers Ctrl+Click may still generate a click; suppress it so the list doesn't jump/activate.
@@ -4411,22 +4426,15 @@ export function mountApp(root: HTMLElement) {
     sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 1800);
     openContextMenu({ kind, id }, e.clientX, e.clientY);
     // Подстраховка от "скачков" скролла на некоторых браузерах при открытии контекстного меню.
-    const restore = () => {
-      restoreSidebarCtxScroll(prevTop, prevLeft);
-    };
-    restore();
-    window.requestAnimationFrame(restore);
-    window.setTimeout(restore, 0);
-    window.setTimeout(restore, 140);
-    window.setTimeout(restore, 420);
-    window.setTimeout(restore, 900);
+    restoreSidebarCtxScroll(prevTop, prevLeft);
+    lockSidebarCtxScroll(prevTop, prevLeft, 1100);
 
     const onFocus = (ev: FocusEvent) => {
       const t = ev.target as HTMLElement | null;
       if (!t) return;
       if (!t.closest(".ctx-menu")) return;
       document.removeEventListener("focusin", onFocus, true);
-      restore();
+      restoreSidebarCtxScroll(prevTop, prevLeft);
     };
     document.addEventListener("focusin", onFocus, true);
     window.setTimeout(() => document.removeEventListener("focusin", onFocus, true), 900);

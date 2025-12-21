@@ -98,3 +98,25 @@ test("handleServerMessage: message_edited ok=false показывает стат
   }
 });
 
+test("handleServerMessage: message_edited обновляет сообщение даже без room/to (fallback по msg_id)", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      conversations: {
+        [key]: [{ kind: "out", from: selfId, to: peer, text: "a", ts: 1, id: 10, status: "delivered" }],
+      },
+    });
+
+    handleServerMessage({ type: "message_edited", ok: true, from: selfId, id: 10, text: "b" }, getState(), { send() {} }, patch);
+
+    const st = getState();
+    assert.equal(st.conversations[key][0].text, "b");
+    assert.equal(st.conversations[key][0].edited, true);
+  } finally {
+    await cleanup();
+  }
+});

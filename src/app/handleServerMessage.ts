@@ -1134,26 +1134,61 @@ export function handleServerMessage(
       patch({ status: `Не удалось изменить сообщение: ${reason}` });
       return;
     }
-    const from = String(msg?.from ?? "");
-    const to = msg?.to ? String(msg.to) : undefined;
-    const room = msg?.room ? String(msg.room) : undefined;
+    const from = String(msg?.from ?? "").trim();
+    const to = msg?.to ? String(msg.to).trim() : "";
+    const room = msg?.room ? String(msg.room).trim() : "";
     const text = String(msg?.text ?? "");
     const rawId = msg?.id;
     const id = typeof rawId === "number" && Number.isFinite(rawId) ? rawId : null;
     if (id === null) return;
-    const key = room ? roomKey(room) : dmKey(from === state.selfId ? String(to ?? "") : from);
-    if (!key) return;
+    let didUpdate = false;
     patch((prev) => {
-      const conv = prev.conversations[key];
-      if (!Array.isArray(conv) || !conv.length) return prev;
-      const idx = conv.findIndex((m) => typeof m.id === "number" && m.id === id);
-      if (idx < 0) return prev;
-      const next = [...conv];
-      const cur = next[idx];
-      next[idx] = { ...cur, text, edited: true };
-      return { ...prev, conversations: { ...prev.conversations, [key]: next } };
+      const conversations = (prev as any).conversations || {};
+      const candidates: string[] = [];
+      if (room) candidates.push(roomKey(room));
+      if (!room) {
+        const selfId = String((prev as any).selfId ?? "").trim();
+        const peer = selfId && from && from === selfId ? to : from;
+        if (peer) candidates.push(dmKey(peer));
+      }
+      const selected = (prev as any).selected;
+      const selectedKey = selected ? (selected.kind === "dm" ? dmKey(String(selected.id || "")) : roomKey(String(selected.id || ""))) : "";
+      if (selectedKey && !candidates.includes(selectedKey)) candidates.push(selectedKey);
+
+      const tryUpdate = (key: string): AppState | null => {
+        const k = String(key || "").trim();
+        if (!k) return null;
+        const conv = conversations[k];
+        if (!Array.isArray(conv) || !conv.length) return null;
+        const idx = conv.findIndex((m) => typeof m?.id === "number" && m.id === id);
+        if (idx < 0) return null;
+        const next = [...conv];
+        const cur = next[idx];
+        next[idx] = { ...cur, text, edited: true };
+        didUpdate = true;
+        return { ...(prev as any), conversations: { ...conversations, [k]: next } } as AppState;
+      };
+
+      for (const k of candidates) {
+        const next = tryUpdate(k);
+        if (next) return next;
+      }
+
+      // Fallback: routing metadata может отсутствовать, но msg_id глобально уникален — найдём по всем чатам.
+      for (const [k, conv] of Object.entries(conversations)) {
+        if (!Array.isArray(conv) || !conv.length) continue;
+        const idx = (conv as any[]).findIndex((m) => typeof m?.id === "number" && m.id === id);
+        if (idx < 0) continue;
+        const nextConv = [...(conv as any[])];
+        const cur = nextConv[idx];
+        nextConv[idx] = { ...cur, text, edited: true };
+        didUpdate = true;
+        return { ...(prev as any), conversations: { ...conversations, [k]: nextConv } } as AppState;
+      }
+
+      return prev;
     });
-    patch({ status: "Сообщение изменено" });
+    patch({ status: didUpdate ? "Сообщение изменено" : "Сообщение изменено (обновится после синхронизации)" });
     return;
   }
   if (t === "message_queued") {

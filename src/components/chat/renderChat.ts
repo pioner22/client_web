@@ -451,10 +451,12 @@ export function renderChat(target: HTMLElement, state: AppState) {
     ]);
   }
 
-  const children: HTMLElement[] = [el("div", { class: "chat-title" }, titleChildren)];
-  if (pinnedBar) children.push(pinnedBar);
-  if (searchBar) children.push(searchBar);
-  children.push(el("div", { class: "chat-lines" }, lines), jumpBtn);
+  const topChildren: HTMLElement[] = [el("div", { class: "chat-title" }, titleChildren)];
+  if (pinnedBar) topChildren.push(pinnedBar);
+  if (searchBar) topChildren.push(searchBar);
+  const top = el("div", { class: "chat-top" }, topChildren);
+
+  const children: HTMLElement[] = [top, el("div", { class: "chat-lines" }, lines), jumpBtn];
   target.replaceChildren(...children);
   if (stickToBottom) {
     target.scrollTop = target.scrollHeight;

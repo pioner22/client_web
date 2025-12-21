@@ -320,6 +320,34 @@
   gap: var(--sp-2);
 }
 
+.chat-top {
+  position: sticky;
+  top: var(--chat-pad);
+  z-index: 6;
+  background: var(--chat-bg);
+}
+
+.chat-top::after {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: var(--sp-2) 0 var(--sp-3);
+  background: color-mix(in srgb, var(--line), transparent 55%);
+}
+
+.chat-top > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-top:has(.chat-search)::after,
+.chat-top:has(.chat-pinned)::after {
+  margin-top: var(--sp-2);
+}
+
+.chat-top:has(.chat-search)::after {
+  margin-bottom: var(--sp-2);
+}
+
 .chat-title .avatar {
   width: var(--chat-title-avatar-size, 20px);
   height: var(--chat-title-avatar-size, 20px);

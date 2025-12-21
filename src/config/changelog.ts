@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.68",
+    date: "2025-12-21",
+    fixed: [
+      "Чат: панель закрепа и поиск теперь закреплены над историей и не «уезжают» при прокрутке",
+      "Редактирование сообщений: правка применяется устойчивее (fallback по msg_id, даже если в payload нет room/to)",
+      "Сайдбар: ПКМ/Ctrl+Click больше не должен «ронять» скролл списка (lock scroll во время открытия меню)",
+    ],
+  },
+  {
     version: "0.1.67",
     date: "2025-12-21",
     improved: ["Надёжность отправки: добавлена локальная outbox‑очередь (offline→send) с автоповтором на reconnect и дедупом по истории"],
