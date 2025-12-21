@@ -233,7 +233,7 @@ export function renderSidebar(
       el("div", { class: "sidebar-mobile-title" }, ["Меню"]),
     ]),
     el("div", { class: "pane-title" }, ["Контакты"]),
-    roomRow("?", "Помощь", state.page === "help", () => onOpenHelp()),
+    roomRow("?", "Info", state.page === "help", () => onOpenHelp()),
     roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup()),
     roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard()),
     ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),

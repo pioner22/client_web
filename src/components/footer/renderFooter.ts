@@ -3,7 +3,7 @@ import type { AppState } from "../../stores/types";
 
 function viewTitle(state: AppState): string {
   if (state.page === "search") return "Поиск";
-  if (state.page === "help") return "Помощь";
+  if (state.page === "help") return "Info";
   if (state.page === "profile") return "Профиль";
   if (state.page === "files") return "Файлы";
   if (state.page === "group_create") return "Создать чат";

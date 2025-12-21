@@ -6,9 +6,10 @@ import type { Layout } from "../layout/types";
 export function renderHeader(layout: Layout, state: AppState) {
   const webBuild = splitBuildId(state.clientVersion);
   const verTitle = state.serverVersion ? `srv ${state.serverVersion}` : "";
+  const headerId = state.selfId ?? state.authRememberedId ?? "—";
   let title = "Чат";
   if (state.page === "search") title = "Поиск";
-  else if (state.page === "help") title = "Помощь";
+  else if (state.page === "help") title = "Info";
   else if (state.page === "profile") title = "Профиль";
   else if (state.page === "files") title = "Файлы";
   else if (state.page === "group_create") title = "Создать чат";
@@ -60,7 +61,7 @@ export function renderHeader(layout: Layout, state: AppState) {
     ),
     " ",
     el("span", { class: "hdr-label" }, ["Ваш ID: "]),
-    el("span", { class: "hdr-id" }, [state.selfId ?? "—"]),
+    el("span", { class: "hdr-id" }, [headerId]),
     ...(state.conn === "connected" && !state.authed
       ? [
           " ",
@@ -90,7 +91,7 @@ export function renderHeader(layout: Layout, state: AppState) {
 
   layout.hotkeys.replaceChildren(
     ...[
-      ["F1", "помощь"],
+      ["F1", "info"],
       ["F2", "профиль"],
       ["F3", "поиск"],
       ["F5", "чат+"],
