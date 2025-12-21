@@ -3,15 +3,16 @@ import type {
   ActionModalBoardInvite,
   ActionModalGroupInvite,
   ActionModalGroupJoinRequest,
-  AppState,
-  BoardEntry,
-  ChatAttachment,
-  ChatMessage,
-  FriendEntry,
-  GroupEntry,
-  SearchResultEntry,
-  UserProfile,
-} from "../stores/types";
+	  AppState,
+	  BoardEntry,
+	  ChatAttachment,
+	  ChatMessage,
+	  FriendEntry,
+	  GroupEntry,
+	  OutboxEntry,
+	  SearchResultEntry,
+	  UserProfile,
+	} from "../stores/types";
 import { dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { nowTs } from "../helpers/time";
 import { parseRoster } from "../helpers/roster/parseRoster";
@@ -25,6 +26,7 @@ import {
   storeAuthId,
   storeSessionToken,
 } from "../helpers/auth/session";
+import { removeOutboxEntry } from "../helpers/chat/outbox";
 
 function oldestLoadedId(msgs: ChatMessage[]): number | null {
   let min: number | null = null;
@@ -50,6 +52,25 @@ function updateLastOutgoing(state: AppState, key: string, update: (msg: ChatMess
     return { ...state, conversations: { ...state.conversations, [key]: next } };
   }
   return state;
+}
+
+function updateFirstPendingOutgoing(
+  state: AppState,
+  key: string,
+  update: (msg: ChatMessage) => ChatMessage
+): { state: AppState; localId: string | null } {
+  const conv = state.conversations[key];
+  if (!conv || conv.length === 0) return { state, localId: null };
+  for (let i = 0; i < conv.length; i += 1) {
+    const msg = conv[i];
+    if (msg.kind !== "out") continue;
+    if (msg.id !== undefined && msg.id !== null) continue;
+    const next = [...conv];
+    next[i] = update(msg);
+    const lid = typeof msg.localId === "string" && msg.localId.trim() ? msg.localId.trim() : null;
+    return { state: { ...state, conversations: { ...state.conversations, [key]: next } }, localId: lid };
+  }
+  return { state, localId: null };
 }
 
 function humanizeError(raw: string): string {
@@ -1038,20 +1059,23 @@ export function handleServerMessage(
     const rawId = msg?.id;
     const id = typeof rawId === "number" && Number.isFinite(rawId) ? rawId : null;
     patch((prev) => {
+      const curOutbox = ((prev as any).outbox || {}) as any;
       const conv = prev.conversations[key];
       if (id !== null && Array.isArray(conv) && conv.length) {
         const idx = conv.findIndex((m) => m.kind === "out" && typeof m.id === "number" && m.id === id);
         if (idx >= 0) {
+          const cur = conv[idx];
           const next = [...conv];
-          next[idx] = { ...next[idx], status: "delivered" };
-          return { ...prev, conversations: { ...prev.conversations, [key]: next } };
+          next[idx] = { ...cur, status: "delivered" };
+          const lid = typeof cur.localId === "string" && cur.localId.trim() ? cur.localId.trim() : null;
+          const outbox = lid ? removeOutboxEntry(curOutbox, key, lid) : curOutbox;
+          return { ...prev, conversations: { ...prev.conversations, [key]: next }, outbox };
         }
       }
-      return updateLastOutgoing(prev, key, (msg) => ({
-        ...msg,
-        id,
-        status: "delivered",
-      }));
+      const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, id, status: "delivered" }));
+      const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
+      const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
+      return { ...updated.state, outbox };
     });
     return;
   }
@@ -1136,13 +1160,14 @@ export function handleServerMessage(
     const to = msg?.to ? String(msg.to) : undefined;
     if (!to) return;
     const id = msg?.id ?? null;
-    patch((prev) =>
-      updateLastOutgoing(prev, dmKey(to), (msg) => ({
-        ...msg,
-        id,
-        status: "queued",
-      }))
-    );
+    const key = dmKey(to);
+    patch((prev) => {
+      const curOutbox = ((prev as any).outbox || {}) as any;
+      const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, id, status: "queued" }));
+      const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
+      const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
+      return { ...updated.state, outbox };
+    });
     return;
   }
   if (t === "message_blocked") {
@@ -1150,12 +1175,14 @@ export function handleServerMessage(
     const reason = String(msg?.reason ?? "blocked");
     if (!to) return;
     patch({ status: `Сообщение не отправлено: ${reason}` });
-    patch((prev) =>
-      updateLastOutgoing(prev, dmKey(to), (msg) => ({
-        ...msg,
-        status: "error",
-      }))
-    );
+    const key = dmKey(to);
+    patch((prev) => {
+      const curOutbox = ((prev as any).outbox || {}) as any;
+      const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, status: "error" }));
+      const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
+      const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
+      return { ...updated.state, outbox };
+    });
     patch((prev) =>
       upsertConversation(prev, dmKey(to), { kind: "sys", from: "", to, text: `[blocked] ${reason}`, ts: nowTs(), id: null })
     );
@@ -1213,7 +1240,59 @@ export function handleServerMessage(
       incoming.push({ kind, from, to, room, text, ts, id, attachment, ...(status ? { status } : {}), ...(edited ? { edited: true } : {}) });
     }
     patch((prev) => {
-      const nextConv = mergeMessages(prev.conversations[key] ?? [], incoming);
+      let baseConv = prev.conversations[key] ?? [];
+      let outbox = (((prev as any).outbox || {}) as any) as any;
+
+      // Best-effort dedup for reconnect: if history already contains our message, bind it to a pending outbox entry
+      // (so we don't resend and we don't show duplicates).
+      const pendingRaw = outbox[key];
+      const pending: OutboxEntry[] = Array.isArray(pendingRaw) ? pendingRaw : [];
+      if (pending.length && incoming.length) {
+        const left = [...pending];
+        let conv = baseConv;
+        let changed = false;
+        for (const inc of incoming) {
+          if (inc.kind !== "out") continue;
+          const incId = typeof inc.id === "number" && Number.isFinite(inc.id) && inc.id > 0 ? inc.id : null;
+          if (incId === null) continue;
+          if (inc.attachment) continue;
+          const text = String(inc.text || "");
+          if (!text) continue;
+
+          let bestIdx = -1;
+          let bestDelta = Infinity;
+          for (let i = 0; i < left.length; i += 1) {
+            const e = left[i];
+            if (!e) continue;
+            if (e.text !== text) continue;
+            if (e.to && inc.to && e.to !== inc.to) continue;
+            if (e.room && inc.room && e.room !== inc.room) continue;
+            const delta = Math.abs(Number(e.ts) - Number(inc.ts));
+            if (!Number.isFinite(delta) || delta > 12) continue;
+            if (delta < bestDelta) {
+              bestDelta = delta;
+              bestIdx = i;
+            }
+          }
+          if (bestIdx < 0) continue;
+          const matched = left[bestIdx];
+          left.splice(bestIdx, 1);
+          const lid = typeof matched.localId === "string" ? matched.localId : "";
+          if (!lid) continue;
+
+          const idx = conv.findIndex((m) => m.kind === "out" && (m.id === undefined || m.id === null) && typeof m.localId === "string" && m.localId === lid);
+          if (idx >= 0) {
+            const next = [...conv];
+            next[idx] = { ...next[idx], id: incId, status: inc.status ?? next[idx].status, ts: inc.ts };
+            conv = next;
+            changed = true;
+          }
+          outbox = removeOutboxEntry(outbox, key, lid);
+        }
+        if (changed) baseConv = conv;
+      }
+
+      const nextConv = mergeMessages(baseConv, incoming);
       const cursor = oldestLoadedId(nextConv);
       const prevCursor = (prev as any).historyCursor || {};
       const prevHasMoreMap = (prev as any).historyHasMore || {};
@@ -1221,6 +1300,7 @@ export function handleServerMessage(
       return {
         ...prev,
         conversations: { ...prev.conversations, [key]: nextConv },
+        outbox,
         historyLoaded: { ...prev.historyLoaded, [key]: true },
         historyCursor: cursor !== null ? { ...prevCursor, [key]: cursor } : prevCursor,
         historyHasMore: hasBefore ? { ...prevHasMoreMap, [key]: Boolean(hasMore) } : prevHasMoreMap,
@@ -1257,12 +1337,13 @@ export function handleServerMessage(
       ]);
       if (sendRelated.has(raw)) {
         const key = sel.kind === "dm" ? dmKey(sel.id) : roomKey(sel.id);
-        patch((prev) =>
-          updateLastOutgoing(prev, key, (msg) => ({
-            ...msg,
-            status: "error",
-          }))
-        );
+        patch((prev) => {
+          const curOutbox = ((prev as any).outbox || {}) as any;
+          const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, status: "error" }));
+          const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
+          const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
+          return { ...updated.state, outbox };
+        });
         patch((prev) =>
           upsertConversation(prev, key, {
             kind: "sys",

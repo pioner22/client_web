@@ -66,11 +66,12 @@ export class GatewayClient {
 
   send(obj: unknown) {
     const ws = this.ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
     try {
       ws.send(JSON.stringify(obj));
+      return true;
     } catch {
-      // ignore
+      return false;
     }
   }
 

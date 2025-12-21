@@ -81,20 +81,24 @@ function transferStatus(entry: FileTransferEntry): string {
   return entry.direction === "out" ? "Ожидание подтверждения" : "Ожидание отправителя";
 }
 
-function statusLabel(status?: ChatMessage["status"]): string {
+function statusLabel(m: ChatMessage): string {
+  const status = m.status;
   if (!status) return "";
+  const hasServerId = typeof m.id === "number" && Number.isFinite(m.id) && m.id > 0;
   if (status === "sending") return "…";
-  if (status === "queued") return "✓";
+  if (status === "queued") return hasServerId ? "✓" : "…";
   if (status === "delivered") return "✓✓";
   if (status === "read") return "✓✓";
   if (status === "error") return "!";
   return "";
 }
 
-function statusTitle(status?: ChatMessage["status"]): string {
+function statusTitle(m: ChatMessage): string {
+  const status = m.status;
   if (!status) return "";
+  const hasServerId = typeof m.id === "number" && Number.isFinite(m.id) && m.id > 0;
   if (status === "sending") return "Отправляется…";
-  if (status === "queued") return "В очереди (адресат оффлайн)";
+  if (status === "queued") return hasServerId ? "В очереди (адресат оффлайн)" : "В очереди (нет соединения)";
   if (status === "delivered") return "Доставлено";
   if (status === "read") return "Прочитано";
   if (status === "error") return "Ошибка отправки";
@@ -181,11 +185,11 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
   const fromId = String(m.from || "").trim();
   const showFrom = m.kind === "in" && Boolean(m.room);
   const fromLabel = fromId || "—";
-  const status = m.kind === "out" ? statusLabel(m.status) : "";
+  const status = m.kind === "out" ? statusLabel(m) : "";
   const meta: HTMLElement[] = [el("span", { class: "msg-time" }, [formatTime(m.ts)])];
   if (m.edited) meta.push(el("span", { class: "msg-edited", "aria-label": "Изменено" }, ["изменено"]));
   if (status)
-    meta.push(el("span", { class: `msg-status msg-status-${m.status || "delivered"}`, title: statusTitle(m.status) || undefined }, [status]));
+    meta.push(el("span", { class: `msg-status msg-status-${m.status || "delivered"}`, title: statusTitle(m) || undefined }, [status]));
   const bodyChildren: HTMLElement[] = [];
   if (showFrom) bodyChildren.push(el("div", { class: "msg-from" }, [fromLabel]));
   if (m.attachment?.kind === "file") {

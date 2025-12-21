@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.67",
+    date: "2025-12-21",
+    improved: ["Надёжность отправки: добавлена локальная outbox‑очередь (offline→send) с автоповтором на reconnect и дедупом по истории"],
+  },
+  {
     version: "0.1.66",
     date: "2025-12-21",
     fixed: ["Сайдбар: остаточные «скачки» скролла при ПКМ/Ctrl+Click по контактам/чатам устранены (стабилизация scroll snapshot + дедуп Pointer/Mouse)"],

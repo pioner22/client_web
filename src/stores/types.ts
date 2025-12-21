@@ -166,11 +166,23 @@ export interface ChatMessage {
   text: string;
   to?: string;
   room?: string;
+  localId?: string | null;
   id?: number | null;
   status?: "sending" | "queued" | "delivered" | "read" | "error";
   edited?: boolean;
   kind: "in" | "out" | "sys";
   attachment?: ChatAttachment | null;
+}
+
+export interface OutboxEntry {
+  localId: string;
+  ts: number;
+  text: string;
+  to?: string;
+  room?: string;
+  status?: "queued" | "sending";
+  attempts?: number;
+  lastAttemptAt?: number;
 }
 
 export interface EditingMessageState {
@@ -272,6 +284,8 @@ export interface AppState {
   historyCursor: Record<string, number>;
   historyHasMore: Record<string, boolean>;
   historyLoading: Record<string, boolean>;
+
+  outbox: Record<string, OutboxEntry[]>;
 
   drafts: Record<string, string>;
   input: string;

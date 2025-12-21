@@ -46,6 +46,7 @@ export function createInitialState(): AppState {
     historyCursor: {},
     historyHasMore: {},
     historyLoading: {},
+    outbox: {},
     drafts: {},
     input: "",
     editing: null,

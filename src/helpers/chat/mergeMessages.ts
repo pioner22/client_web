@@ -2,6 +2,8 @@ import type { ChatMessage } from "../../stores/types";
 
 function stableKey(m: ChatMessage): string {
   if (m.id !== undefined && m.id !== null) return `id:${m.id}`;
+  const localId = typeof m.localId === "string" ? m.localId.trim() : "";
+  if (localId) return `local:${localId}`;
   return `ts:${m.ts}|from:${m.from}|room:${m.room ?? ""}|to:${m.to ?? ""}|text:${m.text}`;
 }
 

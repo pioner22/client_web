@@ -30,6 +30,7 @@ import {
 } from "../helpers/chat/pinnedMessages";
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
+import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
 import { activatePwaUpdate } from "../helpers/pwa/registerServiceWorker";
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
@@ -66,6 +67,8 @@ let pinnedMessagesLoadedForUser: string | null = null;
 let pinnedMessagesSaveTimer: number | null = null;
 let fileTransfersSaveTimer: number | null = null;
 let fileTransfersLoadedForUser: string | null = null;
+let outboxSaveTimer: number | null = null;
+let outboxLoadedForUser: string | null = null;
 
 function scheduleSaveDrafts(store: Store<AppState>) {
   if (draftsSaveTimer !== null) {
@@ -93,6 +96,37 @@ function flushDrafts(store: Store<AppState>) {
     const st = store.get();
     if (!st.authed || !st.selfId) return;
     saveDraftsForUser(st.selfId, st.drafts);
+  } catch {
+    // ignore
+  }
+}
+
+function scheduleSaveOutbox(store: Store<AppState>) {
+  if (outboxSaveTimer !== null) {
+    window.clearTimeout(outboxSaveTimer);
+    outboxSaveTimer = null;
+  }
+  outboxSaveTimer = window.setTimeout(() => {
+    outboxSaveTimer = null;
+    try {
+      const st = store.get();
+      if (!st.selfId) return;
+      saveOutboxForUser(st.selfId, st.outbox);
+    } catch {
+      // ignore
+    }
+  }, 420);
+}
+
+function flushOutbox(store: Store<AppState>) {
+  if (outboxSaveTimer !== null) {
+    window.clearTimeout(outboxSaveTimer);
+    outboxSaveTimer = null;
+  }
+  try {
+    const st = store.get();
+    if (!st.selfId) return;
+    saveOutboxForUser(st.selfId, st.outbox);
   } catch {
     // ignore
   }
@@ -1119,10 +1153,14 @@ export function mountApp(root: HTMLElement) {
       }
       if (handleFileMessage(msg)) return;
       handleServerMessage(msg, store.get(), gateway, (p) => store.set(p));
+      if (t === "message_delivered" || t === "message_queued" || t === "message_blocked" || t === "error" || t === "history_result") {
+        scheduleSaveOutbox(store);
+      }
 
       if (t === "auth_ok" || t === "register_ok") {
         const st = store.get();
         if (st.selected) requestHistory(st.selected, { force: true, deltaLimit: 2000 });
+        drainOutbox();
       }
     },
     (conn, detail) => {
@@ -1137,13 +1175,57 @@ export function mountApp(root: HTMLElement) {
       const prevConn = lastConn;
       lastConn = conn;
 
-      if (conn !== "connected") {
-        autoAuthAttemptedForConn = false;
-        historyRequested.clear();
-        historyDeltaRequestedAt.clear();
-        store.set((prev) => (prev.authed ? { ...prev, authed: false } : prev));
-        return;
-      }
+	      if (conn !== "connected") {
+	        autoAuthAttemptedForConn = false;
+	        historyRequested.clear();
+	        historyDeltaRequestedAt.clear();
+	        store.set((prev) => {
+	          if (!prev.selfId) return prev.authed ? { ...prev, authed: false } : prev;
+	          let outboxChanged = false;
+	          let outbox = prev.outbox;
+	          for (const [k, list] of Object.entries(prev.outbox || {})) {
+	            const arr = Array.isArray(list) ? list : [];
+	            if (!arr.length) continue;
+	            const hasSending = arr.some((e) => e && typeof e === "object" && (e as any).status === "sending");
+	            if (!hasSending) continue;
+	            outboxChanged = true;
+	            outbox = {
+	              ...outbox,
+	              [k]: arr.map((e) => (e && typeof e === "object" ? { ...(e as any), status: "queued" as const } : e)),
+	            };
+	          }
+
+	          let conversations = prev.conversations;
+	          let convChanged = false;
+	          for (const [k, list] of Object.entries(outbox)) {
+	            const arr = Array.isArray(list) ? list : [];
+	            if (!arr.length) continue;
+	            const lids = new Set(arr.map((e) => String(e?.localId || "").trim()).filter(Boolean));
+	            const conv = conversations[k];
+	            if (!Array.isArray(conv) || !conv.length) continue;
+	            const idxs: number[] = [];
+	            for (let i = 0; i < conv.length; i += 1) {
+	              const m = conv[i];
+	              if (m.kind !== "out") continue;
+	              if (m.id !== undefined && m.id !== null) continue;
+	              if (typeof m.localId !== "string" || !lids.has(m.localId)) continue;
+	              if (m.status === "queued") continue;
+	              idxs.push(i);
+	            }
+	            if (!idxs.length) continue;
+	            convChanged = true;
+	            const nextConv = [...conv];
+	            for (const i of idxs) nextConv[i] = { ...nextConv[i], status: "queued" as const };
+	            conversations = { ...conversations, [k]: nextConv };
+	          }
+
+	          const next = prev.authed ? { ...prev, authed: false } : prev;
+	          if (!outboxChanged && !convChanged) return next;
+	          return { ...next, outbox, conversations };
+	        });
+	        scheduleSaveOutbox(store);
+	        return;
+	      }
 
       // New socket: even if UI thought we were authed, we must re-auth on reconnect.
       if (prevConn !== "connected") {
@@ -2887,6 +2969,7 @@ export function mountApp(root: HTMLElement) {
   function logout() {
     flushDrafts(store);
     flushPinnedMessages(store);
+    flushOutbox(store);
     clearToast();
     const st = store.get();
     const id = String(st.selfId || "").trim();
@@ -2942,6 +3025,7 @@ export function mountApp(root: HTMLElement) {
       historyCursor: {},
       historyHasMore: {},
       historyLoading: {},
+      outbox: {},
       drafts: {},
       input: "",
       editing: null,
@@ -2963,6 +3047,7 @@ export function mountApp(root: HTMLElement) {
     pinsLoadedForUser = null;
     pinnedMessagesLoadedForUser = null;
     fileTransfersLoadedForUser = null;
+    outboxLoadedForUser = null;
     try {
       layout.input.value = "";
       autosizeInput(layout.input);
@@ -3058,10 +3143,6 @@ export function mountApp(root: HTMLElement) {
       store.set({ status: `Слишком длинное сообщение (${text.length}/${APP_MSG_MAX_LEN})` });
       return;
     }
-    if (st.conn !== "connected") {
-      store.set({ status: "Нет соединения: сообщение не отправлено" });
-      return;
-    }
     if (!st.authed) {
       const token = getStoredSessionToken();
       if (token) {
@@ -3082,13 +3163,22 @@ export function mountApp(root: HTMLElement) {
       store.set({ status: "Выберите контакт или чат слева" });
       return;
     }
+
     if (editing) {
+      if (st.conn !== "connected") {
+        store.set({ status: "Нет соединения: нельзя изменить сообщение" });
+        return;
+      }
       const msgId = Number.isFinite(Number(editing.id)) ? Math.trunc(Number(editing.id)) : 0;
       if (msgId <= 0) {
         store.set({ status: "Нельзя изменить это сообщение" });
         return;
       }
-      gateway.send({ type: "message_edit", id: msgId, text });
+      const ok = gateway.send({ type: "message_edit", id: msgId, text });
+      if (!ok) {
+        store.set({ status: "Нет соединения: изменения не отправлены" });
+        return;
+      }
       store.set({ status: "Сохраняем изменения…" });
 
       const restore = editing.prevDraft || "";
@@ -3103,23 +3193,42 @@ export function mountApp(root: HTMLElement) {
       scheduleSaveDrafts(store);
       return;
     }
+
     const convKey = key;
+    const localId = makeOutboxLocalId();
+    const ts = nowTs();
+    const nowMs = Date.now();
+    const payload = sel.kind === "dm" ? { type: "send" as const, to: sel.id, text } : { type: "send" as const, room: sel.id, text };
+    const sent = st.conn === "connected" ? gateway.send(payload) : false;
+    const initialStatus = sent ? ("sending" as const) : ("queued" as const);
+
     const localMsg = {
       kind: "out" as const,
       from: st.selfId || "",
       to: sel.kind === "dm" ? sel.id : undefined,
       room: sel.kind === "dm" ? undefined : sel.id,
       text,
-      ts: nowTs(),
+      ts,
+      localId,
       id: null,
-      status: "sending" as const,
+      status: initialStatus,
     };
-    store.set((prev) => upsertConversation(prev, convKey, localMsg));
-    if (sel.kind === "dm") {
-      gateway.send({ type: "send", to: sel.id, text });
-    } else {
-      gateway.send({ type: "send", room: sel.id, text });
-    }
+
+    store.set((prev) => {
+      const next = upsertConversation(prev, convKey, localMsg);
+      const outbox = addOutboxEntry(next.outbox, convKey, {
+        localId,
+        ts,
+        text,
+        ...(sel.kind === "dm" ? { to: sel.id } : { room: sel.id }),
+        status: sent ? "sending" : "queued",
+        attempts: sent ? 1 : 0,
+        lastAttemptAt: sent ? nowMs : 0,
+      });
+      return { ...next, outbox };
+    });
+    scheduleSaveOutbox(store);
+
     layout.input.value = "";
     autosizeInput(layout.input);
     layout.input.focus();
@@ -3128,6 +3237,79 @@ export function mountApp(root: HTMLElement) {
       return { ...prev, input: "", drafts };
     });
     scheduleSaveDrafts(store);
+
+    if (!sent) {
+      store.set({ status: st.conn === "connected" ? "Сообщение в очереди" : "Нет соединения: сообщение в очереди" });
+    }
+  }
+
+  const OUTBOX_RETRY_MIN_MS = 900;
+  const OUTBOX_DRAIN_MAX = 12;
+
+  function drainOutbox(limit = OUTBOX_DRAIN_MAX) {
+    const st = store.get();
+    if (st.conn !== "connected") return;
+    if (!st.authed || !st.selfId) return;
+    const entries = Object.entries(st.outbox || {});
+    if (!entries.length) return;
+
+    const nowMs = Date.now();
+    const flat: Array<{ key: string; localId: string; to?: string; room?: string; text: string; ts: number; lastAttemptAt: number }> = [];
+    for (const [k, list] of entries) {
+      const arr = Array.isArray(list) ? list : [];
+      for (const e of arr) {
+        const lid = typeof e?.localId === "string" ? e.localId.trim() : "";
+        if (!lid) continue;
+        const text = typeof e?.text === "string" ? e.text : "";
+        if (!text) continue;
+        const to = typeof e?.to === "string" && e.to.trim() ? e.to.trim() : undefined;
+        const room = typeof e?.room === "string" && e.room.trim() ? e.room.trim() : undefined;
+        if (!to && !room) continue;
+        const ts = Number.isFinite(e?.ts) ? Number(e.ts) : 0;
+        const lastAttemptAtRaw = e?.lastAttemptAt;
+        const lastAttemptAt =
+          typeof lastAttemptAtRaw === "number" && Number.isFinite(lastAttemptAtRaw)
+            ? Math.max(0, Math.trunc(lastAttemptAtRaw))
+            : 0;
+        flat.push({ key: k, localId: lid, to, room, text, ts, lastAttemptAt });
+      }
+    }
+    if (!flat.length) return;
+    flat.sort((a, b) => a.ts - b.ts);
+
+    const sent: Array<{ key: string; localId: string }> = [];
+    for (const it of flat) {
+      if (sent.length >= limit) break;
+      if (it.lastAttemptAt && nowMs - it.lastAttemptAt < OUTBOX_RETRY_MIN_MS) continue;
+      const ok = gateway.send(it.to ? { type: "send", to: it.to, text: it.text } : { type: "send", room: it.room, text: it.text });
+      if (!ok) break;
+      sent.push({ key: it.key, localId: it.localId });
+    }
+    if (!sent.length) return;
+
+    store.set((prev) => {
+      let outbox = prev.outbox;
+      let conversations = prev.conversations;
+      for (const s of sent) {
+        outbox = updateOutboxEntry(outbox, s.key, s.localId, (e) => ({
+          ...e,
+          status: "sending",
+          attempts: (e.attempts ?? 0) + 1,
+          lastAttemptAt: nowMs,
+        }));
+        const conv = conversations[s.key];
+        if (Array.isArray(conv) && conv.length) {
+          const idx = conv.findIndex((m) => m.kind === "out" && typeof m.localId === "string" && m.localId === s.localId);
+          if (idx >= 0) {
+            const next = [...conv];
+            next[idx] = { ...next[idx], status: "sending" };
+            conversations = { ...conversations, [s.key]: next };
+          }
+        }
+      }
+      return { ...prev, outbox, conversations, status: "Отправляем сообщения из очереди…" };
+    });
+    scheduleSaveOutbox(store);
   }
 
   layout.input.addEventListener("input", () => {
@@ -3865,6 +4047,7 @@ export function mountApp(root: HTMLElement) {
 
   async function applyPwaUpdateNow() {
     flushDrafts(store);
+    flushOutbox(store);
     saveRestartState(store.get());
     store.set({ status: "Применяем обновление веб-клиента…" });
     try {
@@ -4597,24 +4780,27 @@ export function mountApp(root: HTMLElement) {
     }
   });
 
-  store.subscribe(() => {
-    const st = store.get();
-    if (
-      st.authed &&
-      st.selfId &&
-      (draftsLoadedForUser !== st.selfId ||
-        pinsLoadedForUser !== st.selfId ||
-        pinnedMessagesLoadedForUser !== st.selfId ||
-        fileTransfersLoadedForUser !== st.selfId)
-    ) {
-      const needDrafts = draftsLoadedForUser !== st.selfId;
-      const needPins = pinsLoadedForUser !== st.selfId;
-      const needPinnedMessages = pinnedMessagesLoadedForUser !== st.selfId;
-      const needFileTransfers = fileTransfersLoadedForUser !== st.selfId;
-      if (needDrafts) draftsLoadedForUser = st.selfId;
-      if (needPins) pinsLoadedForUser = st.selfId;
-      if (needPinnedMessages) pinnedMessagesLoadedForUser = st.selfId;
-      if (needFileTransfers) fileTransfersLoadedForUser = st.selfId;
+	  store.subscribe(() => {
+	    const st = store.get();
+	    if (
+	      st.authed &&
+	      st.selfId &&
+	      (draftsLoadedForUser !== st.selfId ||
+	        pinsLoadedForUser !== st.selfId ||
+	        pinnedMessagesLoadedForUser !== st.selfId ||
+	        fileTransfersLoadedForUser !== st.selfId ||
+	        outboxLoadedForUser !== st.selfId)
+	    ) {
+	      const needDrafts = draftsLoadedForUser !== st.selfId;
+	      const needPins = pinsLoadedForUser !== st.selfId;
+	      const needPinnedMessages = pinnedMessagesLoadedForUser !== st.selfId;
+	      const needFileTransfers = fileTransfersLoadedForUser !== st.selfId;
+	      const needOutbox = outboxLoadedForUser !== st.selfId;
+	      if (needDrafts) draftsLoadedForUser = st.selfId;
+	      if (needPins) pinsLoadedForUser = st.selfId;
+	      if (needPinnedMessages) pinnedMessagesLoadedForUser = st.selfId;
+	      if (needFileTransfers) fileTransfersLoadedForUser = st.selfId;
+	      if (needOutbox) outboxLoadedForUser = st.selfId;
 
       const storedDrafts = needDrafts ? loadDraftsForUser(st.selfId) : {};
       const mergedDrafts = needDrafts ? { ...storedDrafts, ...st.drafts } : st.drafts;
@@ -4625,9 +4811,9 @@ export function mountApp(root: HTMLElement) {
       const storedPinnedMessages = needPinnedMessages ? loadPinnedMessagesForUser(st.selfId) : {};
       const mergedPinnedMessages = needPinnedMessages ? mergePinnedMessagesMaps(storedPinnedMessages, st.pinnedMessages) : st.pinnedMessages;
 
-      const storedFileTransfers = needFileTransfers ? loadFileTransfersForUser(st.selfId) : [];
-      const mergedFileTransfers = (() => {
-        if (!needFileTransfers) return st.fileTransfers;
+	      const storedFileTransfers = needFileTransfers ? loadFileTransfersForUser(st.selfId) : [];
+	      const mergedFileTransfers = (() => {
+	        if (!needFileTransfers) return st.fileTransfers;
         const present = new Set<string>();
         for (const e of st.fileTransfers) {
           const k = String(e.id || e.localId || "").trim();
@@ -4638,32 +4824,97 @@ export function mountApp(root: HTMLElement) {
           if (!k) return false;
           return !present.has(k);
         });
-        return extras.length ? [...st.fileTransfers, ...extras] : st.fileTransfers;
-      })();
+	        return extras.length ? [...st.fileTransfers, ...extras] : st.fileTransfers;
+	      })();
+
+	      const storedOutboxRaw = needOutbox ? loadOutboxForUser(st.selfId) : {};
+	      const storedOutbox = (() => {
+	        if (!needOutbox) return st.outbox;
+	        const out: typeof st.outbox = {};
+	        for (const [k, list] of Object.entries(storedOutboxRaw || {})) {
+	          const arr = Array.isArray(list) ? list : [];
+	          const normalized = arr
+	            .map((e) => ({ ...e, status: "queued" as const }))
+	            .filter((e) => typeof e.localId === "string" && Boolean(e.localId.trim()));
+	          if (normalized.length) out[k] = normalized;
+	        }
+	        return out;
+	      })();
+
+	      const mergedOutbox = (() => {
+	        if (!needOutbox) return st.outbox;
+	        const out: typeof st.outbox = { ...storedOutbox };
+	        for (const [k, list] of Object.entries(st.outbox || {})) {
+	          const base = Array.isArray(out[k]) ? out[k] : [];
+	          const seen = new Set(base.map((e) => String(e.localId || "").trim()).filter(Boolean));
+	          const extras = (Array.isArray(list) ? list : []).filter((e) => {
+	            const lid = typeof e?.localId === "string" ? e.localId.trim() : "";
+	            return Boolean(lid) && !seen.has(lid);
+	          });
+	          if (extras.length) out[k] = [...base, ...extras].sort((a, b) => a.ts - b.ts);
+	        }
+	        return out;
+	      })();
+
+	      const mergedConversations = (() => {
+	        if (!needOutbox) return st.conversations;
+	        let changed = false;
+	        const next: typeof st.conversations = { ...st.conversations };
+	        for (const [k, list] of Object.entries(mergedOutbox)) {
+	          const out = Array.isArray(list) ? list : [];
+	          if (!out.length) continue;
+	          const prevConv = next[k] ?? [];
+	          const has = new Set(prevConv.map((m) => (typeof m.localId === "string" ? m.localId : "")).filter(Boolean));
+	          const add = out
+	            .filter((e) => !has.has(e.localId))
+	            .map((e) => ({
+	              kind: "out" as const,
+	              from: st.selfId || "",
+	              to: e.to,
+	              room: e.room,
+	              text: e.text,
+	              ts: e.ts,
+	              localId: e.localId,
+	              id: null,
+	              status: "queued" as const,
+	            }));
+	          if (!add.length) continue;
+	          changed = true;
+	          next[k] = [...prevConv, ...add].sort((a, b) => {
+	            const sa = typeof a.id === "number" && Number.isFinite(a.id) ? a.id : a.ts;
+	            const sb = typeof b.id === "number" && Number.isFinite(b.id) ? b.id : b.ts;
+	            return sa - sb;
+	          });
+	        }
+	        return changed ? next : st.conversations;
+	      })();
 
       const selectedKey = st.selected ? conversationKey(st.selected) : "";
       const shouldRestoreInput = Boolean(selectedKey && !st.input.trim() && mergedDrafts[selectedKey]);
       const restoredInput = shouldRestoreInput ? (mergedDrafts[selectedKey] ?? "") : null;
 
-      store.set((prev) => ({
-        ...prev,
-        drafts: mergedDrafts,
-        pinned: mergedPins,
-        pinnedMessages: mergedPinnedMessages,
-        fileTransfers: mergedFileTransfers,
-        ...(restoredInput !== null ? { input: restoredInput } : {}),
-      }));
+	      store.set((prev) => ({
+	        ...prev,
+	        drafts: mergedDrafts,
+	        pinned: mergedPins,
+	        pinnedMessages: mergedPinnedMessages,
+	        fileTransfers: mergedFileTransfers,
+	        outbox: mergedOutbox,
+	        conversations: mergedConversations,
+	        ...(restoredInput !== null ? { input: restoredInput } : {}),
+	      }));
 
-      if (restoredInput !== null) {
-        try {
-          layout.input.value = restoredInput;
-          autosizeInput(layout.input);
-        } catch {
-          // ignore
-        }
-      }
-      return;
-    }
+	      if (restoredInput !== null) {
+	        try {
+	          layout.input.value = restoredInput;
+	          autosizeInput(layout.input);
+	        } catch {
+	          // ignore
+	        }
+	      }
+	      scheduleSaveOutbox(store);
+	      return;
+	    }
 
     if (st.page === "main" && st.chatSearchOpen && st.selected) {
       const q = st.chatSearchQuery || "";
