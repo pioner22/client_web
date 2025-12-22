@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.84",
+    date: "2025-12-22",
+    added: ["Android: предложение установить PWA (beforeinstallprompt) — показываем ненавязчивый toast «Установить/Позже»"],
+    improved: [
+      "iPhone (Safari/PWA): добавлен fallback на -webkit-fill-available для стабильно полного экрана (#app) — меньше шансов на пустую полосу снизу",
+      "Toast: поддержаны произвольные actions (нужно для install‑prompt и будущих сценариев)",
+    ],
+  },
+  {
     version: "0.1.83",
     date: "2025-12-22",
     improved: ["iOS PWA: для композера включаем autocorrect/spellcheck/autocapitalize до focus — панель Undo/Redo/✓ появляется заметно реже"],

@@ -34,6 +34,13 @@ import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
 import { activatePwaUpdate } from "../helpers/pwa/registerServiceWorker";
 import { shouldReloadForBuild } from "../helpers/pwa/shouldReloadForBuild";
+import {
+  clearPwaInstallDismissed,
+  isBeforeInstallPromptEvent,
+  markPwaInstallDismissed,
+  shouldOfferPwaInstall,
+  type BeforeInstallPromptEvent,
+} from "../helpers/pwa/installPrompt";
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
 import { nowTs } from "../helpers/time";
@@ -764,7 +771,15 @@ export function mountApp(root: HTMLElement) {
     store.set({ toast: null });
   }
 
-  function showToast(message: string, opts?: { kind?: "info" | "success" | "warn" | "error"; undo?: () => void; timeoutMs?: number }) {
+  function showToast(
+    message: string,
+    opts?: {
+      kind?: "info" | "success" | "warn" | "error";
+      undo?: () => void;
+      actions?: Array<{ id: string; label: string; primary?: boolean; onClick: () => void }>;
+      timeoutMs?: number;
+    }
+  ) {
     const msg = String(message || "").trim();
     if (!msg) return;
     if (toastTimer !== null) {
@@ -774,6 +789,16 @@ export function mountApp(root: HTMLElement) {
     toastActionHandlers.clear();
 
     const actions: Array<{ id: string; label: string; primary?: boolean }> = [];
+    if (opts?.actions) {
+      for (const a of opts.actions) {
+        const id = String(a?.id || "").trim();
+        const label = String(a?.label || "").trim();
+        if (!id || !label) continue;
+        if (toastActionHandlers.has(id)) continue;
+        actions.push({ id, label, primary: Boolean(a.primary) });
+        toastActionHandlers.set(id, () => a.onClick());
+      }
+    }
     if (opts?.undo) {
       actions.push({ id: "undo", label: "Отмена" });
       toastActionHandlers.set("undo", opts.undo);
@@ -805,6 +830,64 @@ export function mountApp(root: HTMLElement) {
       // ignore
     }
   });
+
+  // Android/Chromium PWA install prompt (beforeinstallprompt).
+  // We show a small, non-blocking toast (similar to modern web apps).
+  let deferredPwaInstall: BeforeInstallPromptEvent | null = null;
+  let pwaInstallOffered = false;
+
+  async function runPwaInstallPrompt() {
+    const ev = deferredPwaInstall;
+    if (!ev) return;
+    deferredPwaInstall = null;
+    try {
+      await ev.prompt();
+    } catch {
+      markPwaInstallDismissed(localStorage, Date.now());
+      return;
+    }
+    try {
+      const choice = await ev.userChoice;
+      if (choice?.outcome === "dismissed") {
+        markPwaInstallDismissed(localStorage, Date.now());
+      } else {
+        clearPwaInstallDismissed(localStorage);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  function maybeOfferPwaInstallToast() {
+    if (pwaInstallOffered) return;
+    const isStandalone = isStandaloneDisplayMode();
+    if (!shouldOfferPwaInstall({ storage: localStorage, now: Date.now(), isStandalone })) return;
+    pwaInstallOffered = true;
+    showToast("Установить «Ягодку» как приложение?", {
+      kind: "info",
+      timeoutMs: 12000,
+      actions: [
+        { id: "pwa-install", label: "Установить", primary: true, onClick: () => void runPwaInstallPrompt() },
+        { id: "pwa-later", label: "Позже", onClick: () => markPwaInstallDismissed(localStorage, Date.now()) },
+      ],
+    });
+  }
+
+  try {
+    window.addEventListener("beforeinstallprompt", (e) => {
+      if (!isBeforeInstallPromptEvent(e)) return;
+      e.preventDefault();
+      deferredPwaInstall = e;
+      maybeOfferPwaInstallToast();
+    });
+    window.addEventListener("appinstalled", () => {
+      deferredPwaInstall = null;
+      clearPwaInstallDismissed(localStorage);
+      showToast("Приложение установлено", { kind: "success" });
+    });
+  } catch {
+    // ignore
+  }
 
   function bumpAvatars(status: string) {
     store.set((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1, status }));

@@ -30,14 +30,24 @@ button {
 
 #app {
   height: 100%;
+  /* Prefer dynamic viewport on modern browsers (mobile address bar / UI chrome). */
   height: 100dvh;
+  height: 100svh;
   width: 100%;
-  min-height: 100vh;
-  min-height: 100svh;
+  /* Avoid legacy 100vh quirks on iOS; keep fallbacks for older engines. */
   min-height: 100dvh;
+  min-height: 100svh;
+  min-height: -webkit-fill-available;
   padding: var(--app-outer-pad);
   overflow: hidden;
   isolation: isolate;
+}
+
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari/PWA: fill the available space even when viewport units behave oddly. */
+  #app {
+    height: -webkit-fill-available;
+  }
 }
 
 * {
