@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.86",
+    date: "2025-12-22",
+    improved: [
+      "Файлы/медиа: можно добавить подпись к фото/файлу (берём текст из композера при отправке одного файла) — подпись сохраняется в истории и рендерится под превью",
+      "Сообщения с вложением: разрешили редактировать подпись через контекстное меню (Изменить подпись…)",
+    ],
+  },
+  {
     version: "0.1.85",
     date: "2025-12-22",
     improved: [

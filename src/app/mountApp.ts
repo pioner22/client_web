@@ -228,6 +228,7 @@ interface UploadState {
   localId: string;
   file: File;
   target: TargetRef;
+  caption?: string;
   fileId?: string | null;
   bytesSent: number;
   seq: number;
@@ -2643,11 +2644,12 @@ export function mountApp(root: HTMLElement) {
     });
   }
 
-  function queueUpload(localId: string, file: File, target: TargetRef) {
+  function queueUpload(localId: string, file: File, target: TargetRef, caption?: string) {
     uploadQueue.push({
       localId,
       file,
       target,
+      caption,
       bytesSent: 0,
       seq: 0,
       lastProgress: 0,
@@ -2666,6 +2668,7 @@ export function mountApp(root: HTMLElement) {
       name: next.file.name || "файл",
       size: next.file.size || 0,
     };
+    if (next.caption) payload.text = next.caption;
     if (next.target.kind === "dm") {
       payload.to = next.target.id;
     } else {
@@ -2715,7 +2718,7 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
-  function sendFile(file: File | null, target: TargetRef | null) {
+  function sendFile(file: File | null, target: TargetRef | null, caption?: string) {
     const st = store.get();
     if (!st.authed) {
       store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
@@ -2754,6 +2757,7 @@ export function mountApp(root: HTMLElement) {
         return;
       }
     }
+    const captionText = String(caption ?? "").trimEnd();
     const localId = nextTransferId();
     const entry: FileTransferEntry = {
       localId,
@@ -2774,9 +2778,9 @@ export function mountApp(root: HTMLElement) {
       from: st.selfId || "",
       to: target.kind === "dm" ? target.id : undefined,
       room: target.kind === "dm" ? undefined : target.id,
-      text: "",
+      text: captionText,
       ts: nowTs(),
-      id: nextLocalChatMsgId(),
+      id: null,
       attachment: {
         kind: "file" as const,
         localId,
@@ -2799,7 +2803,7 @@ export function mountApp(root: HTMLElement) {
       const withMsg = upsertConversation(prev, key, outMsg);
       return { ...withMsg, fileTransfers: [entry, ...withMsg.fileTransfers], status: `Файл предложен: ${entry.name}` };
     });
-    queueUpload(localId, file, target);
+    queueUpload(localId, file, target, captionText);
   }
 
   function acceptFileOffer(fileId: string) {
@@ -2887,6 +2891,7 @@ export function mountApp(root: HTMLElement) {
       if (!fileId) return true;
       const rawMsgId = msg?.msg_id;
       const msgId = typeof rawMsgId === "number" && Number.isFinite(rawMsgId) ? rawMsgId : null;
+      const text = typeof msg?.text === "string" ? String(msg.text) : "";
       const offer: FileOfferIn = {
         id: fileId,
         from: String(msg?.from ?? "").trim() || "—",
@@ -2900,9 +2905,9 @@ export function mountApp(root: HTMLElement) {
         from: offer.from,
         to: store.get().selfId || "",
         room: offer.room ?? undefined,
-        text: "",
+        text,
         ts: nowTs(),
-        id: msgId ?? nextLocalChatMsgId(),
+        id: msgId ?? null,
         attachment: {
           kind: "file" as const,
           fileId,
@@ -3752,7 +3757,22 @@ export function mountApp(root: HTMLElement) {
         const files = Array.from(input.files || []);
         input.remove();
         if (!files.length) return;
-        for (const file of files) sendFile(file, target);
+        const st2 = store.get();
+        const canCaption = !st2.editing && files.length === 1;
+        const caption = canCaption ? String(layout.input.value || "").trimEnd() : "";
+        if (caption) {
+          store.set((prev) => ({ ...prev, input: "" }));
+          try {
+            layout.input.value = "";
+            autosizeInput(layout.input);
+          } catch {
+            // ignore
+          }
+          scheduleSaveDrafts(store);
+        }
+        for (let i = 0; i < files.length; i += 1) {
+          sendFile(files[i], target, i === 0 ? caption : "");
+        }
       },
       { once: true }
     );
@@ -3865,10 +3885,15 @@ export function mountApp(root: HTMLElement) {
           : String(msg?.text || "").trim() || "Сообщение";
       title = preview.length > 64 ? `${preview.slice(0, 61)}…` : preview;
 
-      items.push({ id: "msg_copy", label: msg?.attachment?.kind === "file" ? "Скопировать имя файла" : "Скопировать текст", disabled: !msg });
+      const caption = msg?.attachment?.kind === "file" ? String(msg?.text || "").trim() : "";
+      items.push({
+        id: "msg_copy",
+        label: msg?.attachment?.kind === "file" ? (caption ? "Скопировать подпись" : "Скопировать имя файла") : "Скопировать текст",
+        disabled: !msg,
+      });
       items.push({ id: "msg_pin_toggle", label: isPinned ? "Открепить" : "Закрепить", disabled: !canPin });
-      const canEdit = Boolean(canPin && msg?.kind === "out" && !msg?.attachment && st.selfId && String(msg.from) === String(st.selfId));
-      if (canEdit) items.push({ id: "msg_edit", label: "Изменить…", disabled: !canAct });
+      const canEdit = Boolean(canPin && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
+      if (canEdit) items.push({ id: "msg_edit", label: msg?.attachment ? "Изменить подпись…" : "Изменить…", disabled: !canAct });
       items.push({ id: "msg_delete_local", label: "Удалить у меня", danger: true, disabled: !msg });
       const canDeleteForAll = Boolean(canPin && canAct && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
       if (canDeleteForAll) items.push({ id: "msg_delete", label: "Удалить", danger: true, disabled: !canAct });
@@ -3947,7 +3972,9 @@ export function mountApp(root: HTMLElement) {
       const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
 
       if (itemId === "msg_copy") {
-        const text = msg?.attachment?.kind === "file" ? String(msg.attachment.name || "файл") : String(msg?.text || "");
+        const caption = msg?.attachment?.kind === "file" ? String(msg?.text || "").trim() : "";
+        const text =
+          msg?.attachment?.kind === "file" ? (caption || String(msg.attachment.name || "файл")) : String(msg?.text || "");
         const ok = await copyText(text);
         showToast(ok ? "Скопировано" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
         close();
@@ -3978,11 +4005,6 @@ export function mountApp(root: HTMLElement) {
 
       if (itemId === "msg_edit") {
         if (!selKey || !msg || msgId === null || msgId <= 0) {
-          close();
-          return;
-        }
-        if (msg.attachment) {
-          showToast("Редактирование вложений пока не поддерживается", { kind: "info" });
           close();
           return;
         }

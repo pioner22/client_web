@@ -279,12 +279,16 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
       const child = url
         ? el("img", { class: "chat-file-img", src: url, alt: name, loading: "lazy", decoding: "async" })
         : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
-      if (url || att.fileId) {
-        rowChildren.unshift(el("button", attrs, [child]));
-      }
+    if (url || att.fileId) {
+      rowChildren.unshift(el("button", attrs, [child]));
     }
+  }
 
     bodyChildren.push(el("div", { class: "file-row file-row-chat" }, rowChildren));
+    const caption = String(m.text || "").trim();
+    if (caption && !caption.startsWith("[file]")) {
+      bodyChildren.push(el("div", { class: "msg-text msg-caption" }, renderRichText(caption)));
+    }
   } else {
     bodyChildren.push(el("div", { class: "msg-text" }, renderRichText(m.text)));
   }
