@@ -279,6 +279,7 @@ export interface AppState {
   skins: SkinInfo[];
 
   mobileSidebarTab: MobileSidebarTab;
+  sidebarQuery: string;
 
   friends: FriendEntry[];
   pendingIn: string[];

@@ -41,6 +41,7 @@ export interface RenderActions {
   onOpenBoardCreate: () => void;
   onSetPage: (page: PageKind) => void;
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void;
+  onSetSidebarQuery: (query: string) => void;
   onAuthLogin: () => void;
   onAuthRegister: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
@@ -158,7 +159,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onSetPage,
     actions.onOpenGroupCreate,
     actions.onOpenBoardCreate,
-    actions.onSetMobileSidebarTab
+    actions.onSetMobileSidebarTab,
+    actions.onSetSidebarQuery
   );
   if (layout.sidebar.scrollTop !== sidebarScrollTop) layout.sidebar.scrollTop = sidebarScrollTop;
   if (layout.sidebar.scrollLeft !== sidebarScrollLeft) layout.sidebar.scrollLeft = sidebarScrollLeft;

@@ -66,14 +66,19 @@
     transform: translateX(0);
   }
 
-  .sidebar-mobile-top {
-    display: flex;
+  .sidebar-mobile-sticky {
     position: sticky;
     top: 0;
+    z-index: 2;
     background: var(--sidebar-bg);
-    padding-bottom: var(--sp-3);
-    margin-bottom: var(--sp-3);
-    z-index: 1;
+    padding-bottom: var(--sp-2);
+    margin-bottom: var(--sp-2);
+  }
+
+  .sidebar-mobile-top {
+    display: flex;
+    padding-bottom: var(--sp-2);
+    margin-bottom: var(--sp-2);
   }
 
   /* На мобильных не перегружаем шапку версиями/ID: важнее заголовок и статус. */

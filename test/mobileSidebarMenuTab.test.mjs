@@ -185,6 +185,7 @@ function mkState(tab) {
     selected: null,
     page: "main",
     mobileSidebarTab: tab,
+    sidebarQuery: "",
     conversations: { "dm:123-456-789": [] },
     drafts: {},
   };
@@ -196,7 +197,7 @@ test("mobile sidebar: 3 вкладки (Чаты/Контакты/Меню)", as
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("chats"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, mkState("chats"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
         assert.deepEqual(labels, ["Чаты", "Контакты", "Меню"]);
@@ -214,7 +215,7 @@ test("mobile sidebar: Контакты не содержат пункты мен
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("contacts"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, mkState("contacts"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         assert.equal(hasText(target, "Поиск"), false);
         assert.equal(hasText(target, "Создать чат"), false);
         assert.equal(hasText(target, "Онлайн"), true);
@@ -232,7 +233,7 @@ test("mobile sidebar: Меню содержит навигацию/создан�
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("menu"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, mkState("menu"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         assert.equal(hasText(target, "Навигация"), true);
         assert.equal(hasText(target, "Поиск"), true);
         assert.equal(hasText(target, "Создать чат"), true);
@@ -246,3 +247,65 @@ test("mobile sidebar: Меню содержит навигацию/создан�
   }
 });
 
+test("mobile sidebar: поиск фильтрует список и вызывает onSetSidebarQuery", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    withDomStubs(
+      () => {
+        const calls = [];
+        const target = document.createElement("div");
+        const state = {
+          friends: [
+            { id: "111-111-111", online: true, unread: 0 },
+            { id: "222-222-222", online: false, unread: 0 },
+          ],
+          profiles: { "111-111-111": { id: "111-111-111", display_name: "Алиса" } },
+          groups: [],
+          boards: [],
+          pinned: [],
+          pendingIn: [],
+          pendingOut: [],
+          pendingGroupInvites: [],
+          pendingGroupJoinRequests: [],
+          pendingBoardInvites: [],
+          fileOffersIn: [],
+          selected: null,
+          page: "main",
+          mobileSidebarTab: "chats",
+          sidebarQuery: "али",
+          conversations: {
+            "dm:111-111-111": [{ ts: 1, from: "111-111-111", text: "привет", kind: "in" }],
+            "dm:222-222-222": [{ ts: 2, from: "222-222-222", text: "йо", kind: "in" }],
+          },
+          drafts: {},
+        };
+
+        helper.renderSidebar(
+          target,
+          state,
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          (q) => calls.push(String(q))
+        );
+
+        assert.equal(hasText(target, "Алиса"), true);
+        assert.equal(hasText(target, "222-222-222"), false);
+
+        const inputs = findAll(target, (n) => n.tagName === "INPUT" && String(n.className || "").includes("sidebar-search-input"));
+        assert.equal(inputs.length > 0, true);
+        const input = inputs[0];
+        input.value = "test";
+        input.dispatchEvent({ type: "input" });
+        assert.deepEqual(calls, ["test"]);
+      },
+      { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});

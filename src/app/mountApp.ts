@@ -5312,6 +5312,11 @@ export function mountApp(root: HTMLElement) {
       }
     },
     onSetMobileSidebarTab: (tab: MobileSidebarTab) => setMobileSidebarTab(tab),
+    onSetSidebarQuery: (query: string) => {
+      const q = String(query ?? "");
+      if (store.get().sidebarQuery === q) return;
+      store.set({ sidebarQuery: q });
+    },
     onAuthLogin: () => authLogin(),
     onAuthRegister: () => authRegister(),
     onAuthModeChange: (mode: "register" | "login") => store.set({ authMode: mode, modal: { kind: "auth" } }),

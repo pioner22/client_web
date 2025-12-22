@@ -323,6 +323,87 @@
   margin-bottom: var(--sp-3);
 }
 
+.sidebar-searchbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 25%);
+  background: color-mix(in srgb, var(--panel2), transparent 35%);
+  margin-bottom: var(--sp-3);
+}
+
+.sidebar-searchbar::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  color: var(--muted);
+  opacity: 0.85;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M10.5 3a7.5 7.5 0 1 1 4.6 13.4l3.15 3.15a1 1 0 0 1-1.42 1.42l-3.15-3.15A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M10.5 3a7.5 7.5 0 1 1 4.6 13.4l3.15 3.15a1 1 0 0 1-1.42 1.42l-3.15-3.15A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
+.sidebar-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: max(var(--font-size), 16px);
+  line-height: 1.2;
+  outline: none;
+  padding: 10px 0;
+  caret-color: var(--caret-color);
+}
+
+.sidebar-search-input::placeholder {
+  color: var(--muted);
+}
+
+.sidebar-search-input::-webkit-search-decoration,
+.sidebar-search-input::-webkit-search-cancel-button,
+.sidebar-search-input::-webkit-search-results-button,
+.sidebar-search-input::-webkit-search-results-decoration {
+  display: none;
+}
+
+.btn.sidebar-search-clear {
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.btn.sidebar-search-clear:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-hover), transparent 20%);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.btn.sidebar-search-clear:active:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-active), transparent 20%);
+  transform: translateY(1px);
+}
+
+.btn.sidebar-search-clear:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
 .sidebar-tips {
   margin: 0 0 var(--sp-3);
   border: 1px solid color-mix(in srgb, var(--line), transparent 30%);

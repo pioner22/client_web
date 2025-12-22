@@ -201,7 +201,8 @@ export function renderSidebar(
   onSetPage: (page: PageKind) => void,
   onCreateGroup: () => void,
   onCreateBoard: () => void,
-  onSetMobileSidebarTab: (tab: MobileSidebarTab) => void
+  onSetMobileSidebarTab: (tab: MobileSidebarTab) => void,
+  onSetSidebarQuery: (query: string) => void
 ) {
   const isMobile =
     typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
@@ -217,6 +218,33 @@ export function renderSidebar(
   const boards = state.boards || [];
   const groups = state.groups || [];
   const sel = state.selected;
+  const sidebarQueryRaw = compactOneLine(String((state as any).sidebarQuery || ""));
+  const sidebarQuery = sidebarQueryRaw.toLowerCase();
+  const hasSidebarQuery = Boolean(sidebarQuery);
+
+  const matchesQuery = (raw: string): boolean => {
+    if (!hasSidebarQuery) return true;
+    return String(raw || "").toLowerCase().includes(sidebarQuery);
+  };
+
+  const matchesFriend = (f: FriendEntry): boolean => {
+    if (!hasSidebarQuery) return true;
+    const id = String(f.id || "").trim();
+    const p = id ? state.profiles?.[id] : null;
+    const dn = displayNameForFriend(state, f);
+    const handle = p?.handle ? String(p.handle).trim() : "";
+    const h = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "";
+    return matchesQuery([dn, h, id].filter(Boolean).join(" "));
+  };
+
+  const matchesRoom = (entry: { id: string; name?: string | null; handle?: string | null }): boolean => {
+    if (!hasSidebarQuery) return true;
+    const id = String(entry.id || "").trim();
+    const name = entry.name ? String(entry.name).trim() : "";
+    const handle = entry.handle ? String(entry.handle).trim() : "";
+    const h = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "";
+    return matchesQuery([name, h, id].filter(Boolean).join(" "));
+  };
 
   if (isMobile) {
     const rawTab = state.mobileSidebarTab;
@@ -270,12 +298,61 @@ export function renderSidebar(
     tabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
     const tabs = el("div", { class: "sidebar-tabs", role: "tablist", "aria-label": "Раздел" }, [tabChats, tabContacts, tabMenu]);
 
+    const searchBar =
+      activeTab === "menu"
+        ? null
+        : (() => {
+            const input = el("input", {
+              class: "sidebar-search-input",
+              type: "search",
+              placeholder: activeTab === "contacts" ? "Поиск контакта" : "Поиск",
+              "aria-label": "Поиск",
+              "data-ios-assistant": "off",
+              autocomplete: "off",
+              autocorrect: "off",
+              autocapitalize: "off",
+              spellcheck: "false",
+              enterkeyhint: "search",
+            }) as HTMLInputElement;
+            input.value = sidebarQueryRaw;
+            input.addEventListener("input", () => onSetSidebarQuery(input.value));
+            input.addEventListener("keydown", (e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onSetSidebarQuery("");
+              }
+            });
+            const clearBtn = el(
+              "button",
+              {
+                class: sidebarQueryRaw ? "btn sidebar-search-clear" : "btn sidebar-search-clear hidden",
+                type: "button",
+                title: "Очистить",
+                "aria-label": "Очистить",
+              },
+              ["×"]
+            ) as HTMLButtonElement;
+            clearBtn.addEventListener("click", (e) => {
+              e.preventDefault();
+              onSetSidebarQuery("");
+              try {
+                input.focus({ preventScroll: true });
+              } catch {
+                // ignore
+              }
+            });
+            return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
+          })();
+
+    const sticky = el("div", { class: "sidebar-mobile-sticky" }, [top, tabs, ...(searchBar ? [searchBar] : [])]);
+
     const pinnedRows: HTMLElement[] = [];
     for (const key of pinnedKeys) {
       if (key.startsWith("dm:")) {
         const id = key.slice(3);
         const f = state.friends.find((x) => x.id === id);
         if (!f) continue;
+        if (!matchesFriend(f)) continue;
         const k = dmKey(f.id);
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         pinnedRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser));
@@ -285,6 +362,7 @@ export function renderSidebar(
         const id = key.slice(5);
         const g = groups.find((x) => x.id === id);
         if (g) {
+          if (!matchesRoom(g)) continue;
           const k = roomKey(g.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
           pinnedRows.push(
@@ -301,6 +379,7 @@ export function renderSidebar(
         }
         const b = boards.find((x) => x.id === id);
         if (b) {
+          if (!matchesRoom(b)) continue;
           const k = roomKey(b.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
           pinnedRows.push(
@@ -330,6 +409,7 @@ export function renderSidebar(
     if (activeTab === "chats") {
       const dialogItems: Array<{ sortTs: number; row: HTMLElement }> = [];
       for (const g of restGroups) {
+        if (!matchesRoom(g)) continue;
         const k = roomKey(g.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
         dialogItems.push({
@@ -345,6 +425,7 @@ export function renderSidebar(
         });
       }
       for (const b of restBoards) {
+        if (!matchesRoom(b)) continue;
         const k = roomKey(b.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
         dialogItems.push({
@@ -363,10 +444,13 @@ export function renderSidebar(
       for (const f of state.friends) {
         const k = dmKey(f.id);
         if (pinnedSet.has(k)) continue;
+        if (!matchesFriend(f)) continue;
         const hasConv = Boolean((state.conversations[k] || []).length);
         const hasDraft = Boolean(String(drafts[k] || "").trim());
         const unread = Math.max(0, Number(f.unread || 0) || 0);
-        if (!hasConv && !hasDraft && unread <= 0) continue; // "Чаты" — только начатые диалоги
+        if (!hasSidebarQuery) {
+          if (!hasConv && !hasDraft && unread <= 0) continue; // "Чаты" — только начатые диалоги
+        }
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         dialogItems.push({
           sortTs: lastTsForKey(k),
@@ -374,6 +458,7 @@ export function renderSidebar(
         });
       }
       for (const id of unknownAttnPeers) {
+        if (hasSidebarQuery && !matchesQuery(id)) continue;
         const k = dmKey(id);
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         const hint = attentionHintForPeer(state, id);
@@ -389,11 +474,10 @@ export function renderSidebar(
       const dialogRows = dialogItems.map((x) => x.row);
 
       target.replaceChildren(
-        top,
-        tabs,
+        sticky,
         ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),
-        el("div", { class: "pane-section" }, ["Диалоги"]),
-        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, ["(пока нет чатов)"])])
+        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Диалоги"]),
+        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])])
       );
       return;
     }
@@ -409,7 +493,9 @@ export function renderSidebar(
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     });
 
-    const unknownAttnRows = unknownAttnPeers.map((id) => {
+    const unknownAttnRows = unknownAttnPeers
+      .filter((id) => (hasSidebarQuery ? matchesQuery(id) : true))
+      .map((id) => {
       const k = dmKey(id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       const hint = attentionHintForPeer(state, id);
@@ -419,9 +505,28 @@ export function renderSidebar(
     });
 
     if (activeTab === "contacts") {
+      if (hasSidebarQuery) {
+        const allFriends = (state.friends || []).filter((f) => matchesFriend(f));
+        allFriends.sort((a, b) => {
+          if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
+          const an = displayNameForFriend(state, a);
+          const bn = displayNameForFriend(state, b);
+          return an.localeCompare(bn, "ru", { sensitivity: "base" });
+        });
+        const rows = allFriends.map((f) => {
+          const k = dmKey(f.id);
+          const meta = previewForConversation(state, k, "dm", drafts[k]);
+          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+        });
+        const allRows = [...unknownAttnRows, ...rows];
+        target.replaceChildren(
+          sticky,
+          ...(allRows.length ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows] : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])])
+        );
+        return;
+      }
       target.replaceChildren(
-        top,
-        tabs,
+        sticky,
         ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
         el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
         ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
@@ -482,8 +587,7 @@ export function renderSidebar(
     ]);
 
     target.replaceChildren(
-      top,
-      tabs,
+      sticky,
       tips,
       el("div", { class: "pane-section" }, ["Навигация"]),
       ...navRows,

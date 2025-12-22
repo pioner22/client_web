@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.97",
+    date: "2025-12-22",
+    added: ["Mobile: в сайдбаре добавили строку поиска (локальный фильтр) для вкладок «Чаты/Контакты»"],
+    improved: ["Mobile: верх сайдбара (заголовок/табы/поиск) теперь sticky — удобнее навигация как в Telegram"],
+  },
+  {
     version: "0.1.96",
     date: "2025-12-22",
     added: ["iOS (Safari): ненавязчивая подсказка установки PWA (Поделиться → «На экран Домой»)"],
