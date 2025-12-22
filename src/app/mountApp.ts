@@ -49,6 +49,7 @@ import { shouldAutofocusComposer } from "../helpers/ui/autofocusPolicy";
 import { armCtxClickSuppression, consumeCtxClickSuppression, type CtxClickSuppressionState } from "../helpers/ui/ctxClickSuppression";
 import { applyIosInputAssistantWorkaround, isIOS, isStandaloneDisplayMode } from "../helpers/ui/iosInputAssistant";
 import { DEFAULT_EMOJI, insertTextAtSelection, mergeEmojiPalette, updateEmojiRecents } from "../helpers/ui/emoji";
+import { createRafScrollLock } from "../helpers/ui/rafScrollLock";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 
 function autosizeInput(el: HTMLTextAreaElement) {
@@ -4540,15 +4541,16 @@ export function mountApp(root: HTMLElement) {
     if (layout.sidebar.scrollLeft !== left) layout.sidebar.scrollLeft = left;
   }
 
-  function lockSidebarCtxScroll(top: number, left: number, durationMs: number) {
-    const start = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
-    const tick = () => {
-      restoreSidebarCtxScroll(top, left);
-      const now = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
-      if (now - start < durationMs) window.requestAnimationFrame(tick);
-    };
-    tick();
-  }
+  const sidebarCtxScrollLock = createRafScrollLock({
+    restore: restoreSidebarCtxScroll,
+    requestAnimationFrame: (cb) => window.requestAnimationFrame(cb),
+    cancelAnimationFrame: (id) => window.cancelAnimationFrame(id),
+  });
+
+  store.subscribe(() => {
+    const st = store.get();
+    if (!st.modal || st.modal.kind !== "context_menu") sidebarCtxScrollLock.stop();
+  });
 
   layout.sidebar.addEventListener(
     "pointerdown",
@@ -4629,15 +4631,17 @@ export function mountApp(root: HTMLElement) {
     armSidebarClickSuppression(650);
 
     const st = store.get();
-    if (st.modal) return;
+    if (st.modal) {
+      restoreSidebarCtxScroll(prevTop, prevLeft);
+      return;
+    }
     const kind = (btn.getAttribute("data-ctx-kind") || "").trim() as ContextMenuTargetKind;
     const id = (btn.getAttribute("data-ctx-id") || "").trim();
     if (!kind || !id) return;
     sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 1800);
     openContextMenu({ kind, id }, e.clientX, e.clientY);
     // Подстраховка от "скачков" скролла на некоторых браузерах при открытии контекстного меню.
-    restoreSidebarCtxScroll(prevTop, prevLeft);
-    lockSidebarCtxScroll(prevTop, prevLeft, 1100);
+    sidebarCtxScrollLock.start(prevTop, prevLeft);
 
     const onFocus = (ev: FocusEvent) => {
       const t = ev.target as HTMLElement | null;

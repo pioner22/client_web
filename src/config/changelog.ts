@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.80",
+    date: "2025-12-22",
+    fixed: ["Сайдбар: при открытии контекстного меню (ПКМ/Ctrl+Click) список больше не должен «скакать» — фиксируем scroll до закрытия меню"],
+    added: ["Regress test: rafScrollLock — проверка scroll-lock на requestAnimationFrame"],
+  },
+  {
     version: "0.1.79",
     date: "2025-12-22",
     improved: [
