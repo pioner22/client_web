@@ -193,7 +193,17 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
   const fromLabel = fromId || "—";
   const status = m.kind === "out" ? statusLabel(m) : "";
   const meta: HTMLElement[] = [el("span", { class: "msg-time" }, [formatTime(m.ts)])];
-  if (m.edited) meta.push(el("span", { class: "msg-edited", "aria-label": "Изменено" }, ["изменено"]));
+  if (m.edited) {
+    const editedTs = typeof m.edited_ts === "number" && Number.isFinite(m.edited_ts) ? m.edited_ts : null;
+    const time = editedTs !== null ? formatTime(editedTs) : "";
+    meta.push(
+      el(
+        "span",
+        { class: "msg-edited", "aria-label": "Изменено", ...(time ? { title: `Изменено: ${time}` } : {}) },
+        [time ? `изменено ${time}` : "изменено"]
+      )
+    );
+  }
   if (status)
     meta.push(el("span", { class: `msg-status msg-status-${m.status || "delivered"}`, title: statusTitle(m) || undefined }, [status]));
   const bodyChildren: HTMLElement[] = [];

@@ -172,6 +172,7 @@ export interface ChatMessage {
   id?: number | null;
   status?: "sending" | "queued" | "delivered" | "read" | "error";
   edited?: boolean;
+  edited_ts?: number;
   kind: "in" | "out" | "sys";
   attachment?: ChatAttachment | null;
 }

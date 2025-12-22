@@ -1207,12 +1207,25 @@ export function handleServerMessage(
     const text = String(msg?.text ?? "");
     const ts = Number(msg?.ts ?? nowTs()) || nowTs();
     const edited = Boolean(msg?.edited);
+    const editedTsRaw = (msg as any)?.edited_ts;
+    const edited_ts = typeof editedTsRaw === "number" && Number.isFinite(editedTsRaw) ? editedTsRaw : undefined;
     const key = room ? roomKey(room) : dmKey(from === state.selfId ? String(to ?? "") : from);
     if (!key || key.endsWith(":")) return;
     const kind = from === state.selfId ? "out" : "in";
     const attachment = parseAttachment(msg?.attachment);
     patch((prev) =>
-      upsertConversation(prev, key, { kind, from, to, room, text, ts, id: msg?.id ?? null, attachment, ...(edited ? { edited: true } : {}) })
+      upsertConversation(prev, key, {
+        kind,
+        from,
+        to,
+        room,
+        text,
+        ts,
+        id: msg?.id ?? null,
+        attachment,
+        ...(edited ? { edited: true } : {}),
+        ...(edited && edited_ts ? { edited_ts } : {}),
+      })
     );
 
     // If we're actively viewing this DM, mark as read immediately to keep unread counters consistent.
@@ -1309,6 +1322,8 @@ export function handleServerMessage(
     const to = msg?.to ? String(msg.to).trim() : "";
     const room = msg?.room ? String(msg.room).trim() : "";
     const text = String(msg?.text ?? "");
+    const editedTsRaw = (msg as any)?.edited_ts;
+    const edited_ts = typeof editedTsRaw === "number" && Number.isFinite(editedTsRaw) ? editedTsRaw : undefined;
     const rawId = msg?.id;
     const id = typeof rawId === "number" && Number.isFinite(rawId) ? rawId : null;
     if (id === null) return;
@@ -1335,7 +1350,7 @@ export function handleServerMessage(
         if (idx < 0) return null;
         const next = [...conv];
         const cur = next[idx];
-        next[idx] = { ...cur, text, edited: true };
+        next[idx] = { ...cur, text, edited: true, ...(edited_ts ? { edited_ts } : {}) };
         didUpdate = true;
         return { ...(prev as any), conversations: { ...conversations, [k]: next } } as AppState;
       };
@@ -1352,7 +1367,7 @@ export function handleServerMessage(
         if (idx < 0) continue;
         const nextConv = [...(conv as any[])];
         const cur = nextConv[idx];
-        nextConv[idx] = { ...cur, text, edited: true };
+        nextConv[idx] = { ...cur, text, edited: true, ...(edited_ts ? { edited_ts } : {}) };
         didUpdate = true;
         return { ...(prev as any), conversations: { ...conversations, [k]: nextConv } } as AppState;
       }
@@ -1440,10 +1455,24 @@ export function handleServerMessage(
       const delivered = Boolean(r?.delivered);
       const read = Boolean(r?.read);
       const edited = Boolean(r?.edited);
+      const editedTsRaw = (r as any)?.edited_ts;
+      const edited_ts = typeof editedTsRaw === "number" && Number.isFinite(editedTsRaw) ? editedTsRaw : undefined;
       const status: ChatMessage["status"] | undefined =
         !room && kind === "out" && hasId ? (read ? "read" : delivered ? "delivered" : "queued") : undefined;
       const attachment = parseAttachment(r?.attachment);
-      incoming.push({ kind, from, to, room, text, ts, id, attachment, ...(status ? { status } : {}), ...(edited ? { edited: true } : {}) });
+      incoming.push({
+        kind,
+        from,
+        to,
+        room,
+        text,
+        ts,
+        id,
+        attachment,
+        ...(status ? { status } : {}),
+        ...(edited ? { edited: true } : {}),
+        ...(edited && edited_ts ? { edited_ts } : {}),
+      });
     }
     patch((prev) => {
       let baseConv = prev.conversations[key] ?? [];

@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.85",
+    date: "2025-12-22",
+    improved: [
+      "Сообщения: при редактировании показываем время правки («изменено HH:MM»), а сервер теперь отдаёт edited_ts в истории/бэклоге",
+    ],
+  },
+  {
     version: "0.1.84",
     date: "2025-12-22",
     added: ["Android: предложение установить PWA (beforeinstallprompt) — показываем ненавязчивый toast «Установить/Позже»"],
