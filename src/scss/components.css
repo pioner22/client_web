@@ -892,8 +892,64 @@
 }
 
 .file-row-chat {
-  padding: var(--sp-2);
-  background: var(--panel2);
+  padding: 10px 12px;
+  border-radius: var(--msg-in-radius);
+  border: var(--msg-in-border-width) solid var(--msg-in-border-color);
+  background: var(--msg-in-bg);
+}
+
+.msg-out .file-row-chat {
+  border-radius: var(--msg-out-radius);
+  border: var(--msg-out-border-width) solid var(--msg-out-border-color);
+  background: var(--msg-out-bg);
+}
+
+.file-row-chat > .chat-file-preview {
+  border: 0;
+  border-radius: calc(var(--msg-in-radius) - 2px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+.msg-out .file-row-chat > .chat-file-preview {
+  border-radius: calc(var(--msg-out-radius) - 2px);
+}
+
+.file-row-chat .file-actions {
+  align-self: center;
+}
+
+.file-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.file-action::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  opacity: 0.92;
+  -webkit-mask: var(--file-action-icon) no-repeat center / contain;
+  mask: var(--file-action-icon) no-repeat center / contain;
+}
+
+.file-action-accept {
+  --file-action-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+}
+
+.file-action-reject {
+  --file-action-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z'/%3E%3C/svg%3E");
+}
+
+.file-action-download {
+  --file-action-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 3a1 1 0 0 1 1 1v9.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-4.01 4.01a1 1 0 0 1-1.38.02l-.02-.02-4.01-4.01a1 1 0 0 1 1.4-1.4L11 13.6V4a1 1 0 0 1 1-1Zm-7 16a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z'/%3E%3C/svg%3E");
 }
 
 .chat-file-preview {

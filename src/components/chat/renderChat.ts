@@ -4,6 +4,7 @@ import { conversationKey } from "../../helpers/chat/conversationKey";
 import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import type { AppState, ChatMessage, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
+import { fileBadge } from "../../helpers/files/fileBadge";
 import { safeUrl } from "../../helpers/security/safeUrl";
 import type { Layout } from "../layout/types";
 
@@ -210,7 +211,10 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
     if (transfer?.acceptedBy?.length) metaEls.push(el("div", { class: "file-meta" }, [`Приняли: ${transfer.acceptedBy.join(", ")}`]));
     if (transfer?.receivedBy?.length) metaEls.push(el("div", { class: "file-meta" }, [`Получили: ${transfer.receivedBy.join(", ")}`]));
 
-    const mainChildren: HTMLElement[] = [el("div", { class: "file-name" }, [name]), ...metaEls];
+    const badge = fileBadge(name, att.mime);
+    const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
+    icon.style.setProperty("--file-h", String(badge.hue));
+    const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [name])]), ...metaEls];
     if (transfer && (transfer.status === "uploading" || transfer.status === "downloading")) {
       const bar = el("div", { class: "file-progress-bar" });
       bar.style.width = `${Math.max(0, Math.min(100, Math.round(transfer.progress || 0)))}%`;
@@ -222,17 +226,17 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
       actions.push(
         el(
           "button",
-          { class: "btn", type: "button", "data-action": "file-accept", "data-file-id": offer.id, "aria-label": `Принять: ${name}` },
+          { class: "btn btn-primary file-action file-action-accept", type: "button", "data-action": "file-accept", "data-file-id": offer.id, "aria-label": `Принять: ${name}` },
           ["Принять"]
         )
       );
     } else if (url) {
-      actions.push(el("a", { class: "btn", href: url, download: name }, ["Скачать"]));
+      actions.push(el("a", { class: "btn file-action file-action-download", href: url, download: name }, ["Скачать"]));
     } else if (att.fileId) {
       actions.push(
         el(
           "button",
-          { class: "btn", type: "button", "data-action": "file-download", "data-file-id": att.fileId, "aria-label": `Скачать: ${name}` },
+          { class: "btn file-action file-action-download", type: "button", "data-action": "file-download", "data-file-id": att.fileId, "aria-label": `Скачать: ${name}` },
           ["Скачать"]
         )
       );
@@ -260,7 +264,7 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
         ? el("img", { class: "chat-file-img", src: url, alt: name, loading: "lazy", decoding: "async" })
         : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
       if (url || att.fileId) {
-        rowChildren.splice(1, 0, el("button", attrs, [child]));
+        rowChildren.unshift(el("button", attrs, [child]));
       }
     }
 

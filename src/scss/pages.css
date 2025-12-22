@@ -381,11 +381,15 @@
 
 .file-row {
   display: grid;
+  grid-template-columns: 1fr auto;
   gap: var(--sp-2);
-  padding: var(--sp-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--panel);
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 15%);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(120% 80% at 10% 0%, color-mix(in srgb, var(--focus), transparent 94%), transparent 60%),
+    radial-gradient(120% 80% at 90% 0%, color-mix(in srgb, var(--accent), transparent 96%), transparent 60%),
+    var(--panel);
 }
 
 .file-row.is-error {
@@ -399,15 +403,46 @@
 .file-main {
   display: grid;
   gap: var(--sp-1);
+  min-width: 0;
+}
+
+.file-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.92);
+  background:
+    radial-gradient(120% 90% at 25% 20%, rgba(255, 255, 255, 0.28), transparent 55%),
+    radial-gradient(120% 90% at 80% 0%, rgba(0, 0, 0, 0.28), transparent 55%),
+    hsl(var(--file-h, 215) 72% 52%);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38);
 }
 
 .file-name {
-  font-weight: 600;
+  font-weight: 650;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-meta {
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.25;
 }
 
 .file-progress {
@@ -425,12 +460,24 @@
 
 .file-actions {
   display: flex;
-  gap: var(--sp-2);
+  gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: start;
 }
 
 .file-actions .btn {
   text-decoration: none;
+}
+
+.file-actions:empty {
+  display: none;
+}
+
+.file-row > .chat-file-preview {
+  grid-column: 1 / -1;
+  border-radius: calc(var(--r-md) - 2px);
 }
 
 .file-file-preview {

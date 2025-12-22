@@ -3634,6 +3634,7 @@ export function mountApp(root: HTMLElement) {
     }
     const input = document.createElement("input");
     input.type = "file";
+    input.multiple = true;
     input.style.position = "fixed";
     input.style.left = "-9999px";
     input.style.top = "-9999px";
@@ -3641,9 +3642,10 @@ export function mountApp(root: HTMLElement) {
     input.addEventListener(
       "change",
       () => {
-        const file = input.files && input.files.length ? input.files[0] : null;
+        const files = Array.from(input.files || []);
         input.remove();
-        sendFile(file, target);
+        if (!files.length) return;
+        for (const file of files) sendFile(file, target);
       },
       { once: true }
     );

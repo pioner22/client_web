@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.75",
+    date: "2025-12-22",
+    improved: [
+      "Файлы/медиа: вложения в чате и на странице «Файлы» теперь выглядят как аккуратные карточки (иконка типа, превью сверху для изображений, компактные кнопки действий)",
+      "Прикрепление: выбор нескольких файлов за раз (multi-select) — удобнее отправлять пачками",
+    ],
+    fixed: ["UI: иконки действий у файлов (accept/reject/download) корректно отображаются во всех браузерах"],
+    added: ["Regress tests: fileBadge и renderChatFileRow"],
+  },
+  {
     version: "0.1.74",
     date: "2025-12-22",
     improved: [

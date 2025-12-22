@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import type { AppState, FileOfferIn, FileTransferEntry, TargetRef } from "../../stores/types";
 import { safeUrl } from "../../helpers/security/safeUrl";
+import { fileBadge } from "../../helpers/files/fileBadge";
 
 export interface FilesPage {
   root: HTMLElement;
@@ -105,8 +106,8 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   }
 
   function renderOffer(offer: FileOfferIn, state: AppState): HTMLElement {
-    const acceptBtn = el("button", { class: "btn", type: "button" }, ["Принять"]);
-    const rejectBtn = el("button", { class: "btn", type: "button" }, ["Отклонить"]);
+    const acceptBtn = el("button", { class: "btn btn-primary file-action file-action-accept", type: "button" }, ["Принять"]);
+    const rejectBtn = el("button", { class: "btn btn-danger file-action file-action-reject", type: "button" }, ["Отклонить"]);
     acceptBtn.addEventListener("click", () => actions.onFileOfferAccept(offer.id));
     rejectBtn.addEventListener("click", () => actions.onFileOfferReject(offer.id));
     const metaLines = [
@@ -115,8 +116,11 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       `Размер: ${formatBytes(offer.size)}`,
     ].filter(Boolean);
     const metaEls = metaLines.map((line) => el("div", { class: "file-meta" }, [line]));
+    const badge = fileBadge(offer.name || "файл", null);
+    const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
+    icon.style.setProperty("--file-h", String(badge.hue));
     return el("div", { class: "file-row" }, [
-      el("div", { class: "file-main" }, [el("div", { class: "file-name" }, [offer.name || "файл"]), ...metaEls]),
+      el("div", { class: "file-main" }, [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [offer.name || "файл"])]), ...metaEls]),
       el("div", { class: "file-actions" }, [acceptBtn, rejectBtn]),
     ]);
   }
@@ -139,7 +143,10 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     if (entry.acceptedBy?.length) metaLines.push(`Приняли: ${entry.acceptedBy.join(", ")}`);
     if (entry.receivedBy?.length) metaLines.push(`Получили: ${entry.receivedBy.join(", ")}`);
     const metaEls = metaLines.map((line) => el("div", { class: "file-meta" }, [line]));
-    const mainChildren: HTMLElement[] = [el("div", { class: "file-name" }, [entry.name || "файл"]), ...metaEls];
+    const badge = fileBadge(entry.name || "файл", null);
+    const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
+    icon.style.setProperty("--file-h", String(badge.hue));
+    const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [entry.name || "файл"])]), ...metaEls];
     if (entry.status === "uploading" || entry.status === "downloading") {
       const bar = el("div", { class: "file-progress-bar" });
       bar.style.width = `${Math.max(0, Math.min(100, Math.round(entry.progress || 0)))}%`;
@@ -148,9 +155,11 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     const actionsList: HTMLElement[] = [];
     const canDownload = entry.status === "complete" || entry.status === "uploaded";
     if (canDownload && safeHref) {
-      actionsList.push(el("a", { class: "btn", href: safeHref, download: entry.name }, ["Скачать"]));
+      actionsList.push(el("a", { class: "btn file-action file-action-download", href: safeHref, download: entry.name }, ["Скачать"]));
     } else if (canDownload && fileId) {
-      actionsList.push(el("button", { class: "btn", type: "button", "data-action": "file-download", "data-file-id": fileId }, ["Скачать"]));
+      actionsList.push(
+        el("button", { class: "btn file-action file-action-download", type: "button", "data-action": "file-download", "data-file-id": fileId }, ["Скачать"])
+      );
     }
     const statusClass = entry.status === "error" ? "is-error" : entry.status === "complete" || entry.status === "uploaded" ? "is-complete" : "";
     const rowChildren: HTMLElement[] = [];
