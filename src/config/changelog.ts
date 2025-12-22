@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.88",
+    date: "2025-12-22",
+    improved: [
+      "iPhone/Android: #app теперь предпочитает 100dvh (вместо 100svh), меньше шансов на «пустую» полосу снизу при нестабильных viewport-юнитах",
+    ],
+    fixed: ["Сайдбар: дополнительная стабилизация скролла при ПКМ/контекстном меню (без резких прыжков списка)"],
+    added: ["Repro: public/ios-input-lab.html — минимальная страница для проверки iOS input toolbar (Undo/Redo/✓)"],
+  },
+  {
     version: "0.1.87",
     date: "2025-12-22",
     added: ["Контакты: контекстное меню → «Пригласить в чат/доску…» с выбором ваших чатов/досок (инвайт приходит пользователю в ЛС)"],

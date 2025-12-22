@@ -5062,13 +5062,15 @@ export function mountApp(root: HTMLElement) {
       restoreSidebarCtxScroll(prevTop, prevLeft);
       return;
     }
+    // Extra stabilization: restore/lock scroll *before* rendering the menu to avoid rare jumps.
+    stabilizeSidebarScrollOnContextClick(prevTop, prevLeft);
+    sidebarCtxScrollLock.start(prevTop, prevLeft);
     const kind = (btn.getAttribute("data-ctx-kind") || "").trim() as ContextMenuTargetKind;
     const id = (btn.getAttribute("data-ctx-id") || "").trim();
     if (!kind || !id) return;
     sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 1800);
     openContextMenu({ kind, id }, e.clientX, e.clientY);
     // Подстраховка от "скачков" скролла на некоторых браузерах при открытии контекстного меню.
-    sidebarCtxScrollLock.start(prevTop, prevLeft);
 
     const onFocus = (ev: FocusEvent) => {
       const t = ev.target as HTMLElement | null;

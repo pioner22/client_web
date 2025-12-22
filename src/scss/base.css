@@ -31,12 +31,14 @@ button {
 #app {
   height: 100%;
   /* Prefer dynamic viewport on modern browsers (mobile address bar / UI chrome). */
-  height: 100dvh;
+  height: 100vh;
   height: 100svh;
+  height: 100dvh;
   width: 100%;
   /* Avoid legacy 100vh quirks on iOS; keep fallbacks for older engines. */
-  min-height: 100dvh;
+  min-height: 100vh;
   min-height: 100svh;
+  min-height: 100dvh;
   min-height: -webkit-fill-available;
   padding: var(--app-outer-pad);
   overflow: hidden;

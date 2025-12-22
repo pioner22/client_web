@@ -68,6 +68,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     id: "profile-status",
     placeholder: "Например: на связи",
     autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
     inputmode: "text",
     enterkeyhint: "done",
   }) as HTMLInputElement;
@@ -79,6 +82,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     placeholder: "Коротко о себе…",
     rows: "4",
     autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
     inputmode: "text",
     enterkeyhint: "done",
   }) as HTMLTextAreaElement;
