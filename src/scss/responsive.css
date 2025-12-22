@@ -1,20 +1,19 @@
-@media (max-width: 820px) and (display-mode: standalone) {
-  /* PWA standalone: на мобильных всегда фуллскрин (без "карточки"), независимо от выбранного скина. */
+@media (max-width: 820px) {
+  /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
   #app {
     --app-outer-pad: 0px;
   }
 
-  .app {
+  #app > .app {
     --app-max-width: 100%;
     --app-border-width: 0px;
     --app-border-color: transparent;
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
+    --app-row-footer: 0px;
   }
-}
 
-@media (max-width: 820px) {
   :root {
     --app-outer-pad: 0px;
     --app-max-width: 100%;

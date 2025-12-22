@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.78",
+    date: "2025-12-22",
+    improved: [
+      "Mobile: фуллскрин принудительно для всех скинов (Safari + PWA) — без «карточки» и лишних отступов",
+      "Mobile: composer учитывает safe-area снизу без ощущения «двойного» паддинга",
+    ],
+    added: ["Regress tests: mobile safe-area CSS (fullscreen overrides + composer padding)"],
+  },
+  {
     version: "0.1.77",
     date: "2025-12-22",
     improved: [
