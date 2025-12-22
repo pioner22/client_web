@@ -143,6 +143,8 @@ export type PageKind = "main" | "search" | "profile" | "files" | "help" | "group
 
 export type AuthMode = "auto" | "register" | "login";
 
+export type MobileSidebarTab = "chats" | "contacts";
+
 export type TargetKind = "dm" | "group" | "board";
 
 export interface TargetRef {
@@ -259,6 +261,8 @@ export interface AppState {
 
   skin: string;
   skins: SkinInfo[];
+
+  mobileSidebarTab: MobileSidebarTab;
 
   friends: FriendEntry[];
   pendingIn: string[];

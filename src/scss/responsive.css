@@ -22,6 +22,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
+    --app-row-footer: 0px;
   }
 
   .grid {
@@ -132,37 +133,9 @@
     min-height: 100%;
   }
 
-  /* Mobile bottom navigation (Telegram-like). */
+  /* Mobile: нижние tab-кнопки убраны (навигация живёт в «Меню» / Контакты). */
   .footer {
-    background: transparent;
-    border-top: 0;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .footer-line {
     display: none;
-  }
-
-  .footer-nav {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    width: min(460px, 100%);
-    padding: 4px;
-    border-radius: 999px;
-    background: var(--panel);
-    border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
-    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
-  }
-
-  .footer-tab {
-    font-size: 12px;
-    white-space: nowrap;
   }
 
   .toast-host {

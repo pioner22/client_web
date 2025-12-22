@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.69",
+    date: "2025-12-22",
+    improved: [
+      "Mobile: нижняя панель навигации убрана — теперь экран чище, а composer находится строго внизу (с учётом safe-area)",
+      "Mobile: в боковом меню добавлены вкладки «Чаты/Контакты» (как в Telegram по смыслу): «Чаты» показывает только начатые диалоги и комнаты, «Контакты» — адресную книгу + навигацию (Поиск/Профиль/Файлы/Info)",
+    ],
+  },
+  {
     version: "0.1.68",
     date: "2025-12-21",
     fixed: [

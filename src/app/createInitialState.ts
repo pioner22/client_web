@@ -24,6 +24,7 @@ export function createInitialState(): AppState {
     authRememberedId: rememberedId,
     skin: getStoredSkinId(),
     skins: [{ id: "default", title: "По умолчанию" }],
+    mobileSidebarTab: "chats",
     friends: [],
     pendingIn: [],
     pendingOut: [],

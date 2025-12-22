@@ -12,6 +12,7 @@ import type {
   ContextMenuTargetKind,
   FileOfferIn,
   FileTransferEntry,
+  MobileSidebarTab,
   PageKind,
   SearchResultEntry,
   TargetRef,
@@ -873,6 +874,12 @@ export function mountApp(root: HTMLElement) {
     setMobileSidebarOpen(false);
   }
 
+  function setMobileSidebarTab(tab: MobileSidebarTab) {
+    const next: MobileSidebarTab = tab === "contacts" ? "contacts" : "chats";
+    if (store.get().mobileSidebarTab === next) return;
+    store.set({ mobileSidebarTab: next });
+  }
+
   layout.navOverlay.addEventListener("click", () => closeMobileSidebar());
 
   layout.sidebar.addEventListener("click", (e) => {
@@ -1274,6 +1281,7 @@ export function mountApp(root: HTMLElement) {
     store.set((prev) => ({
       ...prev,
       page,
+      ...(page !== "main" ? { mobileSidebarTab: "contacts" as MobileSidebarTab } : {}),
       ...(page !== "main" ? { chatSearchOpen: false, chatSearchQuery: "", chatSearchHits: [], chatSearchPos: 0 } : {}),
     }));
   }
@@ -4642,6 +4650,7 @@ export function mountApp(root: HTMLElement) {
         gateway.send({ type: "profile_get" });
       }
     },
+    onSetMobileSidebarTab: (tab: MobileSidebarTab) => setMobileSidebarTab(tab),
     onAuthLogin: () => authLogin(),
     onAuthRegister: () => authRegister(),
     onAuthModeChange: (mode: "register" | "login") => store.set({ authMode: mode, modal: { kind: "auth" } }),

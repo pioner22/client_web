@@ -82,7 +82,7 @@
   padding: var(--composer-pad-y) var(--composer-pad-x);
   padding-left: calc(var(--composer-pad-x) + env(safe-area-inset-left));
   padding-right: calc(var(--composer-pad-x) + env(safe-area-inset-right));
-  padding-bottom: var(--composer-pad-y);
+  padding-bottom: calc(var(--composer-pad-y) + env(safe-area-inset-bottom));
   border-top: var(--composer-border-width) solid var(--composer-border-color);
   background: var(--composer-bg);
 }

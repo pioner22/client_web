@@ -2,7 +2,7 @@ import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { formatTime } from "../../helpers/time";
-import type { ActionModalPayload, AppState, FriendEntry, TargetRef } from "../../stores/types";
+import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 
 function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement {
   const url = getStoredAvatar(kind, id);
@@ -151,10 +151,14 @@ export function renderSidebar(
   state: AppState,
   onSelect: (t: TargetRef) => void,
   onOpenAction: (payload: ActionModalPayload) => void,
-  onOpenHelp: () => void,
+  onSetPage: (page: PageKind) => void,
   onCreateGroup: () => void,
-  onCreateBoard: () => void
+  onCreateBoard: () => void,
+  onSetMobileSidebarTab: (tab: MobileSidebarTab) => void
 ) {
+  const isMobile =
+    typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
+
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
   const pinnedSet = new Set(pinnedKeys);
@@ -170,6 +174,234 @@ export function renderSidebar(
   const boards = state.boards || [];
   const groups = state.groups || [];
   const sel = state.selected;
+
+  if (isMobile) {
+    const activeTab: MobileSidebarTab = state.mobileSidebarTab === "contacts" ? "contacts" : "chats";
+    const topTitle = activeTab === "contacts" ? "Контакты" : "Чаты";
+
+    const top = el("div", { class: "sidebar-mobile-top" }, [
+      el(
+        "button",
+        { class: "btn sidebar-close", type: "button", "data-action": "sidebar-close", title: "Назад", "aria-label": "Назад" },
+        ["←"]
+      ),
+      el("div", { class: "sidebar-mobile-title" }, [topTitle]),
+    ]);
+
+    const tabChats = el(
+      "button",
+      {
+        class: activeTab === "chats" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "chats"),
+      },
+      ["Чаты"]
+    ) as HTMLButtonElement;
+    const tabContacts = el(
+      "button",
+      {
+        class: activeTab === "contacts" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "contacts"),
+      },
+      ["Контакты"]
+    ) as HTMLButtonElement;
+    tabChats.addEventListener("click", () => onSetMobileSidebarTab("chats"));
+    tabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
+    const tabs = el("div", { class: "sidebar-tabs", role: "tablist", "aria-label": "Раздел" }, [tabChats, tabContacts]);
+
+    const pinnedRows: HTMLElement[] = [];
+    for (const key of pinnedKeys) {
+      if (key.startsWith("dm:")) {
+        const id = key.slice(3);
+        const f = state.friends.find((x) => x.id === id);
+        if (!f) continue;
+        const k = dmKey(f.id);
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        pinnedRows.push(friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect));
+        continue;
+      }
+      if (key.startsWith("room:")) {
+        const id = key.slice(5);
+        const g = groups.find((x) => x.id === id);
+        if (g) {
+          const k = roomKey(g.id);
+          const meta = previewForConversation(state, k, "room", drafts[k]);
+          pinnedRows.push(
+            roomRow(
+              null,
+              String(g.name || g.id),
+              Boolean(sel && sel.kind === "group" && sel.id === g.id),
+              () => onSelect({ kind: "group", id: g.id }),
+              { kind: "group", id: g.id },
+              meta
+            )
+          );
+          continue;
+        }
+        const b = boards.find((x) => x.id === id);
+        if (b) {
+          const k = roomKey(b.id);
+          const meta = previewForConversation(state, k, "room", drafts[k]);
+          pinnedRows.push(
+            roomRow(
+              null,
+              String(b.name || b.id),
+              Boolean(sel && sel.kind === "board" && sel.id === b.id),
+              () => onSelect({ kind: "board", id: b.id }),
+              { kind: "board", id: b.id },
+              meta
+            )
+          );
+        }
+      }
+    }
+
+    const pendingCount =
+      state.pendingIn.length +
+      state.pendingOut.length +
+      state.pendingGroupInvites.length +
+      state.pendingGroupJoinRequests.length +
+      state.pendingBoardInvites.length +
+      state.fileOffersIn.length;
+
+    const restBoards = boards.filter((b) => !pinnedSet.has(roomKey(b.id)));
+    const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
+
+    const lastTsForKey = (key: string): number => {
+      const conv = state.conversations[key] || [];
+      const last = conv.length ? conv[conv.length - 1] : null;
+      const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
+      return Math.max(0, ts);
+    };
+
+    if (activeTab === "chats") {
+      const dialogItems: Array<{ sortTs: number; row: HTMLElement }> = [];
+      for (const g of restGroups) {
+        const k = roomKey(g.id);
+        const meta = previewForConversation(state, k, "room", drafts[k]);
+        dialogItems.push({
+          sortTs: lastTsForKey(k),
+          row: roomRow(
+            null,
+            String(g.name || g.id),
+            Boolean(sel && sel.kind === "group" && sel.id === g.id),
+            () => onSelect({ kind: "group", id: g.id }),
+            { kind: "group", id: g.id },
+            meta
+          ),
+        });
+      }
+      for (const b of restBoards) {
+        const k = roomKey(b.id);
+        const meta = previewForConversation(state, k, "room", drafts[k]);
+        dialogItems.push({
+          sortTs: lastTsForKey(k),
+          row: roomRow(
+            null,
+            String(b.name || b.id),
+            Boolean(sel && sel.kind === "board" && sel.id === b.id),
+            () => onSelect({ kind: "board", id: b.id }),
+            { kind: "board", id: b.id },
+            meta
+          ),
+        });
+      }
+
+      for (const f of state.friends) {
+        const k = dmKey(f.id);
+        if (pinnedSet.has(k)) continue;
+        const hasConv = Boolean((state.conversations[k] || []).length);
+        const hasDraft = Boolean(String(drafts[k] || "").trim());
+        const unread = Math.max(0, Number(f.unread || 0) || 0);
+        if (!hasConv && !hasDraft && unread <= 0) continue; // "Чаты" — только начатые диалоги
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        dialogItems.push({ sortTs: lastTsForKey(k), row: friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect) });
+      }
+
+      dialogItems.sort((a, b) => b.sortTs - a.sortTs);
+      const dialogRows = dialogItems.map((x) => x.row);
+
+      target.replaceChildren(
+        top,
+        tabs,
+        ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),
+        el("div", { class: "pane-section" }, ["Диалоги"]),
+        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, ["(пока нет чатов)"])])
+      );
+      return;
+    }
+
+    // Contacts tab (Telegram-like): адресная книга + навигация.
+    const actionRows: HTMLElement[] = [
+      roomRow("⌕", "Поиск", state.page === "search", () => onSetPage("search")),
+      roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile")),
+      roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files")),
+      roomRow("?", "Info", state.page === "help", () => onSetPage("help")),
+      roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup()),
+      roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard()),
+    ];
+
+    const onlineRows = online.map((f) => {
+      const k = dmKey(f.id);
+      const meta = previewForConversation(state, k, "dm", drafts[k]);
+      return friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect);
+    });
+    const offlineRows = offline.map((f) => {
+      const k = dmKey(f.id);
+      const meta = previewForConversation(state, k, "dm", drafts[k]);
+      return friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect);
+    });
+
+    target.replaceChildren(
+      top,
+      tabs,
+      el("div", { class: "pane-section" }, ["Меню"]),
+      ...actionRows,
+      el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
+      ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
+      el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
+      ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
+      el("div", { class: "pane-section" }, [`Ожидают (${pendingCount})`]),
+      ...(pendingCount
+        ? [
+            ...state.pendingIn.map((id) =>
+              pendingRow("IN", `Запрос: ${id}`, () => onOpenAction({ kind: "auth_in", peer: id }), { kind: "auth_in", id })
+            ),
+            ...state.pendingOut.map((id) =>
+              pendingRow("OUT", `Ожидает: ${id}`, () => onOpenAction({ kind: "auth_out", peer: id }), { kind: "auth_out", id })
+            ),
+            ...state.pendingGroupInvites.map((inv) =>
+              pendingRow("G+", `Инвайт: ${roomLabel(inv.name, inv.groupId, inv.handle)}`, () => onOpenAction(inv))
+            ),
+            ...state.pendingGroupJoinRequests.map((req) =>
+              pendingRow("G?", `Запрос: ${req.from} → ${roomLabel(req.name, req.groupId, req.handle)}`, () => onOpenAction(req))
+            ),
+            ...state.pendingBoardInvites.map((inv) =>
+              pendingRow("B+", `Инвайт: ${roomLabel(inv.name, inv.boardId, inv.handle)}`, () => onOpenAction(inv))
+            ),
+            ...state.fileOffersIn.map((offer) =>
+              pendingRow(
+                "F+",
+                `Файл: ${offer.name || "файл"} ← ${offer.from}${offer.room ? ` → ${offer.room}` : ""}`,
+                () =>
+                  onOpenAction({
+                    kind: "file_offer",
+                    fileId: offer.id,
+                    from: offer.from,
+                    name: offer.name,
+                    size: offer.size,
+                    room: offer.room,
+                  })
+              )
+            ),
+          ]
+        : [el("div", { class: "pane-section" }, ["(нет)"])])
+    );
+    return;
+  }
 
   const pinnedRows: HTMLElement[] = [];
   for (const key of pinnedKeys) {
@@ -233,7 +465,7 @@ export function renderSidebar(
       el("div", { class: "sidebar-mobile-title" }, ["Меню"]),
     ]),
     el("div", { class: "pane-title" }, ["Контакты"]),
-    roomRow("?", "Info", state.page === "help", () => onOpenHelp()),
+    roomRow("?", "Info", state.page === "help", () => onSetPage("help")),
     roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup()),
     roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard()),
     ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),

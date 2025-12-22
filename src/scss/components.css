@@ -312,6 +312,52 @@
   line-height: 1;
 }
 
+.sidebar-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
+  background: color-mix(in srgb, var(--panel2), transparent 25%);
+  margin-bottom: var(--sp-3);
+}
+
+.sidebar-tab {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 80ms ease;
+}
+
+.sidebar-tab:hover {
+  background: color-mix(in srgb, var(--sel), transparent 45%);
+  color: var(--text);
+}
+
+.sidebar-tab:active {
+  transform: translateY(1px);
+}
+
+.sidebar-tab.sidebar-tab-active {
+  background: var(--sel);
+  color: var(--text);
+}
+
+.sidebar-tab:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
 .chat-title {
   color: var(--chat-title-color);
   margin-bottom: var(--chat-title-mb);
