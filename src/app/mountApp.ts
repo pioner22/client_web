@@ -2853,7 +2853,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function joinBoardFromInvite(boardId: string) {
-    gateway.send({ type: "board_join", board_id: boardId });
+    gateway.send({ type: "board_invite_response", board_id: boardId, accept: true });
     store.set((prev) => {
       const inv = prev.pendingBoardInvites.find((x) => x.boardId === boardId);
       const from = String(inv?.from || "").trim();
@@ -2878,6 +2878,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function declineBoardInvite(boardId: string) {
+    gateway.send({ type: "board_invite_response", board_id: boardId, accept: false });
     store.set((prev) => {
       const inv = prev.pendingBoardInvites.find((x) => x.boardId === boardId);
       const from = String(inv?.from || "").trim();

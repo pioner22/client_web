@@ -1128,6 +1128,28 @@ export function handleServerMessage(
     if (bid) patch({ status: `Инвайт отправлен: ${bid}` });
     return;
   }
+  if (t === "board_invite_response_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const friendly =
+        reason === "no_invite"
+          ? "Нет активного приглашения (возможно, уже обработано)"
+          : reason === "not_found"
+            ? "Доска не найдена"
+            : reason === "bad_args"
+              ? "Некорректные данные"
+              : reason;
+      patch({ status: `Не удалось обработать приглашение: ${friendly}` });
+      return;
+    }
+    const bid = String(msg?.board_id ?? "");
+    const accept = msg?.accept === undefined ? null : Boolean(msg.accept);
+    if (bid && accept === true) patch({ status: `Приглашение принято: ${bid}` });
+    else if (bid && accept === false) patch({ status: `Приглашение отклонено: ${bid}` });
+    else patch({ status: "Приглашение обработано" });
+    return;
+  }
   if (t === "board_join_result") {
     const ok = Boolean(msg?.ok);
     if (!ok) {
