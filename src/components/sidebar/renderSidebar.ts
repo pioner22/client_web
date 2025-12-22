@@ -4,6 +4,35 @@ import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { formatTime } from "../../helpers/time";
 import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 
+function collectAttentionPeers(state: AppState): Set<string> {
+  const ids = new Set<string>();
+  const add = (raw: unknown) => {
+    const id = String(raw || "").trim();
+    if (!id) return;
+    if (state.selfId && id === String(state.selfId)) return;
+    ids.add(id);
+  };
+  for (const id of state.pendingIn || []) add(id);
+  for (const id of state.pendingOut || []) add(id);
+  for (const inv of state.pendingGroupInvites || []) add(inv?.from);
+  for (const req of state.pendingGroupJoinRequests || []) add(req?.from);
+  for (const inv of state.pendingBoardInvites || []) add(inv?.from);
+  for (const offer of state.fileOffersIn || []) add(offer?.from);
+  return ids;
+}
+
+function attentionHintForPeer(state: AppState, id: string): string | null {
+  const peer = String(id || "").trim();
+  if (!peer) return null;
+  if ((state.pendingIn || []).includes(peer)) return "Запрос авторизации";
+  if ((state.pendingOut || []).includes(peer)) return "Ожидаем авторизацию";
+  if ((state.fileOffersIn || []).some((x) => String(x?.from || "").trim() === peer)) return "Входящий файл";
+  if ((state.pendingGroupInvites || []).some((x) => String(x?.from || "").trim() === peer)) return "Инвайт в чат";
+  if ((state.pendingBoardInvites || []).some((x) => String(x?.from || "").trim() === peer)) return "Инвайт в доску";
+  if ((state.pendingGroupJoinRequests || []).some((x) => String(x?.from || "").trim() === peer)) return "Запрос вступления";
+  return null;
+}
+
 function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement {
   const url = getStoredAvatar(kind, id);
   const a = el("span", { class: url ? "avatar avatar-img" : "avatar", "aria-hidden": "true" }, [url ? "" : avatarMonogram(kind, id)]);
@@ -81,9 +110,11 @@ function friendRow(
   selected: boolean,
   meta: SidebarRowMeta,
   onSelect: (t: TargetRef) => void,
-  onOpenUser: (id: string) => void
+  onOpenUser: (id: string) => void,
+  attn?: boolean
 ): HTMLElement {
-  const cls = selected ? "row row-sel" : "row";
+  const clsBase = selected ? "row row-sel" : "row";
+  const cls = attn ? `${clsBase} row-attn` : clsBase;
   const unread = Math.max(0, Number(f.unread || 0) || 0);
   const unreadLabel = unread > 99 ? "99+" : String(unread);
   const tailChildren: HTMLElement[] = [];
@@ -162,31 +193,6 @@ function roomRow(
   return btn;
 }
 
-function pendingRow(prefix: string, label: string, onClick: () => void, ctx?: { kind: "auth_in" | "auth_out"; id: string }): HTMLElement {
-  const cls = ctx?.kind === "auth_in" ? "row row-attn" : "row";
-  const btn = el("button", { class: cls, type: "button" }, [
-    el("span", { class: "row-prefix", "aria-hidden": "true" }, [prefix]),
-    el("span", { class: "row-label" }, [label]),
-  ]);
-  if (ctx) {
-    btn.setAttribute("data-ctx-kind", ctx.kind);
-    btn.setAttribute("data-ctx-id", ctx.id);
-  }
-  btn.addEventListener("click", (e) => {
-    const ev = e as MouseEvent;
-    if (ev.ctrlKey) return;
-    if (typeof ev.button === "number" && ev.button !== 0) return;
-    onClick();
-  });
-  return btn;
-}
-
-function roomLabel(name: string | null | undefined, id: string, handle?: string | null): string {
-  const base = name ? `${name} (${id})` : id;
-  if (handle) return `${base} ${handle}`;
-  return base;
-}
-
 export function renderSidebar(
   target: HTMLElement,
   state: AppState,
@@ -204,15 +210,11 @@ export function renderSidebar(
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
   const pinnedSet = new Set(pinnedKeys);
+  const attnSet = collectAttentionPeers(state);
+  const friendIdSet = new Set((state.friends || []).map((f) => String(f.id || "").trim()).filter(Boolean));
+  const unknownAttnPeers = Array.from(attnSet).filter((id) => !friendIdSet.has(id)).sort();
   const online = state.friends.filter((f) => f.online);
   const offline = state.friends.filter((f) => !f.online);
-  const pendingCount =
-    state.pendingIn.length +
-    state.pendingOut.length +
-    state.pendingGroupInvites.length +
-    state.pendingGroupJoinRequests.length +
-    state.pendingBoardInvites.length +
-    state.fileOffersIn.length;
   const boards = state.boards || [];
   const groups = state.groups || [];
   const sel = state.selected;
@@ -301,14 +303,6 @@ export function renderSidebar(
       }
     }
 
-    const pendingCount =
-      state.pendingIn.length +
-      state.pendingOut.length +
-      state.pendingGroupInvites.length +
-      state.pendingGroupJoinRequests.length +
-      state.pendingBoardInvites.length +
-      state.fileOffersIn.length;
-
     const restBoards = boards.filter((b) => !pinnedSet.has(roomKey(b.id)));
     const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
 
@@ -362,7 +356,18 @@ export function renderSidebar(
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser),
+          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id)),
+        });
+      }
+      for (const id of unknownAttnPeers) {
+        const k = dmKey(id);
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        const hint = attentionHintForPeer(state, id);
+        const meta2 = meta.sub ? meta : { ...meta, sub: hint };
+        const pseudo: FriendEntry = { id, online: false, unread: 0 };
+        dialogItems.push({
+          sortTs: lastTsForKey(k),
+          row: friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true),
         });
       }
 
@@ -392,12 +397,21 @@ export function renderSidebar(
     const onlineRows = online.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     });
     const offlineRows = offline.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+    });
+
+    const unknownAttnRows = unknownAttnPeers.map((id) => {
+      const k = dmKey(id);
+      const meta = previewForConversation(state, k, "dm", drafts[k]);
+      const hint = attentionHintForPeer(state, id);
+      const meta2 = meta.sub ? meta : { ...meta, sub: hint };
+      const pseudo: FriendEntry = { id, online: false, unread: 0 };
+      return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
     });
 
     target.replaceChildren(
@@ -405,45 +419,11 @@ export function renderSidebar(
       tabs,
       el("div", { class: "pane-section" }, ["Меню"]),
       ...actionRows,
+      ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
       el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
       ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
       el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
-      ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
-      el("div", { class: "pane-section" }, [`Ожидают (${pendingCount})`]),
-      ...(pendingCount
-        ? [
-            ...state.pendingIn.map((id) =>
-              pendingRow("IN", `Запрос: ${id}`, () => onOpenAction({ kind: "auth_in", peer: id }), { kind: "auth_in", id })
-            ),
-            ...state.pendingOut.map((id) =>
-              pendingRow("OUT", `Ожидает: ${id}`, () => onOpenAction({ kind: "auth_out", peer: id }), { kind: "auth_out", id })
-            ),
-            ...state.pendingGroupInvites.map((inv) =>
-              pendingRow("G+", `Инвайт: ${roomLabel(inv.name, inv.groupId, inv.handle)}`, () => onOpenAction(inv))
-            ),
-            ...state.pendingGroupJoinRequests.map((req) =>
-              pendingRow("G?", `Запрос: ${req.from} → ${roomLabel(req.name, req.groupId, req.handle)}`, () => onOpenAction(req))
-            ),
-            ...state.pendingBoardInvites.map((inv) =>
-              pendingRow("B+", `Инвайт: ${roomLabel(inv.name, inv.boardId, inv.handle)}`, () => onOpenAction(inv))
-            ),
-            ...state.fileOffersIn.map((offer) =>
-              pendingRow(
-                "F+",
-                `Файл: ${offer.name || "файл"} ← ${offer.from}${offer.room ? ` → ${offer.room}` : ""}`,
-                () =>
-                  onOpenAction({
-                    kind: "file_offer",
-                    fileId: offer.id,
-                    from: offer.from,
-                    name: offer.name,
-                    size: offer.size,
-                    room: offer.room,
-                  })
-              )
-            ),
-          ]
-        : [el("div", { class: "pane-section" }, ["(нет)"])])
+      ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])])
     );
     return;
   }
@@ -456,7 +436,7 @@ export function renderSidebar(
       if (!f) continue;
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      pinnedRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser));
+      pinnedRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id)));
       continue;
     }
     if (key.startsWith("room:")) {
@@ -499,6 +479,14 @@ export function renderSidebar(
   const groupsRest = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
   const onlineRest = online.filter((f) => !pinnedSet.has(dmKey(f.id)));
   const offlineRest = offline.filter((f) => !pinnedSet.has(dmKey(f.id)));
+  const unknownAttnRows = unknownAttnPeers.map((id) => {
+    const k = dmKey(id);
+    const meta = previewForConversation(state, k, "dm", drafts[k]);
+    const hint = attentionHintForPeer(state, id);
+    const meta2 = meta.sub ? meta : { ...meta, sub: hint };
+    const pseudo: FriendEntry = { id, online: false, unread: 0 };
+    return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
+  });
 
   target.replaceChildren(
     el("div", { class: "sidebar-mobile-top" }, [
@@ -514,6 +502,7 @@ export function renderSidebar(
     roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup()),
     roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard()),
     ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),
+    ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
     el("div", { class: "pane-section" }, [`Доски (${boardsRest.length})`]),
     ...(boardsRest.length
       ? boardsRest.map((b) =>
@@ -552,48 +541,13 @@ export function renderSidebar(
     ...onlineRest.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     }),
     el("div", { class: "pane-section" }, [`Оффлайн (${offlineRest.length})`]),
     ...offlineRest.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
-    }),
-    el("div", { class: "pane-section" }, [`Ожидают (${pendingCount})`]),
-    ...(pendingCount
-      ? [
-          ...state.pendingIn.map((id) =>
-            pendingRow("IN", `Запрос: ${id}`, () => onOpenAction({ kind: "auth_in", peer: id }), { kind: "auth_in", id })
-          ),
-          ...state.pendingOut.map((id) =>
-            pendingRow("OUT", `Ожидает: ${id}`, () => onOpenAction({ kind: "auth_out", peer: id }), { kind: "auth_out", id })
-          ),
-          ...state.pendingGroupInvites.map((inv) =>
-            pendingRow("G+", `Инвайт: ${roomLabel(inv.name, inv.groupId, inv.handle)}`, () => onOpenAction(inv))
-          ),
-          ...state.pendingGroupJoinRequests.map((req) =>
-            pendingRow("G?", `Запрос: ${req.from} → ${roomLabel(req.name, req.groupId, req.handle)}`, () => onOpenAction(req))
-          ),
-          ...state.pendingBoardInvites.map((inv) =>
-            pendingRow("B+", `Инвайт: ${roomLabel(inv.name, inv.boardId, inv.handle)}`, () => onOpenAction(inv))
-          ),
-          ...state.fileOffersIn.map((offer) =>
-            pendingRow(
-              "F+",
-              `Файл: ${offer.name || "файл"} ← ${offer.from}${offer.room ? ` → ${offer.room}` : ""}`,
-              () =>
-                onOpenAction({
-                  kind: "file_offer",
-                  fileId: offer.id,
-                  from: offer.from,
-                  name: offer.name,
-                  size: offer.size,
-                  room: offer.room,
-                })
-            )
-          ),
-        ]
-      : [el("div", { class: "pane-section" }, ["(нет)"])])
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+    })
   );
 }

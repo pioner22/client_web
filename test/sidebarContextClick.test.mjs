@@ -260,3 +260,53 @@ test("sidebar: показывает display_name вместо ID (если из�
     await helper.cleanup();
   }
 });
+
+test("sidebar: «Ожидают» убраны, а pending подсвечивает контакт (row-attn)", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    withDomStubs(() => {
+      const target = document.createElement("div");
+      const state = {
+        friends: [],
+        profiles: {},
+        groups: [],
+        boards: [],
+        pinned: [],
+        pendingIn: ["999-000-111"],
+        pendingOut: [],
+        pendingGroupInvites: [],
+        pendingGroupJoinRequests: [],
+        pendingBoardInvites: [],
+        fileOffersIn: [],
+        selected: null,
+        page: "main",
+        conversations: {},
+        drafts: {},
+      };
+
+      helper.renderSidebar(
+        target,
+        state,
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        () => {}
+      );
+
+      const hasPendingSection = findFirst(
+        target,
+        (n) => n && typeof n === "object" && n.nodeType === 3 && String(n.textContent || "").includes("Ожида")
+      );
+      assert.equal(hasPendingSection, null, "pending section should not be rendered");
+
+      const btn = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "999-000-111");
+      assert.ok(btn, "pending peer row not found");
+      assert.ok(String(btn.className || "").split(" ").includes("row-attn"), "pending peer should be marked with row-attn");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});

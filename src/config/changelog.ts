@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.89",
+    date: "2025-12-22",
+    improved: ["Сайдбар: убрали отдельную секцию «Ожидают» — запросы/инвайты теперь подсвечиваются прямо в списке контактов"],
+    fixed: ["Сайдбар: запросы от неизвестных пользователей не теряются — показываем их отдельными строками в блоке «Внимание»"],
+  },
+  {
     version: "0.1.88",
     date: "2025-12-22",
     improved: [
