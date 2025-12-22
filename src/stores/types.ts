@@ -145,7 +145,7 @@ export type PageKind = "main" | "search" | "profile" | "user" | "files" | "help"
 
 export type AuthMode = "auto" | "register" | "login";
 
-export type MobileSidebarTab = "chats" | "contacts";
+export type MobileSidebarTab = "chats" | "contacts" | "menu";
 
 export type TargetKind = "dm" | "group" | "board";
 

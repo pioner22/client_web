@@ -1066,7 +1066,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function setMobileSidebarTab(tab: MobileSidebarTab) {
-    const next: MobileSidebarTab = tab === "contacts" ? "contacts" : "chats";
+    const next: MobileSidebarTab = tab === "contacts" || tab === "menu" ? tab : "chats";
     if (store.get().mobileSidebarTab === next) return;
     store.set({ mobileSidebarTab: next });
   }
@@ -1474,7 +1474,7 @@ export function mountApp(root: HTMLElement) {
       ...prev,
       page,
       ...(page !== "user" ? { userViewId: null } : {}),
-      ...(page !== "main" ? { mobileSidebarTab: "contacts" as MobileSidebarTab } : {}),
+      ...(page !== "main" ? { mobileSidebarTab: "menu" as MobileSidebarTab } : {}),
       ...(page !== "main" ? { chatSearchOpen: false, chatSearchQuery: "", chatSearchHits: [], chatSearchPos: 0 } : {}),
     }));
   }

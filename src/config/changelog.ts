@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.91",
+    date: "2025-12-22",
+    improved: [
+      "Mobile sidebar: добавили третью вкладку «Меню» (как отдельный раздел, без смешивания с контактами)",
+      "Mobile sidebar: навигацию/создание (Поиск/Профиль/Файлы/Info/Создать чат/Создать доску) перенесли из «Контакты» в «Меню»",
+      "Подсказки: в «Меню» добавили компактный блок «Подсказки» + описания/tooltip’ы на пунктах",
+    ],
+  },
+  {
     version: "0.1.90",
     date: "2025-12-22",
     improved: [

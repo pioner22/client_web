@@ -314,13 +314,64 @@
 
 .sidebar-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 0;
   padding: 2px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
   background: color-mix(in srgb, var(--panel2), transparent 25%);
   margin-bottom: var(--sp-3);
+}
+
+.sidebar-tips {
+  margin: 0 0 var(--sp-3);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 30%);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel2), transparent 35%);
+  overflow: hidden;
+}
+
+.sidebar-tips-summary {
+  list-style: none;
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  color: var(--text);
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.sidebar-tips-summary::-webkit-details-marker {
+  display: none;
+}
+
+.sidebar-tips-summary::after {
+  content: "▾";
+  color: var(--muted);
+  font-weight: 700;
+  transform: translateY(-1px);
+  transition: transform 160ms ease;
+}
+
+.sidebar-tips[open] > .sidebar-tips-summary::after {
+  transform: rotate(180deg) translateY(1px);
+}
+
+.sidebar-tips-body {
+  padding: 0 12px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-tip::before {
+  content: "• ";
+  color: color-mix(in srgb, var(--muted), var(--text) 25%);
 }
 
 .sidebar-tab {

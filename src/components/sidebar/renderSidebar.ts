@@ -168,16 +168,15 @@ function roomRow(
   if (meta?.hasDraft) tailChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
   const tail = tailChildren.length ? el("span", { class: "row-tail" }, tailChildren) : null;
   const hasConversationMeta = Boolean(ctx);
+  const hasSub = Boolean(meta?.sub);
   const mainChildren: Array<string | HTMLElement> = [
-    hasConversationMeta ? el("span", { class: "row-title row-label" }, [label]) : el("span", { class: "row-label" }, [label]),
+    el("span", { class: hasConversationMeta || hasSub ? "row-title row-label" : "row-label" }, [label]),
+    ...(hasSub ? [el("span", { class: meta?.hasDraft ? "row-sub row-sub-draft" : "row-sub" }, [String(meta?.sub || "")])] : []),
   ];
-  if (hasConversationMeta && meta?.sub) {
-    mainChildren.push(el("span", { class: meta.hasDraft ? "row-sub row-sub-draft" : "row-sub" }, [meta.sub]));
-  }
   const btn = el("button", { class: cls, type: "button" }, [
     ...(prefix ? [el("span", { class: "row-prefix", "aria-hidden": "true" }, [prefix])] : []),
     ...(ctx ? [avatar(ctx.kind, ctx.id)] : []),
-    ...(hasConversationMeta ? [el("span", { class: "row-main" }, mainChildren)] : mainChildren),
+    ...(hasConversationMeta || hasSub ? [el("span", { class: "row-main" }, mainChildren)] : mainChildren),
     ...(tail ? [tail] : []),
   ]);
   if (ctx) {
@@ -220,8 +219,9 @@ export function renderSidebar(
   const sel = state.selected;
 
   if (isMobile) {
-    const activeTab: MobileSidebarTab = state.mobileSidebarTab === "contacts" ? "contacts" : "chats";
-    const topTitle = activeTab === "contacts" ? "Контакты" : "Чаты";
+    const rawTab = state.mobileSidebarTab;
+    const activeTab: MobileSidebarTab = rawTab === "contacts" || rawTab === "menu" ? rawTab : "chats";
+    const topTitle = activeTab === "contacts" ? "Контакты" : activeTab === "menu" ? "Меню" : "Чаты";
 
     const top = el("div", { class: "sidebar-mobile-top" }, [
       el(
@@ -239,6 +239,7 @@ export function renderSidebar(
         type: "button",
         role: "tab",
         "aria-selected": String(activeTab === "chats"),
+        title: "Чаты",
       },
       ["Чаты"]
     ) as HTMLButtonElement;
@@ -249,12 +250,25 @@ export function renderSidebar(
         type: "button",
         role: "tab",
         "aria-selected": String(activeTab === "contacts"),
+        title: "Контакты",
       },
       ["Контакты"]
     ) as HTMLButtonElement;
+    const tabMenu = el(
+      "button",
+      {
+        class: activeTab === "menu" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "menu"),
+        title: "Меню",
+      },
+      ["Меню"]
+    ) as HTMLButtonElement;
     tabChats.addEventListener("click", () => onSetMobileSidebarTab("chats"));
     tabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
-    const tabs = el("div", { class: "sidebar-tabs", role: "tablist", "aria-label": "Раздел" }, [tabChats, tabContacts]);
+    tabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
+    const tabs = el("div", { class: "sidebar-tabs", role: "tablist", "aria-label": "Раздел" }, [tabChats, tabContacts, tabMenu]);
 
     const pinnedRows: HTMLElement[] = [];
     for (const key of pinnedKeys) {
@@ -384,16 +398,6 @@ export function renderSidebar(
       return;
     }
 
-    // Contacts tab (Telegram-like): адресная книга + навигация.
-    const actionRows: HTMLElement[] = [
-      roomRow("⌕", "Поиск", state.page === "search", () => onSetPage("search")),
-      roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile")),
-      roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files")),
-      roomRow("?", "Info", state.page === "help", () => onSetPage("help")),
-      roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup()),
-      roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard()),
-    ];
-
     const onlineRows = online.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
@@ -414,16 +418,79 @@ export function renderSidebar(
       return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
     });
 
+    if (activeTab === "contacts") {
+      target.replaceChildren(
+        top,
+        tabs,
+        ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
+        el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
+        ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
+        el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
+        ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])])
+      );
+      return;
+    }
+
+    // Menu tab: действия и навигация.
+    const searchRow = roomRow("⌕", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
+      sub: "Найти по ID или @handle",
+      time: null,
+      hasDraft: false,
+    });
+    searchRow.setAttribute("title", "Поиск пользователей по ID или @handle");
+    const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
+      sub: "Имя, @handle, аватар, выход",
+      time: null,
+      hasDraft: false,
+    });
+    profileRow.setAttribute("title", "Настройки профиля и интерфейса");
+    const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
+      sub: "История и загрузки",
+      time: null,
+      hasDraft: false,
+    });
+    filesRow.setAttribute("title", "Передача файлов и история");
+    const navRows: HTMLElement[] = [searchRow, profileRow, filesRow];
+
+    const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
+      sub: "Групповой чат и приглашения",
+      time: null,
+      hasDraft: false,
+    });
+    createGroupRow.setAttribute("title", "Создать новый групповой чат");
+    const createBoardRow = roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard(), undefined, {
+      sub: "Доска (чтение всем, запись владельцу)",
+      time: null,
+      hasDraft: false,
+    });
+    createBoardRow.setAttribute("title", "Создать новую доску");
+    const createRows: HTMLElement[] = [createGroupRow, createBoardRow];
+    const infoRow = roomRow("?", "Info", state.page === "help", () => onSetPage("help"), undefined, {
+      sub: "Хоткеи, версии и изменения",
+      time: null,
+      hasDraft: false,
+    });
+    infoRow.setAttribute("title", "Подсказки по клавишам и журнал обновлений");
+
+    const tips = el("details", { class: "sidebar-tips" }, [
+      el("summary", { class: "sidebar-tips-summary", title: "Короткие подсказки", "aria-label": "Подсказки" }, ["Подсказки"]),
+      el("div", { class: "sidebar-tips-body" }, [
+        el("div", { class: "sidebar-tip" }, ["ПКМ/долгий тап по контакту — меню действий."]),
+        el("div", { class: "sidebar-tip" }, ["В «Чаты» попадают только начатые диалоги."]),
+        el("div", { class: "sidebar-tip" }, ["Новые контакты удобнее добавлять через «Поиск»."]),
+      ]),
+    ]);
+
     target.replaceChildren(
       top,
       tabs,
-      el("div", { class: "pane-section" }, ["Меню"]),
-      ...actionRows,
-      ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
-      el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
-      ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
-      el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
-      ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])])
+      tips,
+      el("div", { class: "pane-section" }, ["Навигация"]),
+      ...navRows,
+      el("div", { class: "pane-section" }, ["Создание"]),
+      ...createRows,
+      el("div", { class: "pane-section" }, ["Справка"]),
+      infoRow
     );
     return;
   }

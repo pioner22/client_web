@@ -1,5 +1,5 @@
 import type { Layout } from "../components/layout/types";
-import type { ActionModalPayload, AppState, PageKind, TargetRef } from "../stores/types";
+import type { ActionModalPayload, AppState, MobileSidebarTab, PageKind, TargetRef } from "../stores/types";
 import { APP_MSG_MAX_LEN } from "../config/app";
 import { renderHeader } from "../components/header/renderHeader";
 import { renderSidebar } from "../components/sidebar/renderSidebar";
@@ -40,7 +40,7 @@ export interface RenderActions {
   onOpenGroupCreate: () => void;
   onOpenBoardCreate: () => void;
   onSetPage: (page: PageKind) => void;
-  onSetMobileSidebarTab: (tab: "chats" | "contacts") => void;
+  onSetMobileSidebarTab: (tab: MobileSidebarTab) => void;
   onAuthLogin: () => void;
   onAuthRegister: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
