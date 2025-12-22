@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.95",
+    date: "2025-12-22",
+    improved: [
+      "iOS/PWA: `--app-vh` теперь берём из innerHeight по умолчанию (закрывает safe-area без «чёрной полосы»), а на visualViewport переключаемся только при большой разнице (клавиатура)",
+    ],
+    added: ["Регресс‑тесты: `appViewportVar.test.mjs` расширен (innerHeight vs visualViewport)"],
+  },
+  {
     version: "0.1.94",
     date: "2025-12-22",
     improved: [

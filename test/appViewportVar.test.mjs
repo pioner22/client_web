@@ -36,7 +36,7 @@ test("css viewport: #app поддерживает JS override через --app-v
   assert.match(css, /min-height:\s*var\(--app-vh\)\s*;/);
 });
 
-test("viewport var: installAppViewportHeightVar пишет --app-vh по visualViewport.height", async () => {
+test("viewport var: installAppViewportHeightVar использует innerHeight по умолчанию (safe-area)", async () => {
   const helper = await loadInstall();
   const prev = {
     window: globalThis.window,
@@ -99,7 +99,7 @@ test("viewport var: installAppViewportHeightVar пишет --app-vh по visualV
     globalThis.document = undefined;
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "642px");
+    assert.equal(style._props.get("--app-vh"), "700px");
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
@@ -113,3 +113,79 @@ test("viewport var: installAppViewportHeightVar пишет --app-vh по visualV
   }
 });
 
+test("viewport var: installAppViewportHeightVar переключается на visualViewport при большой разнице (клавиатура)", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+    let rafCb = null;
+
+    const vvListeners = new Map();
+    const windowListeners = new Map();
+
+    globalThis.window = {
+      innerHeight: 700,
+      visualViewport: {
+        height: 390.2,
+        addEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          list.push(cb);
+          vvListeners.set(type, list);
+        },
+        removeEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          vvListeners.set(
+            type,
+            list.filter((x) => x !== cb)
+          );
+        },
+      },
+      requestAnimationFrame(cb) {
+        rafCb = cb;
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener(type, cb) {
+        const list = windowListeners.get(type) || [];
+        list.push(cb);
+        windowListeners.set(type, list);
+      },
+      removeEventListener(type, cb) {
+        const list = windowListeners.get(type) || [];
+        windowListeners.set(
+          type,
+          list.filter((x) => x !== cb)
+        );
+      },
+    };
+
+    // Ensure it doesn't crash without document.
+    globalThis.document = undefined;
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "390px");
+
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
+    assert.equal(rafCb !== null, true);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});

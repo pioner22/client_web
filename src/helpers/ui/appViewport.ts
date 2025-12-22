@@ -3,8 +3,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let lastHeight = 0;
 
   const readHeight = (): number => {
+    const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
+    const inner = Math.round(Number(window.innerHeight) || 0);
     const vv = window.visualViewport;
-    const h = vv && typeof vv.height === "number" ? vv.height : window.innerHeight;
+    const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
+    const diff = inner && vvHeight ? Math.abs(inner - vvHeight) : 0;
+    const h = vvHeight && (!inner || diff >= USE_VISUAL_VIEWPORT_DIFF_PX) ? vvHeight : inner;
     const n = Math.round(Number(h) || 0);
     return n > 0 ? n : 0;
   };
@@ -42,4 +46,3 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     root.style.removeProperty("--app-vh");
   };
 }
-
