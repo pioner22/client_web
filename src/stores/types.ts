@@ -139,7 +139,7 @@ export type ModalState =
   | { kind: "action"; payload: ActionModalPayload; message?: string }
   | { kind: "context_menu"; payload: ContextMenuPayload };
 
-export type PageKind = "main" | "search" | "profile" | "files" | "help" | "group_create" | "board_create";
+export type PageKind = "main" | "search" | "profile" | "user" | "files" | "help" | "group_create" | "board_create";
 
 export type AuthMode = "auto" | "register" | "login";
 
@@ -198,6 +198,10 @@ export interface FriendEntry {
   online: boolean;
   unread: number;
   last_seen_at?: string | null;
+  display_name?: string | null;
+  handle?: string | null;
+  avatar_rev?: number;
+  avatar_mime?: string | null;
 }
 
 export interface GroupEntry {
@@ -226,7 +230,12 @@ export interface UserProfile {
   id: string;
   display_name?: string | null;
   handle?: string | null;
+  bio?: string | null;
+  status?: string | null;
+  avatar_rev?: number;
+  avatar_mime?: string | null;
   client_version?: string | null;
+  client_web_version?: string | null;
 }
 
 export type ToastKind = "info" | "success" | "warn" | "error";
@@ -301,6 +310,7 @@ export interface AppState {
   chatSearchPos: number;
 
   page: PageKind;
+  userViewId: string | null;
   searchQuery: string;
   searchResults: SearchResultEntry[];
   groupCreateMessage: string;
@@ -308,6 +318,8 @@ export interface AppState {
   profiles: Record<string, UserProfile>;
   profileDraftDisplayName: string;
   profileDraftHandle: string;
+  profileDraftBio: string;
+  profileDraftStatus: string;
 
   toast: ToastState | null;
   modal: ModalState | null;

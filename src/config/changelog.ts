@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.76",
+    date: "2025-12-22",
+    added: [
+      "Контакт: отдельная страница профиля (аватар/имя/@handle/ID/статус/био)",
+      "Regress tests: sidebar display_name, avatar_rev storage, handleServerMessage avatar",
+    ],
+    improved: [
+      "Контакты/чаты: если у пользователя задано имя, показываем его вместо голого ID (в сайдбаре, шапке и статус-строке)",
+      "Профиль: добавлены поля «Статус» и «О себе» (bio), сохранение через серверный profile_set",
+      "Аватары: серверная синхронизация (avatar_set/clear/get) + локальный кэш с avatar_rev",
+    ],
+  },
+  {
     version: "0.1.75",
     date: "2025-12-22",
     improved: [

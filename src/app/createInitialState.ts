@@ -56,6 +56,7 @@ export function createInitialState(): AppState {
     chatSearchHits: [],
     chatSearchPos: 0,
     page: "main",
+    userViewId: null,
     searchQuery: "",
     searchResults: [],
     groupCreateMessage: "",
@@ -63,6 +64,8 @@ export function createInitialState(): AppState {
     profiles: {},
     profileDraftDisplayName: "",
     profileDraftHandle: "",
+    profileDraftBio: "",
+    profileDraftStatus: "",
     // “В тишине”: auth-модалку открываем только по явному действию пользователя («Войти»).
     toast: null,
     modal: null,

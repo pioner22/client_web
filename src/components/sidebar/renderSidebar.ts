@@ -18,6 +18,16 @@ type SidebarRowMeta = {
   hasDraft: boolean;
 };
 
+function displayNameForFriend(state: AppState, f: FriendEntry): string {
+  const id = String(f.id || "").trim();
+  if (!id) return "—";
+  const p = state.profiles?.[id];
+  const dn = p?.display_name ? String(p.display_name).trim() : "";
+  if (dn) return dn;
+  const fdn = (f as any).display_name ? String((f as any).display_name).trim() : "";
+  return fdn || id;
+}
+
 function compactOneLine(raw: string): string {
   return String(raw ?? "")
     .replace(/\s+/g, " ")
@@ -65,7 +75,14 @@ function previewForConversation(state: AppState, key: string, kind: "dm" | "room
   return { sub, time, hasDraft: Boolean(draft) };
 }
 
-function friendRow(f: FriendEntry, selected: boolean, meta: SidebarRowMeta, onSelect: (t: TargetRef) => void): HTMLElement {
+function friendRow(
+  state: AppState,
+  f: FriendEntry,
+  selected: boolean,
+  meta: SidebarRowMeta,
+  onSelect: (t: TargetRef) => void,
+  onOpenUser: (id: string) => void
+): HTMLElement {
   const cls = selected ? "row row-sel" : "row";
   const unread = Math.max(0, Number(f.unread || 0) || 0);
   const unreadLabel = unread > 99 ? "99+" : String(unread);
@@ -76,13 +93,21 @@ function friendRow(f: FriendEntry, selected: boolean, meta: SidebarRowMeta, onSe
     tailChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
   }
   const tail = tailChildren.length ? el("span", { class: "row-tail", "aria-hidden": tailChildren.length ? "false" : "true" }, tailChildren) : null;
-  const mainChildren: Array<string | HTMLElement> = [el("span", { class: "row-title row-id" }, [f.id])];
+  const titleText = displayNameForFriend(state, f);
+  const isIdTitle = titleText === String(f.id || "").trim();
+  const mainChildren: Array<string | HTMLElement> = [el("span", { class: isIdTitle ? "row-title row-id" : "row-title row-name" }, [titleText])];
   if (meta.sub) {
     mainChildren.push(el("span", { class: meta.hasDraft ? "row-sub row-sub-draft" : "row-sub" }, [meta.sub]));
   }
   const main = el("span", { class: "row-main" }, mainChildren);
+  const av = avatar("dm", f.id);
+  av.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onOpenUser(f.id);
+  });
   const btn = el("button", { class: cls, type: "button" }, [
-    avatar("dm", f.id),
+    av,
     main,
     ...(tail ? [tail] : []),
   ]);
@@ -166,6 +191,7 @@ export function renderSidebar(
   target: HTMLElement,
   state: AppState,
   onSelect: (t: TargetRef) => void,
+  onOpenUser: (id: string) => void,
   onOpenAction: (payload: ActionModalPayload) => void,
   onSetPage: (page: PageKind) => void,
   onCreateGroup: () => void,
@@ -236,7 +262,7 @@ export function renderSidebar(
         if (!f) continue;
         const k = dmKey(f.id);
         const meta = previewForConversation(state, k, "dm", drafts[k]);
-        pinnedRows.push(friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect));
+        pinnedRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser));
         continue;
       }
       if (key.startsWith("room:")) {
@@ -334,7 +360,10 @@ export function renderSidebar(
         const unread = Math.max(0, Number(f.unread || 0) || 0);
         if (!hasConv && !hasDraft && unread <= 0) continue; // "Чаты" — только начатые диалоги
         const meta = previewForConversation(state, k, "dm", drafts[k]);
-        dialogItems.push({ sortTs: lastTsForKey(k), row: friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect) });
+        dialogItems.push({
+          sortTs: lastTsForKey(k),
+          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser),
+        });
       }
 
       dialogItems.sort((a, b) => b.sortTs - a.sortTs);
@@ -363,12 +392,12 @@ export function renderSidebar(
     const onlineRows = online.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect);
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
     });
     const offlineRows = offline.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect);
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
     });
 
     target.replaceChildren(
@@ -427,7 +456,7 @@ export function renderSidebar(
       if (!f) continue;
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      pinnedRows.push(friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect));
+      pinnedRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser));
       continue;
     }
     if (key.startsWith("room:")) {
@@ -523,13 +552,13 @@ export function renderSidebar(
     ...onlineRest.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect);
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
     }),
     el("div", { class: "pane-section" }, [`Оффлайн (${offlineRest.length})`]),
     ...offlineRest.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect);
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
     }),
     el("div", { class: "pane-section" }, [`Ожидают (${pendingCount})`]),
     ...(pendingCount

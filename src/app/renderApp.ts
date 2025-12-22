@@ -12,6 +12,7 @@ import { conversationKey } from "../helpers/chat/conversationKey";
 import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
 import { createSearchPage, type SearchPage } from "../pages/search/createSearchPage";
 import { createProfilePage, type ProfilePage } from "../pages/profile/createProfilePage";
+import { createUserPage, type UserPage } from "../pages/user/createUserPage";
 import { createFilesPage, type FilesPage } from "../pages/files/createFilesPage";
 import { createHelpPage, type HelpPage } from "../pages/help/createHelpPage";
 import { createGroupCreatePage, type CreateGroupPage } from "../pages/create/createGroupCreatePage";
@@ -19,6 +20,7 @@ import { createBoardCreatePage, type CreateBoardPage } from "../pages/create/cre
 
 let searchPage: SearchPage | null = null;
 let profilePage: ProfilePage | null = null;
+let userPage: UserPage | null = null;
 let filesPage: FilesPage | null = null;
 let helpPage: HelpPage | null = null;
 let groupCreatePage: CreateGroupPage | null = null;
@@ -32,6 +34,7 @@ function mountChat(layout: Layout, node: HTMLElement) {
 
 export interface RenderActions {
   onSelectTarget: (t: TargetRef) => void;
+  onOpenUser: (id: string) => void;
   onOpenActionModal: (payload: ActionModalPayload) => void;
   onOpenHelp: () => void;
   onOpenGroupCreate: () => void;
@@ -70,8 +73,8 @@ export interface RenderActions {
   onClearCompletedFiles: () => void;
   onSearchQueryChange: (query: string) => void;
   onSearchSubmit: (query: string) => void;
-  onProfileDraftChange: (draft: { displayName: string; handle: string }) => void;
-  onProfileSave: (draft: { displayName: string; handle: string }) => void;
+  onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
+  onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onProfileRefresh: () => void;
   onProfileAvatarSelect: (file: File | null) => void;
   onProfileAvatarClear: () => void;
@@ -149,6 +152,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.sidebar,
     state,
     actions.onSelectTarget,
+    actions.onOpenUser,
     actions.onOpenActionModal,
     actions.onSetPage,
     actions.onOpenGroupCreate,
@@ -308,6 +312,19 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     mountChat(layout, profilePage.root);
     profilePage.update(state);
     if (pageChanged) profilePage.focus();
+  } else if (state.page === "user") {
+    if (!userPage) {
+      userPage = createUserPage({
+        onBack: () => actions.onSetPage("main"),
+        onOpenChat: (id: string) => {
+          actions.onSetPage("main");
+          actions.onSelectTarget({ kind: "dm", id });
+        },
+      });
+    }
+    mountChat(layout, userPage.root);
+    userPage.update(state);
+    if (pageChanged) userPage.focus();
   } else if (state.page === "files") {
     if (!filesPage) {
       filesPage = createFilesPage({

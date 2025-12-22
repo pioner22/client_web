@@ -11,13 +11,25 @@ export function renderHeader(layout: Layout, state: AppState) {
   if (state.page === "search") title = "Поиск";
   else if (state.page === "help") title = "Info";
   else if (state.page === "profile") title = "Профиль";
+  else if (state.page === "user") {
+    const id = String(state.userViewId || "").trim();
+    const p = id ? state.profiles?.[id] : null;
+    const dn = p?.display_name ? String(p.display_name).trim() : "";
+    title = dn ? `Контакт: ${dn}` : "Контакт";
+  }
   else if (state.page === "files") title = "Файлы";
   else if (state.page === "group_create") title = "Создать чат";
   else if (state.page === "board_create") title = "Создать доску";
   else {
     const sel = state.selected;
     if (sel) {
-      if (sel.kind === "dm") title = `Чат с: ${sel.id}`;
+      if (sel.kind === "dm") {
+        const p = state.profiles?.[sel.id];
+        const dn = p?.display_name ? String(p.display_name).trim() : "";
+        const h = p?.handle ? String(p.handle).trim() : "";
+        const label = dn || (h ? (h.startsWith("@") ? h : `@${h}`) : sel.id);
+        title = `Чат с: ${label}`;
+      }
       else if (sel.kind === "group") {
         const g = (state.groups || []).find((x) => x.id === sel.id);
         title = `Чат: ${String(g?.name || sel.id)}`;

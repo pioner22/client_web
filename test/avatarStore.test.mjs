@@ -29,6 +29,22 @@ async function loadModule(entry) {
   }
 }
 
+function mkStorage() {
+  const map = new Map();
+  return {
+    getItem(k) {
+      const v = map.get(String(k));
+      return v === undefined ? null : String(v);
+    },
+    setItem(k, v) {
+      map.set(String(k), String(v));
+    },
+    removeItem(k) {
+      map.delete(String(k));
+    },
+  };
+}
+
 test("avatarMonogram: понятные подписи для разных типов", async () => {
   const { mod, cleanup } = await loadModule("src/helpers/avatar/avatarStore.ts");
   try {
@@ -38,6 +54,26 @@ test("avatarMonogram: понятные подписи для разных тип
     assert.equal(avatarMonogram("dm", "111-222-333"), "33");
     assert.equal(avatarMonogram("dm", "u-deadbeef"), "U-");
   } finally {
+    await cleanup();
+  }
+});
+
+test("avatarStore: хранит rev (и очищает вместе с аватаром)", async () => {
+  const { mod, cleanup } = await loadModule("src/helpers/avatar/avatarStore.ts");
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = mkStorage();
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+
+    const { getStoredAvatarRev, storeAvatarRev, clearStoredAvatar } = mod;
+    assert.equal(getStoredAvatarRev("dm", "123-456-789"), 0);
+    storeAvatarRev("dm", "123-456-789", 7);
+    assert.equal(getStoredAvatarRev("dm", "123-456-789"), 7);
+    clearStoredAvatar("dm", "123-456-789");
+    assert.equal(getStoredAvatarRev("dm", "123-456-789"), 0);
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
     await cleanup();
   }
 });
@@ -57,4 +93,3 @@ test("avatarHue: стабильный диапазон 0..359", async () => {
     await cleanup();
   }
 });
-

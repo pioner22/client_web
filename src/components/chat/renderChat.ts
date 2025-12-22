@@ -41,7 +41,13 @@ function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement {
 function chatTitleNodes(state: AppState): Array<string | HTMLElement> {
   const sel = state.selected;
   if (!sel) return ["Чат"];
-  if (sel.kind === "dm") return [avatar("dm", sel.id), `Чат с: ${sel.id}`];
+  if (sel.kind === "dm") {
+    const p = state.profiles?.[sel.id];
+    const dn = p?.display_name ? String(p.display_name).trim() : "";
+    const h = p?.handle ? String(p.handle).trim() : "";
+    const label = dn || (h ? (h.startsWith("@") ? h : `@${h}`) : sel.id);
+    return [avatar("dm", sel.id), `Чат с: ${label}`];
+  }
   if (sel.kind === "group") {
     const g = (state.groups || []).find((x) => x.id === sel.id);
     return [avatar("group", sel.id), `Чат: ${String(g?.name || sel.id)}`];

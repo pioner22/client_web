@@ -1,10 +1,15 @@
 export type AvatarTargetKind = "dm" | "group" | "board";
 
 const STORAGE_PREFIX = "yagodka_avatar:";
+const REV_PREFIX = "yagodka_avatar_rev:";
 const MAX_DATA_URL_LEN = 220_000;
 
 function key(kind: AvatarTargetKind, id: string): string {
   return `${STORAGE_PREFIX}${kind}:${String(id ?? "").trim()}`;
+}
+
+function revKey(kind: AvatarTargetKind, id: string): string {
+  return `${REV_PREFIX}${kind}:${String(id ?? "").trim()}`;
 }
 
 function isSafeDataUrl(value: string): boolean {
@@ -23,6 +28,27 @@ export function getStoredAvatar(kind: AvatarTargetKind, id: string): string | nu
   }
 }
 
+export function getStoredAvatarRev(kind: AvatarTargetKind, id: string): number {
+  const k = revKey(kind, id);
+  try {
+    const raw = String(localStorage.getItem(k) || "").trim();
+    const n = Math.trunc(Number(raw || 0) || 0);
+    return n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function storeAvatarRev(kind: AvatarTargetKind, id: string, rev: number): void {
+  const k = revKey(kind, id);
+  const n = Math.max(0, Math.trunc(Number(rev || 0) || 0));
+  try {
+    localStorage.setItem(k, String(n));
+  } catch {
+    // ignore
+  }
+}
+
 export function storeAvatar(kind: AvatarTargetKind, id: string, dataUrl: string): void {
   const v = String(dataUrl ?? "");
   if (!isSafeDataUrl(v)) throw new Error("bad_avatar_data");
@@ -33,6 +59,7 @@ export function storeAvatar(kind: AvatarTargetKind, id: string, dataUrl: string)
 export function clearStoredAvatar(kind: AvatarTargetKind, id: string): void {
   try {
     localStorage.removeItem(key(kind, id));
+    localStorage.removeItem(revKey(kind, id));
   } catch {
     // ignore
   }
@@ -91,4 +118,3 @@ export async function imageFileToAvatarDataUrl(file: File, size = 128): Promise<
     URL.revokeObjectURL(srcUrl);
   }
 }
-

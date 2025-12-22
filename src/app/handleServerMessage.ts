@@ -18,6 +18,7 @@ import { nowTs } from "../helpers/time";
 import { parseRoster } from "../helpers/roster/parseRoster";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { mergeMessages } from "../helpers/chat/mergeMessages";
+import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatar, storeAvatarRev } from "../helpers/avatar/avatarStore";
 import {
   blockSessionAutoAuth,
   clearSessionAutoAuthBlock,
@@ -224,7 +225,57 @@ export function handleServerMessage(
   }
   if (t === "roster_full" || t === "roster") {
     const r = parseRoster(msg);
-    patch({ friends: r.friends, pendingIn: r.pendingIn, pendingOut: r.pendingOut });
+    let avatarChanged = false;
+    for (const f of r.friends) {
+      const id = String(f?.id ?? "").trim();
+      if (!id) continue;
+      const rev = typeof (f as any).avatar_rev === "number" ? Math.max(0, Math.trunc((f as any).avatar_rev)) : 0;
+      if (rev <= 0) {
+        const had = Boolean(getStoredAvatar("dm", id));
+        const storedRev = getStoredAvatarRev("dm", id);
+        if (had || storedRev) {
+          clearStoredAvatar("dm", id);
+          storeAvatarRev("dm", id, 0);
+          avatarChanged = true;
+        }
+        continue;
+      }
+      const storedRev = getStoredAvatarRev("dm", id);
+      const storedUrl = getStoredAvatar("dm", id);
+      if (storedRev !== rev || !storedUrl) {
+        gateway.send({ type: "avatar_get", id });
+      }
+    }
+
+    patch((prev) => {
+      let nextProfiles: Record<string, UserProfile> | null = null;
+      for (const f of r.friends) {
+        const id = String(f?.id ?? "").trim();
+        if (!id) continue;
+        const hasExtra =
+          (f as any).display_name !== undefined || (f as any).handle !== undefined || (f as any).avatar_rev !== undefined || (f as any).avatar_mime !== undefined;
+        if (!hasExtra) continue;
+        const cur = prev.profiles[id] ?? { id };
+        const next: UserProfile = {
+          ...cur,
+          id,
+          ...((f as any).display_name === undefined ? {} : { display_name: (f as any).display_name }),
+          ...((f as any).handle === undefined ? {} : { handle: (f as any).handle }),
+          ...((f as any).avatar_rev === undefined ? {} : { avatar_rev: (f as any).avatar_rev }),
+          ...((f as any).avatar_mime === undefined ? {} : { avatar_mime: (f as any).avatar_mime }),
+        };
+        if (!nextProfiles) nextProfiles = { ...prev.profiles };
+        nextProfiles[id] = next;
+      }
+      return {
+        ...prev,
+        friends: r.friends,
+        pendingIn: r.pendingIn,
+        pendingOut: r.pendingOut,
+        ...(nextProfiles ? { profiles: nextProfiles } : {}),
+        ...(avatarChanged ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}),
+      };
+    });
     return;
   }
   if (t === "friends") {
@@ -968,19 +1019,44 @@ export function handleServerMessage(
   if (t === "profile") {
     const id = String(msg?.id ?? "");
     if (!id) return;
+    const avatarRev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
     const prof: UserProfile = {
       id,
       display_name: (msg?.display_name ?? null) as any,
       handle: (msg?.handle ?? null) as any,
+      bio: (msg?.bio ?? null) as any,
+      status: (msg?.status ?? null) as any,
+      avatar_rev: avatarRev,
+      avatar_mime: (msg?.avatar_mime ?? null) as any,
       client_version: (msg?.client_version ?? null) as any,
+      client_web_version: (msg?.client_web_version ?? null) as any,
     };
+    const isFriend = Boolean(state.selfId && id === state.selfId) || state.friends.some((f) => f.id === id);
+    if (isFriend) {
+      if (avatarRev <= 0) {
+        const had = Boolean(getStoredAvatar("dm", id));
+        const storedRev = getStoredAvatarRev("dm", id);
+        if (had || storedRev) {
+          clearStoredAvatar("dm", id);
+          storeAvatarRev("dm", id, 0);
+          patch((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1 }));
+        }
+      } else {
+        const storedRev = getStoredAvatarRev("dm", id);
+        const storedUrl = getStoredAvatar("dm", id);
+        if (storedRev !== avatarRev || !storedUrl) gateway.send({ type: "avatar_get", id });
+      }
+    }
     patch((prev) => {
       const next: AppState = { ...prev, profiles: { ...prev.profiles, [id]: prof } };
       if (id === prev.selfId) {
         // Keep drafts in sync unless user is actively editing on the Profile page.
-        if (prev.page !== "profile" || (!prev.profileDraftDisplayName && !prev.profileDraftHandle)) {
+        const draftsEmpty = !prev.profileDraftDisplayName && !prev.profileDraftHandle && !prev.profileDraftBio && !prev.profileDraftStatus;
+        if (prev.page !== "profile" || draftsEmpty) {
           next.profileDraftDisplayName = String(prof.display_name ?? "");
           next.profileDraftHandle = String(prof.handle ?? "");
+          next.profileDraftBio = String(prof.bio ?? "");
+          next.profileDraftStatus = String(prof.status ?? "");
         }
       }
       return next;
@@ -990,13 +1066,35 @@ export function handleServerMessage(
   if (t === "profile_updated") {
     const id = String(msg?.id ?? "");
     if (!id) return;
+    const hasAvatarRev = msg?.avatar_rev !== undefined;
+    const avatarRev = hasAvatarRev ? Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0)) : null;
+    const isFriend = Boolean(state.selfId && id === state.selfId) || state.friends.some((f) => f.id === id);
+    if (isFriend && hasAvatarRev) {
+      if ((avatarRev || 0) <= 0) {
+        const had = Boolean(getStoredAvatar("dm", id));
+        const storedRev = getStoredAvatarRev("dm", id);
+        if (had || storedRev) {
+          clearStoredAvatar("dm", id);
+          storeAvatarRev("dm", id, 0);
+          patch((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1 }));
+        }
+      } else {
+        const storedRev = getStoredAvatarRev("dm", id);
+        const storedUrl = getStoredAvatar("dm", id);
+        if (storedRev !== avatarRev || !storedUrl) gateway.send({ type: "avatar_get", id });
+      }
+    }
     patch((prev) => {
       const cur = prev.profiles[id] ?? { id };
       const nextProfile: UserProfile = {
         ...cur,
         id,
-        display_name: (msg?.display_name ?? null) as any,
-        handle: (msg?.handle ?? null) as any,
+        ...(msg?.display_name === undefined ? {} : { display_name: (msg?.display_name ?? null) as any }),
+        ...(msg?.handle === undefined ? {} : { handle: (msg?.handle ?? null) as any }),
+        ...(msg?.bio === undefined ? {} : { bio: (msg?.bio ?? null) as any }),
+        ...(msg?.status === undefined ? {} : { status: (msg?.status ?? null) as any }),
+        ...(msg?.avatar_rev === undefined ? {} : { avatar_rev: (avatarRev ?? 0) as any }),
+        ...(msg?.avatar_mime === undefined ? {} : { avatar_mime: (msg?.avatar_mime ?? null) as any }),
       };
       return { ...prev, profiles: { ...prev.profiles, [id]: nextProfile } };
     });
@@ -1009,16 +1107,16 @@ export function handleServerMessage(
       const message =
         reason === "handle_taken"
           ? "Этот @handle уже занят"
-          : reason === "handle_invalid"
-            ? "Некорректный @handle (только a-z, 0-9, _; длина 3–16)"
+            : reason === "handle_invalid"
+              ? "Некорректный @handle (только a-z, 0-9, _; длина 3–16)"
             : reason === "too_long"
-              ? "Имя слишком длинное"
-              : reason === "empty"
-                ? "Имя не должно быть пустым"
-                : reason === "no_such_user"
-                  ? "Пользователь не найден"
-                  : reason === "server_error"
-                    ? "Ошибка сервера"
+              ? "Слишком длинное значение"
+            : reason === "empty"
+                ? "Поле не должно быть пустым"
+              : reason === "no_such_user"
+                ? "Пользователь не найден"
+                : reason === "server_error"
+                  ? "Ошибка сервера"
                     : reason;
       patch({ status: `Не удалось сохранить профиль: ${message}` });
       return;
@@ -1028,14 +1126,77 @@ export function handleServerMessage(
       const cur = prev.profiles[prev.selfId] ?? { id: prev.selfId };
       const displayName = (msg?.display_name ?? null) as any;
       const handle = (msg?.handle ?? null) as any;
-      const nextProfile: UserProfile = { ...cur, display_name: displayName, handle };
+      const bio = (msg?.bio ?? null) as any;
+      const statusText = (msg?.status ?? null) as any;
+      const nextProfile: UserProfile = { ...cur, display_name: displayName, handle, bio, status: statusText };
       return {
         ...prev,
         profiles: { ...prev.profiles, [prev.selfId]: nextProfile },
         profileDraftDisplayName: String(displayName ?? ""),
         profileDraftHandle: String(handle ?? ""),
+        profileDraftBio: String(bio ?? ""),
+        profileDraftStatus: String(statusText ?? ""),
         status: "Профиль сохранён",
       };
+    });
+    return;
+  }
+  if (t === "avatar") {
+    const id = String(msg?.id ?? "").trim();
+    if (!id) return;
+    const rev = Math.max(0, Math.trunc(Number(msg?.rev ?? 0) || 0));
+    const mime = typeof msg?.mime === "string" && msg.mime.trim() ? String(msg.mime).trim() : null;
+    const data = typeof msg?.data === "string" && msg.data.trim() ? String(msg.data).trim() : null;
+
+    if (mime && data) {
+      const dataUrl = `data:${mime};base64,${data}`;
+      try {
+        storeAvatar("dm", id, dataUrl);
+      } catch {
+        clearStoredAvatar("dm", id);
+      }
+    } else {
+      clearStoredAvatar("dm", id);
+    }
+    storeAvatarRev("dm", id, rev);
+
+    patch((prev) => {
+      const cur = prev.profiles[id] ?? { id };
+      const nextProfile: UserProfile = { ...cur, id, avatar_rev: rev, avatar_mime: mime };
+      return { ...prev, profiles: { ...prev.profiles, [id]: nextProfile }, avatarsRev: (prev.avatarsRev || 0) + 1 };
+    });
+    return;
+  }
+  if (t === "avatar_set_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Не удалось обновить аватар: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const rev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
+    patch((prev) => {
+      if (!prev.selfId) return prev;
+      storeAvatarRev("dm", prev.selfId, rev);
+      const cur = prev.profiles[prev.selfId] ?? { id: prev.selfId };
+      const nextProfile: UserProfile = { ...cur, id: prev.selfId, avatar_rev: rev };
+      return { ...prev, profiles: { ...prev.profiles, [prev.selfId]: nextProfile }, avatarsRev: (prev.avatarsRev || 0) + 1, status: "Аватар обновлён" };
+    });
+    return;
+  }
+  if (t === "avatar_clear_result") {
+    const ok = Boolean(msg?.ok);
+    if (!ok) {
+      patch({ status: `Не удалось удалить аватар: ${String(msg?.reason ?? "ошибка")}` });
+      return;
+    }
+    const rev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
+    patch((prev) => {
+      if (!prev.selfId) return prev;
+      clearStoredAvatar("dm", prev.selfId);
+      storeAvatarRev("dm", prev.selfId, rev);
+      const cur = prev.profiles[prev.selfId] ?? { id: prev.selfId };
+      const nextProfile: UserProfile = { ...cur, id: prev.selfId, avatar_rev: rev, avatar_mime: null };
+      return { ...prev, profiles: { ...prev.profiles, [prev.selfId]: nextProfile }, avatarsRev: (prev.avatarsRev || 0) + 1, status: "Аватар удалён" };
     });
     return;
   }

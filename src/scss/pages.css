@@ -31,6 +31,10 @@
   align-content: start;
 }
 
+.page.page-user {
+  align-content: start;
+}
+
 .profile-card {
   border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
   border-radius: var(--r-md);
@@ -87,6 +91,29 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   opacity: 0.9;
+}
+
+.profile-field {
+  display: grid;
+  gap: 6px;
+}
+
+.profile-field-label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.profile-field-value {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.profile-bio-text {
+  white-space: pre-wrap;
 }
 
 .profile-head-actions {

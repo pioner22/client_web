@@ -212,3 +212,51 @@ test("sidebar: Ctrl+Click/ПКМ не активирует строку (не м
   }
 });
 
+test("sidebar: показывает display_name вместо ID (если известен профиль)", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    withDomStubs(() => {
+      const target = document.createElement("div");
+      const state = {
+        friends: [{ id: "123-456-789", online: true, unread: 0 }],
+        profiles: { "123-456-789": { id: "123-456-789", display_name: "Алиса" } },
+        groups: [],
+        boards: [],
+        pinned: [],
+        pendingIn: [],
+        pendingOut: [],
+        pendingGroupInvites: [],
+        pendingGroupJoinRequests: [],
+        pendingBoardInvites: [],
+        fileOffersIn: [],
+        selected: null,
+        page: "main",
+        mobileSidebarTab: "chats",
+        conversations: { "dm:123-456-789": [] },
+        drafts: {},
+      };
+
+      helper.renderSidebar(
+        target,
+        state,
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        () => {}
+      );
+
+      const btn = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
+      assert.ok(btn, "row button not found");
+
+      const title = findFirst(btn, (n) => typeof n.className === "string" && n.className.split(" ").includes("row-title"));
+      assert.ok(title, "row title not found");
+      const text = Array.isArray(title._children) ? title._children.map((c) => (c && typeof c === "object" ? c.textContent : "")).join("") : "";
+      assert.equal(text, "Алиса");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});

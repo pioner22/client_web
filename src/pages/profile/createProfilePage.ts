@@ -3,8 +3,8 @@ import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar
 import type { AppState } from "../../stores/types";
 
 export interface ProfilePageActions {
-  onDraftChange: (draft: { displayName: string; handle: string }) => void;
-  onSave: (draft: { displayName: string; handle: string }) => void;
+  onDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
+  onSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onRefresh: () => void;
   onSkinChange: (skinId: string) => void;
   onAvatarSelect: (file: File | null) => void;
@@ -61,6 +61,28 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     enterkeyhint: "done",
   }) as HTMLInputElement;
 
+  const statusLabel = el("label", { class: "modal-label", for: "profile-status" }, ["Статус"]);
+  const statusInput = el("input", {
+    class: "modal-input",
+    type: "text",
+    id: "profile-status",
+    placeholder: "Например: на связи",
+    autocomplete: "off",
+    inputmode: "text",
+    enterkeyhint: "done",
+  }) as HTMLInputElement;
+
+  const bioLabel = el("label", { class: "modal-label", for: "profile-bio" }, ["О себе"]);
+  const bioInput = el("textarea", {
+    class: "modal-input",
+    id: "profile-bio",
+    placeholder: "Коротко о себе…",
+    rows: "4",
+    autocomplete: "off",
+    inputmode: "text",
+    enterkeyhint: "done",
+  }) as HTMLTextAreaElement;
+
   const skinLabel = el("label", { class: "modal-label", for: "profile-skin" }, ["Скин интерфейса"]);
   const skinSelect = el("select", { class: "modal-input", id: "profile-skin" }, []) as HTMLSelectElement;
   const skinHint = el("div", { class: "profile-hint" }, ["Скин хранится локально в браузере и применяется сразу"]);
@@ -77,6 +99,10 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     displayNameInput,
     handleLabel,
     handleInput,
+    statusLabel,
+    statusInput,
+    bioLabel,
+    bioInput,
   ]);
 
   const ui = el("div", { class: "profile-card" }, [el("div", { class: "profile-card-title" }, ["Интерфейс"]), skinLabel, skinSelect, skinHint]);
@@ -91,7 +117,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   ]);
 
   function draft() {
-    return { displayName: displayNameInput.value, handle: handleInput.value };
+    return { displayName: displayNameInput.value, handle: handleInput.value, bio: bioInput.value, status: statusInput.value };
   }
 
   function save() {
@@ -113,6 +139,8 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
 
   displayNameInput.addEventListener("input", () => actions.onDraftChange(draft()));
   handleInput.addEventListener("input", () => actions.onDraftChange(draft()));
+  statusInput.addEventListener("input", () => actions.onDraftChange(draft()));
+  bioInput.addEventListener("input", () => actions.onDraftChange(draft()));
 
   handleInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
@@ -121,6 +149,12 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     }
   });
   displayNameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      save();
+    }
+  });
+  statusInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       save();
@@ -141,13 +175,20 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     avatarPreview.classList.toggle("avatar-img", Boolean(url));
     avatarPreview.textContent = url ? "" : avatarMonogram("dm", myId);
     avatarPreview.style.backgroundImage = url ? `url(${url})` : "";
-    (btnAvatarClear as HTMLButtonElement).disabled = !url;
+    const hasServerAvatar = Boolean((me?.avatar_rev || 0) > 0 && me?.avatar_mime);
+    (btnAvatarClear as HTMLButtonElement).disabled = !url && !hasServerAvatar;
 
     if (document.activeElement !== displayNameInput && displayNameInput.value !== state.profileDraftDisplayName) {
       displayNameInput.value = state.profileDraftDisplayName;
     }
     if (document.activeElement !== handleInput && handleInput.value !== state.profileDraftHandle) {
       handleInput.value = state.profileDraftHandle;
+    }
+    if (document.activeElement !== statusInput && statusInput.value !== state.profileDraftStatus) {
+      statusInput.value = state.profileDraftStatus;
+    }
+    if (document.activeElement !== bioInput && bioInput.value !== state.profileDraftBio) {
+      bioInput.value = state.profileDraftBio;
     }
 
     const skins = state.skins || [];

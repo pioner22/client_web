@@ -1290,9 +1290,21 @@ export function mountApp(root: HTMLElement) {
     store.set((prev) => ({
       ...prev,
       page,
+      ...(page !== "user" ? { userViewId: null } : {}),
       ...(page !== "main" ? { mobileSidebarTab: "contacts" as MobileSidebarTab } : {}),
       ...(page !== "main" ? { chatSearchOpen: false, chatSearchQuery: "", chatSearchHits: [], chatSearchPos: 0 } : {}),
     }));
+  }
+
+  function openUserPage(id: string) {
+    const uid = String(id || "").trim();
+    if (!uid) return;
+    setPage("user");
+    store.set({ userViewId: uid, status: `Профиль: ${uid}` });
+    const st = store.get();
+    if (st.authed && st.conn === "connected") {
+      gateway.send({ type: "profile_get", id: uid });
+    }
   }
 
   layout.footer.addEventListener("click", (e) => {
@@ -4137,6 +4149,7 @@ export function mountApp(root: HTMLElement) {
       const payload = {
         v: 1,
         page: st.page,
+        userViewId: st.userViewId,
         selected: st.selected,
         input,
         drafts: st.drafts,
@@ -4147,6 +4160,8 @@ export function mountApp(root: HTMLElement) {
         searchQuery: st.searchQuery,
         profileDraftDisplayName: st.profileDraftDisplayName,
         profileDraftHandle: st.profileDraftHandle,
+        profileDraftBio: st.profileDraftBio,
+        profileDraftStatus: st.profileDraftStatus,
       };
       sessionStorage.setItem(RESTART_STATE_KEY, JSON.stringify(payload));
     } catch {
@@ -4157,6 +4172,7 @@ export function mountApp(root: HTMLElement) {
   function consumeRestartState():
     | {
         page?: PageKind;
+        userViewId?: string | null;
         selected?: TargetRef | null;
         input?: string;
         drafts?: Record<string, string>;
@@ -4167,6 +4183,8 @@ export function mountApp(root: HTMLElement) {
         searchQuery?: string;
         profileDraftDisplayName?: string;
         profileDraftHandle?: string;
+        profileDraftBio?: string;
+        profileDraftStatus?: string;
       }
     | null {
     try {
@@ -4178,7 +4196,8 @@ export function mountApp(root: HTMLElement) {
       const obj = parsed as any;
       if (obj.v !== 1) return null;
 
-      const page: PageKind | undefined = ["main", "search", "profile", "files"].includes(obj.page) ? obj.page : undefined;
+      const page: PageKind | undefined = ["main", "search", "profile", "user", "files"].includes(obj.page) ? obj.page : undefined;
+      const userViewId = typeof obj.userViewId === "string" && obj.userViewId.trim() ? obj.userViewId.trim() : null;
 
       const selectedRaw = obj.selected;
       const selected: TargetRef | null =
@@ -4199,8 +4218,25 @@ export function mountApp(root: HTMLElement) {
       const searchQuery = typeof obj.searchQuery === "string" ? obj.searchQuery : "";
       const profileDraftDisplayName = typeof obj.profileDraftDisplayName === "string" ? obj.profileDraftDisplayName : "";
       const profileDraftHandle = typeof obj.profileDraftHandle === "string" ? obj.profileDraftHandle : "";
+      const profileDraftBio = typeof obj.profileDraftBio === "string" ? obj.profileDraftBio : "";
+      const profileDraftStatus = typeof obj.profileDraftStatus === "string" ? obj.profileDraftStatus : "";
 
-      return { page, selected, input, drafts, pinned, chatSearchOpen, chatSearchQuery, chatSearchPos, searchQuery, profileDraftDisplayName, profileDraftHandle };
+      return {
+        page,
+        userViewId,
+        selected,
+        input,
+        drafts,
+        pinned,
+        chatSearchOpen,
+        chatSearchQuery,
+        chatSearchPos,
+        searchQuery,
+        profileDraftDisplayName,
+        profileDraftHandle,
+        profileDraftBio,
+        profileDraftStatus,
+      };
     } catch {
       return null;
     }
@@ -4799,6 +4835,7 @@ export function mountApp(root: HTMLElement) {
 
   const actions = {
     onSelectTarget: (t: TargetRef) => selectTarget(t),
+    onOpenUser: (id: string) => openUserPage(id),
     onOpenActionModal: (payload: ActionModalPayload) => openActionModal(payload),
     onOpenHelp: () => setPage("help"),
     onOpenGroupCreate: () => openGroupCreateModal(),
@@ -4887,50 +4924,79 @@ export function mountApp(root: HTMLElement) {
       lastSearchIssued = q;
       gateway.send({ type: "search", query: q });
     },
-    onProfileDraftChange: (draft: { displayName: string; handle: string }) => {
+    onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => {
       lastUserInputAt = Date.now();
-      store.set({ profileDraftDisplayName: draft.displayName, profileDraftHandle: draft.handle });
+      store.set({
+        profileDraftDisplayName: draft.displayName,
+        profileDraftHandle: draft.handle,
+        profileDraftBio: draft.bio,
+        profileDraftStatus: draft.status,
+      });
     },
-    onProfileSave: (draft: { displayName: string; handle: string }) => {
+    onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => {
       const display_name = draft.displayName.trim();
       const handle = draft.handle.trim();
-      gateway.send({ type: "profile_set", display_name: display_name || null, handle: handle || null });
+      const bio = draft.bio.trim();
+      const status = draft.status.trim();
+      gateway.send({
+        type: "profile_set",
+        display_name: display_name || null,
+        handle: handle || null,
+        bio: bio || null,
+        status: status || null,
+      });
       store.set({ status: "Сохранение профиля…" });
     },
     onProfileRefresh: () => gateway.send({ type: "profile_get" }),
     onProfileAvatarSelect: (file: File | null) => {
       const id = store.get().selfId;
       if (!id) return;
-      setAvatarFromFile("dm", id, file);
+      if (!file) return;
+      void (async () => {
+        try {
+          const dataUrl = await imageFileToAvatarDataUrl(file, 128);
+          storeAvatar("dm", id, dataUrl);
+          bumpAvatars("Аватар загружается…");
+          const base64 = String(dataUrl.split(",")[1] || "").trim();
+          if (!base64) throw new Error("bad_avatar_data");
+          gateway.send({ type: "avatar_set", mime: "image/png", data: base64 });
+        } catch (e) {
+          bumpAvatars(`Не удалось загрузить аватар: ${String((e as any)?.message || "ошибка")}`);
+        }
+      })();
     },
     onProfileAvatarClear: () => {
       const id = store.get().selfId;
       if (!id) return;
-      removeAvatar("dm", id);
+      store.set({ status: "Удаляем аватар…" });
+      gateway.send({ type: "avatar_clear" });
     },
     onContextMenuAction: (itemId: string) => void handleContextMenuAction(itemId),
     onConfirmModal: () => confirmSubmit(),
   };
 
   const restored = consumeRestartState();
-  if (restored) {
-    store.set((prev) => ({
-      ...prev,
-      ...(restored.page ? { page: restored.page } : {}),
-      ...(restored.selected ? { selected: restored.selected } : {}),
-      input: restored.input ?? prev.input,
-      drafts: restored.drafts ?? prev.drafts,
-      pinned: restored.pinned ?? prev.pinned,
-      chatSearchOpen: restored.chatSearchOpen ?? prev.chatSearchOpen,
-      chatSearchQuery: restored.chatSearchQuery ?? prev.chatSearchQuery,
-      chatSearchPos: restored.chatSearchPos ?? prev.chatSearchPos,
-      searchQuery: restored.searchQuery ?? prev.searchQuery,
-      profileDraftDisplayName: restored.profileDraftDisplayName ?? prev.profileDraftDisplayName,
-      profileDraftHandle: restored.profileDraftHandle ?? prev.profileDraftHandle,
-    }));
-    try {
-      layout.input.value = restored.input ?? "";
-      autosizeInput(layout.input);
+	  if (restored) {
+	    store.set((prev) => ({
+	      ...prev,
+	      ...(restored.page ? { page: restored.page } : {}),
+	      userViewId: restored.userViewId ?? prev.userViewId,
+	      ...(restored.selected ? { selected: restored.selected } : {}),
+	      input: restored.input ?? prev.input,
+	      drafts: restored.drafts ?? prev.drafts,
+	      pinned: restored.pinned ?? prev.pinned,
+	      chatSearchOpen: restored.chatSearchOpen ?? prev.chatSearchOpen,
+	      chatSearchQuery: restored.chatSearchQuery ?? prev.chatSearchQuery,
+	      chatSearchPos: restored.chatSearchPos ?? prev.chatSearchPos,
+	      searchQuery: restored.searchQuery ?? prev.searchQuery,
+	      profileDraftDisplayName: restored.profileDraftDisplayName ?? prev.profileDraftDisplayName,
+	      profileDraftHandle: restored.profileDraftHandle ?? prev.profileDraftHandle,
+	      profileDraftBio: restored.profileDraftBio ?? prev.profileDraftBio,
+	      profileDraftStatus: restored.profileDraftStatus ?? prev.profileDraftStatus,
+	    }));
+	    try {
+	      layout.input.value = restored.input ?? "";
+	      autosizeInput(layout.input);
     } catch {
       // ignore
     }

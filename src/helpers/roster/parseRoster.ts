@@ -16,6 +16,10 @@ export function parseRoster(msg: any): { friends: FriendEntry[]; pendingIn: stri
         online: Boolean(x?.online) || onlineSet.has(id),
         unread: Number(x?.unread ?? 0) || 0,
         last_seen_at: (x?.last_seen_at ?? null) as any,
+        display_name: (x?.display_name ?? null) as any,
+        handle: (x?.handle ?? null) as any,
+        avatar_rev: x?.avatar_rev === undefined ? undefined : (Number(x?.avatar_rev ?? 0) || 0),
+        avatar_mime: (x?.avatar_mime ?? null) as any,
       };
     })
     .filter((x: FriendEntry) => x.id);

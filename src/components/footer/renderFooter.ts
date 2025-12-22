@@ -5,12 +5,24 @@ function viewTitle(state: AppState): string {
   if (state.page === "search") return "Поиск";
   if (state.page === "help") return "Info";
   if (state.page === "profile") return "Профиль";
+  if (state.page === "user") {
+    const id = String(state.userViewId || "").trim();
+    const p = id ? state.profiles?.[id] : null;
+    const dn = p?.display_name ? String(p.display_name).trim() : "";
+    return dn ? `Контакт: ${dn}` : "Контакт";
+  }
   if (state.page === "files") return "Файлы";
   if (state.page === "group_create") return "Создать чат";
   if (state.page === "board_create") return "Создать доску";
   const sel = state.selected;
   if (!sel) return "Чат";
-  if (sel.kind === "dm") return `Чат с: ${sel.id}`;
+  if (sel.kind === "dm") {
+    const p = state.profiles?.[sel.id];
+    const dn = p?.display_name ? String(p.display_name).trim() : "";
+    const h = p?.handle ? String(p.handle).trim() : "";
+    const label = dn || (h ? (h.startsWith("@") ? h : `@${h}`) : sel.id);
+    return `Чат с: ${label}`;
+  }
   if (sel.kind === "group") {
     const g = (state.groups || []).find((x) => x.id === sel.id);
     return `Чат: ${String(g?.name || sel.id)}`;
