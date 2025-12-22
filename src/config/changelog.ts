@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.79",
+    date: "2025-12-22",
+    improved: [
+      "Авторизация: если ID уже сохранён — поле ID блокируется от случайного редактирования, но его можно быстро «разблокировать» кнопкой «Сменить ID»",
+      "Dropdown/select: стрелка и hover/focus стали заметнее, сохранили нативное поведение",
+    ],
+    added: ["Regress tests: auth ID-lock (rememberedId → readonly + «Сменить ID»)"],
+  },
+  {
     version: "0.1.78",
     date: "2025-12-22",
     improved: [

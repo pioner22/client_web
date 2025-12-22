@@ -18,6 +18,47 @@ export function renderAuthModal(
   currentSkin: string,
   actions: AuthModalActions
 ): HTMLElement {
+  function wrapWithIdUnlock(input: HTMLInputElement, locked: boolean): HTMLElement {
+    if (!locked) return input;
+
+    const toggle = el(
+      "button",
+      {
+        class: "btn field-action field-action-edit",
+        type: "button",
+        "aria-label": "Сменить ID",
+        title: "Сменить ID",
+      },
+      [""]
+    ) as HTMLButtonElement;
+
+    try {
+      input.setAttribute("readonly", "true");
+    } catch {
+      // ignore
+    }
+
+    toggle.addEventListener("click", () => {
+      try {
+        input.removeAttribute("readonly");
+      } catch {
+        // ignore
+      }
+      try {
+        input.focus({ preventScroll: true });
+      } catch {
+        input.focus();
+      }
+      try {
+        input.select();
+      } catch {
+        // ignore
+      }
+    });
+
+    return el("div", { class: "field-with-action auth-id-lock" }, [input, toggle]);
+  }
+
   function wrapWithPasswordToggle(input: HTMLInputElement): HTMLElement {
     const toggle = el(
       "button",
@@ -133,6 +174,7 @@ export function renderAuthModal(
       el("div", { class: "modal-help" }, ["После регистрации вы получите новый ID. Сохраните его."])
     );
   } else {
+    const hasRemembered = Boolean(String(rememberedId ?? "").trim());
     const idInput = el("input", {
       class: "modal-input",
       id: "auth-id",
@@ -166,7 +208,7 @@ export function renderAuthModal(
     body.append(
       el("div", { class: "modal-title" }, ["Войти по ID"]),
       el("label", { class: "modal-label", for: "auth-id" }, ["ID:"]),
-      idInput,
+      wrapWithIdUnlock(idInput, hasRemembered),
       el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль:"]),
       wrapWithPasswordToggle(pwInput)
     );
