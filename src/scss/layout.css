@@ -64,6 +64,7 @@
   min-height: 0;
   min-width: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   /* Prevent browser scroll anchoring from jumping the list during re-renders/context menus. */
   overflow-anchor: none;
 }
@@ -86,6 +87,7 @@
   min-height: 0;
   min-width: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   overflow-anchor: none;
 }
 

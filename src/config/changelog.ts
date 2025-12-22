@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.99",
+    date: "2025-12-22",
+    improved: ["iOS/mobile: включили инерционную прокрутку для списков/истории (`-webkit-overflow-scrolling: touch`)"],
+    added: ["Регресс‑тест: `mobileScrollContainers.test.mjs` (защита от потери инерции на iOS)"],
+  },
+  {
     version: "0.1.98",
     date: "2025-12-22",
     fixed: ["ПКМ по контакту/чату: усилили стабилизацию скролла (scroll-lock на время открытия меню) — список не «улетает»"],
