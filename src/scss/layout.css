@@ -92,6 +92,7 @@
   align-items: flex-end;
   gap: var(--composer-gap);
   min-height: var(--composer-field-min-h);
+  position: relative;
   background: var(--composer-field-bg);
   border: var(--composer-field-border-width) solid var(--composer-field-border-color);
   border-radius: var(--composer-field-radius);

@@ -25,6 +25,9 @@ export function createLayout(root: HTMLElement): Layout {
   const attachBtn = el("button", { class: "btn composer-attach", type: "button", title: "Файл", "aria-label": "Прикрепить файл" }, [
     "＋",
   ]) as HTMLButtonElement;
+  const emojiBtn = el("button", { class: "btn composer-emoji", type: "button", title: "Эмодзи", "aria-label": "Открыть эмодзи" }, [
+    "☺︎",
+  ]) as HTMLButtonElement;
   const sendBtn = el("button", { class: "btn composer-send", type: "button", "aria-label": "Отправить" }, ["Отправить"]);
   const editBar = el("div", { class: "composer-edit hidden", id: "composer-edit", role: "status", "aria-live": "polite" }, [
     el("div", { class: "composer-edit-body" }, [
@@ -47,7 +50,11 @@ export function createLayout(root: HTMLElement): Layout {
     el("span", { class: "composer-hint", "aria-hidden": "true" }, ["Shift+Enter — новая строка"]),
     el("span", { class: "composer-count", "aria-hidden": "true" }, ["0/4000"]),
   ]);
-  const inputWrap = el("div", { class: "input-wrap" }, [editBar, el("div", { class: "composer-field" }, [attachBtn, input, sendBtn]), composerMeta]);
+  const inputWrap = el("div", { class: "input-wrap" }, [
+    editBar,
+    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, input, sendBtn]),
+    composerMeta,
+  ]);
 
   const footer = el("footer", { class: "footer" });
   const toastHost = el("div", { class: "toast-host hidden", "aria-live": "polite", "aria-atomic": "true" });
@@ -63,5 +70,5 @@ export function createLayout(root: HTMLElement): Layout {
   if (boot) root.replaceChildren(boot, app);
   else root.replaceChildren(app);
 
-  return { headerLeft, headerRight, hotkeys, sidebar, chat, toastHost, inputWrap, input, attachBtn, sendBtn, footer, navOverlay, overlay };
+  return { headerLeft, headerRight, hotkeys, sidebar, chat, toastHost, inputWrap, input, attachBtn, emojiBtn, sendBtn, footer, navOverlay, overlay };
 }

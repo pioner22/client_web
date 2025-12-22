@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.70",
+    date: "2025-12-22",
+    added: ["Composer: кнопка эмодзи с быстрым пикером и списком «недавних» (локально на устройстве)"],
+    improved: ["Профиль: аккуратная шапка (аватар/имя/@handle/ID) и секции «Аккаунт/Интерфейс» — ближе к привычному стилю мессенджеров"],
+  },
+  {
     version: "0.1.69",
     date: "2025-12-22",
     improved: [

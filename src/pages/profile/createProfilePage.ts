@@ -20,21 +20,25 @@ export interface ProfilePage {
 export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const title = el("div", { class: "chat-title" }, ["Профиль"]);
 
-  const meLine = el("div", { class: "msg msg-sys" }, ["Ваш профиль"]);
+  const profileName = el("div", { class: "profile-name" }, ["—"]);
+  const profileHandle = el("div", { class: "profile-handle" }, ["—"]);
+  const profileId = el("div", { class: "profile-id" }, [""]);
 
-  const avatarTitle = el("div", { class: "pane-section" }, ["Аватар"]);
-  const avatarPreview = el("div", { class: "avatar avatar-lg", "aria-label": "Аватар профиля" });
+  const avatarPreview = el("button", { class: "avatar avatar-xl profile-avatar-btn", type: "button", "aria-label": "Аватар профиля" });
   const avatarFile = el("input", { class: "hidden", type: "file", accept: "image/*" }) as HTMLInputElement;
   const btnAvatarUpload = el("button", { class: "btn", type: "button" }, ["Загрузить…"]);
-  const btnAvatarClear = el("button", { class: "btn", type: "button" }, ["Удалить"]);
-  const avatarActions = el("div", { class: "page-actions" }, [btnAvatarUpload, btnAvatarClear, avatarFile]);
-  const avatarRow = el("div", { class: "profile-avatar-row" }, [avatarPreview, avatarActions]);
+  const btnAvatarClear = el("button", { class: "btn btn-danger", type: "button" }, ["Удалить"]);
+  const avatarActions = el("div", { class: "profile-head-actions" }, [btnAvatarUpload, btnAvatarClear, avatarFile]);
+  const headTop = el("div", { class: "profile-head-top" }, [avatarPreview, el("div", { class: "profile-head-main" }, [profileName, profileHandle, profileId])]);
+  const head = el("div", { class: "profile-card profile-head" }, [headTop, avatarActions]);
 
-  const displayNameLabel = el("div", { class: "pane-section" }, ["display_name"]);
+  const displayNameLabel = el("label", { class: "modal-label", for: "profile-display-name" }, ["Имя"]);
   const displayNameInput = el("input", {
     class: "modal-input",
     type: "text",
+    id: "profile-display-name",
     placeholder: "Имя",
+    "data-ios-assistant": "off",
     autocomplete: "off",
     autocorrect: "off",
     autocapitalize: "off",
@@ -43,10 +47,11 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     enterkeyhint: "done",
   }) as HTMLInputElement;
 
-  const handleLabel = el("div", { class: "pane-section" }, ["handle (@name)"]);
+  const handleLabel = el("label", { class: "modal-label", for: "profile-handle" }, ["Логин (@name)"]);
   const handleInput = el("input", {
     class: "modal-input",
     type: "text",
+    id: "profile-handle",
     placeholder: "@name",
     "data-ios-assistant": "off",
     autocomplete: "off",
@@ -57,28 +62,31 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     enterkeyhint: "done",
   }) as HTMLInputElement;
 
-  const skinLabel = el("div", { class: "pane-section" }, ["Скин интерфейса"]);
-  const skinSelect = el("select", { class: "modal-input" }, []) as HTMLSelectElement;
-  const skinHint = el("div", { class: "msg msg-sys" }, ["Скин хранится локально в браузере и применяется сразу"]);
+  const skinLabel = el("label", { class: "modal-label", for: "profile-skin" }, ["Скин интерфейса"]);
+  const skinSelect = el("select", { class: "modal-input", id: "profile-skin" }, []) as HTMLSelectElement;
+  const skinHint = el("div", { class: "profile-hint" }, ["Скин хранится локально в браузере и применяется сразу"]);
 
-  const btnSave = el("button", { class: "btn", type: "button" }, ["Сохранить"]);
+  const btnSave = el("button", { class: "btn btn-primary", type: "button" }, ["Сохранить"]);
   const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnSave, btnRefresh]);
 
-  const hint = el("div", { class: "msg msg-sys" }, ["Enter — сохранить | Esc — назад"]);
+  const hint = el("div", { class: "msg msg-sys" }, ["Enter — сохранить · Esc — назад"]);
 
-  const root = el("div", { class: "page" }, [
-    title,
-    meLine,
-    avatarTitle,
-    avatarRow,
+  const account = el("div", { class: "profile-card" }, [
+    el("div", { class: "profile-card-title" }, ["Аккаунт"]),
     displayNameLabel,
     displayNameInput,
     handleLabel,
     handleInput,
-    skinLabel,
-    skinSelect,
-    skinHint,
+  ]);
+
+  const ui = el("div", { class: "profile-card" }, [el("div", { class: "profile-card-title" }, ["Интерфейс"]), skinLabel, skinSelect, skinHint]);
+
+  const root = el("div", { class: "page page-profile" }, [
+    title,
+    head,
+    account,
+    ui,
     actionsRow,
     hint,
   ]);
@@ -95,6 +103,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   btnRefresh.addEventListener("click", () => actions.onRefresh());
   skinSelect.addEventListener("change", () => actions.onSkinChange(skinSelect.value));
 
+  avatarPreview.addEventListener("click", () => avatarFile.click());
   btnAvatarUpload.addEventListener("click", () => avatarFile.click());
   avatarFile.addEventListener("change", () => {
     const file = avatarFile.files && avatarFile.files.length ? avatarFile.files[0] : null;
@@ -121,7 +130,10 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
 
   function update(state: AppState) {
     const me = state.selfId ? state.profiles[state.selfId] : null;
-    meLine.textContent = me ? `ID: ${me.id}  display_name=${me.display_name ?? "—"}  handle=${me.handle ?? "—"}` : "Ваш профиль";
+    profileName.textContent = me?.display_name ? me.display_name : "Без имени";
+    const h = me?.handle ? String(me.handle).trim() : "";
+    profileHandle.textContent = h ? (h.startsWith("@") ? h : `@${h}`) : "Логин не задан";
+    profileId.textContent = me?.id ? `ID: ${me.id}` : "";
 
     const myId = state.selfId || "";
     const url = myId ? getStoredAvatar("dm", myId) : null;
@@ -160,6 +172,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     root,
     update,
     focus: () => {
+      if (window.matchMedia && window.matchMedia("(max-width: 820px)").matches) return;
       displayNameInput.focus();
       displayNameInput.select();
     },

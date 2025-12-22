@@ -47,6 +47,7 @@ import { defaultToastTimeoutMs } from "../helpers/ui/toast";
 import { shouldAutofocusComposer } from "../helpers/ui/autofocusPolicy";
 import { armCtxClickSuppression, consumeCtxClickSuppression, type CtxClickSuppressionState } from "../helpers/ui/ctxClickSuppression";
 import { applyIosInputAssistantWorkaround } from "../helpers/ui/iosInputAssistant";
+import { DEFAULT_EMOJI, insertTextAtSelection, mergeEmojiPalette, updateEmojiRecents } from "../helpers/ui/emoji";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 
 function autosizeInput(el: HTMLTextAreaElement) {
@@ -3320,6 +3321,141 @@ export function mountApp(root: HTMLElement) {
     scheduleSaveOutbox(store);
   }
 
+  const EMOJI_RECENTS_KEY = "yagodka:emoji_recents:v1";
+  const EMOJI_RECENTS_MAX = 24;
+  let emojiOpen = false;
+  let emojiPopover: HTMLElement | null = null;
+
+  function loadEmojiRecents(): string[] {
+    try {
+      const raw = localStorage.getItem(EMOJI_RECENTS_KEY);
+      if (!raw) return [];
+      const v = JSON.parse(raw);
+      if (!Array.isArray(v)) return [];
+      return v.filter((x) => typeof x === "string" && x && x.length <= 16).slice(0, EMOJI_RECENTS_MAX);
+    } catch {
+      return [];
+    }
+  }
+
+  function saveEmojiRecents(recents: string[]) {
+    try {
+      localStorage.setItem(EMOJI_RECENTS_KEY, JSON.stringify(recents));
+    } catch {
+      // ignore
+    }
+  }
+
+  function ensureEmojiPopover(): HTMLElement {
+    if (emojiPopover) return emojiPopover;
+    const pop = el("div", { class: "emoji-popover hidden", role: "dialog", "aria-label": "Эмодзи" });
+    const field = layout.inputWrap.querySelector(".composer-field");
+    (field || layout.inputWrap).append(pop);
+    emojiPopover = pop;
+
+    pop.addEventListener("click", (ev) => {
+      const closeBtn = (ev.target as HTMLElement | null)?.closest("button[data-action='emoji-close']") as HTMLButtonElement | null;
+      if (closeBtn) {
+        ev.preventDefault();
+        closeEmojiPopover();
+        return;
+      }
+
+      const target = (ev.target as HTMLElement | null)?.closest("button[data-emoji]") as HTMLButtonElement | null;
+      if (!target) return;
+      ev.preventDefault();
+      const emoji = String(target.dataset.emoji || "");
+      if (!emoji) return;
+      if (layout.input.disabled) return;
+
+      const { value, caret } = insertTextAtSelection({
+        value: layout.input.value || "",
+        selectionStart: layout.input.selectionStart,
+        selectionEnd: layout.input.selectionEnd,
+        insertText: emoji,
+      });
+      layout.input.value = value;
+      try {
+        layout.input.setSelectionRange(caret, caret);
+      } catch {
+        // ignore
+      }
+      layout.input.dispatchEvent(new Event("input", { bubbles: true }));
+      try {
+        layout.input.focus({ preventScroll: true });
+      } catch {
+        layout.input.focus();
+      }
+
+      const recents = loadEmojiRecents();
+      const next = updateEmojiRecents(recents, emoji, EMOJI_RECENTS_MAX);
+      saveEmojiRecents(next);
+      renderEmojiPopover();
+    });
+
+    pop.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeEmojiPopover();
+    });
+
+    return pop;
+  }
+
+  function renderEmojiPopover() {
+    const pop = ensureEmojiPopover();
+    const palette = mergeEmojiPalette(loadEmojiRecents(), DEFAULT_EMOJI);
+
+    const closeBtn = el(
+      "button",
+      { class: "btn emoji-close", type: "button", "aria-label": "Закрыть эмодзи", "data-action": "emoji-close" },
+      ["×"]
+    );
+    const head = el("div", { class: "emoji-head" }, [el("div", { class: "emoji-title" }, ["Эмодзи"]), closeBtn]);
+    const grid = el(
+      "div",
+      { class: "emoji-grid", role: "listbox", "aria-label": "Список эмодзи" },
+      palette.map((e) => el("button", { class: "emoji-btn", type: "button", "data-emoji": e, title: e, "aria-label": e }, [e]))
+    );
+
+    pop.replaceChildren(head, grid);
+  }
+
+  function openEmojiPopover() {
+    if (layout.input.disabled) return;
+    emojiOpen = true;
+    layout.emojiBtn.classList.add("btn-active");
+    const pop = ensureEmojiPopover();
+    renderEmojiPopover();
+    pop.classList.remove("hidden");
+  }
+
+  function closeEmojiPopover() {
+    emojiOpen = false;
+    layout.emojiBtn.classList.remove("btn-active");
+    if (emojiPopover) emojiPopover.classList.add("hidden");
+  }
+
+  layout.emojiBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (emojiOpen) closeEmojiPopover();
+    else openEmojiPopover();
+  });
+
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (!emojiOpen) return;
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (emojiPopover && emojiPopover.contains(t)) return;
+      if (layout.emojiBtn.contains(t)) return;
+      closeEmojiPopover();
+    },
+    true
+  );
+
   layout.input.addEventListener("input", () => {
     lastUserInputAt = Date.now();
     const value = layout.input.value || "";
@@ -3334,6 +3470,12 @@ export function mountApp(root: HTMLElement) {
   });
 
   layout.input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && emojiOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeEmojiPopover();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendChat();

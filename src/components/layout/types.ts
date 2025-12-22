@@ -8,6 +8,7 @@ export interface Layout {
   inputWrap: HTMLElement;
   input: HTMLTextAreaElement;
   attachBtn: HTMLButtonElement;
+  emojiBtn: HTMLButtonElement;
   sendBtn: HTMLButtonElement;
   footer: HTMLElement;
   navOverlay: HTMLElement;
