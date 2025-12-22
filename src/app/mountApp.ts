@@ -4999,9 +4999,34 @@ export function mountApp(root: HTMLElement) {
     cancelAnimationFrame: (id) => window.cancelAnimationFrame(id),
   });
 
+  let sidebarCtxHoldTimer: number | null = null;
+
+  function disarmSidebarCtxScrollHold() {
+    if (sidebarCtxHoldTimer !== null) {
+      window.clearTimeout(sidebarCtxHoldTimer);
+      sidebarCtxHoldTimer = null;
+    }
+    sidebarCtxScrollLock.stop();
+  }
+
+  function armSidebarCtxScrollHold(top: number, left: number) {
+    sidebarCtxScrollLock.start(top, left);
+    if (sidebarCtxHoldTimer !== null) {
+      window.clearTimeout(sidebarCtxHoldTimer);
+      sidebarCtxHoldTimer = null;
+    }
+    // Если по какой-то причине контекстное меню не открылось, не держим лок бесконечно.
+    sidebarCtxHoldTimer = window.setTimeout(() => {
+      sidebarCtxHoldTimer = null;
+      const st = store.get();
+      if (st.modal && st.modal.kind === "context_menu") return;
+      sidebarCtxScrollLock.stop();
+    }, 900);
+  }
+
   store.subscribe(() => {
     const st = store.get();
-    if (!st.modal || st.modal.kind !== "context_menu") sidebarCtxScrollLock.stop();
+    if (!st.modal || st.modal.kind !== "context_menu") disarmSidebarCtxScrollHold();
   });
 
   layout.sidebar.addEventListener(
@@ -5017,6 +5042,7 @@ export function mountApp(root: HTMLElement) {
       rememberSidebarCtxScroll();
       const { top, left } = readSidebarCtxScrollSnapshot();
       stabilizeSidebarScrollOnContextClick(top, left);
+      armSidebarCtxScrollHold(top, left);
       ev.preventDefault();
       ev.stopPropagation();
       armSidebarClickSuppression(650);
@@ -5036,6 +5062,7 @@ export function mountApp(root: HTMLElement) {
       rememberSidebarCtxScroll();
       const { top, left } = readSidebarCtxScrollSnapshot();
       stabilizeSidebarScrollOnContextClick(top, left);
+      armSidebarCtxScrollHold(top, left);
       ev.preventDefault();
       ev.stopPropagation();
       armSidebarClickSuppression(650);
@@ -5085,11 +5112,12 @@ export function mountApp(root: HTMLElement) {
     const st = store.get();
     if (st.modal) {
       restoreSidebarCtxScroll(prevTop, prevLeft);
+      disarmSidebarCtxScrollHold();
       return;
     }
     // Extra stabilization: restore/lock scroll *before* rendering the menu to avoid rare jumps.
     stabilizeSidebarScrollOnContextClick(prevTop, prevLeft);
-    sidebarCtxScrollLock.start(prevTop, prevLeft);
+    armSidebarCtxScrollHold(prevTop, prevLeft);
     const kind = (btn.getAttribute("data-ctx-kind") || "").trim() as ContextMenuTargetKind;
     const id = (btn.getAttribute("data-ctx-id") || "").trim();
     if (!kind || !id) return;
