@@ -128,6 +128,9 @@ function startUpdatePolling(reg: ServiceWorkerRegistration) {
     if (document.visibilityState === "visible") run();
   };
   document.addEventListener("visibilitychange", onVisible);
+  // PWA/mobile: also re-check when network comes back or app regains focus.
+  window.addEventListener("online", run);
+  window.addEventListener("focus", run);
 
   // Periodically check for SW updates so PWA can pick up new builds without a full restart.
   updatePollTimer = window.setInterval(run, 5 * 60 * 1000);

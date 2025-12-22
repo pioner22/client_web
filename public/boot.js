@@ -1,5 +1,6 @@
 (function () {
   var RECOVER_KEY = "yagodka_boot_recover_v1";
+  var SOFT_RELOAD_KEY = "yagodka_boot_soft_reload_v1";
   var UPDATING_KEY = "yagodka_updating";
   var FORCE_RECOVER_KEY = "yagodka_force_recover";
   var BOOTED_EVENT = "yagodka:booted";
@@ -29,6 +30,7 @@
     try {
       sessionStorage.removeItem(UPDATING_KEY);
       sessionStorage.removeItem(RECOVER_KEY);
+      sessionStorage.removeItem(SOFT_RELOAD_KEY);
       sessionStorage.removeItem(FORCE_RECOVER_KEY);
     } catch {}
   }
@@ -123,6 +125,18 @@
 
   window.setTimeout(function () {
     if (hasBooted()) return;
+    // iOS PWA иногда показывает "чёрный экран" после обновления, но ручной Ctrl+R/перезапуск помогает.
+    // Поэтому при update/force сначала делаем мягкий reload один раз, и только затем — тяжёлый recover.
+    if (requiresBootEvent) {
+      try {
+        if (sessionStorage.getItem(SOFT_RELOAD_KEY) !== "1") {
+          sessionStorage.setItem(SOFT_RELOAD_KEY, "1");
+          setStatus("Перезапуск…");
+          window.location.reload();
+          return;
+        }
+      } catch {}
+    }
     void recover();
   }, 7000);
 })();

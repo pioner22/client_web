@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.74",
+    date: "2025-12-22",
+    improved: [
+      "PWA update: service worker активируется сразу после установки (skipWaiting) — обновления подхватываются надёжнее",
+      "PWA update: если SW уже на новой версии, а вкладка ещё на старой — делаем тихий перезапуск только когда безопасно (idle + нет активных загрузок + нет фокуса в полях ввода)",
+      "Boot: при обновлении сначала делаем один «мягкий» reload (как Ctrl+R), и только потом — тяжёлый recover (unregister SW + очистка caches), если запуск всё ещё не удался",
+    ],
+    added: ["Regress test: shouldReloadForBuild — проверка логики «нужен ли перезапуск по buildId»"],
+  },
+  {
     version: "0.1.73",
     date: "2025-12-22",
     fixed: ["Чат: закреп/поиск теперь физически отделены от истории и не «уезжают» при прокрутке"],

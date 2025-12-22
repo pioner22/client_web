@@ -1,6 +1,6 @@
 import { createLayout } from "../components/layout/createLayout";
 import { getGatewayUrl } from "../config/env";
-import { APP_MSG_MAX_LEN } from "../config/app";
+import { APP_MSG_MAX_LEN, APP_VERSION } from "../config/app";
 import { GatewayClient } from "../lib/net/gatewayClient";
 import { Store } from "../stores/store";
 import { el } from "../helpers/dom/el";
@@ -33,6 +33,7 @@ import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/f
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
 import { activatePwaUpdate } from "../helpers/pwa/registerServiceWorker";
+import { shouldReloadForBuild } from "../helpers/pwa/shouldReloadForBuild";
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
 import { nowTs } from "../helpers/time";
@@ -4233,6 +4234,9 @@ export function mountApp(root: HTMLElement) {
     const hasActiveTransfer = (st.fileTransfers || []).some((t) => t.status === "uploading" || t.status === "downloading");
     if (hasActiveTransfer) return false;
     if (st.modal) return false;
+    // Не перезапускаем приложение, пока пользователь находится в поле ввода (особенно на iOS).
+    const ae = document.activeElement as HTMLElement | null;
+    if (ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae.isContentEditable)) return false;
     // Не дёргаем PWA/веб обновление, когда вкладка неактивна: на мобилках это часто даёт "чёрный экран" при возврате.
     if (document.visibilityState !== "visible") return false;
     const now = Date.now();
@@ -4266,6 +4270,15 @@ export function mountApp(root: HTMLElement) {
     const st = store.get();
     if (st.conn === "connected" && st.authed) {
       gateway.send({ type: "client_info", client: "web", version: buildId });
+    }
+    // Если SW уже обновился до новой semver, а JS ещё старый — тихо перезапускаем приложение.
+    if (shouldReloadForBuild(APP_VERSION, buildId)) {
+      store.set((prev) => ({
+        ...prev,
+        pwaUpdateAvailable: true,
+        status: prev.status || "Обновление веб-клиента…",
+      }));
+      scheduleAutoApplyPwaUpdate();
     }
   });
 

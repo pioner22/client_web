@@ -99,9 +99,11 @@ self.addEventListener("install", (event) => {
     (async () => {
       const cache = await caches.open(CACHE);
       await cache.addAll(PRECACHE_URLS);
+      // Telegram-like: activate the new SW immediately, but *do not* force reload here.
+      // The app decides when it's safe to restart (idle / no transfers / no focused input).
+      await self.skipWaiting();
     })()
   );
-  // Do NOT call skipWaiting() automatically: обновление применяем только по подтверждению пользователя.
 });
 
 self.addEventListener("activate", (event) => {
