@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.103",
+    date: "2025-12-22",
+    fixed: [
+      "iPhone/PWA: композер больше не «подпрыгивает» вверх при клавиатуре (safe-area снизу отключаем, пока клавиатура открыта)",
+      "iPhone/PWA: #app высота учитывает clientHeight (safe-area) — меньше шансов на чёрную полосу снизу",
+    ],
+    improved: ["Viewport: добавили регресс‑тест на clientHeight (safe-area)"],
+  },
+  {
     version: "0.1.102",
     date: "2025-12-22",
     improved: ["Mobile: контекстные меню на touch теперь открываются как bottom‑sheet (как в Telegram)"],

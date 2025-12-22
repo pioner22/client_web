@@ -36,7 +36,7 @@ test("css viewport: #app поддерживает JS override через --app-v
   assert.match(css, /min-height:\s*var\(--app-vh\)\s*;/);
 });
 
-test("viewport var: installAppViewportHeightVar использует innerHeight по умолчанию (safe-area)", async () => {
+test("viewport var: installAppViewportHeightVar использует innerHeight по умолчанию (без document)", async () => {
   const helper = await loadInstall();
   const prev = {
     window: globalThis.window,
@@ -100,10 +100,58 @@ test("viewport var: installAppViewportHeightVar использует innerHeight
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "700px");
+    assert.equal(style._props.has("--safe-bottom"), false);
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
     assert.equal(rafCb !== null, true);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});
+
+test("viewport var: installAppViewportHeightVar предпочитает documentElement.clientHeight (safe-area)", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    globalThis.document = { documentElement: { clientHeight: 740 } };
+    globalThis.window = {
+      innerHeight: 700,
+      visualViewport: { height: 690.2, addEventListener() {}, removeEventListener() {} },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "740px");
+    assert.equal(style._props.has("--safe-bottom"), false);
+
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
+    assert.equal(style._props.has("--safe-bottom"), false);
   } finally {
     await helper.cleanup();
     if (prev.window === undefined) delete globalThis.window;
@@ -177,9 +225,11 @@ test("viewport var: installAppViewportHeightVar переключается на 
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "390px");
+    assert.equal(style._props.get("--safe-bottom"), "0px");
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
+    assert.equal(style._props.has("--safe-bottom"), false);
     assert.equal(rafCb !== null, true);
   } finally {
     await helper.cleanup();
