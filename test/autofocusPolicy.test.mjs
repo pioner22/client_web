@@ -40,7 +40,7 @@ test("autofocusPolicy: shouldAutofocusComposer учитывает pointer coarse
   try {
     assert.equal(shouldAutofocusComposer({ coarsePointer: false, composerHadFocus: false }), true);
     assert.equal(shouldAutofocusComposer({ coarsePointer: false, composerHadFocus: true }), true);
-    assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: false }), false);
+    assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: false }), true);
     assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: true }), true);
     assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: false, anyFinePointer: true }), true);
     assert.equal(shouldAutofocusComposer({ coarsePointer: true, composerHadFocus: false, hover: true }), true);

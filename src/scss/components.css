@@ -1039,6 +1039,8 @@
   font-weight: var(--composer-input-font-weight);
   letter-spacing: var(--composer-input-letter-spacing);
   caret-color: var(--caret-color);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
   overflow-y: hidden;
   scrollbar-width: none;
 }
@@ -1136,6 +1138,12 @@
 .btn.composer-emoji:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.btn.composer-attach:focus-visible,
+.btn.composer-emoji:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
 }
 
 .emoji-popover {

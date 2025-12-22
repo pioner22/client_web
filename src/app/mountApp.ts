@@ -1481,7 +1481,7 @@ export function mountApp(root: HTMLElement) {
     }
     // UX:
     // - Desktop (pointer: fine): после выбора контакта/чата сразу фокусируем ввод, чтобы можно было печатать без лишнего клика.
-    // - Touch (pointer: coarse): не форсим фокус (иначе всплывает клавиатура/масштаб «прыгает»), но сохраняем его если пользователь уже печатал.
+    // - Touch (pointer: coarse): тоже ставим фокус, но с небольшой задержкой, чтобы закрытие drawer/overlay не конфликтовало с клавиатурой.
     if (
       shouldAutofocusComposer({
         coarsePointer: coarsePointerMq.matches,
@@ -1490,7 +1490,12 @@ export function mountApp(root: HTMLElement) {
         hover: hoverMq.matches,
       })
     ) {
-      scheduleFocusComposer();
+      const pureTouch = coarsePointerMq.matches && !anyFinePointerMq.matches && !hoverMq.matches;
+      if (pureTouch && !composerHadFocus) {
+        window.setTimeout(() => scheduleFocusComposer(), 90);
+      } else {
+        scheduleFocusComposer();
+      }
     }
   }
 

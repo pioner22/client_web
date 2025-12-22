@@ -226,6 +226,11 @@
   transform: translateY(1px);
 }
 
+.btn.composer-send:focus-visible {
+  outline: var(--focus-ring-width) solid color-mix(in srgb, var(--focus), #ffffff 12%);
+  outline-offset: 2px;
+}
+
 .btn.composer-send:disabled {
   opacity: 1;
   background: transparent;

@@ -11,6 +11,7 @@ export function shouldAutofocusComposer(opts: {
   // В таком случае автофокус ожидаем и он не воспринимается как "неожиданное" открытие клавиатуры.
   if (opts.anyFinePointer || opts.hover) return true;
 
-  // Pure touch: не форсим фокус (иначе всплывает клавиатура/масштаб «прыгает»), но сохраняем его если пользователь уже печатал.
-  return opts.composerHadFocus;
+  // Pure touch: тоже фокусируем — в PWA-режиме это ощущается как "приложение" (как минимум на Android),
+  // а на iOS держим font-size>=16 и используем preventScroll, чтобы снизить шанс зума/скачков.
+  return true;
 }

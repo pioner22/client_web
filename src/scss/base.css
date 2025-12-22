@@ -81,18 +81,14 @@ button {
   top: -9999px;
   width: var(--caret-thickness);
   height: 1em;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--caret-color), #ffffff 18%),
-    var(--caret-color)
-  );
+  background: var(--caret-color);
   border-radius: var(--caret-radius);
   pointer-events: none;
   z-index: 2000;
   opacity: 0;
   box-shadow:
-    0 0 12px var(--caret-glow),
-    0 0 2px color-mix(in srgb, var(--caret-color), transparent 10%);
+    0 0 8px var(--caret-glow),
+    0 0 1px color-mix(in srgb, var(--caret-color), transparent 20%);
   transform: translateZ(0);
 }
 
