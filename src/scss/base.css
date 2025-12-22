@@ -45,10 +45,12 @@ button {
   isolation: isolate;
 }
 
-@supports (-webkit-touch-callout: none) {
-  /* iOS Safari/PWA: fill the available space even when viewport units behave oddly. */
+/* iOS Safari/PWA: use -webkit-fill-available only as a fallback for engines without 100dvh.
+   On modern iOS (17/18) forcing -webkit-fill-available can cause layout/scroll glitches. */
+@supports (-webkit-touch-callout: none) and (not (height: 100dvh)) {
   #app {
     height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
   }
 }
 

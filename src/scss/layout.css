@@ -61,6 +61,8 @@
   padding: var(--sidebar-pad);
   padding-left: calc(var(--sidebar-pad) + env(safe-area-inset-left));
   padding-right: calc(var(--sidebar-pad) + env(safe-area-inset-right));
+  min-height: 0;
+  min-width: 0;
   overflow: auto;
   /* Prevent browser scroll anchoring from jumping the list during re-renders/context menus. */
   overflow-anchor: none;
@@ -73,6 +75,7 @@
   padding-right: calc(var(--chat-pad) + env(safe-area-inset-right));
   overflow: hidden;
   min-height: 0;
+  min-width: 0;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -81,6 +84,7 @@
 .chat-host {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
   overflow-anchor: none;
 }

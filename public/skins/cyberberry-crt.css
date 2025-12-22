@@ -537,17 +537,6 @@
   transition: opacity 160ms ease;
 }
 
-.overlay.hidden {
-  display: grid;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.overlay.hidden .modal {
-  opacity: 0;
-  transform: translateY(6px) scale(0.98);
-}
-
 .overlay {
   backdrop-filter: none;
 }

@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.92",
+    date: "2025-12-22",
+    fixed: [
+      "iOS/PWA: исправили «разъезд» лейаута/потерю скролла — больше не форсим height:-webkit-fill-available на современных движках (оставили только fallback, если нет 100dvh)",
+      "Скролл: добавили min-height/min-width:0 для sidebar/chat/chat-host (корректный overflow:auto внутри grid/flex)",
+    ],
+    improved: ["Cyberberry CRT: overlay.hidden больше не переопределяет display (меньше рисков для скролла/верстки)"],
+  },
+  {
     version: "0.1.91",
     date: "2025-12-22",
     improved: [
