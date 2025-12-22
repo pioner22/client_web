@@ -39,7 +39,6 @@ button {
   min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
-  min-height: -webkit-fill-available;
   padding: var(--app-outer-pad);
   overflow: hidden;
   isolation: isolate;
