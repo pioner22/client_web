@@ -161,6 +161,53 @@ test("viewport var: installAppViewportHeightVar предпочитает documen
   }
 });
 
+test("viewport var: installAppViewportHeightVar может подхватить screen.height, если он близок к base (iOS PWA safe-area)", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    globalThis.document = { documentElement: { clientHeight: 810 } };
+    globalThis.window = {
+      innerHeight: 810,
+      screen: { height: 844 },
+      visualViewport: { height: 808.2, addEventListener() {}, removeEventListener() {} },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "844px");
+    assert.equal(style._props.has("--safe-bottom"), false);
+
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});
+
 test("viewport var: installAppViewportHeightVar переключается на visualViewport при большой разнице (клавиатура)", async () => {
   const helper = await loadInstall();
   const prev = {

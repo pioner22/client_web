@@ -4,10 +4,21 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
   const read = (): { height: number; keyboard: boolean } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
+    const USE_SCREEN_HEIGHT_SLACK_PX = 120;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
-    const base = Math.max(inner, client);
+    let base = Math.max(inner, client);
+    // iOS PWA: sometimes innerHeight/clientHeight are missing the bottom safe-area, leaving a visible "black strip".
+    // Use screen.height only when it's very close to base (so we don't break Safari with browser chrome).
+    try {
+      const sh = Math.round(Number((window as any).screen?.height) || 0);
+      if (sh > 0 && base > 0 && sh >= base && sh - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
+        base = sh;
+      }
+    } catch {
+      // ignore
+    }
     const vv = window.visualViewport;
     const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
     const diff = base && vvHeight ? Math.abs(base - vvHeight) : 0;
