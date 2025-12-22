@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.101",
+    date: "2025-12-22",
+    fixed: ["Mobile + скины: mobile‑настройки теперь не перебиваются скином (используем `:root[data-skin]` и более специфичные селекторы)"],
+    improved: ["Mobile: композер и пузырьки стали компактнее (меньше внутренних отступов/зазоров)"],
+    added: ["Регресс‑тест: `mobileResponsiveOverrides.test.mjs`"],
+  },
+  {
     version: "0.1.100",
     date: "2025-12-22",
     fixed: ["Mobile: усилили фуллскрин‑лейаут независимо от скина (прямые `padding/border/radius/shadow/overflow`) — меньше шансов, что UI «уедет»"],
