@@ -110,7 +110,9 @@
         <label><input type="radio" name="kind" value="textarea" checked /> textarea</label>
         <label><input type="radio" name="kind" value="input" /> input</label>
         <label><input type="radio" name="kind" value="editable" /> contenteditable</label>
-        <label><input type="checkbox" id="attrs" checked /> iOS‑friendly атрибуты</label>
+        <label><input type="radio" name="attrsMode" value="off" checked /> attrs: off</label>
+        <label><input type="radio" name="attrsMode" value="workaround" /> attrs: workaround</label>
+        <label><input type="radio" name="attrsMode" value="none" /> attrs: none</label>
       </div>
       <div id="mount"></div>
       <div class="meta" id="meta"></div>
@@ -120,7 +122,7 @@
       const mount = document.getElementById("mount");
       const meta = document.getElementById("meta");
 
-      function iosFriendlyAttrs(el) {
+      function attrsOff(el) {
         el.setAttribute("autocomplete", "off");
         el.setAttribute("autocorrect", "off");
         el.setAttribute("autocapitalize", "off");
@@ -129,9 +131,38 @@
         el.setAttribute("enterkeyhint", "done");
       }
 
+      function attrsWorkaround(el) {
+        el.setAttribute("autocomplete", "off");
+        el.setAttribute("autocorrect", "on");
+        el.setAttribute("spellcheck", "true");
+        el.setAttribute("autocapitalize", "sentences");
+        el.setAttribute("inputmode", "text");
+        el.setAttribute("enterkeyhint", "done");
+      }
+
+      function isIOS() {
+        const ua = String(navigator.userAgent || "");
+        const isClassic = /iPad|iPhone|iPod/i.test(ua);
+        const isIPadOS = /Macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1;
+        return isClassic || isIPadOS;
+      }
+
+      function isStandalone() {
+        try {
+          if (navigator.standalone) return true;
+        } catch {}
+        try {
+          return Boolean(
+            window.matchMedia?.("(display-mode: standalone)")?.matches || window.matchMedia?.("(display-mode: fullscreen)")?.matches
+          );
+        } catch {
+          return false;
+        }
+      }
+
       function build() {
         const kind = document.querySelector("input[name='kind']:checked")?.value || "textarea";
-        const applyAttrs = Boolean(document.getElementById("attrs")?.checked);
+        const attrsMode = document.querySelector("input[name='attrsMode']:checked")?.value || "off";
 
         const el = document.createElement(kind === "input" ? "input" : kind === "editable" ? "div" : "textarea");
         el.className = "field";
@@ -143,7 +174,8 @@
           el.textContent = "";
         }
         if (kind === "input") el.type = "text";
-        if (applyAttrs) iosFriendlyAttrs(el);
+        if (attrsMode === "off") attrsOff(el);
+        else if (attrsMode === "workaround") attrsWorkaround(el);
 
         mount.replaceChildren(el);
         try {
@@ -158,11 +190,16 @@
           if (v !== null) pairs.push(`${name}="${v}"`);
         }
         if (kind === "editable") pairs.push('contenteditable="true"');
-        meta.textContent = `Текущее поле: ${kind}\n` + (pairs.length ? pairs.join(" ") : "(без специальных атрибутов)");
+        const ua = String(navigator.userAgent || "");
+        meta.textContent =
+          `UA: ${ua}\n` +
+          `isIOS=${isIOS()}  standalone=${isStandalone()}\n` +
+          `Текущее поле: ${kind}  attrs=${attrsMode}\n` +
+          (pairs.length ? pairs.join(" ") : "(без специальных атрибутов)");
       }
 
       document.addEventListener("change", (e) => {
-        if (e.target && (e.target.name === "kind" || e.target.id === "attrs")) build();
+        if (e.target && (e.target.name === "kind" || e.target.name === "attrsMode")) build();
       });
 
       build();

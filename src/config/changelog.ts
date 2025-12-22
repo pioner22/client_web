@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.77",
+    date: "2025-12-22",
+    improved: [
+      "iOS PWA: workaround для системной панели Undo/Redo/✓ применяется до focus (pointerdown/touchstart) — проявляется заметно реже",
+      "Авторизация: поле ID помечено data-ios-assistant=off (не вмешиваемся в numeric‑ввод)",
+    ],
+    added: ["Диагностика iOS: обновлена страница /ios-input-bar-test.html (режимы attrs=off/workaround/none + isIOS/standalone)"],
+  },
+  {
     version: "0.1.76",
     date: "2025-12-22",
     added: [

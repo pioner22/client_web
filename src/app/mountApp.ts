@@ -47,7 +47,7 @@ import { resolveMemberTokensForSubmit } from "../helpers/members/resolveMemberTo
 import { defaultToastTimeoutMs } from "../helpers/ui/toast";
 import { shouldAutofocusComposer } from "../helpers/ui/autofocusPolicy";
 import { armCtxClickSuppression, consumeCtxClickSuppression, type CtxClickSuppressionState } from "../helpers/ui/ctxClickSuppression";
-import { applyIosInputAssistantWorkaround } from "../helpers/ui/iosInputAssistant";
+import { applyIosInputAssistantWorkaround, isIOS, isStandaloneDisplayMode } from "../helpers/ui/iosInputAssistant";
 import { DEFAULT_EMOJI, insertTextAtSelection, mergeEmojiPalette, updateEmojiRecents } from "../helpers/ui/emoji";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 
@@ -316,28 +316,34 @@ function guessMimeTypeByName(name: string): string {
 export function mountApp(root: HTMLElement) {
   const store = new Store<AppState>(createInitialState());
   const layout = createLayout(root);
-  applyIosInputAssistantWorkaround(layout.input);
-  // iOS standalone (PWA): дополнительная попытка уменьшить появление системной панели Undo/Redo/✓
-  // над клавиатурой — применяем workaround при фокусе на текстовые поля.
-  document.addEventListener(
-    "focusin",
-    (e) => {
-      const t = e.target as HTMLElement | null;
-      if (!t) return;
-      if (t instanceof HTMLTextAreaElement) {
-        if (t.getAttribute("data-ios-assistant") === "off") return;
-        applyIosInputAssistantWorkaround(t);
-        return;
-      }
-      if (t instanceof HTMLInputElement) {
-        const type = String(t.type || "text").toLowerCase();
-        if (["password", "file", "checkbox", "radio", "button", "submit", "reset", "hidden", "range", "color"].includes(type)) return;
-        if (t.getAttribute("data-ios-assistant") === "off") return;
-        applyIosInputAssistantWorkaround(t);
-      }
-    },
-    true
-  );
+  const iosStandalone = isIOS() && isStandaloneDisplayMode();
+
+  function maybeApplyIosInputAssistant(target: EventTarget | null) {
+    if (!iosStandalone) return;
+    const t = target instanceof HTMLElement ? target : null;
+    if (!t) return;
+    const node =
+      t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
+        ? t
+        : (t.closest("input,textarea") as HTMLInputElement | HTMLTextAreaElement | null);
+    if (!node) return;
+    if (node.getAttribute("data-ios-assistant") === "off") return;
+    if (node instanceof HTMLInputElement) {
+      const type = String(node.type || "text").toLowerCase();
+      if (["password", "file", "checkbox", "radio", "button", "submit", "reset", "hidden", "range", "color"].includes(type)) return;
+    }
+    applyIosInputAssistantWorkaround(node);
+  }
+
+  maybeApplyIosInputAssistant(layout.input);
+
+  // iOS standalone (PWA): стараемся применить workaround ДО focus, т.к. WebKit решает,
+  // какую "панель" показывать над клавиатурой, в момент фокуса.
+  if (iosStandalone) {
+    document.addEventListener("pointerdown", (e) => maybeApplyIosInputAssistant(e.target), true);
+    document.addEventListener("touchstart", (e) => maybeApplyIosInputAssistant(e.target), true);
+    document.addEventListener("focusin", (e) => maybeApplyIosInputAssistant(e.target), true);
+  }
   let prevPinnedMessagesRef = store.get().pinnedMessages;
   store.subscribe(() => {
     const st = store.get();

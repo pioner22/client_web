@@ -138,6 +138,7 @@ export function renderAuthModal(
       id: "auth-id",
       name: "username",
       placeholder: "517-048-184",
+      "data-ios-assistant": "off",
       inputmode: "numeric",
       autocomplete: "off",
       autocorrect: "off",
