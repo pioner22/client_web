@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.73",
+    date: "2025-12-22",
+    fixed: ["Чат: закреп/поиск теперь физически отделены от истории и не «уезжают» при прокрутке"],
+    improved: ["Чат: скролл перенесён в chatHost (стабильнее jump‑to‑bottom и автоподгрузка истории)"],
+    added: ["Regress test: chatFixedTop — проверка, что закреп/поиск рендерятся в chatTop, а не внутри истории"],
+  },
+  {
     version: "0.1.72",
     date: "2025-12-22",
     fixed: ["Сайдбар: ПКМ/Ctrl+Click больше не активирует строку и не должен «дёргать» прокрутку списка"],

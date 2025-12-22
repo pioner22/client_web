@@ -367,8 +367,7 @@
 }
 
 .chat-top {
-  position: sticky;
-  top: var(--chat-pad);
+  position: relative;
   z-index: 6;
   background: var(--chat-bg);
 }

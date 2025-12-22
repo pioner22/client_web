@@ -26,8 +26,8 @@ let boardCreatePage: CreateBoardPage | null = null;
 let lastPage: PageKind | null = null;
 
 function mountChat(layout: Layout, node: HTMLElement) {
-  if (layout.chat.childNodes.length === 1 && layout.chat.firstChild === node) return;
-  layout.chat.replaceChildren(node);
+  if (layout.chatHost.childNodes.length === 1 && layout.chatHost.firstChild === node) return;
+  layout.chatHost.replaceChildren(node);
 }
 
 export interface RenderActions {
@@ -210,19 +210,32 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
 
   const inlineModal = Boolean(state.modal && state.modal.kind !== "context_menu");
   layout.chat.classList.toggle("chat-page", state.page !== "main" || inlineModal);
+  const showChatTop = state.page === "main" && !inlineModal;
+  layout.chatTop.classList.toggle("hidden", !showChatTop);
+  if (!showChatTop) {
+    // When switching to pages/modals, clear chat header state so returning to chat is treated as "fresh".
+    layout.chatTop.replaceChildren();
+    layout.chatHost.removeAttribute("data-chat-key");
+    layout.chatJump.classList.add("hidden");
+    try {
+      layout.chatHost.scrollTop = 0;
+    } catch {
+      // ignore
+    }
+  }
   if (inlineModal && modalNode) {
     mountChat(
       layout,
       el("div", { class: "page modal-page" }, [modalNode, el("div", { class: "msg msg-sys" }, ["Esc — назад"])])
     );
   } else if (state.page === "main") {
-    const prevSearch = layout.chat.querySelector("#chat-search-input") as HTMLInputElement | null;
+    const prevSearch = layout.chatTop.querySelector("#chat-search-input") as HTMLInputElement | null;
     const searchHadFocus = Boolean(prevSearch && document.activeElement === prevSearch);
     const searchSelStart = prevSearch?.selectionStart ?? null;
     const searchSelEnd = prevSearch?.selectionEnd ?? null;
-    renderChat(layout.chat, state);
+    renderChat(layout, state);
     if (state.chatSearchOpen && searchHadFocus) {
-      const nextSearch = layout.chat.querySelector("#chat-search-input") as HTMLInputElement | null;
+      const nextSearch = layout.chatTop.querySelector("#chat-search-input") as HTMLInputElement | null;
       if (nextSearch) {
         try {
           nextSearch.focus({ preventScroll: true });

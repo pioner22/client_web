@@ -450,9 +450,15 @@ export function mountApp(root: HTMLElement) {
 
   const updateChatJumpVisibility = () => {
     chatJumpRaf = null;
-    const btn = layout.chat.querySelector("button[data-action='chat-jump-bottom']") as HTMLButtonElement | null;
+    const btn = layout.chatJump;
     if (!btn) return;
-    const atBottom = layout.chat.scrollTop + layout.chat.clientHeight >= layout.chat.scrollHeight - 24;
+    const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
+    if (!key) {
+      btn.classList.add("hidden");
+      return;
+    }
+    const host = layout.chatHost;
+    const atBottom = host.scrollTop + host.clientHeight >= host.scrollHeight - 24;
     btn.classList.toggle("hidden", atBottom);
   };
   const scheduleChatJumpVisibility = () => {
@@ -493,10 +499,10 @@ export function mountApp(root: HTMLElement) {
     requestMoreHistory();
   }
 
-  layout.chat.addEventListener(
+  layout.chatHost.addEventListener(
     "scroll",
     () => {
-      const scrollTop = layout.chat.scrollTop;
+      const scrollTop = layout.chatHost.scrollTop;
       const scrollingUp = scrollTop < lastChatScrollTop;
       lastChatScrollTop = scrollTop;
       scheduleChatJumpVisibility();
@@ -635,7 +641,7 @@ export function mountApp(root: HTMLElement) {
     const jumpBtn = target?.closest("button[data-action='chat-jump-bottom']") as HTMLButtonElement | null;
     if (jumpBtn) {
       e.preventDefault();
-      layout.chat.scrollTop = layout.chat.scrollHeight;
+      layout.chatHost.scrollTop = layout.chatHost.scrollHeight;
       scheduleChatJumpVisibility();
       return;
     }
@@ -1372,7 +1378,7 @@ export function mountApp(root: HTMLElement) {
     const before = st.historyCursor[key];
     if (!before || !Number.isFinite(before) || before <= 0) return;
 
-    historyPrependAnchor = { key, scrollHeight: layout.chat.scrollHeight, scrollTop: layout.chat.scrollTop };
+    historyPrependAnchor = { key, scrollHeight: layout.chatHost.scrollHeight, scrollTop: layout.chatHost.scrollTop };
     historyRequested.add(key);
     store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
     if (st.selected.kind === "dm") {
@@ -4774,7 +4780,7 @@ export function mountApp(root: HTMLElement) {
 
   layout.chat.addEventListener("pointerup", () => clearMsgLongPress());
   layout.chat.addEventListener("pointercancel", () => clearMsgLongPress());
-  layout.chat.addEventListener("scroll", () => clearMsgLongPress(), { passive: true });
+  layout.chatHost.addEventListener("scroll", () => clearMsgLongPress(), { passive: true });
 
   const actions = {
     onSelectTarget: (t: TargetRef) => selectTarget(t),
@@ -5091,11 +5097,11 @@ export function mountApp(root: HTMLElement) {
       if (st.page !== "main" || !selectedKey || selectedKey !== anchorKey) {
         historyPrependAnchor = null;
       } else if (!st.historyLoading[anchorKey]) {
-        const delta = layout.chat.scrollHeight - historyPrependAnchor.scrollHeight;
+        const delta = layout.chatHost.scrollHeight - historyPrependAnchor.scrollHeight;
         if (Number.isFinite(delta) && delta !== 0) {
           // Не даём автозагрузчику истории сработать сразу после "компенсации" скролла.
           historyAutoBlockUntil = Date.now() + 350;
-          layout.chat.scrollTop = historyPrependAnchor.scrollTop + delta;
+          layout.chatHost.scrollTop = historyPrependAnchor.scrollTop + delta;
         }
         historyPrependAnchor = null;
       }

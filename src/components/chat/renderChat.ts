@@ -5,8 +5,7 @@ import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import type { AppState, ChatMessage, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { safeUrl } from "../../helpers/security/safeUrl";
-
-let lastRenderedKey: string | null = null;
+import type { Layout } from "../layout/types";
 
 function dayKey(ts: number): string {
   try {
@@ -279,12 +278,14 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
   return el("div", { class: cls }, lineChildren);
 }
 
-export function renderChat(target: HTMLElement, state: AppState) {
+export function renderChat(layout: Layout, state: AppState) {
+  const scrollHost = layout.chatHost;
   const key = state.selected ? conversationKey(state.selected) : "";
-  const keyChanged = key !== lastRenderedKey;
-  lastRenderedKey = key;
-  const atBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 24;
+  const prevKey = String(scrollHost.getAttribute("data-chat-key") || "");
+  const keyChanged = key !== prevKey;
+  const atBottom = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
   const stickToBottom = keyChanged || atBottom;
+  scrollHost.setAttribute("data-chat-key", key);
 
   const msgs = (key && state.conversations[key]) || [];
   const hasMore = Boolean(key && state.historyHasMore && state.historyHasMore[key]);
@@ -329,22 +330,16 @@ export function renderChat(target: HTMLElement, state: AppState) {
     lines.unshift(el("div", { class: "chat-history-more-wrap" }, [btn]));
   }
 
-  const jumpBtn = el(
-    "button",
-    { class: stickToBottom ? "btn chat-jump hidden" : "btn chat-jump", type: "button", "data-action": "chat-jump-bottom", "aria-label": "Вниз" },
-    ["↓"]
-  );
-
   if (!lines.length) {
     if (!state.selected) {
-      const title = el("div", { class: "chat-title" }, ["Сообщения"]);
-      target.replaceChildren(
-        title,
+      layout.chatTop.replaceChildren(el("div", { class: "chat-title" }, ["Сообщения"]));
+      scrollHost.replaceChildren(
         el("div", { class: "chat-empty" }, [
           el("div", { class: "chat-empty-title" }, ["Выберите чат или контакт слева"]),
           el("div", { class: "chat-empty-sub" }, ["F3 — поиск, F5/F6 — создать"]),
         ])
       );
+      layout.chatJump.classList.add("hidden");
       return;
     }
     const loaded = key ? Boolean(state.historyLoaded[key]) : true;
@@ -454,11 +449,13 @@ export function renderChat(target: HTMLElement, state: AppState) {
   const topChildren: HTMLElement[] = [el("div", { class: "chat-title" }, titleChildren)];
   if (pinnedBar) topChildren.push(pinnedBar);
   if (searchBar) topChildren.push(searchBar);
-  const top = el("div", { class: "chat-top" }, topChildren);
-
-  const children: HTMLElement[] = [top, el("div", { class: "chat-lines" }, lines), jumpBtn];
-  target.replaceChildren(...children);
-  if (stickToBottom) {
-    target.scrollTop = target.scrollHeight;
+  layout.chatTop.replaceChildren(...topChildren);
+  scrollHost.replaceChildren(el("div", { class: "chat-lines" }, lines));
+  layout.chatJump.classList.toggle("hidden", stickToBottom);
+  if (stickToBottom && key) {
+    queueMicrotask(() => {
+      if (String(scrollHost.getAttribute("data-chat-key") || "") !== key) return;
+      scrollHost.scrollTop = scrollHost.scrollHeight;
+    });
   }
 }

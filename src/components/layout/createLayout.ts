@@ -9,7 +9,14 @@ export function createLayout(root: HTMLElement): Layout {
   const header = el("header", { class: "hdr" }, [headerLeft, headerRight, hotkeys]);
 
   const sidebar = el("aside", { class: "sidebar" });
-  const chat = el("main", { class: "chat" });
+  const chatTop = el("div", { class: "chat-top hidden" });
+  const chatHost = el("div", { class: "chat-host" });
+  const chatJump = el(
+    "button",
+    { class: "btn chat-jump hidden", type: "button", "data-action": "chat-jump-bottom", "aria-label": "Вниз" },
+    ["↓"]
+  ) as HTMLButtonElement;
+  const chat = el("main", { class: "chat" }, [chatTop, chatHost, chatJump]);
 
   const input = el("textarea", {
     class: "input",
@@ -71,5 +78,23 @@ export function createLayout(root: HTMLElement): Layout {
   if (boot) root.replaceChildren(boot, app);
   else root.replaceChildren(app);
 
-  return { headerLeft, headerRight, hotkeys, sidebar, chat, toastHost, inputWrap, input, attachBtn, emojiBtn, sendBtn, footer, navOverlay, overlay };
+  return {
+    headerLeft,
+    headerRight,
+    hotkeys,
+    sidebar,
+    chat,
+    chatTop,
+    chatHost,
+    chatJump,
+    toastHost,
+    inputWrap,
+    input,
+    attachBtn,
+    emojiBtn,
+    sendBtn,
+    footer,
+    navOverlay,
+    overlay,
+  };
 }

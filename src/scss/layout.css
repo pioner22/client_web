@@ -71,10 +71,18 @@
   padding: var(--chat-pad);
   padding-left: calc(var(--chat-pad) + env(safe-area-inset-left));
   padding-right: calc(var(--chat-pad) + env(safe-area-inset-right));
-  overflow: auto;
-  overflow-anchor: none;
+  overflow: hidden;
   min-height: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overflow-anchor: none;
 }
 
 .input-wrap {
