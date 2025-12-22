@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.82",
+    date: "2025-12-22",
+    added: ["Web: добавлена поддержка React (Vite plugin + TSX) для постепенного внедрения компонентного UI"],
+    improved: ["Info: добавлен небольшой бейдж «React» (проверка, что связка реально работает)"],
+    notes: ["Оставляем основной UI на vanilla TS; React используем точечно. Vue подключим отдельно, если решим, что он действительно нужен."],
+  },
+  {
     version: "0.1.81",
     date: "2025-12-22",
     improved: [

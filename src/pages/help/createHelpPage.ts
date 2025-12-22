@@ -1,6 +1,9 @@
 import { el } from "../../helpers/dom/el";
 import { CHANGELOG, type ChangelogEntry } from "../../config/changelog";
 import { splitBuildId } from "../../helpers/version/buildId";
+import { createElement } from "react";
+import { renderReact } from "../../helpers/ui/reactMount";
+import { FrameworkBadge } from "../../react/FrameworkBadge";
 import type { AppState } from "../../stores/types";
 
 export interface HelpPage {
@@ -58,6 +61,8 @@ function renderChangelogEntry(entry: ChangelogEntry, currentVersion: string): HT
 export function createHelpPage(): HelpPage {
   const title = el("div", { class: "chat-title" }, ["Info"]);
   const meta = el("div", { class: "info-meta" }, [""]);
+  const fwBadgeHost = el("div", { class: "fw-badge-host", "aria-hidden": "true" }, []);
+  const metaRow = el("div", { class: "info-meta-row" }, [meta, fwBadgeHost]);
 
   const rows = el(
     "div",
@@ -147,7 +152,9 @@ export function createHelpPage(): HelpPage {
 
   const hint = el("div", { class: "msg msg-sys" }, ["Esc — назад"]);
 
-  const root = el("div", { class: "page info-page" }, [title, meta, quickStart, hkTitle, rows, changelogSection, hint]);
+  const root = el("div", { class: "page info-page" }, [title, metaRow, quickStart, hkTitle, rows, changelogSection, hint]);
+
+  renderReact(fwBadgeHost, createElement(FrameworkBadge, { label: "React" }));
 
   return {
     root,

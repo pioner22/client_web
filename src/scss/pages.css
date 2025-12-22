@@ -235,6 +235,40 @@
   overflow-wrap: anywhere;
 }
 
+.info-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fw-badge-host {
+  display: inline-flex;
+}
+
+.fw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 40%);
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.fw-badge .fw-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--focus), #ffffff 18%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--focus), transparent 70%);
+}
+
 .info-section {
   display: grid;
   gap: var(--sp-2);
