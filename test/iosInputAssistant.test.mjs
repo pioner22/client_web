@@ -133,6 +133,7 @@ test("iosInputAssistant: apply* включает autocorrect/spellcheck толь
         helper.applyIosInputAssistantWorkaround(el);
         assert.equal(el.getAttribute("autocorrect"), "on");
         assert.equal(el.getAttribute("spellcheck"), "true");
+        assert.equal(el.getAttribute("autocapitalize"), "sentences");
       }
     );
   } finally {

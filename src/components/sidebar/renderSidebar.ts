@@ -88,7 +88,13 @@ function friendRow(f: FriendEntry, selected: boolean, meta: SidebarRowMeta, onSe
   ]);
   btn.setAttribute("data-ctx-kind", "dm");
   btn.setAttribute("data-ctx-id", f.id);
-  btn.addEventListener("click", () => onSelect({ kind: "dm", id: f.id }));
+  btn.addEventListener("click", (e) => {
+    const ev = e as MouseEvent;
+    // Prevent Ctrl+Click / RMB quirks (macOS) from triggering navigation when opening context menu.
+    if (ev.ctrlKey) return;
+    if (typeof ev.button === "number" && ev.button !== 0) return;
+    onSelect({ kind: "dm", id: f.id });
+  });
   return btn;
 }
 
@@ -122,7 +128,12 @@ function roomRow(
     btn.setAttribute("data-ctx-kind", ctx.kind);
     btn.setAttribute("data-ctx-id", ctx.id);
   }
-  btn.addEventListener("click", onClick);
+  btn.addEventListener("click", (e) => {
+    const ev = e as MouseEvent;
+    if (ev.ctrlKey) return;
+    if (typeof ev.button === "number" && ev.button !== 0) return;
+    onClick();
+  });
   return btn;
 }
 
@@ -136,7 +147,12 @@ function pendingRow(prefix: string, label: string, onClick: () => void, ctx?: { 
     btn.setAttribute("data-ctx-kind", ctx.kind);
     btn.setAttribute("data-ctx-id", ctx.id);
   }
-  btn.addEventListener("click", onClick);
+  btn.addEventListener("click", (e) => {
+    const ev = e as MouseEvent;
+    if (ev.ctrlKey) return;
+    if (typeof ev.button === "number" && ev.button !== 0) return;
+    onClick();
+  });
   return btn;
 }
 

@@ -15,6 +15,7 @@ export function createLayout(root: HTMLElement): Layout {
     class: "input",
     rows: "1",
     placeholder: "Сообщение",
+    "data-ios-assistant": "composer",
     spellcheck: "false",
     autocomplete: "off",
     autocorrect: "off",

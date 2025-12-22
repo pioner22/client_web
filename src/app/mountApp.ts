@@ -4560,11 +4560,6 @@ export function mountApp(root: HTMLElement) {
     const { top: prevTop, left: prevLeft } = readSidebarCtxScrollSnapshot();
     const btn = (e.target as HTMLElement | null)?.closest("button[data-ctx-kind][data-ctx-id]") as HTMLButtonElement | null;
     if (!btn) return;
-    try {
-      btn.focus({ preventScroll: true });
-    } catch {
-      // ignore
-    }
     e.preventDefault();
     e.stopPropagation();
     // In some browsers Ctrl+Click may still generate a click; suppress it so the list doesn't jump/activate.

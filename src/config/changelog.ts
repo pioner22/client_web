@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.72",
+    date: "2025-12-22",
+    fixed: ["Сайдбар: ПКМ/Ctrl+Click больше не активирует строку и не должен «дёргать» прокрутку списка"],
+    improved: ["iOS PWA: усилили workaround для панели Undo/Redo/✓ (включаем autocapitalize=sentences вместе с autocorrect/spellcheck)"],
+    added: ["Regress test: sidebarContextClick — проверка, что Ctrl+Click/ПКМ не меняет выбранный чат"],
+  },
+  {
     version: "0.1.71",
     date: "2025-12-22",
     improved: [

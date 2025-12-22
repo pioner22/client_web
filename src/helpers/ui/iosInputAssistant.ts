@@ -34,6 +34,8 @@ export function applyIosInputAssistantWorkaround(el: HTMLTextAreaElement | HTMLI
   try {
     el.setAttribute("autocorrect", "on");
     el.setAttribute("spellcheck", "true");
+    // Возвращаем типичную для iOS автокапитализацию (снижаем шанс появления "редакторской" панели).
+    el.setAttribute("autocapitalize", "sentences");
     try {
       (el as any).spellcheck = true;
     } catch {

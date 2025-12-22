@@ -38,7 +38,6 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     type: "text",
     id: "profile-display-name",
     placeholder: "Имя",
-    "data-ios-assistant": "off",
     autocomplete: "off",
     autocorrect: "off",
     autocapitalize: "off",
