@@ -51,6 +51,7 @@ test("handleServerMessage: group_invite парсится из payload.group", as
       pendingGroupInvites: [],
       pendingBoardInvites: [],
       pendingGroupJoinRequests: [],
+      conversations: {},
       modal: null,
       status: "",
     });
@@ -73,6 +74,12 @@ test("handleServerMessage: group_invite парсится из payload.group", as
     assert.equal(st.pendingGroupInvites[0].name, "Чат");
     assert.equal(st.pendingGroupInvites[0].handle, "@chat");
     assert.equal(st.modal, null);
+    const conv = st.conversations?.["dm:111-111-111"] || [];
+    const msg = Array.isArray(conv) ? conv.find((m) => m && m.localId === "action:group_invite:grp-0001:111-111-111") : null;
+    assert.ok(msg, "должно быть системное сообщение с action:group_invite");
+    assert.equal(msg.kind, "sys");
+    assert.equal(msg.attachment?.kind, "action");
+    assert.equal(msg.attachment?.payload?.kind, "group_invite");
   } finally {
     await cleanup();
   }
@@ -85,6 +92,7 @@ test("handleServerMessage: board_invite парсится из payload.board", as
       pendingGroupInvites: [],
       pendingBoardInvites: [],
       pendingGroupJoinRequests: [],
+      conversations: {},
       modal: null,
       status: "",
     });
@@ -107,6 +115,12 @@ test("handleServerMessage: board_invite парсится из payload.board", as
     assert.equal(st.pendingBoardInvites[0].name, "Новости");
     assert.equal(st.pendingBoardInvites[0].handle, "@news");
     assert.equal(st.modal, null);
+    const conv = st.conversations?.["dm:111-111-111"] || [];
+    const msg = Array.isArray(conv) ? conv.find((m) => m && m.localId === "action:board_invite:b-abcdef12:111-111-111") : null;
+    assert.ok(msg, "должно быть системное сообщение с action:board_invite");
+    assert.equal(msg.kind, "sys");
+    assert.equal(msg.attachment?.kind, "action");
+    assert.equal(msg.attachment?.payload?.kind, "board_invite");
   } finally {
     await cleanup();
   }

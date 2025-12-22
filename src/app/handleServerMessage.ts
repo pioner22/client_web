@@ -1,5 +1,6 @@
 import type { GatewayClient } from "../lib/net/gatewayClient";
 import type {
+  ActionModalPayload,
   ActionModalBoardInvite,
   ActionModalGroupInvite,
   ActionModalGroupJoinRequest,
@@ -29,6 +30,40 @@ import {
   storeSessionToken,
 } from "../helpers/auth/session";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
+
+function upsertConversationByLocalId(state: any, key: string, msg: ChatMessage, localId: string): any {
+  const convMap = state?.conversations && typeof state.conversations === "object" ? state.conversations : {};
+  const prev = Array.isArray(convMap[key]) ? convMap[key] : [];
+  if (prev.some((m: any) => String(m?.localId ?? "") === localId)) return state;
+  return { ...state, conversations: { ...convMap, [key]: [...prev, msg] } };
+}
+
+function updateConversationByLocalId(
+  state: any,
+  key: string,
+  localId: string,
+  update: (msg: ChatMessage) => ChatMessage
+): any {
+  const convMap = state?.conversations && typeof state.conversations === "object" ? state.conversations : {};
+  const prev = Array.isArray(convMap[key]) ? convMap[key] : [];
+  const idx = prev.findIndex((m: any) => String(m?.localId ?? "") === localId);
+  if (idx < 0) return state;
+  const next = [...prev];
+  next[idx] = update(next[idx] as ChatMessage);
+  return { ...state, conversations: { ...convMap, [key]: next } };
+}
+
+function sysActionMessage(peer: string, text: string, payload: ActionModalPayload, localId: string): ChatMessage {
+  return {
+    ts: nowTs(),
+    from: peer,
+    text,
+    kind: "sys",
+    localId,
+    id: null,
+    attachment: { kind: "action", payload },
+  };
+}
 
 function oldestLoadedId(msgs: ChatMessage[]): number | null {
   let min: number | null = null;
@@ -267,7 +302,7 @@ export function handleServerMessage(
         if (!nextProfiles) nextProfiles = { ...prev.profiles };
         nextProfiles[id] = next;
       }
-      return {
+      let nextState: any = {
         ...prev,
         friends: r.friends,
         pendingIn: r.pendingIn,
@@ -275,6 +310,29 @@ export function handleServerMessage(
         ...(nextProfiles ? { profiles: nextProfiles } : {}),
         ...(avatarChanged ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}),
       };
+      for (const peer of r.pendingIn) {
+        const id = String(peer || "").trim();
+        if (!id) continue;
+        const localId = `action:auth_in:${id}`;
+        nextState = upsertConversationByLocalId(
+          nextState,
+          dmKey(id),
+          sysActionMessage(id, `Входящий запрос на контакт: ${id}`, { kind: "auth_in", peer: id }, localId),
+          localId
+        );
+      }
+      for (const peer of r.pendingOut) {
+        const id = String(peer || "").trim();
+        if (!id) continue;
+        const localId = `action:auth_out:${id}`;
+        nextState = upsertConversationByLocalId(
+          nextState,
+          dmKey(id),
+          sysActionMessage(id, `Ожидает подтверждения: ${id}`, { kind: "auth_out", peer: id }, localId),
+          localId
+        );
+      }
+      return nextState;
     });
     return;
   }
@@ -395,21 +453,44 @@ export function handleServerMessage(
     const raw = msg?.from;
     const pending = Array.isArray(raw) ? raw.map((x: any) => String(x || "").trim()).filter((x: string) => x) : [];
     if (!pending.length) return;
-    patch((prev) => ({
-      ...prev,
-      pendingIn: Array.from(new Set([...prev.pendingIn, ...pending])),
-      status: `Ожидают авторизации: ${pending.length}`,
-    }));
+    patch((prev) => {
+      const prevPending = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
+      let nextState: any = {
+        ...prev,
+        pendingIn: Array.from(new Set([...prevPending, ...pending])),
+        status: `Ожидают авторизации: ${pending.length}`,
+      };
+      for (const peer of pending) {
+        const id = String(peer || "").trim();
+        if (!id) continue;
+        const localId = `action:auth_in:${id}`;
+        nextState = upsertConversationByLocalId(
+          nextState,
+          dmKey(id),
+          sysActionMessage(id, `Входящий запрос на контакт: ${id}`, { kind: "auth_in", peer: id }, localId),
+          localId
+        );
+      }
+      return nextState;
+    });
     return;
   }
   if (t === "authz_request") {
     const from = String(msg?.from ?? "").trim();
     if (!from) return;
-    patch((prev) => ({
-      ...prev,
-      pendingIn: prev.pendingIn.includes(from) ? prev.pendingIn : [...prev.pendingIn, from],
-      status: `Входящий запрос: ${from}`,
-    }));
+    patch((prev) => {
+      const prevPending = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
+      const nextPending = prevPending.includes(from) ? prevPending : [...prevPending, from];
+      const localId = `action:auth_in:${from}`;
+      let nextState: any = { ...prev, pendingIn: nextPending, status: `Входящий запрос: ${from}` };
+      nextState = upsertConversationByLocalId(
+        nextState,
+        dmKey(from),
+        sysActionMessage(from, `Входящий запрос на контакт: ${from}`, { kind: "auth_in", peer: from }, localId),
+        localId
+      );
+      return nextState;
+    });
     return;
   }
   if (t === "authz_request_result") {
@@ -420,11 +501,19 @@ export function handleServerMessage(
       return;
     }
     if (to) {
-      patch((prev) => ({
-        ...prev,
-        pendingOut: prev.pendingOut.includes(to) ? prev.pendingOut : [...prev.pendingOut, to],
-        status: `Запрос отправлен: ${to}`,
-      }));
+      patch((prev) => {
+        const prevPending = Array.isArray((prev as any).pendingOut) ? (prev as any).pendingOut : [];
+        const nextPending = prevPending.includes(to) ? prevPending : [...prevPending, to];
+        const localId = `action:auth_out:${to}`;
+        let nextState: any = { ...prev, pendingOut: nextPending, status: `Запрос отправлен: ${to}` };
+        nextState = upsertConversationByLocalId(
+          nextState,
+          dmKey(to),
+          sysActionMessage(to, `Запрос на контакт отправлен: ${to}`, { kind: "auth_out", peer: to }, localId),
+          localId
+        );
+        return nextState;
+      });
     }
     return;
   }
@@ -436,11 +525,14 @@ export function handleServerMessage(
     }
     const peer = String(msg?.peer ?? "");
     if (peer) {
-      patch((prev) => ({
-        ...prev,
-        pendingIn: prev.pendingIn.filter((id) => id !== peer),
-        status: `Ответ отправлен: ${peer}`,
-      }));
+      patch((prev) => {
+        const prevPending = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
+        const nextPending = prevPending.filter((id: string) => id !== peer);
+        const localId = `action:auth_in:${peer}`;
+        let nextState: any = { ...prev, pendingIn: nextPending, status: `Ответ отправлен: ${peer}` };
+        nextState = updateConversationByLocalId(nextState, dmKey(peer), localId, (m) => ({ ...m, text: `Ответ отправлен: ${peer}`, attachment: null }));
+        return nextState;
+      });
     }
     return;
   }
@@ -452,45 +544,69 @@ export function handleServerMessage(
       return;
     }
     if (peer) {
-      patch((prev) => ({
-        ...prev,
-        pendingOut: prev.pendingOut.filter((id) => id !== peer),
-        status: `Отмена запроса: ${peer}`,
-      }));
+      patch((prev) => {
+        const prevPending = Array.isArray((prev as any).pendingOut) ? (prev as any).pendingOut : [];
+        const nextPending = prevPending.filter((id: string) => id !== peer);
+        const localId = `action:auth_out:${peer}`;
+        let nextState: any = { ...prev, pendingOut: nextPending, status: `Отмена запроса: ${peer}` };
+        nextState = updateConversationByLocalId(nextState, dmKey(peer), localId, (m) => ({ ...m, text: `Запрос отменён: ${peer}`, attachment: null }));
+        return nextState;
+      });
     }
     return;
   }
   if (t === "authz_accepted") {
     const id = String(msg?.id ?? "").trim();
     if (!id) return;
-    patch((prev) => ({
-      ...prev,
-      pendingIn: prev.pendingIn.filter((x) => x !== id),
-      pendingOut: prev.pendingOut.filter((x) => x !== id),
-      status: `Запрос принят: ${id}`,
-    }));
+    patch((prev) => {
+      const prevIn = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
+      const prevOut = Array.isArray((prev as any).pendingOut) ? (prev as any).pendingOut : [];
+      let nextState: any = {
+        ...prev,
+        pendingIn: prevIn.filter((x: string) => x !== id),
+        pendingOut: prevOut.filter((x: string) => x !== id),
+        status: `Запрос принят: ${id}`,
+      };
+      nextState = updateConversationByLocalId(nextState, dmKey(id), `action:auth_in:${id}`, (m) => ({ ...m, text: `Запрос принят: ${id}`, attachment: null }));
+      nextState = updateConversationByLocalId(nextState, dmKey(id), `action:auth_out:${id}`, (m) => ({ ...m, text: `Запрос принят: ${id}`, attachment: null }));
+      return nextState;
+    });
     return;
   }
   if (t === "authz_declined") {
     const id = String(msg?.id ?? "").trim();
     if (!id) return;
-    patch((prev) => ({
-      ...prev,
-      pendingIn: prev.pendingIn.filter((x) => x !== id),
-      pendingOut: prev.pendingOut.filter((x) => x !== id),
-      status: `Запрос отклонён: ${id}`,
-    }));
+    patch((prev) => {
+      const prevIn = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
+      const prevOut = Array.isArray((prev as any).pendingOut) ? (prev as any).pendingOut : [];
+      let nextState: any = {
+        ...prev,
+        pendingIn: prevIn.filter((x: string) => x !== id),
+        pendingOut: prevOut.filter((x: string) => x !== id),
+        status: `Запрос отклонён: ${id}`,
+      };
+      nextState = updateConversationByLocalId(nextState, dmKey(id), `action:auth_in:${id}`, (m) => ({ ...m, text: `Запрос отклонён: ${id}`, attachment: null }));
+      nextState = updateConversationByLocalId(nextState, dmKey(id), `action:auth_out:${id}`, (m) => ({ ...m, text: `Запрос отклонён: ${id}`, attachment: null }));
+      return nextState;
+    });
     return;
   }
   if (t === "authz_cancelled") {
     const peer = String(msg?.peer ?? "").trim();
     if (!peer) return;
-    patch((prev) => ({
-      ...prev,
-      pendingIn: prev.pendingIn.filter((x) => x !== peer),
-      pendingOut: prev.pendingOut.filter((x) => x !== peer),
-      status: `Запрос отменён: ${peer}`,
-    }));
+    patch((prev) => {
+      const prevIn = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
+      const prevOut = Array.isArray((prev as any).pendingOut) ? (prev as any).pendingOut : [];
+      let nextState: any = {
+        ...prev,
+        pendingIn: prevIn.filter((x: string) => x !== peer),
+        pendingOut: prevOut.filter((x: string) => x !== peer),
+        status: `Запрос отменён: ${peer}`,
+      };
+      nextState = updateConversationByLocalId(nextState, dmKey(peer), `action:auth_in:${peer}`, (m) => ({ ...m, text: `Запрос отменён: ${peer}`, attachment: null }));
+      nextState = updateConversationByLocalId(nextState, dmKey(peer), `action:auth_out:${peer}`, (m) => ({ ...m, text: `Запрос отменён: ${peer}`, attachment: null }));
+      return nextState;
+    });
     return;
   }
   if (t === "groups") {
@@ -895,13 +1011,20 @@ export function handleServerMessage(
       name: (msg?.name ?? group?.name ?? null) as any,
       handle: (msg?.handle ?? group?.handle ?? null) as any,
     };
-    patch((prev) => ({
-      ...prev,
-      pendingGroupInvites: prev.pendingGroupInvites.some((inv) => inv.groupId === groupId && inv.from === from)
-        ? prev.pendingGroupInvites
-        : [...prev.pendingGroupInvites, entry],
-      status: `Приглашение в чат: ${groupId}`,
-    }));
+    patch((prev) => {
+      const prevInv = Array.isArray((prev as any).pendingGroupInvites) ? (prev as any).pendingGroupInvites : [];
+      const pendingGroupInvites = prevInv.some((inv: any) => inv.groupId === groupId && inv.from === from) ? prevInv : [...prevInv, entry];
+      const label = String(entry.name || entry.handle || groupId);
+      const localId = `action:group_invite:${groupId}:${from}`;
+      let nextState: any = { ...prev, pendingGroupInvites, status: `Приглашение в чат: ${label}` };
+      nextState = upsertConversationByLocalId(
+        nextState,
+        dmKey(from),
+        sysActionMessage(from, `Приглашение в чат: ${label}`, entry, localId),
+        localId
+      );
+      return nextState;
+    });
     return;
   }
   if (t === "group_invite_result") {
@@ -925,13 +1048,20 @@ export function handleServerMessage(
       name: (msg?.name ?? null) as any,
       handle: (msg?.handle ?? null) as any,
     };
-    patch((prev) => ({
-      ...prev,
-      pendingGroupJoinRequests: prev.pendingGroupJoinRequests.some((req) => req.groupId === groupId && req.from === from)
-        ? prev.pendingGroupJoinRequests
-        : [...prev.pendingGroupJoinRequests, entry],
-      status: `Запрос на вступление: ${groupId}`,
-    }));
+    patch((prev) => {
+      const prevReq = Array.isArray((prev as any).pendingGroupJoinRequests) ? (prev as any).pendingGroupJoinRequests : [];
+      const pendingGroupJoinRequests = prevReq.some((req: any) => req.groupId === groupId && req.from === from) ? prevReq : [...prevReq, entry];
+      const label = String(entry.name || entry.handle || groupId);
+      const localId = `action:group_join_request:${groupId}:${from}`;
+      let nextState: any = { ...prev, pendingGroupJoinRequests, status: `Запрос на вступление: ${label}` };
+      nextState = upsertConversationByLocalId(
+        nextState,
+        dmKey(from),
+        sysActionMessage(from, `Запрос на вступление в чат: ${label}`, entry, localId),
+        localId
+      );
+      return nextState;
+    });
     return;
   }
   if (t === "group_join_request_result") {
@@ -972,13 +1102,20 @@ export function handleServerMessage(
       name: (msg?.name ?? board?.name ?? null) as any,
       handle: (msg?.handle ?? board?.handle ?? null) as any,
     };
-    patch((prev) => ({
-      ...prev,
-      pendingBoardInvites: prev.pendingBoardInvites.some((inv) => inv.boardId === boardId && inv.from === from)
-        ? prev.pendingBoardInvites
-        : [...prev.pendingBoardInvites, entry],
-      status: `Приглашение в доску: ${boardId}`,
-    }));
+    patch((prev) => {
+      const prevInv = Array.isArray((prev as any).pendingBoardInvites) ? (prev as any).pendingBoardInvites : [];
+      const pendingBoardInvites = prevInv.some((inv: any) => inv.boardId === boardId && inv.from === from) ? prevInv : [...prevInv, entry];
+      const label = String(entry.name || entry.handle || boardId);
+      const localId = `action:board_invite:${boardId}:${from}`;
+      let nextState: any = { ...prev, pendingBoardInvites, status: `Приглашение в доску: ${label}` };
+      nextState = upsertConversationByLocalId(
+        nextState,
+        dmKey(from),
+        sysActionMessage(from, `Приглашение в доску: ${label}`, entry, localId),
+        localId
+      );
+      return nextState;
+    });
     return;
   }
   if (t === "board_invite_result") {

@@ -759,6 +759,29 @@ input.modal-input[type="file"]::file-selector-button:active {
   outline-offset: 2px;
 }
 
+.invite-list {
+  display: grid;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+
+.invite-row {
+  align-items: center;
+}
+
+.invite-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--focus);
+}
+
+.invite-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .modal.modal-viewer {
   width: min(920px, 100%);
   padding: var(--sp-4);

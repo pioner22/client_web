@@ -49,6 +49,7 @@ test("handleServerMessage: authz_request не открывает модалку 
   try {
     const { getState, patch } = createPatchHarness({
       pendingIn: [],
+      conversations: {},
       modal: null,
       status: "",
     });
@@ -59,6 +60,12 @@ test("handleServerMessage: authz_request не открывает модалку 
     assert.deepEqual(st.pendingIn, ["111-111-111"]);
     assert.equal(st.modal, null);
     assert.ok(String(st.status || "").includes("111-111-111"));
+    const conv = st.conversations?.["dm:111-111-111"] || [];
+    const msg = Array.isArray(conv) ? conv.find((m) => m && m.localId === "action:auth_in:111-111-111") : null;
+    assert.ok(msg, "должно быть системное сообщение с action:auth_in");
+    assert.equal(msg.kind, "sys");
+    assert.equal(msg.attachment?.kind, "action");
+    assert.equal(msg.attachment?.payload?.kind, "auth_in");
   } finally {
     await cleanup();
   }

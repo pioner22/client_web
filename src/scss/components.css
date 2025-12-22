@@ -818,6 +818,21 @@
   border: 0;
 }
 
+.msg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding-top: 4px;
+}
+
+.msg-action-btn {
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
 .msg-in .msg-body {
   background: var(--msg-in-bg);
   border: var(--msg-in-border-width) solid var(--msg-in-border-color);
@@ -916,6 +931,59 @@
 
 .file-row-chat .file-actions {
   align-self: center;
+}
+
+.file-row-chat.file-row-image {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  position: relative;
+}
+
+.file-row-chat.file-row-image > .chat-file-preview {
+  border: 0;
+  border-radius: var(--msg-in-radius);
+  box-shadow: none;
+}
+
+.msg-out .file-row-chat.file-row-image > .chat-file-preview {
+  border-radius: var(--msg-out-radius);
+}
+
+.file-row-chat.file-row-image .file-main {
+  display: none;
+}
+
+.file-row-chat.file-row-image.file-row-progress .file-main {
+  display: grid;
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 56px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 28%);
+  background: color-mix(in srgb, var(--panel), transparent 24%);
+}
+
+.file-row-chat.file-row-image.file-row-progress .file-title,
+.file-row-chat.file-row-image.file-row-progress .file-meta {
+  display: none;
+}
+
+.file-row-chat.file-row-image .file-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.file-row-chat.file-row-image .file-action {
+  background: color-mix(in srgb, var(--panel), transparent 25%);
+  border-color: color-mix(in srgb, var(--line), transparent 25%);
 }
 
 .file-action {

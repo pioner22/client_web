@@ -662,6 +662,98 @@ export function mountApp(root: HTMLElement) {
       return;
     }
 
+    const authAcceptBtn = target?.closest("button[data-action='auth-accept']") as HTMLButtonElement | null;
+    if (authAcceptBtn) {
+      const peer = String(authAcceptBtn.getAttribute("data-peer") || "").trim();
+      if (!peer) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      acceptAuth(peer);
+      return;
+    }
+
+    const authDeclineBtn = target?.closest("button[data-action='auth-decline']") as HTMLButtonElement | null;
+    if (authDeclineBtn) {
+      const peer = String(authDeclineBtn.getAttribute("data-peer") || "").trim();
+      if (!peer) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      declineAuth(peer);
+      return;
+    }
+
+    const authCancelBtn = target?.closest("button[data-action='auth-cancel']") as HTMLButtonElement | null;
+    if (authCancelBtn) {
+      const peer = String(authCancelBtn.getAttribute("data-peer") || "").trim();
+      if (!peer) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      cancelAuth(peer);
+      return;
+    }
+
+    const groupInviteAcceptBtn = target?.closest("button[data-action='group-invite-accept']") as HTMLButtonElement | null;
+    if (groupInviteAcceptBtn) {
+      const groupId = String(groupInviteAcceptBtn.getAttribute("data-group-id") || "").trim();
+      if (!groupId) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      acceptGroupInvite(groupId);
+      return;
+    }
+
+    const groupInviteDeclineBtn = target?.closest("button[data-action='group-invite-decline']") as HTMLButtonElement | null;
+    if (groupInviteDeclineBtn) {
+      const groupId = String(groupInviteDeclineBtn.getAttribute("data-group-id") || "").trim();
+      if (!groupId) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      declineGroupInvite(groupId);
+      return;
+    }
+
+    const groupJoinAcceptBtn = target?.closest("button[data-action='group-join-accept']") as HTMLButtonElement | null;
+    if (groupJoinAcceptBtn) {
+      const groupId = String(groupJoinAcceptBtn.getAttribute("data-group-id") || "").trim();
+      const peer = String(groupJoinAcceptBtn.getAttribute("data-peer") || "").trim();
+      if (!groupId || !peer) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      acceptGroupJoin(groupId, peer);
+      return;
+    }
+
+    const groupJoinDeclineBtn = target?.closest("button[data-action='group-join-decline']") as HTMLButtonElement | null;
+    if (groupJoinDeclineBtn) {
+      const groupId = String(groupJoinDeclineBtn.getAttribute("data-group-id") || "").trim();
+      const peer = String(groupJoinDeclineBtn.getAttribute("data-peer") || "").trim();
+      if (!groupId || !peer) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      declineGroupJoin(groupId, peer);
+      return;
+    }
+
+    const boardInviteAcceptBtn = target?.closest("button[data-action='board-invite-accept']") as HTMLButtonElement | null;
+    if (boardInviteAcceptBtn) {
+      const boardId = String(boardInviteAcceptBtn.getAttribute("data-board-id") || "").trim();
+      if (!boardId) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      joinBoardFromInvite(boardId);
+      return;
+    }
+
+    const boardInviteDeclineBtn = target?.closest("button[data-action='board-invite-decline']") as HTMLButtonElement | null;
+    if (boardInviteDeclineBtn) {
+      const boardId = String(boardInviteDeclineBtn.getAttribute("data-board-id") || "").trim();
+      if (!boardId) return;
+      e.preventDefault();
+      closeMobileSidebar();
+      declineBoardInvite(boardId);
+      return;
+    }
+
     const fileAcceptBtn = target?.closest("button[data-action='file-accept']") as HTMLButtonElement | null;
     if (fileAcceptBtn) {
       const fileId = String(fileAcceptBtn.getAttribute("data-file-id") || "").trim();
@@ -1674,6 +1766,68 @@ export function mountApp(root: HTMLElement) {
 
   function openActionModal(payload: ActionModalPayload) {
     closeMobileSidebar();
+
+    const jumpToMessage = (findIdx: (msgs: any[]) => number) => {
+      const attempt = () => {
+        const st = store.get();
+        if (!st.selected) return;
+        const key = conversationKey(st.selected);
+        const msgs = (st.conversations && (st.conversations as any)[key]) || [];
+        const idx = findIdx(Array.isArray(msgs) ? msgs : []);
+        if (idx < 0) return;
+        scrollToChatMsgIdx(idx);
+      };
+      queueMicrotask(attempt);
+      window.setTimeout(attempt, 0);
+      window.setTimeout(attempt, 120);
+    };
+
+    const jumpToLocalId = (localId: string) =>
+      jumpToMessage((msgs) => msgs.findIndex((m: any) => String(m?.localId ?? "") === localId));
+    const jumpToFileId = (fileId: string) =>
+      jumpToMessage((msgs) =>
+        msgs.findIndex((m: any) => m?.attachment?.kind === "file" && String(m?.attachment?.fileId ?? "") === fileId)
+      );
+
+    // Вместо блокирующей action-модалки показываем действия прямо в переписке (как системное сообщение).
+    if (payload.kind === "auth_in" || payload.kind === "auth_out") {
+      setPage("main");
+      selectTarget({ kind: "dm", id: payload.peer });
+      jumpToLocalId(`action:${payload.kind}:${payload.peer}`);
+      return;
+    }
+    if (payload.kind === "group_invite") {
+      setPage("main");
+      selectTarget({ kind: "dm", id: payload.from });
+      jumpToLocalId(`action:group_invite:${payload.groupId}:${payload.from}`);
+      return;
+    }
+    if (payload.kind === "group_join_request") {
+      setPage("main");
+      selectTarget({ kind: "dm", id: payload.from });
+      jumpToLocalId(`action:group_join_request:${payload.groupId}:${payload.from}`);
+      return;
+    }
+    if (payload.kind === "board_invite") {
+      setPage("main");
+      selectTarget({ kind: "dm", id: payload.from });
+      jumpToLocalId(`action:board_invite:${payload.boardId}:${payload.from}`);
+      return;
+    }
+    if (payload.kind === "file_offer") {
+      setPage("main");
+      const room = String(payload.room ?? "").trim();
+      if (room) {
+        const kind = room.startsWith("grp-") ? "group" : "board";
+        selectTarget({ kind, id: room });
+      } else {
+        selectTarget({ kind: "dm", id: payload.from });
+      }
+      jumpToFileId(payload.fileId);
+      return;
+    }
+
+    // Fallback (не должно происходить, но безопаснее оставить).
     store.set({ modal: { kind: "action", payload } });
   }
 
@@ -2405,6 +2559,48 @@ export function mountApp(root: HTMLElement) {
     store.set({ modal: { ...modal, message: "Сохраняем…" }, status: "Переименование…" });
   }
 
+  function inviteUserSubmit() {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "invite_user") return;
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    const peer = String(modal.peer || "").trim();
+    if (!peer) {
+      store.set({ modal: { ...modal, message: "Некорректный ID пользователя" } });
+      return;
+    }
+    if (st.conn !== "connected") {
+      store.set({ modal: { ...modal, message: "Нет соединения" }, status: "Нет соединения" });
+      return;
+    }
+
+    const form = document.getElementById("invite-user-form");
+    const groupIds = Array.from(form?.querySelectorAll("input[type='checkbox'][data-invite-kind='group']:checked") || [])
+      .map((n) => String((n as HTMLInputElement).value || "").trim())
+      .filter(Boolean);
+    const boardIds = Array.from(form?.querySelectorAll("input[type='checkbox'][data-invite-kind='board']:checked") || [])
+      .map((n) => String((n as HTMLInputElement).value || "").trim())
+      .filter(Boolean);
+
+    if (!groupIds.length && !boardIds.length) {
+      store.set({ modal: { ...modal, message: "Выберите хотя бы один чат или доску" } });
+      return;
+    }
+
+    for (const gid of groupIds) {
+      gateway.send({ type: "group_add", group_id: gid, members: [peer] });
+    }
+    for (const bid of boardIds) {
+      gateway.send({ type: "board_invite", board_id: bid, members: [peer] });
+    }
+
+    const total = groupIds.length + boardIds.length;
+    store.set({ modal: null, status: `Приглашения отправляются (${total}): ${peer}` });
+  }
+
   function confirmSubmit() {
     const st = store.get();
     const modal = st.modal;
@@ -2482,32 +2678,58 @@ export function mountApp(root: HTMLElement) {
 
   function acceptAuth(peer: string) {
     gateway.send({ type: "authz_response", peer, accept: true });
-    store.set((prev) => ({
-      ...prev,
-      pendingIn: prev.pendingIn.filter((id) => id !== peer),
-      modal: null,
-      status: `Принят запрос: ${peer}`,
-    }));
+    store.set((prev) => {
+      const key = dmKey(peer);
+      const conv = prev.conversations[key] || [];
+      const localId = `action:auth_in:${peer}`;
+      const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+      const nextConv = idx >= 0 ? [...conv.slice(0, idx), { ...conv[idx], text: `Запрос принят: ${peer}`, attachment: null }, ...conv.slice(idx + 1)] : conv;
+      return {
+        ...prev,
+        pendingIn: prev.pendingIn.filter((id) => id !== peer),
+        ...(idx >= 0 ? { conversations: { ...prev.conversations, [key]: nextConv } } : {}),
+        modal: null,
+        status: `Принят запрос: ${peer}`,
+      };
+    });
   }
 
   function declineAuth(peer: string) {
     gateway.send({ type: "authz_response", peer, accept: false });
-    store.set((prev) => ({
-      ...prev,
-      pendingIn: prev.pendingIn.filter((id) => id !== peer),
-      modal: null,
-      status: `Отклонён запрос: ${peer}`,
-    }));
+    store.set((prev) => {
+      const key = dmKey(peer);
+      const conv = prev.conversations[key] || [];
+      const localId = `action:auth_in:${peer}`;
+      const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+      const nextConv =
+        idx >= 0 ? [...conv.slice(0, idx), { ...conv[idx], text: `Запрос отклонён: ${peer}`, attachment: null }, ...conv.slice(idx + 1)] : conv;
+      return {
+        ...prev,
+        pendingIn: prev.pendingIn.filter((id) => id !== peer),
+        ...(idx >= 0 ? { conversations: { ...prev.conversations, [key]: nextConv } } : {}),
+        modal: null,
+        status: `Отклонён запрос: ${peer}`,
+      };
+    });
   }
 
   function cancelAuth(peer: string) {
     gateway.send({ type: "authz_cancel", peer });
-    store.set((prev) => ({
-      ...prev,
-      pendingOut: prev.pendingOut.filter((id) => id !== peer),
-      modal: null,
-      status: `Отменён запрос: ${peer}`,
-    }));
+    store.set((prev) => {
+      const key = dmKey(peer);
+      const conv = prev.conversations[key] || [];
+      const localId = `action:auth_out:${peer}`;
+      const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+      const nextConv =
+        idx >= 0 ? [...conv.slice(0, idx), { ...conv[idx], text: `Запрос отменён: ${peer}`, attachment: null }, ...conv.slice(idx + 1)] : conv;
+      return {
+        ...prev,
+        pendingOut: prev.pendingOut.filter((id) => id !== peer),
+        ...(idx >= 0 ? { conversations: { ...prev.conversations, [key]: nextConv } } : {}),
+        modal: null,
+        status: `Отменён запрос: ${peer}`,
+      };
+    });
   }
 
   function joinGroup(groupId: string) {
@@ -2540,61 +2762,143 @@ export function mountApp(root: HTMLElement) {
 
   function acceptGroupInvite(groupId: string) {
     gateway.send({ type: "group_invite_response", group_id: groupId, accept: true });
-    store.set((prev) => ({
-      ...prev,
-      pendingGroupInvites: prev.pendingGroupInvites.filter((inv) => inv.groupId !== groupId),
-      modal: null,
-      status: `Принято приглашение: ${groupId}`,
-    }));
+    store.set((prev) => {
+      const inv = prev.pendingGroupInvites.find((x) => x.groupId === groupId);
+      const from = String(inv?.from || "").trim();
+      let nextState: any = {
+        ...prev,
+        pendingGroupInvites: prev.pendingGroupInvites.filter((x) => x.groupId !== groupId),
+        modal: null,
+        status: `Принято приглашение: ${groupId}`,
+      };
+      if (from) {
+        const key = dmKey(from);
+        const conv = prev.conversations[key] || [];
+        const localId = `action:group_invite:${groupId}:${from}`;
+        const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+        if (idx >= 0) {
+          const nextConv = [...conv.slice(0, idx), { ...conv[idx], text: `Приглашение принято: ${groupId}`, attachment: null }, ...conv.slice(idx + 1)];
+          nextState = { ...nextState, conversations: { ...prev.conversations, [key]: nextConv } };
+        }
+      }
+      return nextState;
+    });
   }
 
   function declineGroupInvite(groupId: string) {
     gateway.send({ type: "group_invite_response", group_id: groupId, accept: false });
-    store.set((prev) => ({
-      ...prev,
-      pendingGroupInvites: prev.pendingGroupInvites.filter((inv) => inv.groupId !== groupId),
-      modal: null,
-      status: `Отклонено приглашение: ${groupId}`,
-    }));
+    store.set((prev) => {
+      const inv = prev.pendingGroupInvites.find((x) => x.groupId === groupId);
+      const from = String(inv?.from || "").trim();
+      let nextState: any = {
+        ...prev,
+        pendingGroupInvites: prev.pendingGroupInvites.filter((x) => x.groupId !== groupId),
+        modal: null,
+        status: `Отклонено приглашение: ${groupId}`,
+      };
+      if (from) {
+        const key = dmKey(from);
+        const conv = prev.conversations[key] || [];
+        const localId = `action:group_invite:${groupId}:${from}`;
+        const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+        if (idx >= 0) {
+          const nextConv = [...conv.slice(0, idx), { ...conv[idx], text: `Приглашение отклонено: ${groupId}`, attachment: null }, ...conv.slice(idx + 1)];
+          nextState = { ...nextState, conversations: { ...prev.conversations, [key]: nextConv } };
+        }
+      }
+      return nextState;
+    });
   }
 
   function acceptGroupJoin(groupId: string, peer: string) {
     gateway.send({ type: "group_join_response", group_id: groupId, peer, accept: true });
-    store.set((prev) => ({
-      ...prev,
-      pendingGroupJoinRequests: prev.pendingGroupJoinRequests.filter((req) => !(req.groupId === groupId && req.from === peer)),
-      modal: null,
-      status: `Принят запрос: ${peer}`,
-    }));
+    store.set((prev) => {
+      const key = dmKey(peer);
+      const conv = prev.conversations[key] || [];
+      const localId = `action:group_join_request:${groupId}:${peer}`;
+      const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+      const nextConv =
+        idx >= 0
+          ? [...conv.slice(0, idx), { ...conv[idx], text: `Запрос принят: ${peer}`, attachment: null }, ...conv.slice(idx + 1)]
+          : conv;
+      return {
+        ...prev,
+        pendingGroupJoinRequests: prev.pendingGroupJoinRequests.filter((req) => !(req.groupId === groupId && req.from === peer)),
+        ...(idx >= 0 ? { conversations: { ...prev.conversations, [key]: nextConv } } : {}),
+        modal: null,
+        status: `Принят запрос: ${peer}`,
+      };
+    });
   }
 
   function declineGroupJoin(groupId: string, peer: string) {
     gateway.send({ type: "group_join_response", group_id: groupId, peer, accept: false });
-    store.set((prev) => ({
-      ...prev,
-      pendingGroupJoinRequests: prev.pendingGroupJoinRequests.filter((req) => !(req.groupId === groupId && req.from === peer)),
-      modal: null,
-      status: `Отклонён запрос: ${peer}`,
-    }));
+    store.set((prev) => {
+      const key = dmKey(peer);
+      const conv = prev.conversations[key] || [];
+      const localId = `action:group_join_request:${groupId}:${peer}`;
+      const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+      const nextConv =
+        idx >= 0
+          ? [...conv.slice(0, idx), { ...conv[idx], text: `Запрос отклонён: ${peer}`, attachment: null }, ...conv.slice(idx + 1)]
+          : conv;
+      return {
+        ...prev,
+        pendingGroupJoinRequests: prev.pendingGroupJoinRequests.filter((req) => !(req.groupId === groupId && req.from === peer)),
+        ...(idx >= 0 ? { conversations: { ...prev.conversations, [key]: nextConv } } : {}),
+        modal: null,
+        status: `Отклонён запрос: ${peer}`,
+      };
+    });
   }
 
   function joinBoardFromInvite(boardId: string) {
     gateway.send({ type: "board_join", board_id: boardId });
-    store.set((prev) => ({
-      ...prev,
-      pendingBoardInvites: prev.pendingBoardInvites.filter((inv) => inv.boardId !== boardId),
-      modal: null,
-      status: `Вступление в доску: ${boardId}`,
-    }));
+    store.set((prev) => {
+      const inv = prev.pendingBoardInvites.find((x) => x.boardId === boardId);
+      const from = String(inv?.from || "").trim();
+      let nextState: any = {
+        ...prev,
+        pendingBoardInvites: prev.pendingBoardInvites.filter((x) => x.boardId !== boardId),
+        modal: null,
+        status: `Вступление в доску: ${boardId}`,
+      };
+      if (from) {
+        const key = dmKey(from);
+        const conv = prev.conversations[key] || [];
+        const localId = `action:board_invite:${boardId}:${from}`;
+        const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+        if (idx >= 0) {
+          const nextConv = [...conv.slice(0, idx), { ...conv[idx], text: `Приглашение принято: ${boardId}`, attachment: null }, ...conv.slice(idx + 1)];
+          nextState = { ...nextState, conversations: { ...prev.conversations, [key]: nextConv } };
+        }
+      }
+      return nextState;
+    });
   }
 
   function declineBoardInvite(boardId: string) {
-    store.set((prev) => ({
-      ...prev,
-      pendingBoardInvites: prev.pendingBoardInvites.filter((inv) => inv.boardId !== boardId),
-      modal: null,
-      status: `Отклонено приглашение: ${boardId}`,
-    }));
+    store.set((prev) => {
+      const inv = prev.pendingBoardInvites.find((x) => x.boardId === boardId);
+      const from = String(inv?.from || "").trim();
+      let nextState: any = {
+        ...prev,
+        pendingBoardInvites: prev.pendingBoardInvites.filter((x) => x.boardId !== boardId),
+        modal: null,
+        status: `Отклонено приглашение: ${boardId}`,
+      };
+      if (from) {
+        const key = dmKey(from);
+        const conv = prev.conversations[key] || [];
+        const localId = `action:board_invite:${boardId}:${from}`;
+        const idx = conv.findIndex((m) => String(m.localId || "") === localId);
+        if (idx >= 0) {
+          const nextConv = [...conv.slice(0, idx), { ...conv[idx], text: `Приглашение отклонено: ${boardId}`, attachment: null }, ...conv.slice(idx + 1)];
+          nextState = { ...nextState, conversations: { ...prev.conversations, [key]: nextConv } };
+        }
+      }
+      return nextState;
+    });
   }
 
   function nextTransferId() {
@@ -2921,9 +3225,6 @@ export function mountApp(root: HTMLElement) {
         const withMsg = upsertConversation(withOffer, key, inMsg);
         return {
           ...withMsg,
-          modal: withMsg.modal
-            ? withMsg.modal
-            : { kind: "action", payload: { kind: "file_offer", fileId, from: offer.from, name: offer.name, size: offer.size, room: offer.room } },
           status: `Входящий файл: ${offer.name}`,
         };
       });
@@ -3808,6 +4109,7 @@ export function mountApp(root: HTMLElement) {
       const pinKey = dmKey(target.id);
       items.push({ id: "pin_toggle", label: st.pinned.includes(pinKey) ? "Открепить" : "Закрепить" });
       items.push({ id: "copy_id", label: "Скопировать ID" });
+      items.push({ id: "invite_user", label: "Пригласить в чат/доску…", disabled: !canAct });
       const unread = st.friends.find((f) => f.id === target.id)?.unread ?? 0;
       if (unread > 0) items.push({ id: "mark_read", label: "Пометить прочитанным", disabled: !canAct });
       items.push({ id: "avatar_set", label: hasAvatar ? "Сменить аватар…" : "Установить аватар…" });
@@ -3953,6 +4255,21 @@ export function mountApp(root: HTMLElement) {
         selectTarget({ kind: t.kind, id: t.id });
       }
       close();
+      return;
+    }
+
+    if (itemId === "invite_user") {
+      if (t.kind !== "dm") {
+        close();
+        return;
+      }
+      if (st.conn !== "connected" || !st.authed) {
+        store.set({ status: "Нет соединения" });
+        close();
+        return;
+      }
+      closeMobileSidebar();
+      store.set({ modal: { kind: "invite_user", peer: t.id } });
       return;
     }
 
@@ -4981,6 +5298,7 @@ export function mountApp(root: HTMLElement) {
     onMembersAdd: () => membersAddSubmit(),
     onMembersRemove: () => membersRemoveSubmit(),
     onRename: () => renameSubmit(),
+    onInviteUser: () => inviteUserSubmit(),
     onAuthRequest: (peer: string) => requestAuth(peer),
     onAuthAccept: (peer: string) => acceptAuth(peer),
     onAuthDecline: (peer: string) => declineAuth(peer),

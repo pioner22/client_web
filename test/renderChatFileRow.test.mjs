@@ -270,3 +270,58 @@ test("renderChat: file-attachment рендерит preview первым, ико�
   }
 });
 
+test("renderChat: sys action message рендерит кнопки действий", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chatTop = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      chatTop.className = "chat-top";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chatTop, chatHost, chatJump };
+      const state = {
+        selected: { kind: "dm", id: "111-111-111" },
+        conversations: {
+          "dm:111-111-111": [
+            {
+              kind: "sys",
+              from: "111-111-111",
+              text: "Приглашение в чат: Чат",
+              ts: 1700000000,
+              id: null,
+              localId: "action:group_invite:grp-0001:111-111-111",
+              attachment: { kind: "action", payload: { kind: "group_invite", groupId: "grp-0001", from: "111-111-111", name: "Чат" } },
+            },
+          ],
+        },
+        historyHasMore: {},
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [],
+        fileOffersIn: [],
+        groups: [],
+        boards: [],
+        profiles: {},
+      };
+
+      helper.renderChat(layout, state);
+
+      const accept = findFirst(chatHost, (n) => n?.getAttribute?.("data-action") === "group-invite-accept");
+      const decline = findFirst(chatHost, (n) => n?.getAttribute?.("data-action") === "group-invite-decline");
+      assert.ok(accept, "должна быть кнопка group-invite-accept");
+      assert.ok(decline, "должна быть кнопка group-invite-decline");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});

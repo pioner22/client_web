@@ -7,6 +7,7 @@ import { renderMembersRemoveModal } from "./renderMembersRemoveModal";
 import { renderRenameModal } from "./renderRenameModal";
 import { renderConfirmModal } from "./renderConfirmModal";
 import { renderFileViewerModal } from "./renderFileViewerModal";
+import { renderInviteUserModal } from "./renderInviteUserModal";
 import { renderActionModal } from "./renderActionModal";
 import { renderContextMenu } from "./renderContextMenu";
 
@@ -23,6 +24,7 @@ export interface ModalActions {
   onMembersAdd: () => void;
   onMembersRemove: () => void;
   onRename: () => void;
+  onInviteUser: () => void;
   onAuthAccept: (peer: string) => void;
   onAuthDecline: (peer: string) => void;
   onAuthCancel: (peer: string) => void;
@@ -88,6 +90,12 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
   }
   if (kind === "file_viewer") {
     return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, { onClose: actions.onClose });
+  }
+  if (kind === "invite_user") {
+    return renderInviteUserModal(modal.peer, state.selfId ?? null, state.groups || [], state.boards || [], modal.message, {
+      onInvite: actions.onInviteUser,
+      onCancel: actions.onClose,
+    });
   }
   if (kind === "action") {
     return renderActionModal(modal.payload, modal.message, {

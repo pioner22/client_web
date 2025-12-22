@@ -9,6 +9,7 @@ export type ModalKind =
   | "rename"
   | "confirm"
   | "file_viewer"
+  | "invite_user"
   | "action"
   | "context_menu";
 
@@ -136,6 +137,7 @@ export type ModalState =
   | { kind: "rename"; targetKind: "group" | "board"; targetId: string; title: string; currentName: string | null; message?: string }
   | { kind: "confirm"; title: string; message: string; action: ConfirmAction; confirmLabel?: string; cancelLabel?: string; danger?: boolean }
   | { kind: "file_viewer"; url: string; name: string; size: number; mime?: string | null }
+  | { kind: "invite_user"; peer: string; message?: string }
   | { kind: "action"; payload: ActionModalPayload; message?: string }
   | { kind: "context_menu"; payload: ContextMenuPayload };
 
@@ -160,6 +162,10 @@ export type ChatAttachment =
       name: string;
       size: number;
       mime?: string | null;
+    }
+  | {
+      kind: "action";
+      payload: ActionModalPayload;
     };
 
 export interface ChatMessage {

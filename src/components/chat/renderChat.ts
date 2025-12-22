@@ -183,9 +183,65 @@ function renderRichText(text: string): Array<HTMLElement | string> {
 }
 
 function messageLine(state: AppState, m: ChatMessage): HTMLElement {
+  function sysActions(payload: any): HTMLElement | null {
+    if (!payload || typeof payload !== "object") return null;
+    const kind = String(payload.kind || "");
+    const buttons: HTMLElement[] = [];
+
+    const btn = (
+      label: string,
+      attrs: Record<string, string>,
+      cls: string
+    ): HTMLElement => el("button", { class: `btn msg-action-btn ${cls}`.trim(), type: "button", ...attrs }, [label]);
+
+    if (kind === "auth_in") {
+      const peer = String(payload.peer || "").trim();
+      if (peer) {
+        buttons.push(btn("Принять", { "data-action": "auth-accept", "data-peer": peer }, "btn-primary"));
+        buttons.push(btn("Отклонить", { "data-action": "auth-decline", "data-peer": peer }, "btn-danger"));
+      }
+    } else if (kind === "auth_out") {
+      const peer = String(payload.peer || "").trim();
+      if (peer) {
+        buttons.push(btn("Отменить", { "data-action": "auth-cancel", "data-peer": peer }, "btn-danger"));
+      }
+    } else if (kind === "group_invite") {
+      const groupId = String(payload.groupId || payload.group_id || "").trim();
+      if (groupId) {
+        buttons.push(btn("Принять", { "data-action": "group-invite-accept", "data-group-id": groupId }, "btn-primary"));
+        buttons.push(btn("Отклонить", { "data-action": "group-invite-decline", "data-group-id": groupId }, "btn-danger"));
+      }
+    } else if (kind === "group_join_request") {
+      const groupId = String(payload.groupId || payload.group_id || "").trim();
+      const peer = String(payload.from || payload.peer || "").trim();
+      if (groupId && peer) {
+        buttons.push(
+          btn("Принять", { "data-action": "group-join-accept", "data-group-id": groupId, "data-peer": peer }, "btn-primary")
+        );
+        buttons.push(
+          btn("Отклонить", { "data-action": "group-join-decline", "data-group-id": groupId, "data-peer": peer }, "btn-danger")
+        );
+      }
+    } else if (kind === "board_invite") {
+      const boardId = String(payload.boardId || payload.board_id || "").trim();
+      if (boardId) {
+        buttons.push(btn("Принять", { "data-action": "board-invite-accept", "data-board-id": boardId }, "btn-primary"));
+        buttons.push(btn("Отклонить", { "data-action": "board-invite-decline", "data-board-id": boardId }, "btn-danger"));
+      }
+    }
+
+    if (!buttons.length) return null;
+    return el("div", { class: "msg-actions" }, buttons);
+  }
+
   if (m.kind === "sys") {
+    const bodyChildren: HTMLElement[] = [el("div", { class: "msg-text" }, renderRichText(m.text))];
+    if (m.attachment?.kind === "action") {
+      const actions = sysActions(m.attachment.payload);
+      if (actions) bodyChildren.push(actions);
+    }
     return el("div", { class: "msg msg-sys" }, [
-      el("div", { class: "msg-body" }, [el("div", { class: "msg-text" }, renderRichText(m.text))]),
+      el("div", { class: "msg-body" }, bodyChildren),
     ]);
   }
   const fromId = String(m.from || "").trim();
@@ -263,7 +319,8 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
       el("div", { class: "file-actions" }, actions),
     ];
 
-    if (isImageFile(name, att.mime)) {
+    const isImage = isImageFile(name, att.mime);
+    if (isImage) {
       const attrs: Record<string, string | undefined> = {
         class: url ? "chat-file-preview" : "chat-file-preview chat-file-preview-empty",
         type: "button",
@@ -284,7 +341,9 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
     }
   }
 
-    bodyChildren.push(el("div", { class: "file-row file-row-chat" }, rowChildren));
+    const hasProgress = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
+    const fileRowClass = isImage ? `file-row file-row-chat file-row-image${hasProgress ? " file-row-progress" : ""}` : "file-row file-row-chat";
+    bodyChildren.push(el("div", { class: fileRowClass }, rowChildren));
     const caption = String(m.text || "").trim();
     if (caption && !caption.startsWith("[file]")) {
       bodyChildren.push(el("div", { class: "msg-text msg-caption" }, renderRichText(caption)));
