@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.71",
+    date: "2025-12-22",
+    improved: [
+      "Автовход: в шапке показываем «Входим…» (можно открыть вход вручную), чтобы меньше было «дёрганий» при старте",
+      "Сессии: при успешном входе обновляем срок жизни токена в cookie/localStorage (даже если сервер не присылает session повторно)",
+      "Composer: эмодзи‑кнопка теперь корректно disabled, а поповер закрывается при смене чата/страницы",
+    ],
+    added: ["Security regression: тесты на формат/хранилище session token и cookie‑параметры (SameSite=Strict, Secure на https)"],
+  },
+  {
     version: "0.1.70",
     date: "2025-12-22",
     added: ["Composer: кнопка эмодзи с быстрым пикером и списком «недавних» (локально на устройстве)"],

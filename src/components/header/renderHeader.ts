@@ -63,14 +63,29 @@ export function renderHeader(layout: Layout, state: AppState) {
     el("span", { class: "hdr-label" }, ["Ваш ID: "]),
     el("span", { class: "hdr-id" }, [headerId]),
     ...(state.conn === "connected" && !state.authed
-      ? [
-          " ",
-          el(
-            "button",
-            { class: "hk-btn hdr-auth", type: "button", "data-action": "auth-open", title: "Войти", "aria-label": "Войти" },
-            ["Войти"]
-          ),
-        ]
+      ? state.authMode === "auto"
+        ? [
+            " ",
+            el(
+              "button",
+              {
+                class: "hk-btn hdr-auth hdr-authing",
+                type: "button",
+                "data-action": "auth-open",
+                title: "Автовход… (нажмите, чтобы войти вручную)",
+                "aria-label": "Автовход…",
+              },
+              ["Входим…"]
+            ),
+          ]
+        : [
+            " ",
+            el(
+              "button",
+              { class: "hk-btn hdr-auth", type: "button", "data-action": "auth-open", title: "Войти", "aria-label": "Войти" },
+              ["Войти"]
+            ),
+          ]
       : state.conn === "connected" && state.authed
         ? [
             " ",

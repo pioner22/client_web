@@ -1278,6 +1278,7 @@ export function mountApp(root: HTMLElement) {
     const prevPage = store.get().page;
     if (prevPage === "group_create" && page !== "group_create") resetCreateMembers("group_create");
     if (prevPage === "board_create" && page !== "board_create") resetCreateMembers("board_create");
+    if (page !== "main") closeEmojiPopover();
     closeMobileSidebar();
     store.set((prev) => ({
       ...prev,
@@ -1406,6 +1407,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function selectTarget(t: TargetRef) {
+    closeEmojiPopover();
     const composerHadFocus = document.activeElement === layout.input;
     closeMobileSidebar();
     const prev = store.get();

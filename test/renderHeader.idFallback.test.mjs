@@ -147,6 +147,7 @@ test("renderHeader: показывает remembered ID, если selfId отсу
         conn: "connected",
         authed: false,
         selfId: null,
+        authMode: "login",
         authRememberedId: "854-432-319",
         clientVersion: "0.1.54-test",
         serverVersion: "0.0.0",
@@ -162,3 +163,32 @@ test("renderHeader: показывает remembered ID, если selfId отсу
   }
 });
 
+test("renderHeader: в режиме авто-входа показывает «Входим…» (и даёт открыть вход вручную)", async () => {
+  const helper = await loadRenderHeader();
+  try {
+    withDomStubs(() => {
+      const layout = {
+        headerLeft: globalThis.document.createElement("div"),
+        headerRight: globalThis.document.createElement("div"),
+        hotkeys: globalThis.document.createElement("div"),
+      };
+      helper.renderHeader(layout, {
+        page: "main",
+        conn: "connected",
+        authed: false,
+        selfId: null,
+        authMode: "auto",
+        authRememberedId: "854-432-319",
+        clientVersion: "0.1.70-test",
+        serverVersion: "0.0.0",
+        status: "Автовход…",
+        selected: null,
+      });
+      const btn = findByClass(layout.headerLeft, "hdr-auth");
+      assert.ok(btn, "hdr-auth button not found");
+      assert.ok(getText(btn).includes("Входим"), "hdr-auth text should indicate auto-login");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});

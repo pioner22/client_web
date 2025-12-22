@@ -23,6 +23,7 @@ import {
   clearSessionAutoAuthBlock,
   clearStoredSessionToken,
   getStoredAuthId,
+  getStoredSessionToken,
   storeAuthId,
   storeSessionToken,
 } from "../helpers/auth/session";
@@ -135,6 +136,11 @@ export function handleServerMessage(
     const sess = typeof msg?.session === "string" ? msg.session : null;
     if (selfId) storeAuthId(selfId);
     if (sess) storeSessionToken(sess);
+    else {
+      // Refresh cookie/localStorage TTL for an existing token (server doesn't resend it on session auth).
+      const existing = getStoredSessionToken();
+      if (existing) storeSessionToken(existing);
+    }
     clearSessionAutoAuthBlock();
     patch({
       authed: true,
@@ -182,6 +188,10 @@ export function handleServerMessage(
     const sess = typeof msg?.session === "string" ? msg.session : null;
     if (selfId) storeAuthId(selfId);
     if (sess) storeSessionToken(sess);
+    else {
+      const existing = getStoredSessionToken();
+      if (existing) storeSessionToken(existing);
+    }
     clearSessionAutoAuthBlock();
     patch({
       authed: true,

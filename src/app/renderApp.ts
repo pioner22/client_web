@@ -124,6 +124,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const composerText = sendText.trim();
   layout.sendBtn.disabled = !canSendNow || !composerText || tooLong;
   layout.attachBtn.disabled = !canSendNow || !sel || isBoardReadOnly || Boolean(editing);
+  layout.emojiBtn.disabled = !canSendNow || !sel || isBoardReadOnly;
   layout.inputWrap.classList.toggle("composer-editing", Boolean(editing));
   layout.sendBtn.setAttribute("aria-label", editing ? "Сохранить" : "Отправить");
 
