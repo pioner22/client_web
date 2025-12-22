@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#0b0f14" />
-    <title>Yagodka — iOS Input Assistant Repro</title>
+    <title>Yagodka · iOS Input Assistant Repro</title>
     <style>
       :root {
         color-scheme: dark;
       }
+      html,
       body {
         margin: 0;
         background: #0b0f14;
@@ -23,158 +23,210 @@
           Arial,
           sans-serif;
       }
-      main {
-        max-width: 720px;
-        margin: 0 auto;
-        padding: 16px;
+      .wrap {
+        min-height: 100dvh;
+        padding: 18px;
         display: grid;
         gap: 14px;
+        align-content: start;
       }
       h1 {
+        margin: 0;
         font-size: 16px;
-        margin: 0;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
       }
-      p {
-        margin: 0;
-        opacity: 0.8;
-        font-size: 14px;
+      .sub {
+        opacity: 0.75;
+        font-size: 13px;
       }
-      .card {
-        border: 1px solid rgba(255, 255, 255, 0.16);
+      .panel {
+        border: 1px solid rgba(236, 72, 153, 0.35);
         border-radius: 12px;
-        padding: 12px;
         background: rgba(255, 255, 255, 0.04);
+        padding: 12px;
         display: grid;
         gap: 10px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
       }
       label {
         font-size: 13px;
         opacity: 0.85;
       }
-      textarea,
-      input,
-      [contenteditable="true"] {
-        width: 100%;
-        box-sizing: border-box;
+      select,
+      button {
+        height: 40px;
+        padding: 0 12px;
+        border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 12px;
         background: rgba(255, 255, 255, 0.06);
-        color: #e6edf3;
-        padding: 12px 12px;
+        color: inherit;
         font: inherit;
-        font-size: 16px;
-        line-height: 1.35;
+      }
+      button {
+        cursor: pointer;
+      }
+      button.primary {
+        border-color: rgba(236, 72, 153, 0.55);
+        box-shadow: 0 0 0 1px rgba(236, 72, 153, 0.22) inset;
+      }
+      .field {
+        width: 100%;
+        min-height: 44px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.06);
+        color: inherit;
+        font: inherit;
         outline: none;
       }
-      textarea {
-        min-height: 44px;
+      textarea.field {
         resize: none;
+        min-height: 88px;
       }
-      textarea:focus,
-      input:focus,
-      [contenteditable="true"]:focus {
-        border-color: rgba(236, 72, 153, 0.75);
-        box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.22);
+      .field:focus-visible {
+        border-color: rgba(34, 211, 238, 0.7);
+        box-shadow:
+          0 0 0 2px rgba(34, 211, 238, 0.22),
+          0 0 18px rgba(34, 211, 238, 0.12);
+      }
+      .hint {
+        font-size: 13px;
+        opacity: 0.72;
       }
       code {
-        font-family:
-          ui-monospace,
-          SFMono-Regular,
-          Menlo,
-          Monaco,
-          Consolas,
-          "Liberation Mono",
-          "Courier New",
-          monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         font-size: 12px;
-        opacity: 0.9;
       }
       .attrs {
         display: grid;
-        gap: 2px;
-        opacity: 0.78;
+        gap: 6px;
+        opacity: 0.9;
       }
     </style>
   </head>
   <body>
-    <main>
-      <h1>Yagodka — iOS Input Assistant Repro</h1>
-      <p>
-        Откройте страницу в Safari iOS и в PWA (standalone). По очереди сфокусируйтесь на полях ниже и проверьте, появляется ли системная панель
-        <code>Undo/Redo/✓</code> над клавиатурой.
-      </p>
+    <div class="wrap">
+      <h1>iOS Input Assistant · Repro</h1>
+      <div class="sub">
+        Откройте в iOS (Safari / PWA). Тап по полю — смотрите панель над клавиатурой (Undo/Redo/✓).
+      </div>
 
-      <section class="card">
-        <label for="ta-off">Textarea (autocorrect=off, spellcheck=false)</label>
-        <textarea
-          id="ta-off"
-          rows="1"
-          placeholder="Сообщение…"
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-          inputmode="text"
-          enterkeyhint="send"
-        ></textarea>
-        <div class="attrs">
-          <code>autocomplete="off"</code>
-          <code>autocorrect="off"</code>
-          <code>autocapitalize="off"</code>
-          <code>spellcheck="false"</code>
+      <div class="panel">
+        <div class="row">
+          <label for="kind">Тип поля:</label>
+          <select id="kind">
+            <option value="textarea">textarea</option>
+            <option value="input">input type="text"</option>
+            <option value="editable">div contenteditable</option>
+          </select>
+          <button class="primary" id="preset-strict" type="button">Strict (off)</button>
+          <button id="preset-ios" type="button">iOS-friendly (on)</button>
         </div>
-      </section>
-
-      <section class="card">
-        <label for="ta-on">Textarea (workaround: autocorrect=on, spellcheck=true)</label>
-        <textarea
-          id="ta-on"
-          rows="1"
-          placeholder="Сообщение…"
-          autocomplete="off"
-          autocorrect="on"
-          autocapitalize="off"
-          spellcheck="true"
-          inputmode="text"
-          enterkeyhint="send"
-        ></textarea>
-        <div class="attrs">
-          <code>autocorrect="on"</code>
-          <code>spellcheck="true"</code>
+        <div id="field-host"></div>
+        <div class="attrs" id="attrs"></div>
+        <div class="hint">
+          Пресеты меняют: <code>autocorrect</code>, <code>spellcheck</code>, <code>autocapitalize</code>, <code>autocomplete</code>,
+          <code>inputmode</code>, <code>enterkeyhint</code>.
         </div>
-      </section>
+      </div>
+    </div>
 
-      <section class="card">
-        <label for="in-off">Input type=text (autocorrect=off, spellcheck=false)</label>
-        <input
-          id="in-off"
-          type="text"
-          placeholder="Поиск…"
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-          inputmode="text"
-          enterkeyhint="done"
-        />
-      </section>
+    <script>
+      const kind = document.getElementById("kind");
+      const host = document.getElementById("field-host");
+      const attrs = document.getElementById("attrs");
+      const btnStrict = document.getElementById("preset-strict");
+      const btnIos = document.getElementById("preset-ios");
 
-      <section class="card">
-        <label for="ce">Contenteditable (plain)</label>
-        <div
-          id="ce"
-          contenteditable="true"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-          role="textbox"
-          aria-multiline="true"
-        >
-          Наберите текст…
-        </div>
-      </section>
-    </main>
+      let el = null;
+
+      function mkField(type) {
+        host.replaceChildren();
+        let node;
+        if (type === "input") {
+          node = document.createElement("input");
+          node.type = "text";
+        } else if (type === "editable") {
+          node = document.createElement("div");
+          node.contentEditable = "true";
+          node.setAttribute("role", "textbox");
+        } else {
+          node = document.createElement("textarea");
+          node.rows = 3;
+        }
+        node.className = "field";
+        node.placeholder = "Сообщение…";
+        node.textContent = type === "editable" ? "Сообщение…" : "";
+        host.appendChild(node);
+        el = node;
+        renderAttrs();
+      }
+
+      function setStrict() {
+        if (!el) return;
+        el.setAttribute("autocomplete", "off");
+        el.setAttribute("autocorrect", "off");
+        el.setAttribute("autocapitalize", "off");
+        el.setAttribute("spellcheck", "false");
+        el.setAttribute("inputmode", "text");
+        el.setAttribute("enterkeyhint", "send");
+        try {
+          el.spellcheck = false;
+        } catch {}
+        renderAttrs();
+      }
+
+      function setIos() {
+        if (!el) return;
+        el.setAttribute("autocomplete", "off");
+        el.setAttribute("autocorrect", "on");
+        el.setAttribute("autocapitalize", "sentences");
+        el.setAttribute("spellcheck", "true");
+        el.setAttribute("inputmode", "text");
+        el.setAttribute("enterkeyhint", "send");
+        try {
+          el.spellcheck = true;
+        } catch {}
+        renderAttrs();
+      }
+
+      function renderAttrs() {
+        if (!el) return;
+        const a = (name) => String(el.getAttribute(name));
+        attrs.replaceChildren(
+          Object.assign(document.createElement("div"), {
+            innerHTML:
+              "<code>" +
+              [
+                "autocomplete=" + a("autocomplete"),
+                "autocorrect=" + a("autocorrect"),
+                "autocapitalize=" + a("autocapitalize"),
+                "spellcheck=" + a("spellcheck"),
+                "inputmode=" + a("inputmode"),
+                "enterkeyhint=" + a("enterkeyhint"),
+              ].join("</code><br/><code>") +
+              "</code>",
+          })
+        );
+      }
+
+      kind.addEventListener("change", () => {
+        mkField(kind.value);
+        setStrict();
+      });
+      btnStrict.addEventListener("click", () => setStrict());
+      btnIos.addEventListener("click", () => setIos());
+
+      mkField(kind.value);
+      setStrict();
+    </script>
   </body>
 </html>
 

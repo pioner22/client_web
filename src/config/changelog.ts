@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.83",
+    date: "2025-12-22",
+    improved: ["iOS PWA: для композера включаем autocorrect/spellcheck/autocapitalize до focus — панель Undo/Redo/✓ появляется заметно реже"],
+    added: [
+      "Repro: public/repro/ios-input-assistant.html — минимальная страница для сравнения strict vs iOS-friendly режимов",
+      "Regress tests: iosInputAssistantWorkaround — проверка, что workaround включает нужные атрибуты в iOS standalone",
+    ],
+    notes: ["Полностью отключить системную панель в WebKit нельзя; цель — снизить частоту появления и вернуть нормальную клавиатуру с подсказками."],
+  },
+  {
     version: "0.1.82",
     date: "2025-12-22",
     added: ["Web: добавлена поддержка React (Vite plugin + TSX) для постепенного внедрения компонентного UI"],

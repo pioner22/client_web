@@ -316,8 +316,8 @@ function guessMimeTypeByName(name: string): string {
 
 export function mountApp(root: HTMLElement) {
   const store = new Store<AppState>(createInitialState());
-  const layout = createLayout(root);
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
+  const layout = createLayout(root, { iosStandalone });
 
   function maybeApplyIosInputAssistant(target: EventTarget | null) {
     if (!iosStandalone) return;

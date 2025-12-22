@@ -1,7 +1,8 @@
 import { el } from "../../helpers/dom/el";
 import type { Layout } from "./types";
 
-export function createLayout(root: HTMLElement): Layout {
+export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean }): Layout {
+  const iosStandalone = Boolean(opts?.iosStandalone);
   const headerLeft = el("div", { class: "hdr-left" });
   const headerRight = el("div", { class: "hdr-right" });
   const hotkeys = el("div", { class: "hotkeys" });
@@ -23,10 +24,13 @@ export function createLayout(root: HTMLElement): Layout {
     rows: "1",
     placeholder: "Сообщение",
     "data-ios-assistant": "composer",
-    spellcheck: "false",
+    // iOS PWA (standalone) иногда показывает системную панель Undo/Redo/✓ вместо подсказок.
+    // Для композера включаем “обычный” режим клавиатуры, чтобы снизить шанс появления панели.
+    // На остальных платформах оставляем строгий режим (без автокоррекции/спеллчека) по умолчанию.
+    spellcheck: iosStandalone ? "true" : "false",
     autocomplete: "off",
-    autocorrect: "off",
-    autocapitalize: "off",
+    autocorrect: iosStandalone ? "on" : "off",
+    autocapitalize: iosStandalone ? "sentences" : "off",
     inputmode: "text",
     enterkeyhint: "send",
   }) as HTMLTextAreaElement;
