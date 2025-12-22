@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.96",
+    date: "2025-12-22",
+    added: ["iOS (Safari): ненавязчивая подсказка установки PWA (Поделиться → «На экран Домой»)"],
+    improved: ["Info: добавили раздел «Установка на телефон» (iOS/Android)"],
+  },
+  {
     version: "0.1.95",
     date: "2025-12-22",
     improved: [

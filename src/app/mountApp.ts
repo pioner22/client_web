@@ -982,6 +982,30 @@ export function mountApp(root: HTMLElement) {
     // ignore
   }
 
+  // iOS Safari/PWA: нет beforeinstallprompt, поэтому даём ненавязчивую подсказку,
+  // как установить приложение через «Поделиться → На экран "Домой"».
+  function maybeOfferIosInstallToast() {
+    if (!isIOS()) return;
+    const isStandalone = isStandaloneDisplayMode();
+    if (!shouldOfferPwaInstall({ storage: localStorage, now: Date.now(), isStandalone })) return;
+    showToast("iPhone/iPad: установить → Поделиться → «На экран Домой»", {
+      kind: "info",
+      timeoutMs: 14000,
+      actions: [
+        { id: "pwa-ios-help", label: "Инструкция", primary: true, onClick: () => setPage("help") },
+        { id: "pwa-ios-later", label: "Позже", onClick: () => markPwaInstallDismissed(localStorage, Date.now()) },
+      ],
+    });
+  }
+
+  // Показываем после первого рендера, чтобы не конфликтовать со стартом/автовходом.
+  if (isIOS() && !isStandaloneDisplayMode()) {
+    window.setTimeout(() => {
+      if (pwaInstallOffered) return;
+      maybeOfferIosInstallToast();
+    }, 1800);
+  }
+
   function bumpAvatars(status: string) {
     store.set((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1, status }));
   }

@@ -87,6 +87,15 @@ export function createHelpPage(): HelpPage {
     el("div", { class: "info-sub" }, ["Пример: 123456789 → автоматически станет 123-456-789; @name — поиск по логину."]),
   ]);
 
+  const install = el("div", { class: "info-section", id: "install" }, [
+    el("div", { class: "info-h" }, ["Установка на телефон"]),
+    el("ul", { class: "info-list" }, [
+      el("li", {}, ["Android/Chrome: при первом заходе появится «Установить» (или меню браузера → «Установить приложение»)."]),
+      el("li", {}, ["iPhone/iPad (Safari): Поделиться → «На экран Домой» (Add to Home Screen)."]),
+    ]),
+    el("div", { class: "info-sub" }, ["После установки интерфейс работает полноэкранно (учитываем вырез/чёлку и safe‑area)."]),
+  ]);
+
   const hkTitle = el("div", { class: "info-h" }, ["Горячие клавиши"]);
 
   const changelogTitle = el("div", { class: "info-h" }, ["История изменений"]);
@@ -152,7 +161,7 @@ export function createHelpPage(): HelpPage {
 
   const hint = el("div", { class: "msg msg-sys" }, ["Esc — назад"]);
 
-  const root = el("div", { class: "page info-page" }, [title, metaRow, quickStart, hkTitle, rows, changelogSection, hint]);
+  const root = el("div", { class: "page info-page" }, [title, metaRow, quickStart, install, hkTitle, rows, changelogSection, hint]);
 
   renderReact(fwBadgeHost, createElement(FrameworkBadge, { label: "React" }));
 
