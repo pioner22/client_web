@@ -6,6 +6,14 @@ export interface ContextMenuActions {
   onClose: () => void;
 }
 
+function shouldRenderAsSheet() {
+  try {
+    return Boolean(window.matchMedia?.("(pointer: coarse)")?.matches || window.matchMedia?.("(hover: none)")?.matches);
+  } catch {
+    return false;
+  }
+}
+
 function focusFirstEnabled(root: HTMLElement) {
   const items = Array.from(root.querySelectorAll<HTMLButtonElement>("button.ctx-item"));
   const first = items.find((b) => !b.disabled);
@@ -47,9 +55,14 @@ function clampIntoViewport(root: HTMLElement) {
 }
 
 export function renderContextMenu(payload: ContextMenuPayload, actions: ContextMenuActions): HTMLElement {
-  const root = el("div", { class: "ctx-menu", role: "menu", tabindex: "-1" });
-  root.style.left = `${payload.x}px`;
-  root.style.top = `${payload.y}px`;
+  const sheet = shouldRenderAsSheet();
+  const root = el("div", { class: sheet ? "ctx-menu ctx-menu-sheet" : "ctx-menu", role: "menu", tabindex: "-1" });
+  if (!sheet) {
+    root.style.left = `${payload.x}px`;
+    root.style.top = `${payload.y}px`;
+  }
+
+  if (sheet) root.append(el("div", { class: "ctx-handle", "aria-hidden": "true" }));
 
   const title = el("div", { class: "ctx-title" }, [payload.title]);
 
@@ -86,7 +99,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
   });
 
   queueMicrotask(() => {
-    clampIntoViewport(root);
+    if (!sheet) clampIntoViewport(root);
     focusFirstEnabled(root);
   });
 

@@ -349,10 +349,12 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   if (state.modal?.kind === "context_menu" && modalNode) {
     layout.overlay.classList.remove("hidden");
     layout.overlay.classList.add("overlay-context");
+    layout.overlay.classList.toggle("overlay-context-sheet", modalNode.classList.contains("ctx-menu-sheet"));
     layout.overlay.replaceChildren(modalNode);
   } else {
     layout.overlay.classList.add("hidden");
     layout.overlay.classList.remove("overlay-context");
+    layout.overlay.classList.remove("overlay-context-sheet");
     layout.overlay.replaceChildren();
   }
 

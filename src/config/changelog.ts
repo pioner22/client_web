@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.102",
+    date: "2025-12-22",
+    improved: ["Mobile: контекстные меню на touch теперь открываются как bottom‑sheet (как в Telegram)"],
+    added: ["Регресс‑тест: `contextMenuSheet.test.mjs`"],
+  },
+  {
     version: "0.1.101",
     date: "2025-12-22",
     fixed: ["Mobile + скины: mobile‑настройки теперь не перебиваются скином (используем `:root[data-skin]` и более специфичные селекторы)"],
