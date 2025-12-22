@@ -34,11 +34,13 @@ button {
   height: 100vh;
   height: 100svh;
   height: 100dvh;
+  height: var(--app-vh);
   width: 100%;
   /* Avoid legacy 100vh quirks on iOS; keep fallbacks for older engines. */
   min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
+  min-height: var(--app-vh);
   padding: var(--app-outer-pad);
   overflow: hidden;
   isolation: isolate;

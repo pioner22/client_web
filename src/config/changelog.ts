@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.94",
+    date: "2025-12-22",
+    improved: [
+      "iOS/PWA: добавили JS‑переменную высоты `--app-vh` (через visualViewport/innerHeight) и подключили её в CSS (#app height/min-height) — меньше шансов, что composer/скролл «уедут» при адрес-баре/клавиатуре",
+    ],
+    added: ["Регресс‑тесты: `appViewportVar.test.mjs` проверяет CSS и установку `--app-vh`"],
+  },
+  {
     version: "0.1.93",
     date: "2025-12-22",
     fixed: ["iOS/PWA: убрали min-height:-webkit-fill-available из базового #app (оставили только в fallback без 100dvh) — меньше шансов на «прыжки» и поломанную прокрутку"],
