@@ -5,7 +5,8 @@
     position: fixed;
     left: 0;
     right: 0;
-    top: 0;
+    /* iOS: при открытии клавиатуры visualViewport может иметь offsetTop -> фиксируем "прыжки". */
+    top: var(--app-vv-top, 0px);
     padding: 0;
   }
 

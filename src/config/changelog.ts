@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.108",
+    date: "2025-12-23",
+    fixed: ["iPhone/PWA: учли `visualViewport.offsetTop` — убрали чёрную полосу снизу и «улёт» строки ввода при клавиатуре"],
+    added: ["Regress: viewport учитывает `visualViewport.offsetTop`", "Regress: mobile fullscreen использует `top: var(--app-vv-top, 0px)`"],
+  },
+  {
     version: "0.1.107",
     date: "2025-12-23",
     improved: ["Mobile: список диалогов ближе к Telegram (сепараторы, time/unread в колонку, крупнее аватар)"],

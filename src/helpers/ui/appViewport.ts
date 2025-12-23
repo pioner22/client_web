@@ -2,7 +2,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let rafId: number | null = null;
   let lastHeight = 0;
 
-  const read = (): { height: number; keyboard: boolean } => {
+  const read = (): { height: number; keyboard: boolean; vvTop: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 48;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
@@ -22,6 +22,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     }
     const vv = window.visualViewport;
     const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
+    const vvTop = vv && typeof (vv as any).offsetTop === "number" ? Math.round(Number((vv as any).offsetTop) || 0) : 0;
     const diff = base && vvHeight ? base - vvHeight : 0;
     let activeEditable = false;
     try {
@@ -36,18 +37,24 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     );
     const resolved = keyboard ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
-    return { height: height > 0 ? height : 0, keyboard };
+    return { height: height > 0 ? height : 0, keyboard, vvTop };
   };
 
   const apply = () => {
     rafId = null;
-    const { height, keyboard } = read();
+    const { height, keyboard, vvTop } = read();
     if (!height) return;
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
     // and creates an ugly gap above the keyboard. Override it to 0 while keyboard is open.
     if (keyboard) root.style.setProperty("--safe-bottom", "0px");
     else root.style.removeProperty("--safe-bottom");
+
+    // iOS Safari/PWA: when the keyboard opens WebKit can scroll the *visual* viewport (offsetTop > 0).
+    // If we only shrink height to visualViewport.height, the app ends above the visible bottom and leaves a
+    // "black strip" + composer jumps upward. Anchor the fixed app to visualViewport.offsetTop.
+    if (Math.abs(vvTop) >= 1) root.style.setProperty("--app-vv-top", `${vvTop}px`);
+    else root.style.removeProperty("--app-vv-top");
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;
@@ -77,5 +84,6 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     vv?.removeEventListener("scroll", onResize);
     root.style.removeProperty("--app-vh");
     root.style.removeProperty("--safe-bottom");
+    root.style.removeProperty("--app-vv-top");
   };
 }

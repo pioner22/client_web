@@ -331,3 +331,69 @@ test("viewport var: при фокусе на input/textarea переключае
     else globalThis.document = prev.document;
   }
 });
+
+test("viewport var: учитывает visualViewport.offsetTop, чтобы не было чёрной полосы/прыжка композера", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    const vvListeners = new Map();
+    globalThis.window = {
+      innerHeight: 844,
+      visualViewport: {
+        height: 520.2,
+        offsetTop: 120.1,
+        addEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          list.push(cb);
+          vvListeners.set(type, list);
+        },
+        removeEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          vvListeners.set(
+            type,
+            list.filter((x) => x !== cb)
+          );
+        },
+      },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    globalThis.document = undefined;
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "520px");
+    assert.equal(style._props.get("--safe-bottom"), "0px");
+    assert.equal(style._props.get("--app-vv-top"), "120px");
+
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
+    assert.equal(style._props.has("--safe-bottom"), false);
+    assert.equal(style._props.has("--app-vv-top"), false);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});
