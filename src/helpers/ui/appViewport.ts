@@ -9,7 +9,11 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
-    let base = Math.max(inner, client);
+    // "Layout viewport" height (used for vvTop/vvBottom math). Keep this independent from any screen.height hacks.
+    const layout = Math.max(inner, client);
+
+    // "Full app" height when keyboard is closed. In iOS PWA (standalone) innerHeight/clientHeight may miss bottom safe-area.
+    let base = layout;
     // iOS PWA: sometimes innerHeight/clientHeight are missing the bottom safe-area, leaving a visible "black strip".
     // Use screen.height only when it's very close to base (so we don't break Safari with browser chrome).
     try {
@@ -34,8 +38,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // For our "fullscreen fixed app" we only care about viewport shifts *down*.
     // Clamp to a sane range to avoid weird negative values on iOS/WebKit edge cases.
     let vvTop = Math.max(0, vvTopRaw);
-    if (base && vvHeight) vvTop = Math.max(0, Math.min(vvTop, Math.max(0, base - vvHeight)));
-    const coveredBottom = base && vvHeight ? Math.max(0, base - (vvHeight + vvTop)) : 0;
+    if (layout && vvHeight) vvTop = Math.max(0, Math.min(vvTop, Math.max(0, layout - vvHeight)));
+    // Bottom area covered by keyboard (or other UI) in the *layout viewport* coordinate space.
+    const coveredBottom = layout && vvHeight ? Math.max(0, layout - (vvHeight + vvTop)) : 0;
     let activeEditable = false;
     try {
       const ae = typeof document !== "undefined" ? (document as any).activeElement : null;
@@ -45,7 +50,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       activeEditable = false;
     }
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
-    const keyboard = Boolean(vvHeight && base && coveredBottom >= keyboardThreshold);
+    const keyboard = Boolean(vvHeight && layout && coveredBottom >= keyboardThreshold);
     const resolved = keyboard ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
     return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom) };

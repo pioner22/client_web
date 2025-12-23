@@ -7,9 +7,8 @@
     right: 0;
     /* iOS: при открытии клавиатуры visualViewport может иметь offsetTop -> фиксируем "прыжки". */
     top: var(--app-vv-top, 0px);
-    /* iOS: если клавиатура открыта, уводим низ приложения до визуального viewport (above keyboard). */
-    bottom: var(--app-vv-bottom, 0px);
-    height: auto;
+    /* На iOS PWA иногда layout viewport “короче” safe-area: держим высоту через JS var(--app-vh). */
+    height: var(--app-vh);
     min-height: 0;
     padding: 0;
   }
@@ -55,7 +54,7 @@
   }
 
   .nav-overlay {
-    position: fixed;
+    position: absolute;
     inset: 0;
     background: var(--overlay-bg);
     z-index: 40;
@@ -64,7 +63,7 @@
 
   .sidebar {
     display: block;
-    position: fixed;
+    position: absolute;
     top: 0;
     bottom: 0;
     left: 0;

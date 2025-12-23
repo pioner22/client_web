@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.113",
+    date: "2025-12-23",
+    fixed: [
+      "iPhone/PWA: #app на мобилке снова держит высоту через `--app-vh` (вместо bottom var) — меньше шансов на чёрную полосу снизу и «улёт» строки ввода",
+    ],
+    improved: [
+      "Mobile: `nav-overlay` и `sidebar` теперь позиционируются относительно #app (absolute), поэтому при iOS visualViewport сдвигах меньше «разъезжается» интерфейс",
+      "Viewport: математика keyboard/offsetTop/bottom теперь считается от layout viewport, а `screen.height` используется только для высоты без клавиатуры (меньше ложных срабатываний)",
+    ],
+  },
+  {
     version: "0.1.112",
     date: "2025-12-23",
     fixed: ["Контакт: убрали лишнюю кнопку «Назад» внизу (используем back в шапке)"],
