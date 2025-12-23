@@ -2,6 +2,7 @@
   "skins": [
     { "id": "default", "title": "По умолчанию" },
     { "id": "telegram-web", "title": "Ягодка (светлая)" },
+    { "id": "telegram-exact", "title": "Telegram (точный)" },
     { "id": "cyberberry-crt", "title": "Cyberberry CRT" },
     { "id": "showcase", "title": "Showcase" },
     { "id": "amber", "title": "Amber" },
