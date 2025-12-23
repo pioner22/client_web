@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.109",
+    date: "2025-12-23",
+    improved: [
+      "Mobile: композер ближе к Telegram — «бар» стал цельнее (лёгкий blur/прозрачность), текст плотнее и чуть жирнее",
+      "iPhone/PWA: стабильнее реагируем на клавиатуру (учитываем реальную «закрытую снизу» часть viewport, слушаем scroll/focus)",
+    ],
+    added: ["Regress: `mobileComposerPolishCss.test.mjs`"],
+  },
+  {
     version: "0.1.108",
     date: "2025-12-23",
     fixed: ["iPhone/PWA: учли `visualViewport.offsetTop` — убрали чёрную полосу снизу и «улёт» строки ввода при клавиатуре"],
