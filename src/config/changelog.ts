@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.120",
+    date: "2025-12-23",
+    fixed: [
+      "Чат: показываем имя отправителя по профилю/handle (особенно в группах), можно открыть профиль кликом по имени/аватару",
+      "Контекст‑меню сообщений: добавлен пункт «Профиль отправителя»",
+      "Android/PWA: клавиатура надёжнее срабатывает по visualViewport (меньше «уезжает» поле ввода)",
+    ],
+  },
+  {
     version: "0.1.119",
     date: "2025-12-23",
     fixed: [

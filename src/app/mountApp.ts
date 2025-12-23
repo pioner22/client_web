@@ -556,6 +556,16 @@ export function mountApp(root: HTMLElement) {
       }
     }
 
+    const userBtn = target?.closest("[data-action='user-open']") as HTMLElement | null;
+    if (userBtn) {
+      const uid = String(userBtn.getAttribute("data-user-id") || "").trim();
+      if (uid) {
+        e.preventDefault();
+        openUserPage(uid);
+      }
+      return;
+    }
+
     const historyMoreBtn = target?.closest("button[data-action='chat-history-more']") as HTMLButtonElement | null;
     if (historyMoreBtn) {
       e.preventDefault();
@@ -4476,6 +4486,10 @@ export function mountApp(root: HTMLElement) {
           : String(msg?.text || "").trim() || "Сообщение";
       title = preview.length > 64 ? `${preview.slice(0, 61)}…` : preview;
 
+      const fromId = msg?.from ? String(msg.from).trim() : "";
+      if (fromId) {
+        items.push({ id: "msg_profile", label: "Профиль отправителя", disabled: !canAct });
+      }
       const caption = msg?.attachment?.kind === "file" ? String(msg?.text || "").trim() : "";
       items.push({
         id: "msg_copy",
@@ -4522,6 +4536,21 @@ export function mountApp(root: HTMLElement) {
       store.set({ pinned: next });
       if (st.selfId) savePinsForUser(st.selfId, next);
       showToast(st.pinned.includes(key) ? "Откреплено" : "Закреплено", { kind: "success" });
+      close();
+      return;
+    }
+
+    if (itemId === "msg_profile") {
+      if (t.kind !== "message") {
+        close();
+        return;
+      }
+      const selKey = st.selected ? conversationKey(st.selected) : "";
+      const idx = Number.isFinite(Number(t.id)) ? Math.trunc(Number(t.id)) : -1;
+      const conv = selKey ? st.conversations[selKey] : null;
+      const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+      const fromId = msg?.from ? String(msg.from).trim() : "";
+      if (fromId) openUserPage(fromId);
       close();
       return;
     }

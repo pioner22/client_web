@@ -111,6 +111,23 @@ function statusTitle(m: ChatMessage): string {
   return "";
 }
 
+function formatUserLabel(displayName: string, handle: string, fallback: string): string {
+  const dn = String(displayName || "").trim();
+  if (dn) return dn;
+  const h = String(handle || "").trim();
+  if (h) return h.startsWith("@") ? h : `@${h}`;
+  return fallback || "—";
+}
+
+function resolveUserLabel(state: AppState, id: string, friendLabels?: Map<string, string>): string {
+  const pid = String(id || "").trim();
+  if (!pid) return "—";
+  const p = state.profiles?.[pid];
+  if (p) return formatUserLabel(p.display_name || "", p.handle || "", pid);
+  const fromFriends = friendLabels?.get(pid);
+  return fromFriends || pid;
+}
+
 function skeletonLine(widthPct: number, cls = "skel-line"): HTMLElement {
   const w = Math.max(8, Math.min(100, Math.round(widthPct)));
   return el("div", { class: cls, style: `width: ${w}%;` }, [""]);
@@ -182,7 +199,7 @@ function renderRichText(text: string): Array<HTMLElement | string> {
   return out.length ? out : [s];
 }
 
-function messageLine(state: AppState, m: ChatMessage): HTMLElement {
+function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string, string>): HTMLElement {
   function sysActions(payload: any): HTMLElement | null {
     if (!payload || typeof payload !== "object") return null;
     const kind = String(payload.kind || "");
@@ -245,8 +262,11 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
     ]);
   }
   const fromId = String(m.from || "").trim();
-  const showFrom = m.kind === "in" && Boolean(m.room);
-  const fromLabel = fromId || "—";
+  const showFrom =
+    m.kind === "in" &&
+    (Boolean(m.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board"));
+  const fromLabel = resolveUserLabel(state, fromId, friendLabels);
+  const canOpenProfile = Boolean(fromId);
   const status = m.kind === "out" ? statusLabel(m) : "";
   const meta: HTMLElement[] = [el("span", { class: "msg-time" }, [formatTime(m.ts)])];
   if (m.edited) {
@@ -263,7 +283,19 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
   if (status)
     meta.push(el("span", { class: `msg-status msg-status-${m.status || "delivered"}`, title: statusTitle(m) || undefined }, [status]));
   const bodyChildren: HTMLElement[] = [];
-  if (showFrom) bodyChildren.push(el("div", { class: "msg-from" }, [fromLabel]));
+  if (showFrom) {
+    const attrs = canOpenProfile
+      ? {
+          class: "msg-from msg-from-btn",
+          type: "button",
+          "data-action": "user-open",
+          "data-user-id": fromId,
+          title: `Профиль: ${fromLabel}`,
+        }
+      : { class: "msg-from" };
+    const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
+    bodyChildren.push(node);
+  }
   if (m.attachment?.kind === "file") {
     const att = m.attachment;
     const transfer =
@@ -355,7 +387,20 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
   bodyChildren.push(el("div", { class: "msg-meta" }, meta));
   const lineChildren: HTMLElement[] = [];
   if (m.kind === "in" && fromId) {
-    lineChildren.push(el("div", { class: "msg-avatar" }, [avatar("dm", fromId)]));
+    const avatarNode = avatar("dm", fromId);
+    if (canOpenProfile) {
+      lineChildren.push(
+        el("div", { class: "msg-avatar" }, [
+          el(
+            "button",
+            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": fromId, title: `Профиль: ${fromLabel}` },
+            [avatarNode]
+          ),
+        ])
+      );
+    } else {
+      lineChildren.push(el("div", { class: "msg-avatar" }, [avatarNode]));
+    }
   }
   lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
   const cls = m.attachment ? `msg msg-${m.kind} msg-attach` : `msg msg-${m.kind}`;
@@ -374,6 +419,11 @@ export function renderChat(layout: Layout, state: AppState) {
   if (stickToBottom && key) hostState.__stickBottom = { key, active: true, at: Date.now() };
   else if (hostState.__stickBottom && hostState.__stickBottom.key === key) hostState.__stickBottom.active = false;
   scrollHost.setAttribute("data-chat-key", key);
+
+  const friendLabels = new Map<string, string>();
+  for (const f of state.friends || []) {
+    friendLabels.set(String(f.id), formatUserLabel(f.display_name || "", f.handle || "", String(f.id || "")));
+  }
 
   const msgs = (key && state.conversations[key]) || [];
   const hasMore = Boolean(key && state.historyHasMore && state.historyHasMore[key]);
@@ -394,7 +444,7 @@ export function renderChat(layout: Layout, state: AppState) {
       lines.push(el("div", { class: "msg-sep", "aria-hidden": "true" }, [el("span", { class: "msg-sep-text" }, [formatDayLabel(m.ts)])]));
       prevMsg = null;
     }
-    const line = messageLine(state, m);
+    const line = messageLine(state, m, friendLabels);
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
     line.setAttribute("data-msg-idx", String(msgIdx));
     if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");

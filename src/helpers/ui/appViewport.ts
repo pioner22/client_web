@@ -19,7 +19,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
   const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
-    const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 48;
+    const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 32;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
@@ -92,7 +92,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     if (keyboard && vvTop >= 1) setVar("--app-vv-top", `${vvTop}px`);
     else setVar("--app-vv-top", null);
 
-    const shouldOffset = Boolean(keyboard && vvTop >= 1);
+    const shouldOffset = Boolean(keyboard);
     if (docEl?.classList) {
       if (shouldOffset) docEl.classList.add("app-vv-offset");
       else docEl.classList.remove("app-vv-offset");
