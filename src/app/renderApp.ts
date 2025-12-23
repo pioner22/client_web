@@ -419,6 +419,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onFileOfferAccept: actions.onFileOfferAccept,
         onFileOfferReject: actions.onFileOfferReject,
         onClearCompleted: actions.onClearCompletedFiles,
+        onOpenUser: actions.onOpenUser,
       });
     }
     mountChat(layout, filesPage.root);

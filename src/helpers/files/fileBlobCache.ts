@@ -1,7 +1,20 @@
 const CACHE_VERSION = 1;
 const CACHE_NAME = `yagodka_file_blob_cache_v${CACHE_VERSION}`;
-const INDEX_VERSION = 1;
-const MAX_ENTRIES = 80;
+const INDEX_VERSION = 2;
+const MAX_ENTRIES = 2000;
+
+export interface FileCachePolicy {
+  maxBytes?: number;
+  ttlMs?: number;
+}
+
+export interface FileCacheStats {
+  totalBytes: number;
+  count: number;
+  oldestTs: number;
+  newestTs: number;
+  removed: number;
+}
 
 interface CacheIndexEntry {
   fileId: string;
@@ -36,6 +49,12 @@ function indexKey(userId: string): string | null {
   return `yagodka_file_blob_index_v${INDEX_VERSION}:${uid}`;
 }
 
+function legacyIndexKey(userId: string): string | null {
+  const uid = normalizeId(userId);
+  if (!uid) return null;
+  return `yagodka_file_blob_index_v1:${uid}`;
+}
+
 function defaultStorage(): Storage | null {
   try {
     return typeof localStorage !== "undefined" ? localStorage : null;
@@ -46,15 +65,15 @@ function defaultStorage(): Storage | null {
 
 function loadIndex(userId: string, storage?: Storage | null): CacheIndexEntry[] {
   const key = indexKey(userId);
-  if (!key) return [];
   const st = storage ?? defaultStorage();
   if (!st) return [];
   try {
-    const raw = st.getItem(key);
+    const legacyKey = legacyIndexKey(userId);
+    const raw = (key ? st.getItem(key) : null) || (legacyKey ? st.getItem(legacyKey) : null);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return [];
-    if (parsed.v !== INDEX_VERSION) return [];
+    if (parsed.v !== 1 && parsed.v !== 2) return [];
     const entries = Array.isArray(parsed.entries) ? parsed.entries : [];
     const out: CacheIndexEntry[] = [];
     for (const it of entries) {
@@ -81,12 +100,26 @@ function loadIndex(userId: string, storage?: Storage | null): CacheIndexEntry[] 
 
 function saveIndex(userId: string, entries: CacheIndexEntry[], storage?: Storage | null): void {
   const key = indexKey(userId);
-  if (!key) return;
   const st = storage ?? defaultStorage();
   if (!st) return;
   try {
     const payload = JSON.stringify({ v: INDEX_VERSION, entries: entries.slice(0, MAX_ENTRIES) });
-    st.setItem(key, payload);
+    if (key) st.setItem(key, payload);
+    const legacyKey = legacyIndexKey(userId);
+    if (legacyKey) st.removeItem(legacyKey);
+  } catch {
+    // ignore
+  }
+}
+
+function removeIndex(userId: string, storage?: Storage | null): void {
+  const st = storage ?? defaultStorage();
+  if (!st) return;
+  try {
+    const key = indexKey(userId);
+    if (key) st.removeItem(key);
+    const legacyKey = legacyIndexKey(userId);
+    if (legacyKey) st.removeItem(legacyKey);
   } catch {
     // ignore
   }
@@ -132,19 +165,6 @@ export async function putCachedFileBlob(
 
     const idx = touchIndex(loadIndex(uid), { fileId: fid, ts: Date.now(), size: Math.round(size) || 0, mime });
     saveIndex(uid, idx);
-
-    // Best-effort eviction (keep it tiny and deterministic).
-    if (idx.length > MAX_ENTRIES) {
-      const extra = idx.slice(MAX_ENTRIES);
-      for (const e of extra) {
-        try {
-          await cache.delete(requestUrl(uid, e.fileId));
-        } catch {
-          // ignore
-        }
-      }
-      saveIndex(uid, idx.slice(0, MAX_ENTRIES));
-    }
   } catch {
     // ignore
   }
@@ -169,6 +189,10 @@ export async function getCachedFileBlob(
     const sizeHeader = res.headers.get("Content-Length");
     const sizeFromHeader = sizeHeader ? Number(sizeHeader) : NaN;
     const size = Number.isFinite(sizeFromHeader) && sizeFromHeader > 0 ? Math.round(sizeFromHeader) : blob.size || 0;
+
+    const idx = touchIndex(loadIndex(uid), { fileId: fid, ts: Date.now(), size: Math.round(size) || 0, mime });
+    saveIndex(uid, idx);
+
     return { blob, mime, size };
   } catch {
     return null;
@@ -180,4 +204,106 @@ export function isImageLikeFile(name: string, mime?: string | null): boolean {
   if (mt.startsWith("image/")) return true;
   const n = String(name || "").toLowerCase();
   return /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n);
+}
+
+function sumIndexSize(entries: CacheIndexEntry[]): number {
+  return entries.reduce((acc, e) => acc + (Number(e.size || 0) || 0), 0);
+}
+
+function statsFromIndex(entries: CacheIndexEntry[], removed: number): FileCacheStats {
+  let oldestTs = 0;
+  let newestTs = 0;
+  for (const e of entries) {
+    const ts = Number(e.ts || 0) || 0;
+    if (!oldestTs || (ts && ts < oldestTs)) oldestTs = ts;
+    if (!newestTs || ts > newestTs) newestTs = ts;
+  }
+  return {
+    totalBytes: sumIndexSize(entries),
+    count: entries.length,
+    oldestTs,
+    newestTs,
+    removed,
+  };
+}
+
+export function getFileCacheStats(userId: string): FileCacheStats {
+  const uid = normalizeId(userId);
+  if (!uid) return { totalBytes: 0, count: 0, oldestTs: 0, newestTs: 0, removed: 0 };
+  const entries = loadIndex(uid);
+  return statsFromIndex(entries, 0);
+}
+
+export async function clearFileCache(userId: string): Promise<void> {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  if (!(await cacheAvailable())) return;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const keys = await cache.keys();
+    const needle = `/__yagodka_cache__/files/${encodeURIComponent(uid)}/`;
+    for (const req of keys) {
+      if (String(req.url || "").includes(needle)) {
+        try {
+          await cache.delete(req);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  removeIndex(uid);
+}
+
+export async function cleanupFileCache(userId: string, policy: FileCachePolicy = {}): Promise<FileCacheStats> {
+  const uid = normalizeId(userId);
+  if (!uid) return { totalBytes: 0, count: 0, oldestTs: 0, newestTs: 0, removed: 0 };
+  const entries = loadIndex(uid);
+  if (!entries.length) return statsFromIndex([], 0);
+
+  const maxBytes = Number(policy.maxBytes ?? 0) || 0;
+  const ttlMs = Number(policy.ttlMs ?? 0) || 0;
+  const now = Date.now();
+  let kept = entries.slice();
+  if (ttlMs > 0) {
+    const minTs = now - ttlMs;
+    kept = kept.filter((e) => Number(e.ts || 0) >= minTs);
+  }
+
+  if (maxBytes > 0) {
+    kept.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    const next: CacheIndexEntry[] = [];
+    let total = 0;
+    for (const e of kept) {
+      const size = Number(e.size || 0) || 0;
+      if (total + size <= maxBytes) {
+        next.push(e);
+        total += size;
+      }
+    }
+    kept = next;
+  }
+
+  const keptIds = new Set(kept.map((e) => e.fileId));
+  const removed = entries.filter((e) => !keptIds.has(e.fileId));
+
+  if (removed.length && (await cacheAvailable())) {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      for (const e of removed) {
+        try {
+          await cache.delete(requestUrl(uid, e.fileId));
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  saveIndex(uid, kept);
+  return statsFromIndex(kept, removed.length);
 }

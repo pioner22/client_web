@@ -1,7 +1,9 @@
 import { el } from "../../helpers/dom/el";
 import type { AppState, FileOfferIn, FileTransferEntry, TargetRef } from "../../stores/types";
 import { safeUrl } from "../../helpers/security/safeUrl";
-import { fileBadge } from "../../helpers/files/fileBadge";
+import { clearFileCache, cleanupFileCache, getCachedFileBlob, getFileCacheStats } from "../../helpers/files/fileBlobCache";
+import { fileBadge, type FileBadgeKind } from "../../helpers/files/fileBadge";
+import { CACHE_CLEAN_PRESETS, CACHE_SIZE_PRESETS, loadFileCachePrefs, saveFileCachePrefs } from "../../helpers/files/fileCachePrefs";
 
 export interface FilesPage {
   root: HTMLElement;
@@ -14,6 +16,7 @@ export interface FilesPageActions {
   onFileOfferAccept: (fileId: string) => void;
   onFileOfferReject: (fileId: string) => void;
   onClearCompleted: () => void;
+  onOpenUser: (id: string) => void;
 }
 
 function formatBytes(size: number): string {
@@ -27,6 +30,22 @@ function formatBytes(size: number): string {
   }
   const precision = value >= 100 || idx === 0 ? 0 : 1;
   return `${value.toFixed(precision)} ${units[idx]}`;
+}
+
+function formatGroupTime(ts: number): string {
+  if (!ts) return "";
+  const dt = new Date(ts);
+  const now = new Date();
+  const sameDay = dt.toDateString() === now.toDateString();
+  const yesterday = (() => {
+    const y = new Date(now);
+    y.setDate(now.getDate() - 1);
+    return dt.toDateString() === y.toDateString();
+  })();
+  const time = dt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  if (sameDay) return `Сегодня ${time}`;
+  if (yesterday) return `Вчера ${time}`;
+  return dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }) + ` · ${time}`;
 }
 
 function targetValue(target: TargetRef): string {
@@ -61,9 +80,68 @@ function transferStatus(entry: FileTransferEntry): string {
   return entry.direction === "out" ? "Ожидание подтверждения" : "Ожидание отправителя";
 }
 
-function isImageFile(name: string): boolean {
-  const n = String(name || "").toLowerCase();
-  return /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/.test(n);
+function isPreviewableKind(kind: FileBadgeKind): boolean {
+  return kind === "image" || kind === "video";
+}
+
+function transferTimestamp(entry: FileTransferEntry): number {
+  const raw = String(entry.localId || "").trim();
+  const m = raw.match(/^ft-(\d+)-/);
+  if (m) {
+    const ts = Number(m[1]);
+    return Number.isFinite(ts) ? ts : 0;
+  }
+  return 0;
+}
+
+interface TransferGroup {
+  key: string;
+  ts: number;
+  direction: "in" | "out";
+  peer: string;
+  room: string | null;
+  items: FileTransferEntry[];
+}
+
+function transferGroupKey(entry: FileTransferEntry): string {
+  const room = typeof entry.room === "string" ? entry.room : "";
+  const peer = String(entry.peer || "").trim();
+  return `${entry.direction}:${room ? `room:${room}` : `peer:${peer}`}`;
+}
+
+function groupTransfers(entries: FileTransferEntry[]): TransferGroup[] {
+  const groups: TransferGroup[] = [];
+  const windowMs = 2 * 60 * 1000;
+  let current: TransferGroup | null = null;
+  let lastTs = 0;
+  for (const entry of entries) {
+    const ts = transferTimestamp(entry);
+    const key = transferGroupKey(entry);
+    const room = typeof entry.room === "string" ? entry.room : null;
+    const peer = String(entry.peer || "").trim() || "—";
+    const canGroup =
+      current &&
+      current.key === key &&
+      (!lastTs || !ts || Math.abs(lastTs - ts) <= windowMs);
+    if (!current || !canGroup) {
+      if (current) groups.push(current);
+      current = {
+        key,
+        ts,
+        direction: entry.direction,
+        peer,
+        room,
+        items: [entry],
+      };
+      lastTs = ts;
+      continue;
+    }
+    current.items.push(entry);
+    if (!current.ts && ts) current.ts = ts;
+    if (ts) lastTs = ts;
+  }
+  if (current) groups.push(current);
+  return groups;
 }
 
 export function createFilesPage(actions: FilesPageActions): FilesPage {
@@ -76,25 +154,58 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   const sendBtn = el("button", { class: "btn", type: "button" }, ["Отправить"]);
   const sendStack = el("div", { class: "page-stack" }, [fileInput, fileMeta, targetSelect]);
   const sendForm = el("div", { class: "page-form" }, [sendStack, sendBtn]);
-  const sendBlock = el("div", { class: "files-section" }, [sendTitle, sendForm]);
+  const sendBlock = el("div", { class: "page-card files-section" }, [sendTitle, sendForm]);
 
   const offersTitle = el("div", { class: "pane-section" }, ["Входящие предложения"]);
   const offersList = el("div", { class: "files-list" });
-  const offersBlock = el("div", { class: "files-section" }, [offersTitle, offersList]);
+  const offersBlock = el("div", { class: "page-card files-section" }, [offersTitle, offersList]);
 
   const transfersTitle = el("div", { class: "pane-section" }, ["Передачи"]);
   const clearBtn = el("button", { class: "btn", type: "button" }, ["Очистить завершенные"]);
   const transfersHeader = el("div", { class: "files-header" }, [transfersTitle, clearBtn]);
   const transfersList = el("div", { class: "files-list" });
-  const transfersBlock = el("div", { class: "files-section" }, [transfersHeader, transfersList]);
+  const transfersBlock = el("div", { class: "page-card files-section" }, [transfersHeader, transfersList]);
+
+  const cacheTitle = el("div", { class: "pane-section" }, ["Кэш файлов"]);
+  const cacheInfo = el("div", { class: "file-cache-info" }, ["—"]);
+  const cacheLimitLabel = el("label", { class: "modal-label", for: "file-cache-limit" }, ["Лимит кэша"]);
+  const cacheLimitSelect = el("select", { class: "modal-input", id: "file-cache-limit" }) as HTMLSelectElement;
+  const cacheCleanLabel = el("label", { class: "modal-label", for: "file-cache-clean" }, ["Автоочистка"]);
+  const cacheCleanSelect = el("select", { class: "modal-input", id: "file-cache-clean" }) as HTMLSelectElement;
+  const cacheHint = el("div", { class: "file-cache-hint" }, [
+    "Кэш нужен, чтобы не скачивать файлы повторно. Автоочистка удаляет старые файлы по сроку.",
+  ]);
+  const cacheClearBtn = el("button", { class: "btn btn-danger", type: "button" }, ["Очистить кэш"]);
+  const cacheActions = el("div", { class: "file-cache-actions" }, [cacheClearBtn]);
+  const cacheBlock = el("div", { class: "page-card files-section" }, [
+    cacheTitle,
+    cacheInfo,
+    cacheLimitLabel,
+    cacheLimitSelect,
+    cacheCleanLabel,
+    cacheCleanSelect,
+    cacheHint,
+    cacheActions,
+  ]);
 
   const hint = el("div", { class: "msg msg-sys page-hint" }, ["F7 — файлы | Esc — назад"]);
 
-  const root = el("div", { class: "page" }, [title, sendBlock, offersBlock, transfersBlock, hint]);
+  const root = el("div", { class: "page page-files" }, [title, sendBlock, offersBlock, transfersBlock, cacheBlock, hint]);
+
+  for (const opt of CACHE_SIZE_PRESETS) {
+    cacheLimitSelect.append(el("option", { value: String(opt.bytes) }, [opt.label]));
+  }
+  for (const opt of CACHE_CLEAN_PRESETS) {
+    cacheCleanSelect.append(el("option", { value: String(opt.ms) }, [opt.label]));
+  }
 
   let lastState: AppState | null = null;
   let selectedTarget = "";
   let targetLocked = false;
+  const previewUrls = new Map<string, string>();
+  const previewInFlight = new Set<string>();
+  let refreshTimer: number | null = null;
+  let cacheStatsTimer: number | null = null;
 
   function updateFileMeta() {
     const file = fileInput.files?.[0];
@@ -103,6 +214,86 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       return;
     }
     fileMeta.textContent = `${file.name} · ${formatBytes(file.size)}`;
+  }
+
+  function displayNameForPeer(state: AppState, id: string): string {
+    const profile = state.profiles[id];
+    const raw = profile?.display_name ? String(profile.display_name).trim() : "";
+    if (raw) return raw;
+    const friend = state.friends.find((f) => f.id === id);
+    if (friend) return friend.id;
+    return id || "—";
+  }
+
+  function handleForPeer(state: AppState, id: string): string | null {
+    const profile = state.profiles[id];
+    const raw = profile?.handle ? String(profile.handle).trim() : "";
+    return raw ? (raw.startsWith("@") ? raw : `@${raw}`) : null;
+  }
+
+  function renderPeerButton(state: AppState, id: string): HTMLElement {
+    const name = displayNameForPeer(state, id);
+    const handle = handleForPeer(state, id);
+    const label = handle ? `${name} ${handle}` : name;
+    return el(
+      "button",
+      {
+        class: "file-peer-link",
+        type: "button",
+        "data-action": "open-peer-profile",
+        "data-peer-id": id,
+        title: `Открыть профиль: ${name}`,
+      },
+      [label]
+    );
+  }
+
+  function scheduleRefresh() {
+    if (refreshTimer !== null) return;
+    refreshTimer = window.setTimeout(() => {
+      refreshTimer = null;
+      if (lastState) update(lastState);
+    }, 0);
+  }
+
+  function scheduleCacheStatsRefresh() {
+    if (cacheStatsTimer !== null) return;
+    cacheStatsTimer = window.setTimeout(() => {
+      cacheStatsTimer = null;
+      if (lastState) refreshCacheStats(lastState);
+    }, 120);
+  }
+
+  function cleanupPreviewUrls(validIds: Set<string>) {
+    for (const [id, url] of previewUrls.entries()) {
+      if (validIds.has(id)) continue;
+      previewUrls.delete(id);
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  async function ensureCachedPreview(userId: string, fileId: string, mime: string | null) {
+    if (previewInFlight.has(fileId)) return;
+    previewInFlight.add(fileId);
+    try {
+      const cached = await getCachedFileBlob(userId, fileId);
+      if (!cached) return;
+      let url: string | null = null;
+      try {
+        url = URL.createObjectURL(cached.blob);
+      } catch {
+        url = null;
+      }
+      if (!url) return;
+      previewUrls.set(fileId, url);
+      scheduleRefresh();
+    } finally {
+      previewInFlight.delete(fileId);
+    }
   }
 
   function renderOffer(offer: FileOfferIn, state: AppState): HTMLElement {
@@ -133,17 +324,25 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     const metaLines: string[] = [];
     if (entry.direction === "out") {
       if (entry.room) metaLines.push(`Куда: ${roomLabel(entry.room, state)}`);
-      else metaLines.push(`Кому: ${entry.peer || "—"}`);
+      else metaLines.push(`Кому:`);
     } else {
       if (entry.room) metaLines.push(`Канал: ${roomLabel(entry.room, state)}`);
-      metaLines.push(`От: ${entry.peer || "—"}`);
+      metaLines.push(`От:`);
     }
     metaLines.push(`Размер: ${formatBytes(entry.size)}`);
     metaLines.push(statusLine);
     if (entry.acceptedBy?.length) metaLines.push(`Приняли: ${entry.acceptedBy.join(", ")}`);
     if (entry.receivedBy?.length) metaLines.push(`Получили: ${entry.receivedBy.join(", ")}`);
-    const metaEls = metaLines.map((line) => el("div", { class: "file-meta" }, [line]));
-    const badge = fileBadge(entry.name || "файл", null);
+    const metaEls = metaLines.map((line) => {
+      if (line === "Кому:" && entry.peer && entry.peer !== "—") {
+        return el("div", { class: "file-meta" }, ["Кому: ", renderPeerButton(state, entry.peer)]);
+      }
+      if (line === "От:" && entry.peer && entry.peer !== "—") {
+        return el("div", { class: "file-meta" }, ["От: ", renderPeerButton(state, entry.peer)]);
+      }
+      return el("div", { class: "file-meta" }, [line]);
+    });
+    const badge = fileBadge(entry.name || "файл", entry.mime ?? null);
     const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
     icon.style.setProperty("--file-h", String(badge.hue));
     const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [entry.name || "файл"])]), ...metaEls];
@@ -163,28 +362,78 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     }
     const statusClass = entry.status === "error" ? "is-error" : entry.status === "complete" || entry.status === "uploaded" ? "is-complete" : "";
     const rowChildren: HTMLElement[] = [];
-    if (canDownload && isImageFile(entry.name || "")) {
+    const canPreview = isPreviewableKind(badge.kind);
+    const previewUrl = safeHref || (fileId ? previewUrls.get(fileId) || null : null);
+    if (canPreview && canDownload) {
       const attrs: Record<string, string | undefined> = {
-        class: safeHref ? "chat-file-preview file-file-preview" : "chat-file-preview file-file-preview chat-file-preview-empty",
+        class: "file-preview",
         type: "button",
-        "data-action": "open-file-viewer",
-        "data-name": entry.name || "файл",
-        "data-size": String(entry.size || 0),
-        "aria-label": `Открыть: ${entry.name || "файл"}`,
+        "data-action": fileId ? "file-download" : undefined,
+        "data-file-id": fileId || undefined,
+        "aria-label": `Скачать: ${entry.name || "файл"}`,
       };
-      if (safeHref) attrs["data-url"] = safeHref;
-      if (!safeHref && fileId) attrs["data-file-id"] = fileId;
-
-      const child = safeHref
-        ? el("img", { class: "chat-file-img file-file-img", src: safeHref, alt: entry.name || "изображение", loading: "lazy", decoding: "async" })
-        : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
-      if (safeHref || fileId) rowChildren.push(el("button", attrs, [child]));
+      const media =
+        badge.kind === "video"
+          ? previewUrl
+            ? el("video", {
+                class: "file-preview-media file-preview-video",
+                src: previewUrl,
+                preload: "metadata",
+                muted: "true",
+                playsinline: "true",
+              })
+            : el("div", { class: "file-preview-placeholder" }, ["Видео"])
+          : previewUrl
+            ? el("img", {
+                class: "file-preview-media file-preview-img",
+                src: previewUrl,
+                alt: entry.name || "изображение",
+                loading: "lazy",
+                decoding: "async",
+              })
+            : el("div", { class: "file-preview-placeholder" }, ["Фото"]);
+      const overlay = badge.kind === "video" ? el("div", { class: "file-preview-overlay" }, ["▶"]) : null;
+      const children = overlay ? [media, overlay] : [media];
+      rowChildren.push(el("button", attrs, children));
+      if (!previewUrl && fileId && state.selfId) {
+        void ensureCachedPreview(state.selfId, fileId, entry.mime ?? null);
+      }
     }
     rowChildren.push(
       el("div", { class: "file-main" }, mainChildren),
       actionsList.length ? el("div", { class: "file-actions" }, actionsList) : el("div", { class: "file-actions" })
     );
     return el("div", { class: `file-row ${statusClass}` }, rowChildren);
+  }
+
+  function renderTransferGroup(group: TransferGroup, state: AppState): HTMLElement {
+    const dirLabel = group.direction === "out" ? "Отправлено" : "Получено";
+    const countLabel = `${group.items.length} ${group.items.length === 1 ? "файл" : group.items.length < 5 ? "файла" : "файлов"}`;
+    const title = `${dirLabel} · ${countLabel}`;
+    const timeLabel = formatGroupTime(group.ts);
+    const targetLabel = group.room ? roomLabel(group.room, state) : group.peer ? displayNameForPeer(state, group.peer) : "";
+    const metaParts = [targetLabel, timeLabel].filter(Boolean).join(" · ");
+    const header = el("div", { class: "files-group-head" }, [
+      el("div", { class: "files-group-title" }, [title]),
+      metaParts ? el("div", { class: "files-group-meta" }, [metaParts]) : el("div", { class: "files-group-meta" }, [""]),
+    ]);
+    const body = el("div", { class: "files-group-list" }, group.items.map((entry) => renderTransfer(entry, state)));
+    return el("div", { class: "files-group" }, [header, body]);
+  }
+
+  function refreshCacheStats(state: AppState) {
+    if (!state.selfId) {
+      cacheInfo.textContent = "Кэш доступен после входа.";
+      cacheInfo.classList.remove("file-cache-warning");
+      return;
+    }
+    const prefs = loadFileCachePrefs(state.selfId);
+    const stats = getFileCacheStats(state.selfId);
+    const used = formatBytes(stats.totalBytes);
+    const limit = formatBytes(prefs.maxBytes);
+    cacheInfo.textContent = `Используется: ${used} / ${limit} · файлов: ${stats.count}`;
+    const warn = prefs.maxBytes > 0 && stats.totalBytes >= prefs.maxBytes * 0.85;
+    cacheInfo.classList.toggle("file-cache-warning", warn);
   }
 
   fileInput.addEventListener("change", updateFileMeta);
@@ -198,12 +447,69 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     actions.onFileSend(file, target ?? lastState?.selected ?? null);
   });
   clearBtn.addEventListener("click", () => actions.onClearCompleted());
+  cacheLimitSelect.addEventListener("change", () => {
+    const st = lastState;
+    if (!st?.selfId) return;
+    const prefs = loadFileCachePrefs(st.selfId);
+    prefs.maxBytes = Number(cacheLimitSelect.value || prefs.maxBytes) || prefs.maxBytes;
+    saveFileCachePrefs(st.selfId, prefs);
+    void cleanupFileCache(st.selfId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => refreshCacheStats(st));
+  });
+  cacheCleanSelect.addEventListener("change", () => {
+    const st = lastState;
+    if (!st?.selfId) return;
+    const prefs = loadFileCachePrefs(st.selfId);
+    prefs.autoCleanMs = Number(cacheCleanSelect.value || prefs.autoCleanMs) || prefs.autoCleanMs;
+    saveFileCachePrefs(st.selfId, prefs);
+    void cleanupFileCache(st.selfId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => {
+      prefs.lastCleanAt = Date.now();
+      saveFileCachePrefs(st.selfId, prefs);
+      refreshCacheStats(st);
+    });
+  });
+  cacheClearBtn.addEventListener("click", () => {
+    const st = lastState;
+    if (!st?.selfId) return;
+    void clearFileCache(st.selfId).then(() => refreshCacheStats(st));
+  });
+
+  root.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement | null;
+    const btn = t?.closest("button[data-action='open-peer-profile']") as HTMLButtonElement | null;
+    if (!btn) return;
+    const peerId = String(btn.getAttribute("data-peer-id") || "").trim();
+    if (!peerId) return;
+    e.preventDefault();
+    actions.onOpenUser(peerId);
+  });
 
   return {
     root,
     update: (state: AppState) => {
       lastState = state;
       updateFileMeta();
+
+      const canUseCache = Boolean(state.selfId && state.authed);
+      cacheLimitSelect.disabled = !canUseCache;
+      cacheCleanSelect.disabled = !canUseCache;
+      cacheClearBtn.disabled = !canUseCache;
+      if (canUseCache && state.selfId) {
+        const prefs = loadFileCachePrefs(state.selfId);
+        cacheLimitSelect.value = String(prefs.maxBytes);
+        cacheCleanSelect.value = String(prefs.autoCleanMs);
+        const now = Date.now();
+        if (prefs.autoCleanMs > 0 && now - prefs.lastCleanAt >= prefs.autoCleanMs) {
+          void cleanupFileCache(state.selfId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => {
+            prefs.lastCleanAt = now;
+            saveFileCachePrefs(state.selfId, prefs);
+            refreshCacheStats(state);
+          });
+        } else {
+          scheduleCacheStatsRefresh();
+        }
+      } else {
+        cacheInfo.textContent = "Кэш доступен после входа.";
+      }
 
       const options: HTMLElement[] = [el("option", { value: "" }, ["— адресат —"])];
       const dmOptions = state.friends.map((f) => el("option", { value: targetValue({ kind: "dm", id: f.id }) }, [f.id]));
@@ -249,8 +555,12 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
           ])
         );
       } else {
-        transfersList.replaceChildren(...state.fileTransfers.map((entry) => renderTransfer(entry, state)));
+        const groups = groupTransfers(state.fileTransfers);
+        transfersList.replaceChildren(...groups.map((group) => renderTransferGroup(group, state)));
       }
+
+      const validPreviewIds = new Set(state.fileTransfers.map((entry) => String(entry.id || "").trim()).filter(Boolean));
+      cleanupPreviewUrls(validPreviewIds);
 
       const hasClearable = state.fileTransfers.some((entry) => ["complete", "uploaded", "error", "rejected"].includes(entry.status));
       clearBtn.disabled = !hasClearable;

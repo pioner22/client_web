@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.140",
+    date: "2025-12-23",
+    improved: [
+      "Файлы: передачи группируются пачками, показывают адресата и быстрый переход к профилю",
+      "Файлы: предпросмотр фото/видео с кликом на скачивание, повторные скачивания идут из кэша",
+      "Файлы: управление кэшем (лимит 1/5/10/30 ГБ, автоочистка день/неделя/месяц, кнопка очистки)",
+    ],
+    fixed: ["Кэш файлов: учитываем лимиты и удаляем старые записи по политике"],
+  },
+  {
     version: "0.1.139",
     date: "2025-12-23",
     improved: [

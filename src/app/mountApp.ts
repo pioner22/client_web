@@ -30,7 +30,8 @@ import {
   savePinnedMessagesForUser,
   togglePinnedMessage,
 } from "../helpers/chat/pinnedMessages";
-import { getCachedFileBlob, isImageLikeFile, putCachedFileBlob } from "../helpers/files/fileBlobCache";
+import { cleanupFileCache, getCachedFileBlob, isImageLikeFile, putCachedFileBlob } from "../helpers/files/fileBlobCache";
+import { loadFileCachePrefs, saveFileCachePrefs } from "../helpers/files/fileCachePrefs";
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
@@ -902,6 +903,7 @@ export function mountApp(root: HTMLElement) {
   const downloadByFileId = new Map<string, DownloadState>();
   const pendingStreamRequests = new Map<string, { fileId: string; name: string; size: number; mime: string | null }>();
   let pendingFileViewer: { fileId: string; name: string; size: number; mime: string | null } | null = null;
+  const pendingFileDownloads = new Map<string, { name: string }>();
   let transferSeq = 0;
   let localChatMsgSeq = 0;
   const cachedPreviewsAttempted = new Set<string>();
@@ -1336,14 +1338,25 @@ export function mountApp(root: HTMLElement) {
       if (!fileId) return;
       e.preventDefault();
       closeMobileSidebar();
-      const meta = resolveFileMeta(fileId);
-      const canStream = Number(meta.size || 0) >= STREAM_MIN_BYTES && startStreamDownload(fileId, meta);
-      if (canStream) {
-        store.set({ status: `Скачивание: ${meta.name || "файл"}` });
-        return;
-      }
-      gateway.send({ type: "file_get", file_id: fileId });
-      store.set({ status: `Скачивание: ${meta.name || fileId}` });
+      void (async () => {
+        const meta = resolveFileMeta(fileId);
+        const st = store.get();
+        const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+        if (entry?.url) {
+          triggerBrowserDownload(entry.url, meta.name || entry.name || "файл");
+          return;
+        }
+        const fromCache = await tryServeFileFromCache(fileId, meta);
+        if (fromCache) return;
+        const canStream = Number(meta.size || 0) >= STREAM_MIN_BYTES && startStreamDownload(fileId, meta);
+        if (canStream) {
+          store.set({ status: `Скачивание: ${meta.name || "файл"}` });
+          return;
+        }
+        pendingFileDownloads.set(fileId, { name: meta.name || "файл" });
+        gateway.send({ type: "file_get", file_id: fileId });
+        store.set({ status: `Скачивание: ${meta.name || fileId}` });
+      })();
       return;
     }
 
@@ -3683,12 +3696,129 @@ export function mountApp(root: HTMLElement) {
     return { name: "файл", size: 0, mime: null };
   }
 
+  function getFileCachePrefsForUser(userId: string | null): { maxBytes: number; autoCleanMs: number; lastCleanAt: number } | null {
+    if (!userId) return null;
+    try {
+      return loadFileCachePrefs(userId);
+    } catch {
+      return null;
+    }
+  }
+
+  async function enforceFileCachePolicy(userId: string, opts: { force?: boolean } = {}): Promise<void> {
+    const prefs = getFileCachePrefsForUser(userId);
+    if (!prefs) return;
+    const now = Date.now();
+    const due = prefs.autoCleanMs > 0 && (now - prefs.lastCleanAt >= prefs.autoCleanMs);
+    if (!opts.force && !due && !(prefs.maxBytes > 0)) return;
+    await cleanupFileCache(userId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs });
+    if (due) {
+      prefs.lastCleanAt = now;
+      saveFileCachePrefs(userId, prefs);
+    }
+  }
+
   function shouldCachePreview(name: string, mime: string | null | undefined, size: number): boolean {
+    const st = store.get();
+    const prefs = getFileCachePrefsForUser(st.selfId || null);
+    if (!prefs || prefs.maxBytes <= 0) return false;
     const bytes = Number(size ?? 0) || 0;
     if (bytes <= 0) return false;
     if (!isImageLikeFile(name, mime)) return false;
     // Keep it small and safe for iOS storage limits; we cache previews only.
     return bytes <= 6 * 1024 * 1024;
+  }
+
+  function shouldCacheFile(name: string, mime: string | null | undefined, size: number): boolean {
+    const st = store.get();
+    const prefs = getFileCachePrefsForUser(st.selfId || null);
+    if (!prefs || prefs.maxBytes <= 0) return false;
+    const bytes = Number(size ?? 0) || 0;
+    if (bytes <= 0) return false;
+    if (bytes > prefs.maxBytes) return false;
+    return Boolean(name || mime);
+  }
+
+  function triggerBrowserDownload(url: string, name: string): void {
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name || "file";
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch {
+      // ignore
+    }
+  }
+
+  async function tryServeFileFromCache(
+    fileId: string,
+    meta: { name: string; size: number; mime: string | null }
+  ): Promise<boolean> {
+    const st = store.get();
+    if (!st.selfId) return false;
+    const cached = await getCachedFileBlob(st.selfId, fileId);
+    if (!cached) return false;
+    let url: string | null = null;
+    try {
+      url = URL.createObjectURL(cached.blob);
+    } catch {
+      url = null;
+    }
+    if (!url) return false;
+
+    const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+    const name = meta.name || entry?.name || "файл";
+    const size = meta.size || entry?.size || cached.size || 0;
+    const mime = meta.mime || entry?.mime || cached.mime || null;
+    const direction = entry?.direction || "in";
+    const peer = entry?.peer || "—";
+    const room = typeof entry?.room === "string" ? entry.room : null;
+
+    store.set((prev) => {
+      const existing = prev.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+      if (existing) {
+        const nextTransfers = prev.fileTransfers.map((t) => {
+          if (String(t.id || "").trim() !== fileId) return t;
+          if (t.url && t.url !== url) {
+            try {
+              URL.revokeObjectURL(t.url);
+            } catch {
+              // ignore
+            }
+          }
+          return {
+            ...t,
+            name,
+            size,
+            mime,
+            url,
+            status: t.status === "uploaded" ? "uploaded" : "complete",
+            progress: 100,
+          };
+        });
+        return { ...prev, fileTransfers: nextTransfers };
+      }
+      const nextEntry: FileTransferEntry = {
+        localId: `ft-cache-${fileId}`,
+        id: fileId,
+        name,
+        size,
+        mime,
+        direction,
+        peer,
+        room,
+        status: "complete",
+        progress: 100,
+        url,
+      };
+      return { ...prev, fileTransfers: [nextEntry, ...prev.fileTransfers] };
+    });
+    scheduleSaveFileTransfers(store);
+    triggerBrowserDownload(url, name);
+    return true;
   }
 
   async function restoreCachedPreviewIntoTransfers(opts: {
@@ -4238,8 +4368,9 @@ export function mountApp(root: HTMLElement) {
       }));
       try {
         const st = store.get();
-        if (st.selfId && shouldCachePreview(activeUpload.file.name || "файл", activeUpload.file.type || null, activeUpload.file.size || 0)) {
+        if (st.selfId && shouldCacheFile(activeUpload.file.name || "файл", activeUpload.file.type || null, activeUpload.file.size || 0)) {
           void putCachedFileBlob(st.selfId, fileId, activeUpload.file, { mime: activeUpload.file.type || null, size: activeUpload.file.size || 0 });
+          void enforceFileCachePolicy(st.selfId, { force: true });
         }
       } catch {
         // ignore
@@ -4408,11 +4539,17 @@ export function mountApp(root: HTMLElement) {
         if (!silent) store.set({ status: `Файл готов: ${download.name}` });
         try {
           const st = store.get();
-          if (st.selfId && shouldCachePreview(download.name || "файл", mime, download.size || blob.size || 0)) {
+          if (st.selfId && shouldCacheFile(download.name || "файл", mime, download.size || blob.size || 0)) {
             void putCachedFileBlob(st.selfId, fileId, blob, { mime, size: download.size || blob.size || 0 });
+            void enforceFileCachePolicy(st.selfId, { force: true });
           }
         } catch {
           // ignore
+        }
+        const pending = pendingFileDownloads.get(fileId);
+        if (pending) {
+          pendingFileDownloads.delete(fileId);
+          triggerBrowserDownload(url, pending.name || download.name || "файл");
         }
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) {
           const pv = pendingFileViewer;
@@ -4433,6 +4570,7 @@ export function mountApp(root: HTMLElement) {
       const silent = fileId ? silentFileGets.has(fileId) : false;
       if (fileId) {
         silentFileGets.delete(fileId);
+        pendingFileDownloads.delete(fileId);
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
         const upload = uploadByFileId.get(fileId);
         if (upload) upload.aborted = true;
@@ -4474,6 +4612,7 @@ export function mountApp(root: HTMLElement) {
     pushAutoAttemptAt = 0;
     store.set({ pwaPushSubscribed: false, pwaPushStatus: null });
     silentFileGets.clear();
+    pendingFileDownloads.clear();
     previewWarmupLastKey = "";
     previewWarmupLastSig = "";
     previewWarmupInFlight = false;
