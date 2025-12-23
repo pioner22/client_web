@@ -76,7 +76,10 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   const apply = () => {
     rafId = null;
     const { height, keyboard, vvTop, vvBottom } = read();
-    if (!height) return;
+    if (!height) {
+      if (docEl?.classList) docEl.classList.remove("app-vv-offset");
+      return;
+    }
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
     // and creates an ugly gap above the keyboard. Override it to 0 while keyboard is open.
@@ -88,6 +91,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // "black strip" + composer jumps upward. Anchor the fixed app to visualViewport.offsetTop.
     if (keyboard && vvTop >= 1) setVar("--app-vv-top", `${vvTop}px`);
     else setVar("--app-vv-top", null);
+
+    const shouldOffset = Boolean(keyboard && vvTop >= 1);
+    if (docEl?.classList) {
+      if (shouldOffset) docEl.classList.add("app-vv-offset");
+      else docEl.classList.remove("app-vv-offset");
+    }
 
     // Similarly, when keyboard is open we want the fixed app to end at the visual viewport bottom.
     // Expose the covered bottom (usually keyboard height) as CSS var so mobile layout can use `bottom: ...`
@@ -149,5 +158,6 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     setVar("--safe-bottom", null);
     setVar("--app-vv-top", null);
     setVar("--app-vv-bottom", null);
+    if (docEl?.classList) docEl.classList.remove("app-vv-offset");
   };
 }

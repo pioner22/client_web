@@ -2,6 +2,10 @@
   /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
   html #app {
     --app-outer-pad: 0px;
+    padding: 0;
+  }
+
+  html.app-vv-offset #app {
     position: fixed;
     left: 0;
     right: 0;
@@ -10,7 +14,6 @@
     /* На iOS PWA иногда layout viewport “короче” safe-area: держим высоту через JS var(--app-vh). */
     height: var(--app-vh);
     min-height: 0;
-    padding: 0;
   }
 
   html #app > .app {
