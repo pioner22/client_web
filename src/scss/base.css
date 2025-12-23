@@ -32,6 +32,9 @@ button {
   /* Safe-area insets (can be overridden by JS when keyboard is open). */
   --safe-bottom: env(safe-area-inset-bottom);
 
+  /* Ensure the app background covers the whole viewport (including safe-area). */
+  background: var(--app-bg);
+
   height: 100%;
   /* Prefer dynamic viewport on modern browsers (mobile address bar / UI chrome). */
   height: 100vh;

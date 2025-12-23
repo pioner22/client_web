@@ -7,6 +7,7 @@ test("mobile safe-area: mobile fullscreen overrides win against skins", async ()
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /@media\s*\(max-width:\s*820px\)\s*\{/);
   assert.match(css, /#app\s*\{[\s\S]*?--app-outer-pad:\s*0px;/);
+  assert.match(css, /#app\s*\{[\s\S]*?position:\s*fixed;/);
   assert.match(css, /#app\s*>\s*\.app\s*\{[\s\S]*?--app-row-footer:\s*0px;/);
 });
 

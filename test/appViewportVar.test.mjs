@@ -286,3 +286,48 @@ test("viewport var: installAppViewportHeightVar переключается на 
     else globalThis.document = prev.document;
   }
 });
+
+test("viewport var: при фокусе на input/textarea переключается на visualViewport при меньшей разнице", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    const active = { tagName: "TEXTAREA", isContentEditable: false };
+    globalThis.document = { activeElement: active, documentElement: { clientHeight: 700 } };
+    globalThis.window = {
+      innerHeight: 700,
+      visualViewport: { height: 642.2, addEventListener() {}, removeEventListener() {} },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "642px");
+    assert.equal(style._props.get("--safe-bottom"), "0px");
+    cleanup();
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});

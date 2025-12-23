@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.106",
+    date: "2025-12-23",
+    fixed: [
+      "iPhone/PWA: #app теперь фиксирован (fixed) на мобильных — меньше шансов на «уехавший» лейаут/прокрутку и чёрные полосы по краям",
+      "iPhone/PWA: фон приложения принудительно покрывает весь экран (включая safe-area снизу)",
+    ],
+    improved: ["Viewport: при фокусе на input/textarea переключаемся на visualViewport даже при меньшей разнице (надёжнее при клавиатуре)"],
+    added: ["Regress: тесты на mobile fullscreen (`position: fixed`) и keyboard‑эвристику при фокусе"],
+  },
+  {
     version: "0.1.105",
     date: "2025-12-23",
     improved: ["iOS PWA: input‑assistant получил режимы `predictive/strict` (чётче контролируем появление панели Undo/Redo/✓ над клавиатурой)"],

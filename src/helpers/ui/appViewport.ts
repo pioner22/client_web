@@ -4,6 +4,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
   const read = (): { height: number; keyboard: boolean } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
+    const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 48;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
@@ -21,8 +22,18 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     }
     const vv = window.visualViewport;
     const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
-    const diff = base && vvHeight ? Math.abs(base - vvHeight) : 0;
-    const keyboard = Boolean(vvHeight && base && diff >= USE_VISUAL_VIEWPORT_DIFF_PX);
+    const diff = base && vvHeight ? base - vvHeight : 0;
+    let activeEditable = false;
+    try {
+      const ae = typeof document !== "undefined" ? (document as any).activeElement : null;
+      const tag = ae && typeof ae.tagName === "string" ? String(ae.tagName).toLowerCase() : "";
+      activeEditable = Boolean(ae && (tag === "input" || tag === "textarea" || Boolean((ae as any).isContentEditable)));
+    } catch {
+      activeEditable = false;
+    }
+    const keyboard = Boolean(
+      vvHeight && base && diff >= (activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX)
+    );
     const resolved = keyboard ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
     return { height: height > 0 ? height : 0, keyboard };
