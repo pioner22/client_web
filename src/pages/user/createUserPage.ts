@@ -33,14 +33,12 @@ export function createUserPage(actions: UserPageActions): UserPage {
   ]);
 
   const btnChat = el("button", { class: "btn btn-primary", type: "button" }, ["Сообщение"]);
-  const btnBack = el("button", { class: "btn", type: "button" }, ["Назад"]);
-  const actionsRow = el("div", { class: "page-actions" }, [btnChat, btnBack]);
+  const actionsRow = el("div", { class: "page-actions" }, [btnChat]);
 
   const hint = el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
 
-  const root = el("div", { class: "page page-profile page-user" }, [title, head, about, actionsRow, hint]);
+  const root = el("div", { class: "page page-profile page-user" }, [title, head, actionsRow, about, hint]);
 
-  btnBack.addEventListener("click", () => actions.onBack());
   btnChat.addEventListener("click", () => {
     const id = String(root.getAttribute("data-user-id") || "").trim();
     if (!id) return;

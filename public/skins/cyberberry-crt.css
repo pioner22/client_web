@@ -254,7 +254,10 @@
 #app::before {
   content: "";
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: var(--app-vv-top, 0px);
+  bottom: var(--app-vv-bottom, 0px);
   pointer-events: none;
   background: repeating-linear-gradient(
     180deg,
@@ -270,7 +273,10 @@
 #app::after {
   content: "";
   position: fixed;
-  inset: -10%;
+  left: 0;
+  right: 0;
+  top: var(--app-vv-top, 0px);
+  bottom: var(--app-vv-bottom, 0px);
   pointer-events: none;
   background: radial-gradient(60% 45% at 50% 0%, rgba(255, 91, 220, 0.16), transparent 60%),
     radial-gradient(50% 40% at 15% 80%, rgba(63, 233, 214, 0.12), transparent 70%),

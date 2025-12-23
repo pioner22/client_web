@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.112",
+    date: "2025-12-23",
+    fixed: ["Контакт: убрали лишнюю кнопку «Назад» внизу (используем back в шапке)"],
+    improved: [
+      "Контакт: CTA «Сообщение» теперь сразу под шапкой профиля (Telegram‑паттерн)",
+      "Cyberberry CRT: CRT‑оверлей (#app::before/#app::after) учитывает visualViewport top/bottom — меньше артефактов при клавиатуре в iOS PWA",
+    ],
+    added: ["Regress: `userPagePolish.test.mjs`", "Regress: `skinCyberberryCrtOverlay.test.mjs`"],
+  },
+  {
     version: "0.1.111",
     date: "2025-12-23",
     fixed: ["iPhone/PWA: #app на мобилке теперь «поджимается» снизу по visualViewport (bottom var) — меньше шансов на чёрную полосу и «улёт» композера при фокусе"],
