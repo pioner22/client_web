@@ -32,7 +32,7 @@ function kindOf(name: string, mime?: string | null): FileBadgeKind {
 
   const ext = extOf(name);
   if (!ext) return "other";
-  if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg"].includes(ext)) return "image";
+  if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "heic", "heif"].includes(ext)) return "image";
   if (["mp4", "mov", "webm", "mkv", "avi"].includes(ext)) return "video";
   if (["mp3", "wav", "ogg", "m4a", "flac"].includes(ext)) return "audio";
   if (["zip", "rar", "7z", "tar", "gz", "bz2", "xz"].includes(ext)) return "archive";
@@ -61,4 +61,3 @@ export function fileBadge(name: string, mime?: string | null): FileBadge {
   const hue = hashHue(`${kind}:${label}:${safeName}`);
   return { kind, label, hue };
 }
-

@@ -243,6 +243,7 @@ interface DownloadState {
   size: number;
   from: string;
   room?: string | null;
+  mime?: string | null;
   chunks: ArrayBuffer[];
   received: number;
   lastProgress: number;
@@ -318,6 +319,8 @@ function guessMimeTypeByName(name: string): string {
   if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
   if (n.endsWith(".gif")) return "image/gif";
   if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".heic")) return "image/heic";
+  if (n.endsWith(".heif")) return "image/heif";
   if (n.endsWith(".svg")) return "image/svg+xml";
   if (n.endsWith(".pdf")) return "application/pdf";
   return "application/octet-stream";
@@ -3004,6 +3007,7 @@ export function mountApp(root: HTMLElement) {
         id: opts.fileId,
         name: opts.name,
         size: opts.size,
+        mime: opts.mime || null,
         direction: opts.direction,
         peer: opts.peer || "—",
         room: opts.room,
@@ -3051,7 +3055,10 @@ export function mountApp(root: HTMLElement) {
 
     previewWarmupInFlight = true;
     try {
-      const tail = msgs.slice(Math.max(0, msgs.length - 40));
+      const MAX_SCAN = 80;
+      const MAX_TASKS = 12;
+      const PREFETCH_MAX_BYTES = 6 * 1024 * 1024;
+      const tail = msgs.slice(Math.max(0, msgs.length - MAX_SCAN));
       const tasks: Array<{
         fileId: string;
         name: string;
@@ -3060,6 +3067,7 @@ export function mountApp(root: HTMLElement) {
         direction: "in" | "out";
         peer: string;
         room: string | null;
+        prefetch: boolean;
       }> = [];
       const seen = new Set<string>();
       for (const m of tail.reverse()) {
@@ -3070,7 +3078,9 @@ export function mountApp(root: HTMLElement) {
         const name = String(att.name || "");
         const mime = typeof att.mime === "string" ? att.mime : null;
         const size = Number(att.size ?? 0) || 0;
-        if (!shouldCachePreview(name, mime, size)) continue;
+        const shouldPrefetch = shouldCachePreview(name, mime, size);
+        const shouldAttemptRestore = shouldPrefetch || !mime;
+        if (!shouldAttemptRestore) continue;
         const already = st.fileTransfers.find((t) => String(t.id || "").trim() === fid && Boolean(t.url));
         if (already) continue;
         seen.add(fid);
@@ -3082,19 +3092,20 @@ export function mountApp(root: HTMLElement) {
           direction: m.kind === "out" ? "out" : "in",
           peer: String(m.kind === "out" ? (m.to || m.room || "") : (m.from || "")) || "—",
           room: typeof m.room === "string" ? m.room : null,
+          prefetch: shouldPrefetch,
         });
-        if (tasks.length >= 8) break;
+        if (tasks.length >= MAX_TASKS) break;
       }
       for (const t of tasks) {
         const restored = await restoreCachedPreviewIntoTransfers({ key, ...t });
-        if (!restored) {
+        if (!restored && t.prefetch) {
           try {
             const latest = store.get();
             const uid = latest.selfId;
             if (!uid) continue;
             if (latest.conn !== "connected") continue;
             // Only prefetch small images to avoid wasting traffic/storage.
-            if (t.size > 1.5 * 1024 * 1024) continue;
+            if (t.size > PREFETCH_MAX_BYTES) continue;
             const k = `${uid}:${t.fileId}`;
             if (previewPrefetchAttempted.has(k)) continue;
             previewPrefetchAttempted.add(k);
@@ -3176,6 +3187,8 @@ export function mountApp(root: HTMLElement) {
       name: next.file.name || "файл",
       size: next.file.size || 0,
     };
+    const mime = typeof next.file.type === "string" ? next.file.type.trim() : "";
+    if (mime) payload.mime = mime;
     if (next.caption) payload.text = next.caption;
     if (next.target.kind === "dm") {
       payload.to = next.target.id;
@@ -3272,6 +3285,7 @@ export function mountApp(root: HTMLElement) {
       id: null,
       name: file.name || "файл",
       size: file.size || 0,
+      mime: file.type || null,
       direction: "out",
       peer: target.id,
       room: target.kind === "dm" ? null : target.id,
@@ -3325,6 +3339,7 @@ export function mountApp(root: HTMLElement) {
           id: offer.id,
           name: offer.name || "файл",
           size: offer.size || 0,
+          mime: offer.mime || null,
           direction: "in",
           peer: offer.from || "—",
           room: offer.room ?? null,
@@ -3400,12 +3415,15 @@ export function mountApp(root: HTMLElement) {
       const rawMsgId = msg?.msg_id;
       const msgId = typeof rawMsgId === "number" && Number.isFinite(rawMsgId) ? rawMsgId : null;
       const text = typeof msg?.text === "string" ? String(msg.text) : "";
+      const mimeRaw = msg?.mime;
+      const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? mimeRaw.trim() : null;
       const offer: FileOfferIn = {
         id: fileId,
         from: String(msg?.from ?? "").trim() || "—",
         name: String(msg?.name ?? "файл"),
         size: Number(msg?.size ?? 0) || 0,
         room: typeof msg?.room === "string" ? msg.room : null,
+        ...(mime ? { mime } : {}),
       };
       const key = offer.room ? roomKey(offer.room) : dmKey(offer.from);
       const inMsg = {
@@ -3421,6 +3439,7 @@ export function mountApp(root: HTMLElement) {
           fileId,
           name: offer.name,
           size: offer.size,
+          ...(mime ? { mime } : {}),
         },
       };
       store.set((prev) => {
@@ -3525,19 +3544,31 @@ export function mountApp(root: HTMLElement) {
       const size = Number(msg?.size ?? 0) || 0;
       const from = String(msg?.from ?? "").trim() || "—";
       const room = typeof msg?.room === "string" ? msg.room : null;
+      const mimeRaw = msg?.mime;
+      const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? mimeRaw.trim() : null;
       const silent = silentFileGets.has(fileId);
-      downloadByFileId.set(fileId, { fileId, name, size, from, room, chunks: [], received: 0, lastProgress: 0 });
+      downloadByFileId.set(fileId, { fileId, name, size, from, room, mime, chunks: [], received: 0, lastProgress: 0 });
       store.set((prev) => {
         const transfers = [...prev.fileTransfers];
         const idx = transfers.findIndex((entry) => entry.id === fileId && entry.direction === "in");
         if (idx >= 0) {
-          transfers[idx] = { ...transfers[idx], name, size, peer: from, room, status: "downloading", progress: 0 };
+          transfers[idx] = {
+            ...transfers[idx],
+            name,
+            size,
+            peer: from,
+            room,
+            mime: mime || transfers[idx].mime || null,
+            status: "downloading",
+            progress: 0,
+          };
         } else {
           transfers.unshift({
             localId: nextTransferId(),
             id: fileId,
             name,
             size,
+            mime,
             direction: "in",
             peer: from,
             room,
@@ -3580,10 +3611,16 @@ export function mountApp(root: HTMLElement) {
       if (download) {
         downloadByFileId.delete(fileId);
         silentFileGets.delete(fileId);
-        const mime = guessMimeTypeByName(download.name);
+        const mime = download.mime || guessMimeTypeByName(download.name);
         const blob = new Blob(download.chunks, { type: mime });
         const url = URL.createObjectURL(blob);
-        updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "complete", progress: 100, url }));
+        updateTransferByFileId(fileId, (entry) => ({
+          ...entry,
+          status: "complete",
+          progress: 100,
+          url,
+          ...(download.mime ? { mime: download.mime } : {}),
+        }));
         if (!silent) store.set({ status: `Файл готов: ${download.name}` });
         try {
           const st = store.get();
@@ -5395,10 +5432,10 @@ export function mountApp(root: HTMLElement) {
     longPressStartY = ev.clientY;
       longPressTimer = window.setTimeout(() => {
         longPressTimer = null;
-        armSidebarClickSuppression(600);
+        armSidebarClickSuppression(1400);
         const prevTop = layout.sidebar.scrollTop;
         const prevLeft = layout.sidebar.scrollLeft;
-        sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 1800);
+        sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 2000);
         openContextMenu({ kind, id }, longPressStartX, longPressStartY);
         window.requestAnimationFrame(() => {
           if (layout.sidebar.scrollTop !== prevTop) layout.sidebar.scrollTop = prevTop;
@@ -5520,7 +5557,7 @@ export function mountApp(root: HTMLElement) {
     msgLongPressTimer = window.setTimeout(() => {
       msgLongPressTimer = null;
       // После long-press обычно прилетает "click" — глушим его, чтобы не открывать вложения/не прыгать.
-      suppressChatClickUntil = Date.now() + 800;
+      suppressChatClickUntil = Date.now() + 1200;
       openContextMenu({ kind: "message", id: msgLongPressIdx }, msgLongPressStartX, msgLongPressStartY);
     }, 520);
   });

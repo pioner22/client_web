@@ -179,6 +179,5 @@ export function isImageLikeFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("image/")) return true;
   const n = String(name || "").toLowerCase();
-  return /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/.test(n);
+  return /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n);
 }
-

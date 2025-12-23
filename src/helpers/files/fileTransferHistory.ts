@@ -74,6 +74,8 @@ function sanitizeEntry(raw: unknown): FileTransferEntry | null {
 
   const errorRaw = typeof obj.error === "string" ? obj.error.trim() : "";
   const error = errorRaw || null;
+  const mimeRaw = typeof obj.mime === "string" ? obj.mime.trim() : "";
+  const mime = mimeRaw || null;
 
   return {
     localId,
@@ -86,6 +88,7 @@ function sanitizeEntry(raw: unknown): FileTransferEntry | null {
     status,
     progress,
     ...(error ? { error } : {}),
+    ...(mime ? { mime } : {}),
   };
 }
 

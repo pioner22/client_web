@@ -151,6 +151,10 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   renderHeader(layout, state);
   const sidebarScrollTop = layout.sidebar.scrollTop;
   const sidebarScrollLeft = layout.sidebar.scrollLeft;
+  const prevSidebarSearch = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
+  const sidebarSearchHadFocus = Boolean(prevSidebarSearch && document.activeElement === prevSidebarSearch);
+  const sidebarSearchSelStart = prevSidebarSearch?.selectionStart ?? null;
+  const sidebarSearchSelEnd = prevSidebarSearch?.selectionEnd ?? null;
   renderSidebar(
     layout.sidebar,
     state,
@@ -165,6 +169,20 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   );
   if (layout.sidebar.scrollTop !== sidebarScrollTop) layout.sidebar.scrollTop = sidebarScrollTop;
   if (layout.sidebar.scrollLeft !== sidebarScrollLeft) layout.sidebar.scrollLeft = sidebarScrollLeft;
+  if (sidebarSearchHadFocus) {
+    const nextSidebarSearch = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
+    if (nextSidebarSearch) {
+      focusElement(nextSidebarSearch);
+      try {
+        const len = nextSidebarSearch.value.length;
+        const start = sidebarSearchSelStart === null ? len : Math.max(0, Math.min(len, sidebarSearchSelStart));
+        const end = sidebarSearchSelEnd === null ? len : Math.max(0, Math.min(len, sidebarSearchSelEnd));
+        nextSidebarSearch.setSelectionRange(start, end);
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   const prevAuthIdInput = state.modal?.kind === "auth" ? (document.getElementById("auth-id") as HTMLInputElement | null) : null;
   const prevAuthPwInput = state.modal?.kind === "auth" ? (document.getElementById("auth-pw") as HTMLInputElement | null) : null;

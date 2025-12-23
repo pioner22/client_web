@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.116",
+    date: "2025-12-23",
+    fixed: [
+      "Mobile: поиск в сайдбаре больше не теряет фокус (клавиатура не закрывается после 1 символа)",
+      "Медиа: превью в истории стабильнее (MIME прокидывается, HEIC/HEIF распознаются, кеш восстанавливается даже без MIME)",
+      "Статусы: queued/delivered теперь визуально различимы",
+    ],
+    improved: [
+      "Context menu на touch компактнее и без выделения текста/IOS callout",
+      "iOS/PWA: обновляем высоту при pageshow/visibility и ограничиваем авто‑масштаб при клавиатуре",
+    ],
+  },
+  {
     version: "0.1.115",
     date: "2025-12-23",
     improved: [

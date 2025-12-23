@@ -1,11 +1,14 @@
+import { isIOS, isStandaloneDisplayMode } from "./iosInputAssistant";
+
 export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let rafId: number | null = null;
   let lastHeight = 0;
+  const iosStandalone = isIOS() && isStandaloneDisplayMode();
 
   const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 48;
-    const USE_SCREEN_HEIGHT_SLACK_PX = 120;
+    const USE_SCREEN_HEIGHT_SLACK_PX = iosStandalone ? 200 : 120;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
@@ -91,9 +94,18 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   schedule();
 
   const onResize = () => schedule();
+  const onVisibility = () => {
+    try {
+      if (document.visibilityState !== "visible") return;
+    } catch {
+      // ignore
+    }
+    schedule();
+  };
   const vv = window.visualViewport;
   window.addEventListener("resize", onResize, { passive: true });
   window.addEventListener("scroll", onResize, { passive: true });
+  window.addEventListener("pageshow", onResize, { passive: true });
   vv?.addEventListener("resize", onResize, { passive: true });
   vv?.addEventListener("scroll", onResize, { passive: true });
   const doc = typeof document !== "undefined" ? (document as any) : null;
@@ -101,6 +113,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   if (canFocusEvents) {
     doc.addEventListener("focusin", onResize, { passive: true });
     doc.addEventListener("focusout", onResize, { passive: true });
+    doc.addEventListener("visibilitychange", onVisibility, { passive: true });
   }
 
   return () => {
@@ -110,11 +123,13 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     }
     window.removeEventListener("resize", onResize);
     window.removeEventListener("scroll", onResize);
+    window.removeEventListener("pageshow", onResize);
     vv?.removeEventListener("resize", onResize);
     vv?.removeEventListener("scroll", onResize);
     if (canFocusEvents) {
       doc.removeEventListener("focusin", onResize);
       doc.removeEventListener("focusout", onResize);
+      doc.removeEventListener("visibilitychange", onVisibility);
     }
     root.style.removeProperty("--app-vh");
     root.style.removeProperty("--safe-bottom");

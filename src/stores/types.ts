@@ -110,6 +110,7 @@ export interface FileOfferIn {
   name: string;
   size: number;
   room?: string | null;
+  mime?: string | null;
 }
 
 export interface FileTransferEntry {
@@ -124,6 +125,7 @@ export interface FileTransferEntry {
   progress: number;
   error?: string | null;
   url?: string | null;
+  mime?: string | null;
   acceptedBy?: string[];
   receivedBy?: string[];
 }

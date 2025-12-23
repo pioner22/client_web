@@ -73,7 +73,7 @@ function isImageFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("image/")) return true;
   const n = String(name || "").toLowerCase();
-  return /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/.test(n);
+  return /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n);
 }
 
 function transferStatus(entry: FileTransferEntry): string {
@@ -273,6 +273,7 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
     const offer = !transfer && att.fileId ? state.fileOffersIn.find((o) => o.id === att.fileId) : null;
     const name = String(transfer?.name || offer?.name || att.name || "файл");
     const size = Number(transfer?.size ?? offer?.size ?? att.size ?? 0) || 0;
+    const mime = att.mime || transfer?.mime || null;
     const base = typeof location !== "undefined" ? location.href : "http://localhost/";
     const url = transfer?.url ? safeUrl(transfer.url, { base, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
     const statusLine = transfer ? transferStatus(transfer) : offer ? "Входящий файл (принять в «Файлы» / F7)" : "";
@@ -283,7 +284,7 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
     if (transfer?.acceptedBy?.length) metaEls.push(el("div", { class: "file-meta" }, [`Приняли: ${transfer.acceptedBy.join(", ")}`]));
     if (transfer?.receivedBy?.length) metaEls.push(el("div", { class: "file-meta" }, [`Получили: ${transfer.receivedBy.join(", ")}`]));
 
-    const badge = fileBadge(name, att.mime);
+    const badge = fileBadge(name, mime);
     const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
     icon.style.setProperty("--file-h", String(badge.hue));
     const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [name])]), ...metaEls];
@@ -319,7 +320,7 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
       el("div", { class: "file-actions" }, actions),
     ];
 
-    const isImage = isImageFile(name, att.mime);
+    const isImage = isImageFile(name, mime);
     if (isImage) {
       const attrs: Record<string, string | undefined> = {
         class: url ? "chat-file-preview" : "chat-file-preview chat-file-preview-empty",
@@ -331,7 +332,7 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
       };
       if (url) attrs["data-url"] = url;
       if (!url && att.fileId) attrs["data-file-id"] = String(att.fileId);
-      if (att.mime) attrs["data-mime"] = String(att.mime);
+      if (mime) attrs["data-mime"] = String(mime);
 
       const child = url
         ? el("img", { class: "chat-file-img", src: url, alt: name, loading: "lazy", decoding: "async" })
