@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.105",
+    date: "2025-12-23",
+    improved: ["iOS PWA: input‑assistant получил режимы `predictive/strict` (чётче контролируем появление панели Undo/Redo/✓ над клавиатурой)"],
+    added: ["Regress: `iosInputAssistantWorkaround` покрывает режим `strict`"],
+    fixed: ["Dev: `npm test` больше не подхватывает чужие `*.test.*` вне `client-web/test/` (ускоряет web-check)"],
+  },
+  {
     version: "0.1.104",
     date: "2025-12-22",
     fixed: ["iPhone/PWA: если видна полоса снизу — используем `screen.height`, когда он близок к viewport (закрывает safe-area)"],

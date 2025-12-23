@@ -1,5 +1,6 @@
 # Node / Vite
 node_modules/
+node_modules_bad_*/
 dist/
 .vite/
 
@@ -18,4 +19,3 @@ pnpm-debug.log*
 # Env
 .env
 .env.*
-

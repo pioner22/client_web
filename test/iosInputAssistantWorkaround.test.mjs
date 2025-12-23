@@ -90,6 +90,30 @@ test("iOS PWA: workaround включает autocorrect/spellcheck/autocapitalize
   }
 });
 
+test("iOS PWA: workaround strict отключает autocorrect/spellcheck/autocapitalize", async () => {
+  const helper = await loadWorkaround();
+  try {
+    const el = new TextElStub();
+    withGlobals(
+      {
+        navigator: { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X)", maxTouchPoints: 0 },
+        window: {
+          matchMedia: () => ({ matches: true }),
+        },
+      },
+      () => {
+        helper.applyIosInputAssistantWorkaround(el, "strict");
+        assert.equal(el.getAttribute("autocorrect"), "off");
+        assert.equal(el.getAttribute("spellcheck"), "false");
+        assert.equal(el.getAttribute("autocapitalize"), "off");
+        assert.equal(el.spellcheck, false);
+      }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("не iOS/не standalone: workaround ничего не меняет", async () => {
   const helper = await loadWorkaround();
   try {

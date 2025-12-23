@@ -336,12 +336,13 @@ export function mountApp(root: HTMLElement) {
         ? t
         : (t.closest("input,textarea") as HTMLInputElement | HTMLTextAreaElement | null);
     if (!node) return;
-    if (node.getAttribute("data-ios-assistant") === "off") return;
+    const modeAttr = node.getAttribute("data-ios-assistant");
+    if (modeAttr === "off") return;
     if (node instanceof HTMLInputElement) {
       const type = String(node.type || "text").toLowerCase();
       if (["password", "file", "checkbox", "radio", "button", "submit", "reset", "hidden", "range", "color"].includes(type)) return;
     }
-    applyIosInputAssistantWorkaround(node);
+    applyIosInputAssistantWorkaround(node, modeAttr === "strict" ? "strict" : "predictive");
   }
 
   maybeApplyIosInputAssistant(layout.input);
