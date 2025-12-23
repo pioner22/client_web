@@ -34,6 +34,7 @@ import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/f
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
 import { activatePwaUpdate } from "../helpers/pwa/registerServiceWorker";
+import { setPushOptOut } from "../helpers/pwa/pushPrefs";
 import { shouldReloadForBuild } from "../helpers/pwa/shouldReloadForBuild";
 import {
   clearPwaInstallDismissed,
@@ -253,6 +254,8 @@ interface DownloadState {
   chunks: ArrayBuffer[];
   received: number;
   lastProgress: number;
+  streamId?: string | null;
+  streaming?: boolean;
 }
 
 function membersAddDom(): {
@@ -483,6 +486,357 @@ export function mountApp(root: HTMLElement) {
     if (!payload) return;
     enqueueSharePayload(payload);
   });
+  window.addEventListener("yagodka:pwa-stream-ready", (e: Event) => {
+    const ev = e as CustomEvent;
+    const detail = ev?.detail as any;
+    const streamId = String(detail?.streamId || "").trim();
+    const fileId = String(detail?.fileId || "").trim();
+    if (!streamId) return;
+    const req = pendingStreamRequests.get(streamId);
+    if (!req) return;
+    if (fileId && req.fileId !== fileId) return;
+    pendingStreamRequests.delete(streamId);
+    const st = store.get();
+    if (st.conn !== "connected") {
+      store.set({ status: "Нет соединения" });
+      return;
+    }
+    downloadByFileId.set(req.fileId, {
+      fileId: req.fileId,
+      name: req.name || "файл",
+      size: req.size || 0,
+      from: "—",
+      room: null,
+      mime: req.mime,
+      chunks: [],
+      received: 0,
+      lastProgress: 0,
+      streamId,
+      streaming: true,
+    });
+    gateway.send({ type: "file_get", file_id: req.fileId });
+    store.set({ status: `Скачивание: ${req.name || "файл"}` });
+  });
+  window.addEventListener("yagodka:pwa-notification-click", (e: Event) => {
+    const ev = e as CustomEvent;
+    const detail = ev?.detail as any;
+    const room = String(detail?.room || "").trim();
+    const from = String(detail?.from || "").trim();
+    if (!room && !from) return;
+    setPage("main");
+    if (room) {
+      if (room.startsWith("b-")) selectTarget({ kind: "board", id: room });
+      else selectTarget({ kind: "group", id: room });
+      return;
+    }
+    if (from) selectTarget({ kind: "dm", id: from });
+  });
+
+  const pushSentByUser = new Map<string, string>();
+  let pushAutoAttemptUser: string | null = null;
+  let pushAutoAttemptAt = 0;
+  let pushSyncInFlight = false;
+
+  function readPushPermission(): "default" | "granted" | "denied" {
+    try {
+      return (Notification?.permission ?? "default") as "default" | "granted" | "denied";
+    } catch {
+      return "default";
+    }
+  }
+
+  async function requestPushPermission(): Promise<"default" | "granted" | "denied"> {
+    try {
+      if (typeof Notification === "undefined" || typeof Notification.requestPermission !== "function") {
+        return "default";
+      }
+      const request = Notification.requestPermission.bind(Notification);
+      if (request.length >= 1) {
+        return await new Promise((resolve) => {
+          try {
+            request((perm) => resolve(perm as "default" | "granted" | "denied"));
+          } catch {
+            resolve(readPushPermission());
+          }
+        });
+      }
+      const result = request();
+      if (typeof result === "string") return result as "default" | "granted" | "denied";
+      if (result && typeof (result as Promise<string>).then === "function") {
+        return (await result) as "default" | "granted" | "denied";
+      }
+    } catch {
+      // ignore
+    }
+    return readPushPermission();
+  }
+
+  function pushDeniedHelpText(): string {
+    try {
+      if (isIOS()) {
+        return "Разрешение запрещено. Откройте: Настройки → Уведомления → Yagodka → Разрешить.";
+      }
+      const ua = String(navigator.userAgent || "");
+      if (/Mac/i.test(ua)) {
+        return "Разрешение запрещено. macOS: Настройки → Уведомления → браузер → Разрешить. В Safari: Настройки → Веб‑сайты → Уведомления → yagodka.org (и включите запрос уведомлений).";
+      }
+      if (/Android/i.test(ua)) {
+        return "Разрешение запрещено. Откройте: Настройки телефона → Приложения → Yagodka → Уведомления.";
+      }
+    } catch {
+      // ignore
+    }
+    return "Разрешение запрещено в настройках браузера/устройства.";
+  }
+
+  function describePushSubscribeError(err: unknown): string {
+    const name = typeof (err as any)?.name === "string" ? String((err as any).name) : "";
+    const message = typeof (err as any)?.message === "string" ? String((err as any).message).trim() : "";
+    if (name === "NotAllowedError") return "доступ запрещен в браузере";
+    if (name === "NotSupportedError") return "Push не поддерживается";
+    if (name === "AbortError") return "операция отменена";
+    if (name === "InvalidStateError") return "Service Worker не готов";
+    if (name === "InvalidAccessError") return "некорректный ключ приложения";
+    if (name === "QuotaExceededError") return "превышен лимит подписок";
+    if (name === "NetworkError") return "ошибка сети";
+    if (message) return message.slice(0, 120);
+    return "неизвестная ошибка";
+  }
+
+  function vapidKeyToUint8Array(key: string): Uint8Array {
+    const raw = String(key || "").trim();
+    if (!raw) return new Uint8Array();
+    const base64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = base64.length % 4;
+    const padded = base64 + (pad ? "=".repeat(4 - pad) : "");
+    const bin = atob(padded);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  async function getPushRegistration(): Promise<ServiceWorkerRegistration | null> {
+    if (!("serviceWorker" in navigator)) return null;
+    try {
+      return await navigator.serviceWorker.ready;
+    } catch {
+      return null;
+    }
+  }
+
+  function swStateLabel(reg: ServiceWorkerRegistration): string {
+    if (reg.active) return "активен";
+    if (reg.waiting) return "ожидает активации";
+    if (reg.installing) return "устанавливается";
+    return "не активен";
+  }
+
+  async function getPushRegistrationWithTimeout(mode: "auto" | "manual", timeoutMs: number): Promise<ServiceWorkerRegistration | null> {
+    if (!("serviceWorker" in navigator)) return null;
+    const prefix = mode === "auto" ? "Авто‑подписка: " : "";
+    const ready = new Promise<ServiceWorkerRegistration | null>((resolve) => {
+      let done = false;
+      const timer = window.setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve(null);
+      }, timeoutMs);
+      navigator.serviceWorker.ready
+        .then((reg) => {
+          if (done) return;
+          done = true;
+          window.clearTimeout(timer);
+          resolve(reg);
+        })
+        .catch(() => {
+          if (done) return;
+          done = true;
+          window.clearTimeout(timer);
+          resolve(null);
+        });
+    });
+    const reg = await ready;
+    if (reg) return reg;
+    let fallback: ServiceWorkerRegistration | null = null;
+    try {
+      fallback = await navigator.serviceWorker.getRegistration();
+    } catch {
+      fallback = null;
+    }
+    if (!fallback) {
+      store.set({ pwaPushStatus: `${prefix}Service Worker не зарегистрирован, пробуем зарегистрировать…` });
+      try {
+        const reg = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+        return reg;
+      } catch (err) {
+        store.set({
+          pwaPushStatus: `${prefix}Service Worker не зарегистрирован: ${describePushSubscribeError(err)}`,
+        });
+        return null;
+      }
+    }
+    const state = swStateLabel(fallback);
+    const controller = navigator.serviceWorker.controller;
+    const suffix = controller ? "" : " (нет controller, перезапустите PWA)";
+    store.set({ pwaPushStatus: `${prefix}Service Worker ${state}${suffix}` });
+    return fallback;
+  }
+
+  function subscriptionFingerprint(sub: PushSubscription): string {
+    try {
+      const json = sub.toJSON() as any;
+      const endpoint = String(json?.endpoint || "");
+      const p256dh = String(json?.keys?.p256dh || "");
+      const auth = String(json?.keys?.auth || "");
+      return `${endpoint}|${p256dh}|${auth}`;
+    } catch {
+      return String(sub.endpoint || "");
+    }
+  }
+
+  async function sendPushSubscription(sub: PushSubscription): Promise<boolean> {
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected" || !st.selfId) return false;
+    const json = sub.toJSON() as any;
+    const endpoint = String(json?.endpoint || "").trim();
+    if (!endpoint) return false;
+    const fp = subscriptionFingerprint(sub);
+    if (pushSentByUser.get(st.selfId) === fp) {
+      store.set({ pwaPushSubscribed: true, pwaPushStatus: "Push уже включен" });
+      return true;
+    }
+    gateway.send({
+      type: "pwa_push_subscribe",
+      subscription: json,
+      ua: navigator.userAgent,
+      client: "web",
+    });
+    pushSentByUser.set(st.selfId, fp);
+    store.set({ pwaPushSubscribed: true, pwaPushStatus: "Подписка отправлена" });
+    return true;
+  }
+
+  async function ensurePushSubscription(mode: "auto" | "manual"): Promise<boolean> {
+    if (pushSyncInFlight) return false;
+    pushSyncInFlight = true;
+    try {
+      const st = store.get();
+      if (!st.authed || st.conn !== "connected" || !st.selfId) return false;
+      if (!st.pwaPushSupported) {
+        store.set({ pwaPushStatus: "Push не поддерживается" });
+        return false;
+      }
+      if (!st.pwaPushPublicKey) {
+        store.set({ pwaPushStatus: "Push отключен на сервере" });
+        return false;
+      }
+      if (mode === "auto" && st.pwaPushOptOut) {
+        store.set({ pwaPushSubscribed: false, pwaPushStatus: "Push отключен пользователем" });
+        return false;
+      }
+      if (mode === "auto" && st.pwaPushSubscribed) {
+        store.set({ pwaPushStatus: "Push уже включен" });
+        return true;
+      }
+      let perm = readPushPermission();
+      if (perm !== "granted" && mode === "manual") {
+        store.set({ pwaPushStatus: "Запрашиваем разрешение…" });
+        try {
+          perm = await requestPushPermission();
+        } catch {
+          perm = readPushPermission();
+        }
+      }
+      store.set({ pwaPushPermission: perm });
+      if (perm !== "granted") {
+        store.set({
+          pwaPushSubscribed: false,
+          pwaPushStatus: perm === "denied" ? pushDeniedHelpText() : "Разрешение не получено",
+        });
+        return false;
+      }
+      store.set({
+        pwaPushStatus: mode === "auto" ? "Авто‑подписка: проверяем Service Worker…" : "Проверяем Service Worker…",
+      });
+      const reg = await getPushRegistrationWithTimeout(mode, 4000);
+      if (!reg) {
+        return false;
+      }
+      let sub: PushSubscription | null = null;
+      try {
+        sub = await reg.pushManager.getSubscription();
+      } catch (err) {
+        store.set({
+          pwaPushSubscribed: false,
+          pwaPushStatus: `Не удалось проверить подписку: ${describePushSubscribeError(err)}`,
+        });
+        return false;
+      }
+      if (!sub) {
+        store.set({
+          pwaPushStatus: mode === "auto" ? "Авто‑подписка: создаём подписку…" : "Создаём подписку…",
+        });
+        try {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: vapidKeyToUint8Array(st.pwaPushPublicKey),
+          });
+        } catch (err) {
+          store.set({
+            pwaPushSubscribed: false,
+            pwaPushStatus: `Не удалось создать подписку: ${describePushSubscribeError(err)}`,
+          });
+          return false;
+        }
+      }
+      const fp = subscriptionFingerprint(sub);
+      if (pushSentByUser.get(st.selfId) === fp) {
+        store.set({ pwaPushSubscribed: true, pwaPushStatus: "Push уже включен" });
+        return true;
+      }
+      store.set({ pwaPushSubscribed: true });
+      await sendPushSubscription(sub);
+      return true;
+    } finally {
+      pushSyncInFlight = false;
+    }
+  }
+
+  async function syncExistingPushSubscription(): Promise<void> {
+    await ensurePushSubscription("auto");
+  }
+
+  async function enablePush(): Promise<void> {
+    setPushOptOut(false);
+    store.set({ pwaPushOptOut: false });
+    await ensurePushSubscription("manual");
+  }
+
+  async function disablePush(): Promise<void> {
+    const st = store.get();
+    setPushOptOut(true);
+    store.set({ pwaPushOptOut: true });
+    const reg = await getPushRegistration();
+    if (!reg) {
+      store.set({ pwaPushStatus: "Service Worker не готов" });
+      return;
+    }
+    let endpoint = "";
+    try {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        endpoint = String(sub.endpoint || "").trim();
+        await sub.unsubscribe();
+      }
+    } catch {
+      // ignore
+    }
+    if (st.authed && st.conn === "connected" && endpoint) {
+      gateway.send({ type: "pwa_push_unsubscribe", endpoint });
+    }
+    if (st.selfId) pushSentByUser.delete(st.selfId);
+    store.set({ pwaPushSubscribed: false, pwaPushStatus: "Push отключен пользователем" });
+  }
   let prevPinnedMessagesRef = store.get().pinnedMessages;
   store.subscribe(() => {
     const st = store.get();
@@ -514,17 +868,36 @@ export function mountApp(root: HTMLElement) {
     sharePrevSelKey = nextSelKey;
     if (changed) flushPendingShareQueue();
   });
+  store.subscribe(() => {
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected" || !st.selfId) {
+      pushAutoAttemptUser = null;
+      pushAutoAttemptAt = 0;
+      return;
+    }
+    if (!st.pwaPushSupported || !st.pwaPushPublicKey) return;
+    if (st.pwaPushOptOut) return;
+    if (st.pwaPushSubscribed) return;
+    if (readPushPermission() !== "granted") return;
+    const now = Date.now();
+    if (pushAutoAttemptUser === st.selfId && now - pushAutoAttemptAt < 15000) return;
+    pushAutoAttemptUser = st.selfId;
+    pushAutoAttemptAt = now;
+    void syncExistingPushSubscription();
+  });
   const historyRequested = new Set<string>();
   const historyDeltaRequestedAt = new Map<string, number>();
   let autoAuthAttemptedForConn = false;
   let lastConn: ConnStatus = "connecting";
   const lastReadSentAt = new Map<string, number>();
   let pwaAutoApplyTimer: number | null = null;
+  let pwaForceInFlight = false;
   let lastUserInputAt = Date.now();
   const uploadQueue: UploadState[] = [];
   let activeUpload: UploadState | null = null;
   const uploadByFileId = new Map<string, UploadState>();
   const downloadByFileId = new Map<string, DownloadState>();
+  const pendingStreamRequests = new Map<string, { fileId: string; name: string; size: number; mime: string | null }>();
   let pendingFileViewer: { fileId: string; name: string; size: number; mime: string | null } | null = null;
   let transferSeq = 0;
   let localChatMsgSeq = 0;
@@ -960,8 +1333,14 @@ export function mountApp(root: HTMLElement) {
       if (!fileId) return;
       e.preventDefault();
       closeMobileSidebar();
+      const meta = resolveFileMeta(fileId);
+      const canStream = Number(meta.size || 0) >= STREAM_MIN_BYTES && startStreamDownload(fileId, meta);
+      if (canStream) {
+        store.set({ status: `Скачивание: ${meta.name || "файл"}` });
+        return;
+      }
       gateway.send({ type: "file_get", file_id: fileId });
-      store.set({ status: `Запрос файла: ${fileId}` });
+      store.set({ status: `Скачивание: ${meta.name || fileId}` });
       return;
     }
 
@@ -3165,6 +3544,134 @@ export function mountApp(root: HTMLElement) {
     return `ft-${Date.now()}-${transferSeq}`;
   }
 
+  function supportsStreamDownload(): boolean {
+    try {
+      return Boolean(
+        "serviceWorker" in navigator &&
+          navigator.serviceWorker.controller &&
+          "ReadableStream" in window
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function postStreamMessage(message: { type: string; streamId: string; [key: string]: any }, transfer?: Transferable[]): boolean {
+    try {
+      const controller = navigator.serviceWorker.controller;
+      if (!controller) return false;
+      if (transfer && transfer.length) {
+        try {
+          controller.postMessage(message, transfer);
+          return true;
+        } catch {
+          // ignore and retry without transfer list
+        }
+      }
+      controller.postMessage(message);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function postStreamChunk(streamId: string, chunk: Uint8Array): boolean {
+    return postStreamMessage({ type: "PWA_STREAM_CHUNK", streamId, chunk }, [chunk.buffer]);
+  }
+
+  function postStreamEnd(streamId: string): boolean {
+    return postStreamMessage({ type: "PWA_STREAM_END", streamId });
+  }
+
+  function postStreamError(streamId: string, error: string): boolean {
+    return postStreamMessage({ type: "PWA_STREAM_ERROR", streamId, error });
+  }
+
+  function makeStreamId(): string {
+    try {
+      const uuid = (globalThis.crypto as any)?.randomUUID?.();
+      if (typeof uuid === "string" && uuid) return uuid;
+    } catch {
+      // ignore
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function buildStreamUrl(fileId: string, meta: { name: string; size: number; mime: string | null }, streamId: string): string {
+    const params = new URLSearchParams();
+    params.set("sid", streamId);
+    if (meta.name) params.set("name", meta.name);
+    if (meta.size) params.set("size", String(meta.size));
+    if (meta.mime) params.set("mime", meta.mime);
+    return `/__yagodka_stream__/files/${encodeURIComponent(fileId)}?${params.toString()}`;
+  }
+
+  function triggerBrowserDownload(url: string, name: string) {
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      if (name) a.download = name;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      window.setTimeout(() => a.remove(), 0);
+    } catch {
+      window.location.href = url;
+    }
+  }
+
+  function startStreamDownload(fileId: string, meta: { name: string; size: number; mime: string | null }): boolean {
+    if (!supportsStreamDownload()) return false;
+    if (pendingStreamRequests.size > 16) return false;
+    const existing = Array.from(pendingStreamRequests.values()).some((req) => req.fileId === fileId);
+    if (existing) return false;
+    const streamId = makeStreamId();
+    pendingStreamRequests.set(streamId, { fileId, name: meta.name, size: meta.size, mime: meta.mime });
+    const url = buildStreamUrl(fileId, meta, streamId);
+    triggerBrowserDownload(url, meta.name || "file");
+    window.setTimeout(() => {
+      if (pendingStreamRequests.has(streamId)) pendingStreamRequests.delete(streamId);
+    }, 5000);
+    return true;
+  }
+
+  const STREAM_MIN_BYTES = 8 * 1024 * 1024;
+
+  function resolveFileMeta(fileId: string): { name: string; size: number; mime: string | null } {
+    const st = store.get();
+    const transfer = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+    if (transfer) {
+      return {
+        name: transfer.name || "файл",
+        size: Number(transfer.size || 0) || 0,
+        mime: transfer.mime ?? null,
+      };
+    }
+    const offer = st.fileOffersIn.find((o) => String(o.id || "").trim() === fileId);
+    if (offer) {
+      return {
+        name: offer.name || "файл",
+        size: Number(offer.size || 0) || 0,
+        mime: offer.mime ?? null,
+      };
+    }
+    const key = st.selected ? conversationKey(st.selected) : "";
+    const msgs = key ? st.conversations[key] || [] : [];
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      const att = msgs[i]?.attachment;
+      if (att?.kind !== "file") continue;
+      const fid = String(att.fileId || "").trim();
+      if (!fid || fid !== fileId) continue;
+      return {
+        name: att.name || "файл",
+        size: Number(att.size || 0) || 0,
+        mime: att.mime ?? null,
+      };
+    }
+    return { name: "файл", size: 0, mime: null };
+  }
+
   function shouldCachePreview(name: string, mime: string | null | undefined, size: number): boolean {
     const bytes = Number(size ?? 0) || 0;
     if (bytes <= 0) return false;
@@ -3771,7 +4278,22 @@ export function mountApp(root: HTMLElement) {
       const mimeRaw = msg?.mime;
       const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? mimeRaw.trim() : null;
       const silent = silentFileGets.has(fileId);
-      downloadByFileId.set(fileId, { fileId, name, size, from, room, mime, chunks: [], received: 0, lastProgress: 0 });
+      const existing = downloadByFileId.get(fileId);
+      const streamId = existing?.streamId ? String(existing.streamId) : null;
+      const streaming = Boolean(existing?.streaming && streamId);
+      downloadByFileId.set(fileId, {
+        fileId,
+        name,
+        size,
+        from,
+        room,
+        mime,
+        chunks: [],
+        received: 0,
+        lastProgress: 0,
+        streamId: streamId || null,
+        streaming,
+      });
       store.set((prev) => {
         const transfers = [...prev.fileTransfers];
         const idx = transfers.findIndex((entry) => entry.id === fileId && entry.direction === "in");
@@ -3817,9 +4339,23 @@ export function mountApp(root: HTMLElement) {
       if (!data) return true;
       const bytes = base64ToBytes(data);
       if (!bytes) return true;
-      const buf = (bytes.buffer as ArrayBuffer).slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      download.chunks.push(buf);
-      download.received += bytes.length;
+      const silent = silentFileGets.has(fileId);
+      const chunkLen = bytes.length;
+      if (download.streaming && download.streamId) {
+        const ok = postStreamChunk(download.streamId, bytes);
+        if (!ok) {
+          postStreamError(download.streamId, "stream_post_failed");
+          downloadByFileId.delete(fileId);
+          silentFileGets.delete(fileId);
+          updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "error", error: "stream_failed" }));
+          if (!silent) store.set({ status: "Ошибка файла: stream_failed" });
+          return true;
+        }
+      } else {
+        const buf = (bytes.buffer as ArrayBuffer).slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        download.chunks.push(buf);
+      }
+      download.received += chunkLen;
       const pct = download.size > 0 ? Math.min(100, Math.round((download.received / download.size) * 100)) : 0;
       if (pct !== download.lastProgress) {
         download.lastProgress = pct;
@@ -3835,6 +4371,19 @@ export function mountApp(root: HTMLElement) {
       if (download) {
         downloadByFileId.delete(fileId);
         silentFileGets.delete(fileId);
+        const isStreaming = Boolean(download.streaming && download.streamId);
+        if (isStreaming && download.streamId) {
+          postStreamEnd(download.streamId);
+          updateTransferByFileId(fileId, (entry) => ({
+            ...entry,
+            status: "complete",
+            progress: 100,
+            ...(download.mime ? { mime: download.mime } : {}),
+          }));
+          if (!silent) store.set({ status: `Скачивание завершено: ${download.name}` });
+          if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
+          return true;
+        }
         const mime = download.mime || guessMimeTypeByName(download.name);
         const blob = new Blob(download.chunks, { type: mime });
         const url = URL.createObjectURL(blob);
@@ -3876,7 +4425,9 @@ export function mountApp(root: HTMLElement) {
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
         const upload = uploadByFileId.get(fileId);
         if (upload) upload.aborted = true;
-        if (downloadByFileId.has(fileId)) downloadByFileId.delete(fileId);
+        const download = downloadByFileId.get(fileId);
+        if (download?.streamId) postStreamError(download.streamId, detail);
+        if (download) downloadByFileId.delete(fileId);
         updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "error", error: detail }));
       }
       if (!silent) store.set({ status: `Ошибка файла: ${detail}` });
@@ -3908,6 +4459,9 @@ export function mountApp(root: HTMLElement) {
     lastReadSentAt.clear();
     cachedPreviewsAttempted.clear();
     previewPrefetchAttempted.clear();
+    pushAutoAttemptUser = null;
+    pushAutoAttemptAt = 0;
+    store.set({ pwaPushSubscribed: false, pwaPushStatus: null });
     silentFileGets.clear();
     previewWarmupLastKey = "";
     previewWarmupLastSig = "";
@@ -5428,6 +5982,27 @@ export function mountApp(root: HTMLElement) {
     window.location.reload();
   }
 
+  async function forcePwaUpdate() {
+    if (pwaForceInFlight) return;
+    if (!("serviceWorker" in navigator)) {
+      store.set({ status: "PWA обновление недоступно в этом браузере" });
+      return;
+    }
+    pwaForceInFlight = true;
+    store.set({ status: "Принудительное обновление PWA…" });
+    try {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.update();
+      } catch {
+        // ignore
+      }
+      await applyPwaUpdateNow();
+    } finally {
+      pwaForceInFlight = false;
+    }
+  }
+
   function isSafeToAutoApplyUpdate(st: AppState): boolean {
     const hasActiveTransfer = (st.fileTransfers || []).some((t) => t.status === "uploading" || t.status === "downloading");
     if (hasActiveTransfer) return false;
@@ -5478,6 +6053,15 @@ export function mountApp(root: HTMLElement) {
       }));
       scheduleAutoApplyPwaUpdate();
     }
+  });
+
+  window.addEventListener("yagodka:pwa-sw-error", (ev) => {
+    const detail = (ev as CustomEvent<any>).detail;
+    const err = String(detail?.error ?? "").trim();
+    if (!err) return;
+    const st = store.get();
+    if (st.pwaPushSubscribed) return;
+    store.set({ pwaPushStatus: `Service Worker: ${err}` });
   });
 
   window.addEventListener("yagodka:pwa-update", () => {
@@ -5802,6 +6386,12 @@ export function mountApp(root: HTMLElement) {
   );
 
   layout.sidebar.addEventListener("contextmenu", (e) => {
+    const isTouchContext = Boolean(coarsePointerMq?.matches) && (e as MouseEvent).button === 0;
+    if (isTouchContext) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const { top: prevTop, left: prevLeft } = readSidebarCtxScrollSnapshot();
     const btn = (e.target as HTMLElement | null)?.closest("button[data-ctx-kind][data-ctx-id]") as HTMLButtonElement | null;
     if (!btn) return;
@@ -5965,6 +6555,12 @@ export function mountApp(root: HTMLElement) {
   );
 
   layout.chat.addEventListener("contextmenu", (e) => {
+    const isTouchContext = Boolean(coarsePointerMq?.matches) && (e as MouseEvent).button === 0;
+    if (isTouchContext) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const st = store.get();
     if (st.modal) return;
     if (!st.selected) return;
@@ -6265,6 +6861,15 @@ export function mountApp(root: HTMLElement) {
       if (!id) return;
       store.set({ status: "Удаляем аватар…" });
       gateway.send({ type: "avatar_clear" });
+    },
+    onPushEnable: () => {
+      void enablePush();
+    },
+    onPushDisable: () => {
+      void disablePush();
+    },
+    onForcePwaUpdate: () => {
+      void forcePwaUpdate();
     },
     onContextMenuAction: (itemId: string) => void handleContextMenuAction(itemId),
     onConfirmModal: () => confirmSubmit(),

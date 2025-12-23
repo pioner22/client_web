@@ -88,6 +88,9 @@ export interface RenderActions {
   onProfileRefresh: () => void;
   onProfileAvatarSelect: (file: File | null) => void;
   onProfileAvatarClear: () => void;
+  onPushEnable: () => void;
+  onPushDisable: () => void;
+  onForcePwaUpdate: () => void;
   onContextMenuAction: (itemId: string) => void;
 }
 
@@ -348,6 +351,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onSkinChange: actions.onSkinChange,
         onAvatarSelect: actions.onProfileAvatarSelect,
         onAvatarClear: actions.onProfileAvatarClear,
+        onPushEnable: actions.onPushEnable,
+        onPushDisable: actions.onPushDisable,
+        onForcePwaUpdate: actions.onForcePwaUpdate,
       });
     }
     mountChat(layout, profilePage.root);

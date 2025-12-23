@@ -353,6 +353,12 @@ export interface AppState {
   updateLatest: string | null;
   updateDismissedLatest: string | null;
   pwaUpdateAvailable: boolean;
+  pwaPushSupported: boolean;
+  pwaPushPermission: "default" | "granted" | "denied";
+  pwaPushSubscribed: boolean;
+  pwaPushPublicKey: string | null;
+  pwaPushStatus: string | null;
+  pwaPushOptOut: boolean;
 
   avatarsRev: number;
 }

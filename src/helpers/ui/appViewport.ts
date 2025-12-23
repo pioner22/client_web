@@ -31,14 +31,24 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // "Full app" height when keyboard is closed. In iOS PWA (standalone) innerHeight/clientHeight may miss bottom safe-area.
     let base = layout;
     // iOS PWA: sometimes innerHeight/clientHeight are missing the bottom safe-area, leaving a visible "black strip".
-    // Use screen.height only when it's very close to base (so we don't break Safari with browser chrome).
+    // Use screen/outer heights only when they're close to the layout viewport to avoid breaking Safari with browser chrome.
     try {
+      const candidates: number[] = [base];
       const sh = Math.round(Number((window as any).screen?.height) || 0);
-      if (iosStandalone && sh > 0 && base > 0) {
-        base = Math.max(base, sh);
-      } else if (isIos && sh > 0 && base > 0 && sh >= base && sh - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
-        base = sh;
+      if (sh > 0) {
+        if (iosStandalone && base > 0) candidates.push(sh);
+        else if (isIos && base > 0 && sh >= base && sh - base <= USE_SCREEN_HEIGHT_SLACK_PX) candidates.push(sh);
       }
+      const avail = Math.round(Number((window as any).screen?.availHeight) || 0);
+      if (avail > 0) {
+        if (iosStandalone && base > 0) candidates.push(avail);
+        else if (isIos && base > 0 && avail >= base && avail - base <= USE_SCREEN_HEIGHT_SLACK_PX) candidates.push(avail);
+      }
+      const outer = Math.round(Number((window as any).outerHeight) || 0);
+      if (outer > 0 && base > 0 && outer >= base && outer - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
+        candidates.push(outer);
+      }
+      base = Math.max(...candidates);
     } catch {
       // ignore
     }
@@ -130,6 +140,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   window.addEventListener("resize", onResize, { passive: true });
   window.addEventListener("scroll", onResize, { passive: true });
   window.addEventListener("pageshow", onResize, { passive: true });
+  window.addEventListener("orientationchange", onResize, { passive: true });
   vv?.addEventListener("resize", onResize, { passive: true });
   vv?.addEventListener("scroll", onResize, { passive: true });
   const doc = typeof document !== "undefined" ? (document as any) : null;
@@ -148,6 +159,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     window.removeEventListener("resize", onResize);
     window.removeEventListener("scroll", onResize);
     window.removeEventListener("pageshow", onResize);
+    window.removeEventListener("orientationchange", onResize);
     vv?.removeEventListener("resize", onResize);
     vv?.removeEventListener("scroll", onResize);
     if (canFocusEvents) {

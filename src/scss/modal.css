@@ -54,8 +54,8 @@
 
 .ctx-menu {
   position: fixed;
-  min-width: 200px;
-  max-width: min(300px, calc(100vw - 16px));
+  min-width: 190px;
+  max-width: min(260px, calc(100vw - 24px));
   background: var(--modal-bg);
   border: 1px solid var(--modal-border-color);
   border-radius: var(--r-lg);
@@ -73,12 +73,12 @@
   min-width: 0;
   width: min(520px, 100%);
   max-width: 100%;
-  max-height: min(44vh, calc(100dvh - 96px));
+  max-height: min(38vh, calc(100dvh - 120px));
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--r-xl) var(--r-xl) 0 0;
-  padding: 6px;
-  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  padding: 4px;
+  padding-bottom: calc(4px + env(safe-area-inset-bottom));
 }
 
 .ctx-handle {
@@ -90,8 +90,8 @@
 }
 
 .ctx-menu.ctx-menu-sheet .ctx-item {
-  padding: 9px 12px;
-  font-size: 13px;
+  padding: 8px 10px;
+  font-size: 12px;
   border-radius: var(--r-lg);
 }
 

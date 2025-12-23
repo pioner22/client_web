@@ -2,6 +2,7 @@ import type { AppState } from "../stores/types";
 import { APP_VERSION } from "../config/app";
 import { getStoredSkinId } from "../helpers/skin/skin";
 import { getStoredAuthId, getStoredSessionToken, isSessionAutoAuthBlocked } from "../helpers/auth/session";
+import { getPushOptOut } from "../helpers/pwa/pushPrefs";
 
 export function createInitialState(): AppState {
   const rememberedId = getStoredAuthId();
@@ -13,6 +14,26 @@ export function createInitialState(): AppState {
     : authMode === "auto"
       ? "Автовход…"
       : "Connecting…";
+  const pushSupported = (() => {
+    try {
+      return Boolean(
+        typeof window !== "undefined" &&
+          "serviceWorker" in navigator &&
+          "PushManager" in window &&
+          "Notification" in window
+      );
+    } catch {
+      return false;
+    }
+  })();
+  const pushPermission = (() => {
+    try {
+      return (Notification?.permission ?? "default") as "default" | "granted" | "denied";
+    } catch {
+      return "default";
+    }
+  })();
+  const pushOptOut = getPushOptOut();
   return {
     conn: "connecting",
     authed: false,
@@ -75,6 +96,12 @@ export function createInitialState(): AppState {
     updateLatest: null,
     updateDismissedLatest: null,
     pwaUpdateAvailable: false,
+    pwaPushSupported: pushSupported,
+    pwaPushPermission: pushPermission,
+    pwaPushSubscribed: false,
+    pwaPushPublicKey: null,
+    pwaPushStatus: null,
+    pwaPushOptOut: pushOptOut,
 
     avatarsRev: 0,
   };

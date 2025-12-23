@@ -129,6 +129,12 @@
   line-height: 1.35;
 }
 
+.profile-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
 .theme-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -96,12 +96,15 @@ const PRECACHE_URLS = ${JSON.stringify(precacheUrls, null, 2)};
 const RUNTIME_CACHE = CACHE_PREFIX + "runtime";
 const RUNTIME_LIMIT = 220;
 const RUNTIME_MAX_BYTES = 8 * 1024 * 1024;
-const RUNTIME_EXT_RE = /\.(js|css|jpe?g|png|gif|webp|avif|svg|ico|woff2?|ttf|otf|wasm|webmanifest)(?:\?.*)?$/i;
+const RUNTIME_EXT_RE = /\\.(js|css|jpe?g|png|gif|webp|avif|svg|ico|woff2?|ttf|otf|wasm|webmanifest)(?:\\?.*)?$/i;
 const RUNTIME_PATH_RE = /^\\/(assets|icons|skins)\\//i;
 const RUNTIME_SPECIAL = new Set(["/manifest.webmanifest", "/sw.js"]);
 const SHARE_PATH_RE = /\\/share\\/?$/i;
 const SHARE_FALLBACK_ID = "__broadcast__";
 const shareQueue = new Map();
+const STREAM_PATH_RE = /^\\/__yagodka_stream__\\/files\\/([^/?#]+)$/i;
+const STREAM_TTL_MS = 2 * 60 * 1000;
+const streams = new Map();
 
 function isNavigationRequest(req) {
   return req.mode === "navigate" || req.destination === "document";
@@ -196,6 +199,63 @@ async function handleShareFetch(event) {
   return Response.redirect("./", 303);
 }
 
+function safeHeaderFilename(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return "file";
+  return raw.replace(/[\\r\\n"]/g, "").slice(0, 180);
+}
+
+function cleanupStreams() {
+  const now = Date.now();
+  for (const [sid, info] of streams.entries()) {
+    const age = now - Number(info?.createdAt || 0);
+    if (age > STREAM_TTL_MS) streams.delete(sid);
+  }
+}
+
+async function notifyStreamReady(streamId, fileId) {
+  const payload = { type: "PWA_STREAM_READY", streamId, fileId };
+  try {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of clients) {
+      try {
+        c.postMessage(payload);
+      } catch {}
+    }
+  } catch {}
+}
+
+async function handleStreamFetch(event) {
+  const req = event.request;
+  const url = new URL(req.url);
+  const match = STREAM_PATH_RE.exec(url.pathname);
+  if (!match) return new Response("bad_request", { status: 400 });
+  const fileId = decodeURIComponent(match[1] || "");
+  const streamId = String(url.searchParams.get("sid") || "").trim();
+  if (!streamId) return new Response("missing_sid", { status: 400 });
+  if (req.headers.get("range")) return new Response("range_not_supported", { status: 416 });
+  cleanupStreams();
+  const name = safeHeaderFilename(url.searchParams.get("name") || "file");
+  const mime = String(url.searchParams.get("mime") || "").trim();
+  const sizeRaw = url.searchParams.get("size");
+  const size = Number(sizeRaw || 0);
+  const headers = new Headers();
+  headers.set("Content-Type", mime || "application/octet-stream");
+  headers.set("Cache-Control", "no-store");
+  if (Number.isFinite(size) && size > 0) headers.set("Content-Length", String(Math.round(size)));
+  if (name) headers.set("Content-Disposition", \`attachment; filename="\${name}"\`);
+  const stream = new ReadableStream({
+    start(controller) {
+      streams.set(streamId, { controller, fileId, createdAt: Date.now() });
+      notifyStreamReady(streamId, fileId);
+    },
+    cancel() {
+      streams.delete(streamId);
+    },
+  });
+  return new Response(stream, { status: 200, headers });
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
@@ -248,6 +308,51 @@ self.addEventListener("message", (event) => {
       .then((clients) => clients.forEach((c) => c.postMessage(payload)))
       .catch(() => {});
   }
+  if (data.type === "PWA_STREAM_CHUNK") {
+    const streamId = String(data.streamId || "").trim();
+    if (!streamId) return;
+    const info = streams.get(streamId);
+    if (!info || !info.controller) return;
+    const chunk = data.chunk;
+    let buf = null;
+    if (chunk instanceof ArrayBuffer) {
+      buf = new Uint8Array(chunk);
+    } else if (chunk && chunk.buffer) {
+      const byteOffset = Number(chunk.byteOffset || 0) || 0;
+      const byteLength = Number(chunk.byteLength || 0) || Number(chunk.length || 0) || 0;
+      if (byteLength) buf = new Uint8Array(chunk.buffer, byteOffset, byteLength);
+    }
+    if (buf && buf.byteLength) {
+      try {
+        info.controller.enqueue(buf);
+      } catch {}
+    }
+    return;
+  }
+  if (data.type === "PWA_STREAM_END") {
+    const streamId = String(data.streamId || "").trim();
+    if (!streamId) return;
+    const info = streams.get(streamId);
+    if (info && info.controller) {
+      try {
+        info.controller.close();
+      } catch {}
+    }
+    streams.delete(streamId);
+    return;
+  }
+  if (data.type === "PWA_STREAM_ERROR") {
+    const streamId = String(data.streamId || "").trim();
+    if (!streamId) return;
+    const info = streams.get(streamId);
+    if (info && info.controller) {
+      try {
+        info.controller.error(data.error || "stream_error");
+      } catch {}
+    }
+    streams.delete(streamId);
+    return;
+  }
   if (data.type === "PWA_SHARE_READY") {
     const source = event && event.source;
     if (source && typeof source.id === "string") {
@@ -265,6 +370,13 @@ self.addEventListener("fetch", (event) => {
   if (SHARE_PATH_RE.test(url.pathname)) {
     if (req.method === "POST") {
       event.respondWith(handleShareFetch(event));
+    }
+    return;
+  }
+
+  if (STREAM_PATH_RE.test(url.pathname)) {
+    if (req.method === "GET") {
+      event.respondWith(handleStreamFetch(event));
     }
     return;
   }
@@ -302,6 +414,66 @@ self.addEventListener("fetch", (event) => {
         } catch {}
       }
       return res;
+    })()
+  );
+});
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(
+    (async () => {
+      let payload = null;
+      try {
+        payload = event?.data?.json?.();
+      } catch {
+        payload = null;
+      }
+      if (!payload) {
+        try {
+          const text = event?.data?.text?.();
+          payload = text ? { title: "Новое сообщение", body: String(text) } : null;
+        } catch {
+          payload = null;
+        }
+      }
+      if (!payload || typeof payload !== "object") return;
+      const title = String(payload.title || "Новое сообщение");
+      const body = String(payload.body || "");
+      const tag = payload.tag ? String(payload.tag) : undefined;
+      const data = payload.data ?? null;
+      const options = {
+        body,
+        tag,
+        data,
+        icon: "./icons/icon-192.png",
+        badge: "./icons/icon-192.png",
+      };
+      try {
+        await self.registration.showNotification(title, options);
+      } catch {}
+    })()
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  const data = event?.notification?.data ?? null;
+  event.notification?.close?.();
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      if (clients && clients.length) {
+        for (const c of clients) {
+          try {
+            c.postMessage({ type: "PWA_NOTIFICATION_CLICK", payload: data });
+          } catch {}
+        }
+        try {
+          await clients[0].focus();
+          return;
+        } catch {}
+      }
+      if (self.clients.openWindow) {
+        await self.clients.openWindow("./");
+      }
     })()
   );
 });

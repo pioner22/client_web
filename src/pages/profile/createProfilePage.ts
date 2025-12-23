@@ -10,6 +10,9 @@ export interface ProfilePageActions {
   onSkinChange: (skinId: string) => void;
   onAvatarSelect: (file: File | null) => void;
   onAvatarClear: () => void;
+  onPushEnable: () => void;
+  onPushDisable: () => void;
+  onForcePwaUpdate: () => void;
 }
 
 export interface ProfilePage {
@@ -100,6 +103,17 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const themeToggle = el("div", { class: "theme-toggle", role: "group", "aria-label": "Тема" }, [btnLight, btnDark]);
   const themeHint = el("div", { class: "profile-hint" }, ["Быстрое переключение темы (светлая/тёмная)"]);
 
+  const pushLabel = el("div", { class: "modal-label" }, ["Уведомления (PWA)"]);
+  const pushStatus = el("div", { class: "profile-hint" }, ["—"]);
+  const btnPushEnable = el("button", { class: "btn btn-primary", type: "button" }, ["Включить"]);
+  const btnPushDisable = el("button", { class: "btn", type: "button" }, ["Выключить"]);
+  const pushActions = el("div", { class: "profile-actions" }, [btnPushEnable, btnPushDisable]);
+
+  const pwaUpdateLabel = el("div", { class: "modal-label" }, ["Обновление PWA"]);
+  const pwaUpdateHint = el("div", { class: "profile-hint" }, ["—"]);
+  const btnPwaUpdate = el("button", { class: "btn btn-primary", type: "button" }, ["Принудительно обновить PWA"]);
+  const pwaUpdateActions = el("div", { class: "profile-actions" }, [btnPwaUpdate]);
+
   const btnSave = el("button", { class: "btn btn-primary", type: "button" }, ["Сохранить"]);
   const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnSave, btnRefresh]);
@@ -123,6 +137,12 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     themeLabel,
     themeToggle,
     themeHint,
+    pushLabel,
+    pushActions,
+    pushStatus,
+    pwaUpdateLabel,
+    pwaUpdateActions,
+    pwaUpdateHint,
     skinLabel,
     skinSelect,
     skinHint,
@@ -150,6 +170,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   skinSelect.addEventListener("change", () => actions.onSkinChange(skinSelect.value));
   btnLight.addEventListener("click", () => actions.onSkinChange(btnLight.getAttribute("data-skin") || "telegram-exact"));
   btnDark.addEventListener("click", () => actions.onSkinChange(btnDark.getAttribute("data-skin") || "default"));
+  btnPushEnable.addEventListener("click", () => actions.onPushEnable());
+  btnPushDisable.addEventListener("click", () => actions.onPushDisable());
+  btnPwaUpdate.addEventListener("click", () => actions.onForcePwaUpdate());
 
   avatarPreview.addEventListener("click", () => avatarFile.click());
   btnAvatarUpload.addEventListener("click", () => avatarFile.click());
@@ -243,6 +266,33 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     const isLight = lightSkins.has(state.skin);
     btnLight.classList.toggle("btn-active", isLight);
     btnDark.classList.toggle("btn-active", !isLight);
+
+    const pushSupported = Boolean(state.pwaPushSupported);
+    const perm = state.pwaPushPermission;
+    const subscribed = Boolean(state.pwaPushSubscribed);
+    const serverKey = Boolean(state.pwaPushPublicKey);
+    const optOut = Boolean(state.pwaPushOptOut);
+    let pushText = "—";
+    if (!pushSupported) pushText = "Push не поддерживается в этом браузере";
+    else if (!serverKey) pushText = "Push отключен на сервере";
+    else if (perm === "denied") pushText = "Разрешение на уведомления запрещено";
+    else if (perm === "default") pushText = "Нужно разрешение на уведомления";
+    else if (subscribed) pushText = "Push включен";
+    else if (optOut) pushText = "Push отключен пользователем";
+    else pushText = "Разрешение есть, Push еще не включен";
+    if (state.pwaPushStatus && state.pwaPushStatus !== pushText) {
+      pushText = `${pushText} · ${state.pwaPushStatus}`;
+    }
+    pushStatus.textContent = pushText;
+    btnPushEnable.disabled = !pushSupported || !serverKey || subscribed;
+    btnPushDisable.disabled = !pushSupported || !subscribed;
+
+    const swSupported = typeof navigator !== "undefined" && "serviceWorker" in navigator;
+    let updateText = "Принудительно проверяет обновления и перезапускает PWA";
+    if (!swSupported) updateText = "PWA обновления не поддерживаются в этом браузере";
+    else if (state.pwaUpdateAvailable) updateText = "Доступно обновление PWA — нажмите, чтобы применить";
+    pwaUpdateHint.textContent = updateText;
+    btnPwaUpdate.disabled = !swSupported;
   }
 
   return {

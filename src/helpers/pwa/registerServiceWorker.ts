@@ -3,6 +3,18 @@ let updateNotified = false;
 let updatePollTimer: number | null = null;
 let lastBuildId = "";
 let shareReadySent = false;
+let registerStarted = false;
+
+function emitSwError(err: unknown) {
+  try {
+    const name = typeof (err as any)?.name === "string" ? String((err as any).name) : "";
+    const message = typeof (err as any)?.message === "string" ? String((err as any).message).trim() : "";
+    const detail = message ? (name ? `${name}: ${message}` : message) : name || "unknown_error";
+    window.dispatchEvent(new CustomEvent("yagodka:pwa-sw-error", { detail: { error: detail } }));
+  } catch {
+    // ignore
+  }
+}
 
 // Test-only hook (used by node --test) to inject a fake SW registration.
 export function __setUpdateRegistrationForTest(reg: ServiceWorkerRegistration | null) {
@@ -97,6 +109,14 @@ function notifySharePayload(payload: unknown) {
   window.dispatchEvent(new CustomEvent("yagodka:pwa-share", { detail: payload }));
 }
 
+function notifyStreamReady(payload: unknown) {
+  window.dispatchEvent(new CustomEvent("yagodka:pwa-stream-ready", { detail: payload }));
+}
+
+function notifyNotificationClick(payload: unknown) {
+  window.dispatchEvent(new CustomEvent("yagodka:pwa-notification-click", { detail: payload }));
+}
+
 function requestBuildId(reg?: ServiceWorkerRegistration) {
   try {
     const msg = { type: "GET_BUILD_ID" };
@@ -188,43 +208,62 @@ export function registerServiceWorker() {
     const type = (data as any).type;
     if (type === "BUILD_ID") notifyBuildId((data as any).buildId);
     if (type === "PWA_SHARE") notifySharePayload((data as any).payload);
+    if (type === "PWA_STREAM_READY") notifyStreamReady(data);
+    if (type === "PWA_NOTIFICATION_CLICK") notifyNotificationClick((data as any).payload ?? data);
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     requestBuildId();
     requestSharePayload();
   });
 
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("./sw.js", { updateViaCache: "none" })
-      .then((reg) => {
-        startUpdatePolling(reg);
+  const registerNow = () => {
+    if (registerStarted) return;
+    registerStarted = true;
+    (async () => {
+      let reg: ServiceWorkerRegistration | null = null;
+      try {
+        reg = await navigator.serviceWorker.getRegistration();
+      } catch {
+        reg = null;
+      }
+      if (!reg) {
+        reg = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+      }
+      startUpdatePolling(reg);
 
-        // If there's already a waiting worker, surface it.
-        if (reg.waiting && navigator.serviceWorker.controller) {
-          notifyUpdate(reg);
-        }
+      // If there's already a waiting worker, surface it.
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        notifyUpdate(reg);
+      }
 
-        reg.addEventListener("updatefound", () => {
-          const nw = reg.installing;
-          if (!nw) return;
-          nw.addEventListener("statechange", () => {
-            // Only notify when updating an existing installation.
-            if (nw.state === "installed" && reg.waiting && navigator.serviceWorker.controller) {
-              notifyUpdate(reg);
-            }
-          });
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener("statechange", () => {
+          // Only notify when updating an existing installation.
+          if (nw.state === "installed" && reg.waiting && navigator.serviceWorker.controller) {
+            notifyUpdate(reg);
+          }
         });
+      });
 
-        requestBuildId(reg);
-        requestSharePayload(reg);
-        navigator.serviceWorker.ready
-          .then(() => {
-            requestBuildId(reg);
-            requestSharePayload(reg);
-          })
-          .catch(() => {});
-      })
-      .catch(() => {});
-  });
+      requestBuildId(reg);
+      requestSharePayload(reg);
+      navigator.serviceWorker.ready
+        .then(() => {
+          requestBuildId(reg);
+          requestSharePayload(reg);
+        })
+        .catch(() => {});
+    })().catch((err) => emitSwError(err));
+  };
+
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    registerNow();
+  } else {
+    window.addEventListener("load", registerNow, { once: true });
+    window.setTimeout(() => {
+      if (!registerStarted && document.readyState !== "loading") registerNow();
+    }, 3_000);
+  }
 }

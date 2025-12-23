@@ -151,7 +151,20 @@ export function handleServerMessage(
 
   if (t === "welcome") {
     const sv = typeof msg?.server_version === "string" ? msg.server_version : state.serverVersion;
-    patch({ serverVersion: sv, status: "Handshake OK" });
+    const pushKey = typeof msg?.pwa_push_public_key === "string" ? String(msg.pwa_push_public_key).trim() : "";
+    const pushPermission = (() => {
+      try {
+        return (Notification?.permission ?? state.pwaPushPermission ?? "default") as "default" | "granted" | "denied";
+      } catch {
+        return state.pwaPushPermission ?? "default";
+      }
+    })();
+    patch({
+      serverVersion: sv,
+      status: "Handshake OK",
+      pwaPushPermission: pushPermission,
+      ...(pushKey ? { pwaPushPublicKey: pushKey } : {}),
+    });
     return;
   }
   if (t === "session_replaced") {
@@ -191,6 +204,24 @@ export function handleServerMessage(
     gateway.send({ type: "group_list" });
     gateway.send({ type: "board_list" });
     gateway.send({ type: "profile_get" });
+    return;
+  }
+  if (t === "pwa_push_subscribe_result") {
+    const ok = Boolean(msg?.ok);
+    const active = Boolean(msg?.active);
+    const status = ok ? (active ? "Push подписка активна" : "Push подписка сохранена (сервер выключен)") : "Не удалось включить Push";
+    patch({
+      pwaPushSubscribed: ok,
+      pwaPushStatus: status,
+    });
+    return;
+  }
+  if (t === "pwa_push_unsubscribe_result") {
+    const ok = Boolean(msg?.ok);
+    patch({
+      pwaPushSubscribed: !ok ? state.pwaPushSubscribed : false,
+      pwaPushStatus: ok ? "Push отключен" : "Не удалось отключить Push",
+    });
     return;
   }
   if (t === "auth_fail") {
@@ -1516,6 +1547,36 @@ export function handleServerMessage(
     if (!key || key.endsWith(":")) return;
     const kind = from === state.selfId ? "out" : "in";
     const attachment = parseAttachment(msg?.attachment);
+    if (kind === "in") {
+      try {
+        const hidden = typeof document !== "undefined" && document.visibilityState !== "visible";
+        const perm = (Notification?.permission ?? "default") as "default" | "granted" | "denied";
+        if (hidden && perm === "granted") {
+          const profile = state.profiles?.[from];
+          let fromLabel = String(profile?.display_name || "").trim();
+          if (!fromLabel) {
+            const handle = String(profile?.handle || "").trim();
+            fromLabel = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : from;
+          }
+          let title = fromLabel || "Новое сообщение";
+          let body = String(text || "").trim();
+          if (!body) {
+            if (attachment?.kind === "file") body = `Файл: ${attachment.name || "файл"}`;
+            else body = "Новое сообщение";
+          }
+          if (room) {
+            const group = (state.groups || []).find((g) => g.id === room);
+            const board = !group ? (state.boards || []).find((b) => b.id === room) : null;
+            const roomLabel = group ? String(group.name || group.id) : board ? String(board.name || board.id) : room;
+            title = group ? `Чат: ${roomLabel}` : board ? `Доска: ${roomLabel}` : `Чат: ${roomLabel}`;
+            if (fromLabel) body = `${fromLabel}: ${body}`;
+          }
+          new Notification(title, { body, tag: room || from });
+        }
+      } catch {
+        // ignore
+      }
+    }
     patch((prev) =>
       upsertConversation(prev, key, {
         kind,
