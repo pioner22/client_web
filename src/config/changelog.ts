@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.122",
+    date: "2025-12-23",
+    fixed: ["Android/PWA: не используем screen.height на не‑iOS — поле ввода не уезжает под экран"],
+  },
+  {
     version: "0.1.121",
     date: "2025-12-23",
     fixed: [

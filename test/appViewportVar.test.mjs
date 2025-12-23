@@ -167,6 +167,7 @@ test("viewport var: installAppViewportHeightVar может подхватить 
   const prev = {
     window: globalThis.window,
     document: globalThis.document,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
   };
   try {
     const style = {
@@ -180,6 +181,11 @@ test("viewport var: installAppViewportHeightVar может подхватить 
     };
     const root = { style };
 
+    Object.defineProperty(globalThis, "navigator", {
+      value: { userAgent: "iPhone", maxTouchPoints: 0 },
+      configurable: true,
+      writable: true,
+    });
     globalThis.document = { documentElement: { clientHeight: 810 } };
     globalThis.window = {
       innerHeight: 810,
@@ -206,6 +212,62 @@ test("viewport var: installAppViewportHeightVar может подхватить 
     else globalThis.window = prev.window;
     if (prev.document === undefined) delete globalThis.document;
     else globalThis.document = prev.document;
+    if (prev.navigator) Object.defineProperty(globalThis, "navigator", prev.navigator);
+    else delete globalThis.navigator;
+  }
+});
+
+test("viewport var: installAppViewportHeightVar игнорирует screen.height на не-iOS", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    Object.defineProperty(globalThis, "navigator", {
+      value: { userAgent: "", maxTouchPoints: 0 },
+      configurable: true,
+      writable: true,
+    });
+    globalThis.document = { documentElement: { clientHeight: 700 } };
+    globalThis.window = {
+      innerHeight: 700,
+      screen: { height: 780 },
+      visualViewport: { height: 690.2, addEventListener() {}, removeEventListener() {} },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "700px");
+
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+    if (prev.navigator) Object.defineProperty(globalThis, "navigator", prev.navigator);
+    else delete globalThis.navigator;
   }
 });
 

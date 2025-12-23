@@ -3,7 +3,8 @@ import { isIOS, isStandaloneDisplayMode } from "./iosInputAssistant";
 export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let rafId: number | null = null;
   let lastHeight = 0;
-  const iosStandalone = isIOS() && isStandaloneDisplayMode();
+  const isIos = isIOS();
+  const iosStandalone = isIos && isStandaloneDisplayMode();
   const docEl = typeof document !== "undefined" ? document.documentElement : null;
 
   const setVar = (name: string, value: string | null) => {
@@ -35,7 +36,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       const sh = Math.round(Number((window as any).screen?.height) || 0);
       if (iosStandalone && sh > 0 && base > 0) {
         base = Math.max(base, sh);
-      } else if (sh > 0 && base > 0 && sh >= base && sh - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
+      } else if (isIos && sh > 0 && base > 0 && sh >= base && sh - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
         base = sh;
       }
     } catch {
