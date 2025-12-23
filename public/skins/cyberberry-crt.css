@@ -622,3 +622,43 @@
     transition: none !important;
   }
 }
+
+/* Telegram baseline: единая типографика и геометрия */
+:root {
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-size: 15px;
+  --line-height: 1.35;
+  --font-weight: 400;
+
+  --app-outer-pad: 0px;
+  --app-max-width: 100%;
+  --app-border-width: 0px;
+  --app-border-color: transparent;
+  --app-radius: 0px;
+  --app-shadow: none;
+  --app-overflow: hidden;
+
+  --header-pad-y: 10px;
+  --header-pad-x: 12px;
+  --header-gap-y: 6px;
+  --header-gap-x: 12px;
+
+  --sidebar-width: 380px;
+  --sidebar-pad: 10px;
+
+  --chat-pad: 16px;
+  --chat-line-gap: 6px;
+
+  --composer-pad-y: 10px;
+  --composer-pad-x: 12px;
+  --composer-gap: 10px;
+
+  --row-pad-y: 8px;
+  --row-pad-x: 10px;
+  --row-radius: 10px;
+
+  --msg-body-max-width: min(78%, 720px);
+  --msg-in-justify: flex-start;
+  --msg-out-justify: flex-end;
+  --msg-sys-justify: center;
+}

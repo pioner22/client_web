@@ -364,11 +364,15 @@ function messageLine(state: AppState, m: ChatMessage): HTMLElement {
 
 export function renderChat(layout: Layout, state: AppState) {
   const scrollHost = layout.chatHost;
+  const hostState = scrollHost as any;
   const key = state.selected ? conversationKey(state.selected) : "";
   const prevKey = String(scrollHost.getAttribute("data-chat-key") || "");
   const keyChanged = key !== prevKey;
+  if (keyChanged && hostState.__stickBottom) hostState.__stickBottom = null;
   const atBottom = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
   const stickToBottom = keyChanged || atBottom;
+  if (stickToBottom && key) hostState.__stickBottom = { key, active: true, at: Date.now() };
+  else if (hostState.__stickBottom && hostState.__stickBottom.key === key) hostState.__stickBottom.active = false;
   scrollHost.setAttribute("data-chat-key", key);
 
   const msgs = (key && state.conversations[key]) || [];
@@ -537,9 +541,25 @@ export function renderChat(layout: Layout, state: AppState) {
   scrollHost.replaceChildren(el("div", { class: "chat-lines" }, lines));
   layout.chatJump.classList.toggle("hidden", stickToBottom);
   if (stickToBottom && key) {
-    queueMicrotask(() => {
+    const shouldStick = () => {
+      const st = hostState.__stickBottom;
+      return Boolean(st && st.active && st.key === key);
+    };
+    const stickNow = () => {
+      if (!shouldStick()) return;
       if (String(scrollHost.getAttribute("data-chat-key") || "") !== key) return;
       scrollHost.scrollTop = scrollHost.scrollHeight;
-    });
+    };
+    queueMicrotask(stickNow);
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(stickNow);
+    } else {
+      stickNow();
+    }
+    if (typeof setTimeout === "function") setTimeout(stickNow, 80);
+    const images = typeof scrollHost.querySelectorAll === "function" ? scrollHost.querySelectorAll("img.chat-file-img") : [];
+    for (const img of images) {
+      img.addEventListener("load", stickNow, { once: true });
+    }
   }
 }

@@ -60,6 +60,7 @@ test("viewport var: installAppViewportHeightVar использует innerHeight
 
     globalThis.window = {
       innerHeight: 700,
+      screen: { height: 0 },
       visualViewport: {
         height: 642.2,
         addEventListener(type, cb) {
@@ -95,8 +96,7 @@ test("viewport var: installAppViewportHeightVar использует innerHeight
       },
     };
 
-    // Ensure it doesn't crash without document.
-    globalThis.document = undefined;
+    globalThis.document = { activeElement: null, documentElement: { clientHeight: 700 } };
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "700px");
@@ -135,6 +135,7 @@ test("viewport var: installAppViewportHeightVar предпочитает documen
     globalThis.document = { documentElement: { clientHeight: 740 } };
     globalThis.window = {
       innerHeight: 700,
+      screen: { height: 0 },
       visualViewport: { height: 690.2, addEventListener() {}, removeEventListener() {} },
       requestAnimationFrame(cb) {
         cb();
@@ -232,6 +233,7 @@ test("viewport var: installAppViewportHeightVar переключается на 
 
     globalThis.window = {
       innerHeight: 700,
+      screen: { height: 0 },
       visualViewport: {
         height: 390.2,
         addEventListener(type, cb) {
@@ -268,7 +270,8 @@ test("viewport var: installAppViewportHeightVar переключается на 
     };
 
     // Ensure it doesn't crash without document.
-    globalThis.document = undefined;
+    const active = { tagName: "TEXTAREA", isContentEditable: false };
+    globalThis.document = { activeElement: active, documentElement: { clientHeight: 700 } };
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "390px");
@@ -311,6 +314,7 @@ test("viewport var: при фокусе на input/textarea переключае
     globalThis.document = { activeElement: active, documentElement: { clientHeight: 700 } };
     globalThis.window = {
       innerHeight: 700,
+      screen: { height: 0 },
       visualViewport: { height: 642.2, addEventListener() {}, removeEventListener() {} },
       requestAnimationFrame(cb) {
         cb();
@@ -356,6 +360,7 @@ test("viewport var: учитывает visualViewport.offsetTop, чтобы не
     const vvListeners = new Map();
     globalThis.window = {
       innerHeight: 844,
+      screen: { height: 0 },
       visualViewport: {
         height: 520.2,
         offsetTop: 120.1,
@@ -381,7 +386,8 @@ test("viewport var: учитывает visualViewport.offsetTop, чтобы не
       removeEventListener() {},
     };
 
-    globalThis.document = undefined;
+    const active = { tagName: "TEXTAREA", isContentEditable: false };
+    globalThis.document = { activeElement: active, documentElement: { clientHeight: 844 } };
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "520px");

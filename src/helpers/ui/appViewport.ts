@@ -67,7 +67,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       activeEditable = false;
     }
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
-    const keyboard = Boolean(vvHeight && layout && coveredBottom >= keyboardThreshold);
+    const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
     const resolved = keyboard ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
     return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom) };

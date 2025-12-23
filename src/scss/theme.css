@@ -17,8 +17,8 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, "Apple Color Emoji",
     "Segoe UI Emoji";
-  --font-family: var(--mono);
-  --font-size: 14px;
+  --font-family: var(--sans);
+  --font-size: 15px;
   --line-height: 1.35;
   --font-weight: 400;
 
@@ -72,7 +72,7 @@
   --app-border-width: 0px;
   --app-radius: 0px;
   --app-shadow: none;
-  --app-overflow: visible;
+  --app-overflow: hidden;
 
   /* App grid rows: header / main / composer / footer */
   --app-row-header: auto;
@@ -87,10 +87,10 @@
   --header-bg: var(--panel);
   --header-border-color: var(--line);
   --header-border-width: var(--border-width);
-  --header-pad-y: var(--sp-3);
-  --header-pad-x: var(--sp-4);
-  --header-gap-y: var(--sp-2);
-  --header-gap-x: var(--sp-4);
+  --header-pad-y: 10px;
+  --header-pad-x: 12px;
+  --header-gap-y: 6px;
+  --header-gap-x: 12px;
   --header-left-color: var(--text);
   --header-right-color: var(--muted);
   --header-label-color: var(--muted);
@@ -106,18 +106,18 @@
   --sidebar-bg: var(--panel);
   --sidebar-border-color: var(--line);
   --sidebar-border-width: var(--border-width);
-  --sidebar-pad: var(--sp-4);
-  --sidebar-width: 320px;
+  --sidebar-pad: 10px;
+  --sidebar-width: 380px;
 
   --chat-bg: var(--bg);
-  --chat-pad: var(--sp-4);
+  --chat-pad: 16px;
 
   --composer-bg: var(--panel);
   --composer-border-color: var(--line);
   --composer-border-width: var(--border-width);
-  --composer-pad-y: var(--sp-2);
-  --composer-pad-x: var(--sp-4);
-  --composer-gap: var(--sp-2);
+  --composer-pad-y: 10px;
+  --composer-pad-x: 12px;
+  --composer-gap: 10px;
   --prompt-color: var(--muted);
 
   --footer-bg: var(--panel);
@@ -203,10 +203,10 @@
   /* ===== Sidebar rows ===== */
   --row-bg: transparent;
   --row-text: var(--text);
-  --row-pad-y: 6px;
-  --row-pad-x: 8px;
+  --row-pad-y: 8px;
+  --row-pad-x: 10px;
   --row-gap: 8px;
-  --row-radius: var(--r-sm);
+  --row-radius: 10px;
   --row-bg-hover: var(--panel2);
   --row-bg-selected: var(--sel);
   --row-star-color: var(--warn);
@@ -233,7 +233,7 @@
   --chat-line-gap: 6px;
   --msg-pad-y: 2px;
   --msg-status-read-color: var(--focus);
-  --msg-body-max-width: 72%;
+  --msg-body-max-width: min(78%, 720px);
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-end;
   --msg-sys-justify: flex-start;

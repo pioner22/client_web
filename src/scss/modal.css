@@ -73,12 +73,12 @@
   min-width: 0;
   width: min(520px, 100%);
   max-width: 100%;
-  max-height: min(54vh, calc(100dvh - 32px));
+  max-height: min(44vh, calc(100dvh - 96px));
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--r-xl) var(--r-xl) 0 0;
-  padding: 8px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  padding: 6px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
 }
 
 .ctx-handle {
@@ -90,8 +90,8 @@
 }
 
 .ctx-menu.ctx-menu-sheet .ctx-item {
-  padding: 12px 12px;
-  font-size: 14px;
+  padding: 10px 12px;
+  font-size: 13px;
   border-radius: var(--r-lg);
 }
 

@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.119",
+    date: "2025-12-23",
+    fixed: [
+      "Чаты: при открытии снова держим скролл у низа, даже если картинки догружаются (не «в середине истории»)",
+      "iOS/Touch: кастомная каретка отключена на тач‑устройствах — меньше кривых позиций после клавиатуры",
+      "Viewport: клавиатура считается активной только при фокусе на input/textarea (меньше ложных сдвигов)",
+    ],
+    improved: [
+      "Контекст‑меню на мобилке компактнее (не на пол‑экрана)",
+      "Скины: унифицирована типографика/геометрия под Telegram‑схему",
+    ],
+  },
+  {
     version: "0.1.118",
     date: "2025-12-23",
     fixed: [

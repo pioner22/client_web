@@ -132,7 +132,14 @@ export function installFancyCaret(): void {
       return false;
     }
   })();
-  if (isIOS || coarsePointer) return;
+  const hasTouch = (() => {
+    try {
+      return Number((navigator as any)?.maxTouchPoints || 0) > 0;
+    } catch {
+      return false;
+    }
+  })();
+  if (isIOS || coarsePointer || hasTouch) return;
 
   w.__yagodka_fancy_caret_installed = true;
 

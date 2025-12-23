@@ -533,6 +533,12 @@ export function mountApp(root: HTMLElement) {
       const scrollTop = layout.chatHost.scrollTop;
       const scrollingUp = scrollTop < lastChatScrollTop;
       lastChatScrollTop = scrollTop;
+      const hostState = layout.chatHost as any;
+      const stick = hostState.__stickBottom;
+      if (stick && stick.active) {
+        const atBottom = scrollTop + layout.chatHost.clientHeight >= layout.chatHost.scrollHeight - 24;
+        if (!atBottom) stick.active = false;
+      }
       scheduleChatJumpVisibility();
       maybeAutoLoadMoreHistory(scrollTop, scrollingUp);
     },
@@ -4164,6 +4170,15 @@ export function mountApp(root: HTMLElement) {
     autosizeInput(layout.input);
     scheduleSaveDrafts(store);
   });
+  layout.input.addEventListener("focus", () => autosizeInput(layout.input));
+  layout.input.addEventListener("blur", () => autosizeInput(layout.input));
+
+  const vv = window.visualViewport;
+  const onViewportResize = () => {
+    if (document.activeElement !== layout.input) return;
+    autosizeInput(layout.input);
+  };
+  vv?.addEventListener("resize", onViewportResize, { passive: true });
 
   layout.input.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && emojiOpen) {
