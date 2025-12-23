@@ -17,6 +17,18 @@ html {
   overscroll-behavior: none;
 }
 
+html.is-ios {
+  position: fixed;
+  width: 100%;
+  height: var(--app-vh, 100%);
+  min-height: var(--app-vh, 100%);
+}
+
+html.is-ios body {
+  height: var(--app-vh, 100%);
+  min-height: var(--app-vh, 100%);
+}
+
 body {
   display: block;
   overflow: hidden;

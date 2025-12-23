@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.117",
+    date: "2025-12-23",
+    fixed: ["iPhone/PWA: усилили фуллскрин (html фиксируется, высота берётся из --app-vh) — меньше шансов на чёрную полосу снизу"],
+    improved: ["Viewport: --app-vh/--safe-bottom теперь пишем и в :root, чтобы iOS корректно растягивал layout"],
+  },
+  {
     version: "0.1.116",
     date: "2025-12-23",
     fixed: [

@@ -4,11 +4,23 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let rafId: number | null = null;
   let lastHeight = 0;
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
+  const docEl = typeof document !== "undefined" ? document.documentElement : null;
+
+  const setVar = (name: string, value: string | null) => {
+    const docStyle = docEl && (docEl as HTMLElement).style ? (docEl as HTMLElement).style : null;
+    if (value === null) {
+      root.style.removeProperty(name);
+      docStyle?.removeProperty(name);
+      return;
+    }
+    root.style.setProperty(name, value);
+    docStyle?.setProperty(name, value);
+  };
 
   const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 48;
-    const USE_SCREEN_HEIGHT_SLACK_PX = iosStandalone ? 200 : 120;
+    const USE_SCREEN_HEIGHT_SLACK_PX = 120;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
@@ -21,7 +33,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // Use screen.height only when it's very close to base (so we don't break Safari with browser chrome).
     try {
       const sh = Math.round(Number((window as any).screen?.height) || 0);
-      if (sh > 0 && base > 0 && sh >= base && sh - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
+      if (iosStandalone && sh > 0 && base > 0) {
+        base = Math.max(base, sh);
+      } else if (sh > 0 && base > 0 && sh >= base && sh - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
         base = sh;
       }
     } catch {
@@ -66,24 +80,24 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
     // and creates an ugly gap above the keyboard. Override it to 0 while keyboard is open.
-    if (keyboard) root.style.setProperty("--safe-bottom", "0px");
-    else root.style.removeProperty("--safe-bottom");
+    if (keyboard) setVar("--safe-bottom", "0px");
+    else setVar("--safe-bottom", null);
 
     // iOS Safari/PWA: when the keyboard opens WebKit can scroll the *visual* viewport (offsetTop > 0).
     // If we only shrink height to visualViewport.height, the app ends above the visible bottom and leaves a
     // "black strip" + composer jumps upward. Anchor the fixed app to visualViewport.offsetTop.
-    if (keyboard && vvTop >= 1) root.style.setProperty("--app-vv-top", `${vvTop}px`);
-    else root.style.removeProperty("--app-vv-top");
+    if (keyboard && vvTop >= 1) setVar("--app-vv-top", `${vvTop}px`);
+    else setVar("--app-vv-top", null);
 
     // Similarly, when keyboard is open we want the fixed app to end at the visual viewport bottom.
     // Expose the covered bottom (usually keyboard height) as CSS var so mobile layout can use `bottom: ...`
     // instead of relying solely on `height: ...` (more stable on iOS).
-    if (keyboard && vvBottom >= 1) root.style.setProperty("--app-vv-bottom", `${vvBottom}px`);
-    else root.style.removeProperty("--app-vv-bottom");
+    if (keyboard && vvBottom >= 1) setVar("--app-vv-bottom", `${vvBottom}px`);
+    else setVar("--app-vv-bottom", null);
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;
-    root.style.setProperty("--app-vh", `${height}px`);
+    setVar("--app-vh", `${height}px`);
   };
 
   const schedule = () => {
@@ -131,9 +145,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       doc.removeEventListener("focusout", onResize);
       doc.removeEventListener("visibilitychange", onVisibility);
     }
-    root.style.removeProperty("--app-vh");
-    root.style.removeProperty("--safe-bottom");
-    root.style.removeProperty("--app-vv-top");
-    root.style.removeProperty("--app-vv-bottom");
+    setVar("--app-vh", null);
+    setVar("--safe-bottom", null);
+    setVar("--app-vv-top", null);
+    setVar("--app-vv-bottom", null);
   };
 }
