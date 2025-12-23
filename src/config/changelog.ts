@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.138",
+    date: "2025-12-23",
+    improved: [
+      "Профиль: при изменении полей страница не сбрасывает скролл наверх",
+      "Контакты (светлая тема): hover/selected контрастнее, выделение темно‑синее",
+    ],
+    fixed: ["Чат: полотно истории стабильнее на touch (меньше «сдвига» при свайпе)"],
+  },
+  {
     version: "0.1.137",
     date: "2025-12-23",
     improved: [

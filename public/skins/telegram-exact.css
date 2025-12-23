@@ -125,6 +125,7 @@
   --row-radius: 0px;
   --row-bg-hover: rgba(0, 0, 0, 0.04);
   --row-bg-selected: #3390ec;
+  --row-bg-selected-hover: #2b6fc2;
   --row-text-selected: #ffffff;
   --row-text-selected-muted: rgba(255, 255, 255, 0.85);
   --row-unread-selected-bg: #ffffff;
@@ -236,6 +237,7 @@
   --row-text: #e6e9ee;
   --row-bg-hover: rgba(255, 255, 255, 0.04);
   --row-bg-selected: #2b5278;
+  --row-bg-selected-hover: #24486d;
   --row-dot-online: #4ea4f6;
   --row-dot-offline: rgba(139, 155, 176, 0.8);
   --row-prefix-color: rgba(139, 155, 176, 0.85);

@@ -156,6 +156,11 @@
   color: var(--row-text-selected);
 }
 
+.row-sel:hover {
+  background: var(--row-bg-selected-hover);
+  color: var(--row-text-selected-hover);
+}
+
 .row-sel .row-sub,
 .row-sel .row-time,
 .row-sel .row-prefix,

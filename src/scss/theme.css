@@ -213,6 +213,8 @@
   --row-bg-selected: var(--sel);
   --row-text-selected: var(--text);
   --row-text-selected-muted: color-mix(in srgb, var(--text), var(--muted) 40%);
+  --row-bg-selected-hover: var(--row-bg-selected);
+  --row-text-selected-hover: var(--row-text-selected);
   --row-unread-selected-bg: var(--panel);
   --row-unread-selected-text: var(--focus);
   --row-star-color: var(--warn);

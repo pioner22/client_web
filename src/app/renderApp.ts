@@ -270,10 +270,12 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.chatTop.replaceChildren();
     layout.chatHost.removeAttribute("data-chat-key");
     layout.chatJump.classList.add("hidden");
-    try {
-      layout.chatHost.scrollTop = 0;
-    } catch {
-      // ignore
+    if (pageChanged) {
+      try {
+        layout.chatHost.scrollTop = 0;
+      } catch {
+        // ignore
+      }
     }
   }
   if (inlineModal && modalNode) {

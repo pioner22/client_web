@@ -89,6 +89,8 @@
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   overflow-anchor: none;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .input-wrap {
