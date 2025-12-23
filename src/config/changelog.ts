@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.121",
+    date: "2025-12-23",
+    fixed: [
+      "Чат: автоскролл удерживает низ при открытии и наборе текста (не «застревает» посередине)",
+      "История: автоскролл теперь зависит от sticky-флага, а не от текущего clientHeight (устойчиво при изменении высоты ввода)",
+    ],
+  },
+  {
     version: "0.1.120",
     date: "2025-12-23",
     fixed: [

@@ -534,10 +534,15 @@ export function mountApp(root: HTMLElement) {
       const scrollingUp = scrollTop < lastChatScrollTop;
       lastChatScrollTop = scrollTop;
       const hostState = layout.chatHost as any;
-      const stick = hostState.__stickBottom;
-      if (stick && stick.active) {
-        const atBottom = scrollTop + layout.chatHost.clientHeight >= layout.chatHost.scrollHeight - 24;
-        if (!atBottom) stick.active = false;
+      const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
+      const atBottom = scrollTop + layout.chatHost.clientHeight >= layout.chatHost.scrollHeight - 24;
+      if (key) {
+        const stick = hostState.__stickBottom;
+        if (!stick || stick.key !== key) {
+          hostState.__stickBottom = { key, active: atBottom, at: Date.now() };
+        } else {
+          stick.active = atBottom;
+        }
       }
       scheduleChatJumpVisibility();
       maybeAutoLoadMoreHistory(scrollTop, scrollingUp);
@@ -686,6 +691,8 @@ export function mountApp(root: HTMLElement) {
     if (jumpBtn) {
       e.preventDefault();
       layout.chatHost.scrollTop = layout.chatHost.scrollHeight;
+      const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
+      if (key) (layout.chatHost as any).__stickBottom = { key, active: true, at: Date.now() };
       scheduleChatJumpVisibility();
       return;
     }

@@ -415,7 +415,9 @@ export function renderChat(layout: Layout, state: AppState) {
   const keyChanged = key !== prevKey;
   if (keyChanged && hostState.__stickBottom) hostState.__stickBottom = null;
   const atBottom = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
-  const stickToBottom = keyChanged || atBottom;
+  const sticky = hostState.__stickBottom;
+  const stickyActive = Boolean(sticky && sticky.active && sticky.key === key);
+  const stickToBottom = keyChanged || stickyActive || atBottom;
   if (stickToBottom && key) hostState.__stickBottom = { key, active: true, at: Date.now() };
   else if (hostState.__stickBottom && hostState.__stickBottom.key === key) hostState.__stickBottom.active = false;
   scrollHost.setAttribute("data-chat-key", key);
