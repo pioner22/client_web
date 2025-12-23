@@ -56,7 +56,13 @@ import { defaultToastTimeoutMs } from "../helpers/ui/toast";
 import { shouldAutofocusComposer } from "../helpers/ui/autofocusPolicy";
 import { armCtxClickSuppression, consumeCtxClickSuppression, type CtxClickSuppressionState } from "../helpers/ui/ctxClickSuppression";
 import { applyIosInputAssistantWorkaround, isIOS, isStandaloneDisplayMode } from "../helpers/ui/iosInputAssistant";
-import { DEFAULT_EMOJI, insertTextAtSelection, mergeEmojiPalette, updateEmojiRecents } from "../helpers/ui/emoji";
+import {
+  EMOJI_RECENTS_ID,
+  buildEmojiSections,
+  filterEmojiSections,
+  insertTextAtSelection,
+  updateEmojiRecents,
+} from "../helpers/ui/emoji";
 import { createRafScrollLock } from "../helpers/ui/rafScrollLock";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 
@@ -4044,6 +4050,14 @@ export function mountApp(root: HTMLElement) {
   const EMOJI_RECENTS_MAX = 24;
   let emojiOpen = false;
   let emojiPopover: HTMLElement | null = null;
+  let emojiTabs: HTMLElement | null = null;
+  let emojiContent: HTMLElement | null = null;
+  let emojiSearchInput: HTMLInputElement | null = null;
+  let emojiSearchWrap: HTMLElement | null = null;
+  let emojiActiveSection = EMOJI_RECENTS_ID;
+  let emojiSearch = "";
+  let emojiHideTimer: number | null = null;
+  let emojiLastQuery = "";
 
   function loadEmojiRecents(): string[] {
     try {
@@ -4065,6 +4079,45 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
+  function clearEmojiHideTimer() {
+    if (emojiHideTimer !== null) {
+      window.clearTimeout(emojiHideTimer);
+      emojiHideTimer = null;
+    }
+  }
+
+  function setActiveEmojiTab(sectionId: string) {
+    emojiActiveSection = sectionId;
+    if (!emojiTabs) return;
+    const tabs = emojiTabs.querySelectorAll<HTMLButtonElement>("button.emoji-tab[data-emoji-section]");
+    tabs.forEach((btn) => {
+      const active = btn.dataset.emojiSection === sectionId;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+
+  function syncEmojiActiveTabFromScroll() {
+    if (!emojiContent) return;
+    const sections = Array.from(emojiContent.querySelectorAll<HTMLElement>(".emoji-section[data-section]"));
+    if (!sections.length) return;
+    const top = emojiContent.scrollTop + 8;
+    let current = sections[0];
+    for (const section of sections) {
+      if (section.offsetTop <= top) current = section;
+      else break;
+    }
+    const nextId = current.dataset.section;
+    if (nextId) setActiveEmojiTab(nextId);
+  }
+
+  function scrollToEmojiSection(sectionId: string, behavior: ScrollBehavior = "smooth") {
+    if (!emojiContent) return;
+    const target = emojiContent.querySelector<HTMLElement>(`.emoji-section[data-section="${sectionId}"]`);
+    if (!target) return;
+    emojiContent.scrollTo({ top: Math.max(0, target.offsetTop - 4), behavior });
+  }
+
   function ensureEmojiPopover(): HTMLElement {
     if (emojiPopover) return emojiPopover;
     const pop = el("div", { class: "emoji-popover hidden", role: "dialog", "aria-label": "Эмодзи" });
@@ -4072,11 +4125,62 @@ export function mountApp(root: HTMLElement) {
     (field || layout.inputWrap).append(pop);
     emojiPopover = pop;
 
+    const closeBtn = el(
+      "button",
+      { class: "btn emoji-close", type: "button", "aria-label": "Закрыть эмодзи", "data-action": "emoji-close" },
+      ["×"]
+    );
+    const searchInput = el("input", {
+      class: "emoji-search-input",
+      type: "search",
+      placeholder: "Поиск эмодзи",
+      "aria-label": "Поиск эмодзи",
+    });
+    emojiSearchInput = searchInput;
+    const clearBtn = el(
+      "button",
+      { class: "emoji-search-clear", type: "button", "aria-label": "Очистить поиск", "data-action": "emoji-search-clear" },
+      ["×"]
+    );
+    const searchWrap = el("label", { class: "emoji-search", role: "search" }, [searchInput, clearBtn]);
+    emojiSearchWrap = searchWrap;
+    const head = el("div", { class: "emoji-head" }, [searchWrap, closeBtn]);
+    const tabs = el("div", { class: "emoji-tabs", role: "tablist", "aria-label": "Категории эмодзи" });
+    emojiTabs = tabs;
+    const content = el("div", { class: "emoji-content", role: "tabpanel", "aria-label": "Список эмодзи" });
+    emojiContent = content;
+    pop.append(head, tabs, content);
+
     pop.addEventListener("click", (ev) => {
       const closeBtn = (ev.target as HTMLElement | null)?.closest("button[data-action='emoji-close']") as HTMLButtonElement | null;
       if (closeBtn) {
         ev.preventDefault();
         closeEmojiPopover();
+        return;
+      }
+
+      const clearBtn = (ev.target as HTMLElement | null)?.closest("button[data-action='emoji-search-clear']") as HTMLButtonElement | null;
+      if (clearBtn) {
+        ev.preventDefault();
+        emojiSearch = "";
+        if (emojiSearchInput) emojiSearchInput.value = "";
+        renderEmojiPopover();
+        try {
+          emojiSearchInput?.focus({ preventScroll: true });
+        } catch {
+          emojiSearchInput?.focus();
+        }
+        return;
+      }
+
+      const tabBtn = (ev.target as HTMLElement | null)?.closest("button[data-emoji-section]") as HTMLButtonElement | null;
+      if (tabBtn) {
+        ev.preventDefault();
+        const nextId = String(tabBtn.dataset.emojiSection || "");
+        if (nextId) {
+          setActiveEmojiTab(nextId);
+          scrollToEmojiSection(nextId);
+        }
         return;
       }
 
@@ -4119,26 +4223,95 @@ export function mountApp(root: HTMLElement) {
       closeEmojiPopover();
     });
 
+    searchInput.addEventListener("input", () => {
+      emojiSearch = searchInput.value || "";
+      renderEmojiPopover();
+    });
+
+    const onEmojiScroll = () => {
+      if (!emojiOpen) return;
+      syncEmojiActiveTabFromScroll();
+    };
+    content.addEventListener("scroll", onEmojiScroll, { passive: true });
+
     return pop;
+  }
+
+  function renderEmojiTabs(sections: ReturnType<typeof buildEmojiSections>) {
+    if (!emojiTabs) return;
+    if (!sections.length) {
+      emojiTabs.replaceChildren();
+      return;
+    }
+    if (!sections.some((s) => s.id === emojiActiveSection)) {
+      emojiActiveSection = sections[0].id;
+    }
+    const buttons = sections.map((section) =>
+      el(
+        "button",
+        {
+          class: `emoji-tab${section.id === emojiActiveSection ? " is-active" : ""}`,
+          type: "button",
+          role: "tab",
+          "data-emoji-section": section.id,
+          "aria-selected": section.id === emojiActiveSection ? "true" : "false",
+          "aria-controls": `emoji-section-${section.id}`,
+          title: section.title,
+        },
+        [section.icon]
+      )
+    );
+    emojiTabs.replaceChildren(...buttons);
+  }
+
+  function renderEmojiContent(sections: ReturnType<typeof buildEmojiSections>, hasQuery: boolean) {
+    if (!emojiContent) return;
+    const contentNodes: HTMLElement[] = [];
+    for (const section of sections) {
+      if (!section.items.length) continue;
+      const title = el("div", { class: "emoji-section-title" }, [section.title]);
+      const grid = el(
+        "div",
+        { class: "emoji-grid", role: "listbox", "aria-label": section.title },
+        section.items.map((e) =>
+          el("button", { class: "emoji-btn", type: "button", "data-emoji": e, title: e, "aria-label": e }, [e])
+        )
+      );
+      const block = el(
+        "section",
+        { class: "emoji-section", id: `emoji-section-${section.id}`, "data-section": section.id },
+        [title, grid]
+      );
+      contentNodes.push(block);
+    }
+    if (!contentNodes.length) {
+      const empty = el("div", { class: "emoji-empty" }, [hasQuery ? "Ничего не найдено" : "Эмодзи пока нет"]);
+      emojiContent.replaceChildren(empty);
+      return;
+    }
+    emojiContent.replaceChildren(...contentNodes);
   }
 
   function renderEmojiPopover() {
     const pop = ensureEmojiPopover();
-    const palette = mergeEmojiPalette(loadEmojiRecents(), DEFAULT_EMOJI);
+    const sections = buildEmojiSections(loadEmojiRecents());
+    const filtered = filterEmojiSections(sections, emojiSearch);
+    const hasQuery = emojiSearch.trim().length > 0;
 
-    const closeBtn = el(
-      "button",
-      { class: "btn emoji-close", type: "button", "aria-label": "Закрыть эмодзи", "data-action": "emoji-close" },
-      ["×"]
-    );
-    const head = el("div", { class: "emoji-head" }, [el("div", { class: "emoji-title" }, ["Эмодзи"]), closeBtn]);
-    const grid = el(
-      "div",
-      { class: "emoji-grid", role: "listbox", "aria-label": "Список эмодзи" },
-      palette.map((e) => el("button", { class: "emoji-btn", type: "button", "data-emoji": e, title: e, "aria-label": e }, [e]))
-    );
+    if (emojiSearchInput && emojiSearchInput.value !== emojiSearch) {
+      emojiSearchInput.value = emojiSearch;
+    }
+    if (emojiSearchWrap) emojiSearchWrap.classList.toggle("has-value", hasQuery);
+    pop.classList.toggle("emoji-searching", hasQuery);
 
-    pop.replaceChildren(head, grid);
+    renderEmojiTabs(sections);
+    renderEmojiContent(filtered, hasQuery);
+
+    if (emojiContent && emojiLastQuery !== emojiSearch) {
+      emojiContent.scrollTop = 0;
+      emojiLastQuery = emojiSearch;
+    }
+    syncEmojiActiveTabFromScroll();
   }
 
   function openEmojiPopover() {
@@ -4147,13 +4320,25 @@ export function mountApp(root: HTMLElement) {
     layout.emojiBtn.classList.add("btn-active");
     const pop = ensureEmojiPopover();
     renderEmojiPopover();
+    clearEmojiHideTimer();
     pop.classList.remove("hidden");
+    requestAnimationFrame(() => pop.classList.add("emoji-open"));
   }
 
   function closeEmojiPopover() {
     emojiOpen = false;
     layout.emojiBtn.classList.remove("btn-active");
-    if (emojiPopover) emojiPopover.classList.add("hidden");
+    if (!emojiPopover) return;
+    emojiSearch = "";
+    emojiLastQuery = "";
+    if (emojiSearchInput) emojiSearchInput.value = "";
+    if (emojiSearchWrap) emojiSearchWrap.classList.remove("has-value");
+    emojiPopover.classList.remove("emoji-searching");
+    emojiPopover.classList.remove("emoji-open");
+    clearEmojiHideTimer();
+    emojiHideTimer = window.setTimeout(() => {
+      if (!emojiOpen) emojiPopover?.classList.add("hidden");
+    }, 160);
   }
 
   layout.emojiBtn.addEventListener("click", (e) => {

@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.124",
+    date: "2025-12-23",
+    improved: [
+      "Эмодзи: панель в стиле Telegram Web (поиск, вкладки, секции, анимация открытия)",
+      "Эмодзи: более ровный рендер за счёт emoji‑font стека и font‑variant‑emoji",
+    ],
+  },
+  {
     version: "0.1.123",
     date: "2025-12-23",
     added: ["Скин `telegram-exact`: палитра, типографика и размеры под Telegram Web (tweb)"],

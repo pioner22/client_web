@@ -22,6 +22,8 @@
 
   /* ===== Typography ===== */
   --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --emoji-font: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", "Twemoji Mozilla", "Segoe UI Symbol",
+    sans-serif;
   --font-size: 16px;
   --line-height: 1.3125;
   --font-weight: 400;

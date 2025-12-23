@@ -18,6 +18,8 @@
   --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, "Apple Color Emoji",
     "Segoe UI Emoji";
   --font-family: var(--sans);
+  --emoji-font: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", "Android Emoji",
+    "EmojiOne Color", "Twemoji Mozilla", "Segoe UI Symbol", sans-serif;
   --font-size: 15px;
   --line-height: 1.35;
   --font-weight: 400;
