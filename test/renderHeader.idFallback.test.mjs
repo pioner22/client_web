@@ -192,3 +192,33 @@ test("renderHeader: в режиме авто-входа показывает «�
     await helper.cleanup();
   }
 });
+
+test("renderHeader: на страницах (не main) nav-toggle работает как back (data-action=nav-back)", async () => {
+  const helper = await loadRenderHeader();
+  try {
+    withDomStubs(() => {
+      const layout = {
+        headerLeft: globalThis.document.createElement("div"),
+        headerRight: globalThis.document.createElement("div"),
+        hotkeys: globalThis.document.createElement("div"),
+      };
+      helper.renderHeader(layout, {
+        page: "profile",
+        conn: "connected",
+        authed: true,
+        selfId: "854-432-319",
+        authMode: "login",
+        authRememberedId: "854-432-319",
+        clientVersion: "0.1.109-test",
+        serverVersion: "0.0.0",
+        status: "",
+        selected: null,
+      });
+      const nav = findByClass(layout.headerLeft, "nav-toggle");
+      assert.ok(nav, "nav-toggle button not found");
+      assert.equal(nav.getAttribute("data-action"), "nav-back");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});

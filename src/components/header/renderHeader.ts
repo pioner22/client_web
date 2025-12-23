@@ -55,9 +55,11 @@ export function renderHeader(layout: Layout, state: AppState) {
       )
     : null;
 
-  const navShowsBack = state.page === "main" && Boolean(state.selected);
-  const navTitle = navShowsBack ? "Список" : "Меню";
-  const navAria = navShowsBack ? "Открыть список чатов" : "Открыть меню";
+  const navBackToMain = state.page !== "main";
+  const navShowsBack = navBackToMain || (state.page === "main" && Boolean(state.selected));
+  const navAction = navBackToMain ? "nav-back" : "sidebar-toggle";
+  const navTitle = navBackToMain ? "Назад" : navShowsBack ? "Список" : "Меню";
+  const navAria = navBackToMain ? "Назад" : navShowsBack ? "Открыть список чатов" : "Открыть меню";
 
   layout.headerLeft.replaceChildren(
     el(
@@ -65,7 +67,7 @@ export function renderHeader(layout: Layout, state: AppState) {
       {
         class: "nav-toggle hk-btn",
         type: "button",
-        "data-action": "sidebar-toggle",
+        "data-action": navAction,
         title: navTitle,
         "aria-label": navAria,
       },

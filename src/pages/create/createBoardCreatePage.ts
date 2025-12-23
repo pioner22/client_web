@@ -71,7 +71,7 @@ export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBo
   const btnCancel = el("button", { class: "btn", type: "button" }, ["Отмена"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnCreate, btnCancel]);
 
-  const hint = el("div", { class: "msg msg-sys" }, ["Enter — создать | Esc — назад"]);
+  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — создать | Esc — назад"]);
 
   const root = el("div", { class: "page" }, [
     title,

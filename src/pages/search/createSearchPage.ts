@@ -63,7 +63,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
   const form = el("div", { class: "page-form" }, [input, btn]);
   const results = el("div", { class: "page-results" });
-  const hint = el("div", { class: "msg msg-sys" }, ["Enter — искать | Esc — назад"]);
+  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — искать | Esc — назад"]);
 
   const root = el("div", { class: "page" }, [title, form, results, hint]);
 

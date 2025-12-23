@@ -97,7 +97,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnSave, btnRefresh]);
 
-  const hint = el("div", { class: "msg msg-sys" }, ["Enter — сохранить · Esc — назад"]);
+  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — сохранить · Esc — назад"]);
 
   const account = el("div", { class: "profile-card" }, [
     el("div", { class: "profile-card-title" }, ["Аккаунт"]),

@@ -321,6 +321,65 @@
     display: none;
   }
 
+  /* Страницы: заголовок/назад уже есть в шапке — убираем дубли и подсказки под клавиатуру. */
+  .page .chat-title {
+    display: none;
+  }
+
+  .page-hint {
+    display: none;
+  }
+
+  /* Профиль/контакт на мобилке выглядят как «экран Telegram»: крупный аватар + центрирование. */
+  .page-profile .profile-head-top {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--sp-3);
+  }
+
+  .page-profile .profile-head-main {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .page-profile .avatar-xl {
+    width: 96px;
+    height: 96px;
+    font-size: 26px;
+  }
+
+  .page-profile .profile-name {
+    font-size: 20px;
+  }
+
+  .page-profile .profile-handle {
+    font-size: 14px;
+  }
+
+  .page-profile .profile-head-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-2);
+  }
+
+  .page-profile .profile-head-actions .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .page-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--sp-3);
+  }
+
+  .page-actions .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
   .msg-in .msg-body,
   .msg-out .msg-body {
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);

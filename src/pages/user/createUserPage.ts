@@ -36,7 +36,7 @@ export function createUserPage(actions: UserPageActions): UserPage {
   const btnBack = el("button", { class: "btn", type: "button" }, ["Назад"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnChat, btnBack]);
 
-  const hint = el("div", { class: "msg msg-sys" }, ["Esc — назад"]);
+  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
 
   const root = el("div", { class: "page page-profile page-user" }, [title, head, about, actionsRow, hint]);
 
@@ -78,4 +78,3 @@ export function createUserPage(actions: UserPageActions): UserPage {
     },
   };
 }
-

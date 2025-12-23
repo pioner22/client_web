@@ -88,7 +88,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   const transfersList = el("div", { class: "files-list" });
   const transfersBlock = el("div", { class: "files-section" }, [transfersHeader, transfersList]);
 
-  const hint = el("div", { class: "msg msg-sys" }, ["F7 — файлы | Esc — назад"]);
+  const hint = el("div", { class: "msg msg-sys page-hint" }, ["F7 — файлы | Esc — назад"]);
 
   const root = el("div", { class: "page" }, [title, sendBlock, offersBlock, transfersBlock, hint]);
 

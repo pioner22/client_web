@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.110",
+    date: "2025-12-23",
+    improved: [
+      "Mobile: на экранах (профиль/контакт/поиск/файлы/info) кнопка в шапке теперь «Назад» (без необходимости Esc)",
+      "Mobile: профиль/контакт ближе к Telegram — крупный аватар, центрирование, кнопки в сетке, меньше визуального шума",
+    ],
+    added: ["Regress: `mobilePagesPolishCss.test.mjs`", "Regress: renderHeader проверяет `nav-back` на страницах"],
+  },
+  {
     version: "0.1.109",
     date: "2025-12-23",
     improved: [

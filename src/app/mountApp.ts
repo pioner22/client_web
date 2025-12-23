@@ -1284,6 +1284,13 @@ export function mountApp(root: HTMLElement) {
     const btn = (e.target as HTMLElement | null)?.closest("button[data-action]") as HTMLButtonElement | null;
     if (!btn) return;
     const action = String(btn.dataset.action || "");
+    if (action === "nav-back") {
+      e.preventDefault();
+      const st = store.get();
+      if (st.modal) return;
+      setPage("main");
+      return;
+    }
     if (action === "chat-search-open") {
       e.preventDefault();
       openChatSearch();

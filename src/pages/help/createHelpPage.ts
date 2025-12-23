@@ -159,7 +159,7 @@ export function createHelpPage(): HelpPage {
 
   const changelogSection = el("div", { class: "info-section" }, [changelogTitle, changelogWrap]);
 
-  const hint = el("div", { class: "msg msg-sys" }, ["Esc — назад"]);
+  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
 
   const root = el("div", { class: "page info-page" }, [title, metaRow, quickStart, install, hkTitle, rows, changelogSection, hint]);
 
