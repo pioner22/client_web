@@ -164,6 +164,10 @@
     min-height: 100%;
   }
 
+  .chat.chat-page .page.page-create {
+    min-height: auto;
+  }
+
   /* Mobile: нижние tab-кнопки убраны (навигация живёт в «Меню» / Контакты). */
   .footer {
     display: none;

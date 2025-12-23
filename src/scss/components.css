@@ -161,6 +161,13 @@
   color: var(--row-text-selected-hover);
 }
 
+.row-sel:hover .row-sub,
+.row-sel:hover .row-time,
+.row-sel:hover .row-prefix,
+.row-sel:hover .row-id {
+  color: var(--row-text-selected-muted-hover);
+}
+
 .row-sel .row-sub,
 .row-sel .row-time,
 .row-sel .row-prefix,

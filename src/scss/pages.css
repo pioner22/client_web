@@ -35,7 +35,12 @@
   align-content: start;
 }
 
-.profile-card {
+.page.page-create {
+  align-content: start;
+}
+
+.profile-card,
+.page-card {
   border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
   border-radius: var(--r-md);
   background: color-mix(in srgb, var(--panel), transparent 10%);
@@ -45,7 +50,8 @@
   box-shadow: var(--card-shadow, none);
 }
 
-.profile-card-title {
+.profile-card-title,
+.page-card-title {
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;

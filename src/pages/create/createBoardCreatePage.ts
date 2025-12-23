@@ -16,7 +16,7 @@ export interface CreateBoardPage {
 export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBoardPage {
   const title = el("div", { class: "chat-title" }, ["Создать доску"]);
 
-  const nameLabel = el("div", { class: "pane-section" }, ["Название"]);
+  const nameLabel = el("label", { class: "modal-label", for: "board-name" }, ["Название"]);
   const nameInput = el("input", {
     class: "modal-input",
     id: "board-name",
@@ -29,7 +29,7 @@ export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBo
     enterkeyhint: "done",
   }) as HTMLInputElement;
 
-  const handleLabel = el("div", { class: "pane-section" }, ["Хэндл (опционально)"]);
+  const handleLabel = el("label", { class: "modal-label", for: "board-handle" }, ["Хэндл (опционально)"]);
   const handleInput = el("input", {
     class: "modal-input",
     id: "board-handle",
@@ -43,7 +43,7 @@ export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBo
     enterkeyhint: "done",
   }) as HTMLInputElement;
 
-  const membersLabel = el("div", { class: "pane-section" }, ["Участники (опционально)"]);
+  const membersLabel = el("label", { class: "modal-label", for: "board-members-entry" }, ["Участники (опционально)"]);
   const membersField = el(
     "div",
     { class: "chips-field", id: "board-members-field", role: "group", "aria-label": "Участники" },
@@ -74,18 +74,19 @@ export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBo
 
   const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — создать | Esc — назад"]);
 
-  const root = el("div", { class: "page" }, [
-    title,
+  const mainCard = el("div", { class: "page-card" }, [
+    el("div", { class: "page-card-title" }, ["Основное"]),
     nameLabel,
     nameInput,
     handleLabel,
     handleInput,
+  ]);
+  const membersCard = el("div", { class: "page-card" }, [
+    el("div", { class: "page-card-title" }, ["Участники"]),
     membersLabel,
     membersField,
-    warn,
-    actionsRow,
-    hint,
   ]);
+  const root = el("div", { class: "page page-create" }, [title, mainCard, membersCard, warn, actionsRow, hint]);
 
   function submit() {
     actions.onCreate();

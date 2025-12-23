@@ -80,6 +80,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .chat-host {

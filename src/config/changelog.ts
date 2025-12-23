@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.139",
+    date: "2025-12-23",
+    improved: [
+      "Создание чатов/досок: карточные блоки формы как в профиле, без растяжения при закрытии клавиатуры",
+      "Контакты (светлая тема): hover выбранного контакта темнее и читабельнее",
+    ],
+    fixed: ["Чат: полотно истории лучше фиксируется на touch (только вертикальный свайп)"],
+  },
+  {
     version: "0.1.138",
     date: "2025-12-23",
     improved: [

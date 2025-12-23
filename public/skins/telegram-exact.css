@@ -128,6 +128,7 @@
   --row-bg-selected-hover: #2b6fc2;
   --row-text-selected: #ffffff;
   --row-text-selected-muted: rgba(255, 255, 255, 0.85);
+  --row-text-selected-muted-hover: rgba(255, 255, 255, 0.85);
   --row-unread-selected-bg: #ffffff;
   --row-unread-selected-text: #3390ec;
   --row-star-color: #f5b400;
@@ -243,6 +244,7 @@
   --row-prefix-color: rgba(139, 155, 176, 0.85);
   --row-text-selected: #ffffff;
   --row-text-selected-muted: rgba(255, 255, 255, 0.8);
+  --row-text-selected-muted-hover: rgba(255, 255, 255, 0.8);
   --row-unread-selected-bg: #ffffff;
   --row-unread-selected-text: #2b5278;
 

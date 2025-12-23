@@ -16,7 +16,7 @@ export interface CreateGroupPage {
 export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGroupPage {
   const title = el("div", { class: "chat-title" }, ["Создать чат"]);
 
-  const nameLabel = el("div", { class: "pane-section" }, ["Название"]);
+  const nameLabel = el("label", { class: "modal-label", for: "group-name" }, ["Название"]);
   const nameInput = el("input", {
     class: "modal-input",
     id: "group-name",
@@ -29,7 +29,7 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
     enterkeyhint: "done",
   }) as HTMLInputElement;
 
-  const membersLabel = el("div", { class: "pane-section" }, ["Участники (опционально)"]);
+  const membersLabel = el("label", { class: "modal-label", for: "group-members-entry" }, ["Участники (опционально)"]);
   const membersField = el(
     "div",
     { class: "chips-field", id: "group-members-field", role: "group", "aria-label": "Участники" },
@@ -60,7 +60,13 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
 
   const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — создать | Esc — назад"]);
 
-  const root = el("div", { class: "page" }, [title, nameLabel, nameInput, membersLabel, membersField, warn, actionsRow, hint]);
+  const mainCard = el("div", { class: "page-card" }, [el("div", { class: "page-card-title" }, ["Основное"]), nameLabel, nameInput]);
+  const membersCard = el("div", { class: "page-card" }, [
+    el("div", { class: "page-card-title" }, ["Участники"]),
+    membersLabel,
+    membersField,
+  ]);
+  const root = el("div", { class: "page page-create" }, [title, mainCard, membersCard, warn, actionsRow, hint]);
 
   function submit() {
     actions.onCreate();
