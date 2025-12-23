@@ -2,7 +2,7 @@ import { el } from "../../helpers/dom/el";
 import { formatTime } from "../../helpers/time";
 import { conversationKey } from "../../helpers/chat/conversationKey";
 import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
-import type { AppState, ChatMessage, FileTransferEntry } from "../../stores/types";
+import type { AppState, ChatMessage, FileOfferIn, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { fileBadge } from "../../helpers/files/fileBadge";
 import { safeUrl } from "../../helpers/security/safeUrl";
@@ -126,6 +126,112 @@ function resolveUserLabel(state: AppState, id: string, friendLabels?: Map<string
   if (p) return formatUserLabel(p.display_name || "", p.handle || "", pid);
   const fromFriends = friendLabels?.get(pid);
   return fromFriends || pid;
+}
+
+type FileAttachmentInfo = {
+  name: string;
+  size: number;
+  mime: string | null;
+  fileId: string | null;
+  url: string | null;
+  transfer: FileTransferEntry | null;
+  offer: FileOfferIn | null;
+  statusLine: string;
+  isImage: boolean;
+  hasProgress: boolean;
+};
+
+type AlbumItem = {
+  idx: number;
+  msg: ChatMessage;
+  info: FileAttachmentInfo;
+};
+
+function buildMessageMeta(m: ChatMessage): HTMLElement[] {
+  const meta: HTMLElement[] = [el("span", { class: "msg-time" }, [formatTime(m.ts)])];
+  if (m.edited) {
+    const editedTs = typeof m.edited_ts === "number" && Number.isFinite(m.edited_ts) ? m.edited_ts : null;
+    const time = editedTs !== null ? formatTime(editedTs) : "";
+    meta.push(
+      el(
+        "span",
+        { class: "msg-edited", "aria-label": "Изменено", ...(time ? { title: `Изменено: ${time}` } : {}) },
+        [time ? `изменено ${time}` : "изменено"]
+      )
+    );
+  }
+  const status = m.kind === "out" ? statusLabel(m) : "";
+  if (status) {
+    meta.push(
+      el("span", { class: `msg-status msg-status-${m.status || "delivered"}`, title: statusTitle(m) || undefined }, [status])
+    );
+  }
+  return meta;
+}
+
+function getFileAttachmentInfo(state: AppState, m: ChatMessage): FileAttachmentInfo | null {
+  const att = m.attachment;
+  if (!att || att.kind !== "file") return null;
+  const transfer =
+    (att.localId ? state.fileTransfers.find((t) => t.localId === att.localId) : null) ||
+    (att.fileId ? state.fileTransfers.find((t) => t.id === att.fileId) : null) ||
+    null;
+  const offer = !transfer && att.fileId ? state.fileOffersIn.find((o) => o.id === att.fileId) : null;
+  const name = String(transfer?.name || offer?.name || att.name || "файл");
+  const size = Number(transfer?.size ?? offer?.size ?? att.size ?? 0) || 0;
+  const mime = att.mime || transfer?.mime || null;
+  const base = typeof location !== "undefined" ? location.href : "http://localhost/";
+  const url = transfer?.url ? safeUrl(transfer.url, { base, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
+  const statusLine = transfer ? transferStatus(transfer) : offer ? "Входящий файл (принять в «Файлы» / F7)" : "";
+  const isImage = isImageFile(name, mime);
+  const hasProgress = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
+  return {
+    name,
+    size,
+    mime,
+    fileId: att.fileId ? String(att.fileId) : null,
+    url,
+    transfer,
+    offer,
+    statusLine,
+    isImage,
+    hasProgress,
+  };
+}
+
+function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number }): HTMLElement | null {
+  if (!info.isImage) return null;
+  if (!info.url && !info.fileId) return null;
+  const classes = info.url ? ["chat-file-preview"] : ["chat-file-preview", "chat-file-preview-empty"];
+  if (opts?.className) classes.push(opts.className);
+  const attrs: Record<string, string | undefined> = {
+    class: classes.join(" "),
+    type: "button",
+    "data-action": "open-file-viewer",
+    "data-name": info.name,
+    "data-size": String(info.size || 0),
+    "aria-label": `Открыть: ${info.name}`,
+  };
+  if (info.url) attrs["data-url"] = info.url;
+  if (!info.url && info.fileId) attrs["data-file-id"] = info.fileId;
+  if (info.mime) attrs["data-mime"] = info.mime;
+  if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
+
+  const child = info.url
+    ? el("img", { class: "chat-file-img", src: info.url, alt: info.name, loading: "lazy", decoding: "async" })
+    : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
+  return el("button", attrs, [child]);
+}
+
+function isAlbumCandidate(msg: ChatMessage, info: FileAttachmentInfo | null): info is FileAttachmentInfo {
+  if (!info || !info.isImage) return false;
+  if (msg.kind === "sys") return false;
+  if (info.offer) return false;
+  if (info.hasProgress) return false;
+  const caption = String(msg.text || "").trim();
+  if (caption && !caption.startsWith("[file]")) return false;
+  if (!info.url && !info.fileId) return false;
+  return true;
 }
 
 function skeletonLine(widthPct: number, cls = "skel-line"): HTMLElement {
@@ -267,21 +373,7 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
     (Boolean(m.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board"));
   const fromLabel = resolveUserLabel(state, fromId, friendLabels);
   const canOpenProfile = Boolean(fromId);
-  const status = m.kind === "out" ? statusLabel(m) : "";
-  const meta: HTMLElement[] = [el("span", { class: "msg-time" }, [formatTime(m.ts)])];
-  if (m.edited) {
-    const editedTs = typeof m.edited_ts === "number" && Number.isFinite(m.edited_ts) ? m.edited_ts : null;
-    const time = editedTs !== null ? formatTime(editedTs) : "";
-    meta.push(
-      el(
-        "span",
-        { class: "msg-edited", "aria-label": "Изменено", ...(time ? { title: `Изменено: ${time}` } : {}) },
-        [time ? `изменено ${time}` : "изменено"]
-      )
-    );
-  }
-  if (status)
-    meta.push(el("span", { class: `msg-status msg-status-${m.status || "delivered"}`, title: statusTitle(m) || undefined }, [status]));
+  const meta = buildMessageMeta(m);
   const bodyChildren: HTMLElement[] = [];
   if (showFrom) {
     const attrs = canOpenProfile
@@ -296,19 +388,15 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
     const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
     bodyChildren.push(node);
   }
-  if (m.attachment?.kind === "file") {
-    const att = m.attachment;
-    const transfer =
-      (att.localId ? state.fileTransfers.find((t) => t.localId === att.localId) : null) ||
-      (att.fileId ? state.fileTransfers.find((t) => t.id === att.fileId) : null) ||
-      null;
-    const offer = !transfer && att.fileId ? state.fileOffersIn.find((o) => o.id === att.fileId) : null;
-    const name = String(transfer?.name || offer?.name || att.name || "файл");
-    const size = Number(transfer?.size ?? offer?.size ?? att.size ?? 0) || 0;
-    const mime = att.mime || transfer?.mime || null;
-    const base = typeof location !== "undefined" ? location.href : "http://localhost/";
-    const url = transfer?.url ? safeUrl(transfer.url, { base, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
-    const statusLine = transfer ? transferStatus(transfer) : offer ? "Входящий файл (принять в «Файлы» / F7)" : "";
+  const info = getFileAttachmentInfo(state, m);
+  if (info) {
+    const name = info.name;
+    const size = info.size;
+    const mime = info.mime;
+    const url = info.url;
+    const transfer = info.transfer;
+    const offer = info.offer;
+    const statusLine = info.statusLine;
 
     const metaEls: HTMLElement[] = [];
     metaEls.push(el("div", { class: "file-meta" }, [`Размер: ${formatBytes(size)}`]));
@@ -337,11 +425,11 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
       );
     } else if (url) {
       actions.push(el("a", { class: "btn file-action file-action-download", href: url, download: name }, ["Скачать"]));
-    } else if (att.fileId) {
+    } else if (info.fileId) {
       actions.push(
         el(
           "button",
-          { class: "btn file-action file-action-download", type: "button", "data-action": "file-download", "data-file-id": att.fileId, "aria-label": `Скачать: ${name}` },
+          { class: "btn file-action file-action-download", type: "button", "data-action": "file-download", "data-file-id": info.fileId, "aria-label": `Скачать: ${name}` },
           ["Скачать"]
         )
       );
@@ -352,29 +440,13 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
       el("div", { class: "file-actions" }, actions),
     ];
 
-    const isImage = isImageFile(name, mime);
+    const isImage = info.isImage;
     if (isImage) {
-      const attrs: Record<string, string | undefined> = {
-        class: url ? "chat-file-preview" : "chat-file-preview chat-file-preview-empty",
-        type: "button",
-        "data-action": "open-file-viewer",
-        "data-name": name,
-        "data-size": String(size || 0),
-        "aria-label": `Открыть: ${name}`,
-      };
-      if (url) attrs["data-url"] = url;
-      if (!url && att.fileId) attrs["data-file-id"] = String(att.fileId);
-      if (mime) attrs["data-mime"] = String(mime);
-
-      const child = url
-        ? el("img", { class: "chat-file-img", src: url, alt: name, loading: "lazy", decoding: "async" })
-        : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
-    if (url || att.fileId) {
-      rowChildren.unshift(el("button", attrs, [child]));
+      const preview = renderImagePreviewButton(info);
+      if (preview) rowChildren.unshift(preview);
     }
-  }
 
-    const hasProgress = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
+    const hasProgress = info.hasProgress;
     const fileRowClass = isImage ? `file-row file-row-chat file-row-image${hasProgress ? " file-row-progress" : ""}` : "file-row file-row-chat";
     bodyChildren.push(el("div", { class: fileRowClass }, rowChildren));
     const caption = String(m.text || "").trim();
@@ -405,6 +477,61 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
   lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
   const cls = m.attachment ? `msg msg-${m.kind} msg-attach` : `msg msg-${m.kind}`;
   return el("div", { class: cls }, lineChildren);
+}
+
+function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map<string, string>): HTMLElement {
+  const first = items[0];
+  const last = items[items.length - 1];
+  const fromId = String(first.msg.from || "").trim();
+  const showFrom =
+    first.msg.kind === "in" &&
+    (Boolean(first.msg.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board"));
+  const fromLabel = resolveUserLabel(state, fromId, friendLabels);
+  const canOpenProfile = Boolean(fromId);
+  const bodyChildren: HTMLElement[] = [];
+  if (showFrom) {
+    const attrs = canOpenProfile
+      ? {
+          class: "msg-from msg-from-btn",
+          type: "button",
+          "data-action": "user-open",
+          "data-user-id": fromId,
+          title: `Профиль: ${fromLabel}`,
+        }
+      : { class: "msg-from" };
+    const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
+    bodyChildren.push(node);
+  }
+
+  const gridItems: HTMLElement[] = [];
+  for (const item of items) {
+    const preview = renderImagePreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx });
+    if (!preview) continue;
+    const wrap = el("div", { class: "chat-album-item", "data-msg-idx": String(item.idx) }, [preview]);
+    gridItems.push(wrap);
+  }
+  bodyChildren.push(el("div", { class: "chat-album-grid", "data-count": String(items.length) }, gridItems));
+  bodyChildren.push(el("div", { class: "msg-meta" }, buildMessageMeta(last.msg)));
+
+  const lineChildren: HTMLElement[] = [];
+  if (first.msg.kind === "in" && fromId) {
+    const avatarNode = avatar("dm", fromId);
+    if (canOpenProfile) {
+      lineChildren.push(
+        el("div", { class: "msg-avatar" }, [
+          el(
+            "button",
+            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": fromId, title: `Профиль: ${fromLabel}` },
+            [avatarNode]
+          ),
+        ])
+      );
+    } else {
+      lineChildren.push(el("div", { class: "msg-avatar" }, [avatarNode]));
+    }
+  }
+  lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
+  return el("div", { class: `msg msg-${first.msg.kind} msg-attach msg-album` }, lineChildren);
 }
 
 export function renderChat(layout: Layout, state: AppState) {
@@ -438,21 +565,53 @@ export function renderChat(layout: Layout, state: AppState) {
   const activeMsgIdx = searchActive && hits.length ? hits[activePos] : null;
   let prevDay = "";
   let prevMsg: ChatMessage | null = null;
-  let msgIdx = 0;
-  for (const m of msgs) {
+  const albumMin = 3;
+  const albumMax = 12;
+  const albumGapSeconds = 3 * 60;
+  for (let msgIdx = 0; msgIdx < msgs.length; msgIdx += 1) {
+    const m = msgs[msgIdx];
     const dk = dayKey(m.ts);
     if (dk && dk !== prevDay) {
       prevDay = dk;
       lines.push(el("div", { class: "msg-sep", "aria-hidden": "true" }, [el("span", { class: "msg-sep-text" }, [formatDayLabel(m.ts)])]));
       prevMsg = null;
     }
+
+    const info = getFileAttachmentInfo(state, m);
+    if (isAlbumCandidate(m, info)) {
+      const group: AlbumItem[] = [{ idx: msgIdx, msg: m, info }];
+      let scan = msgIdx + 1;
+      while (scan < msgs.length) {
+        const next = msgs[scan];
+        if (dk && dayKey(next.ts) !== dk) break;
+        const nextInfo = getFileAttachmentInfo(state, next);
+        if (!isAlbumCandidate(next, nextInfo)) break;
+        if (!isMessageContinuation(group[group.length - 1].msg, next, { maxGapSeconds: albumGapSeconds })) break;
+        group.push({ idx: scan, msg: next, info: nextInfo });
+        scan += 1;
+        if (group.length >= albumMax) break;
+      }
+      if (group.length >= albumMin) {
+        const line = renderAlbumLine(state, group, friendLabels);
+        if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
+        const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
+        const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
+        line.setAttribute("data-msg-idx", String(group[group.length - 1].idx));
+        if (hit) line.classList.add("msg-hit");
+        if (active) line.classList.add("msg-hit-active");
+        lines.push(line);
+        prevMsg = group[group.length - 1].msg.kind === "sys" ? null : group[group.length - 1].msg;
+        msgIdx = group[group.length - 1].idx;
+        continue;
+      }
+    }
+
     const line = messageLine(state, m, friendLabels);
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
     line.setAttribute("data-msg-idx", String(msgIdx));
     if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");
     if (activeMsgIdx === msgIdx) line.classList.add("msg-hit-active");
     lines.push(line);
-    msgIdx += 1;
     prevMsg = m.kind === "sys" ? null : m;
   }
 

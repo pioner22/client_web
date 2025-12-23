@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.141",
+    date: "2025-12-23",
+    improved: [
+      "Чат: фото группируются в компактные альбомы (3+ подряд), превью не растягиваются на всю ширину",
+      "Чат/Файлы: превью стали компактнее, при наведении мягко увеличиваются",
+    ],
+    fixed: ["Чат: горизонтальные свайпы по истории блокируются, меньше «двигается полотно»"],
+  },
+  {
     version: "0.1.140",
     date: "2025-12-23",
     improved: [

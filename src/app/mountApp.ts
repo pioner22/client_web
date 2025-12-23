@@ -1071,6 +1071,52 @@ export function mountApp(root: HTMLElement) {
     },
     { passive: true }
   );
+
+  let chatTouchStartX = 0;
+  let chatTouchStartY = 0;
+  let chatTouchTracking = false;
+  const resetChatTouch = () => {
+    chatTouchTracking = false;
+  };
+
+  layout.chatHost.addEventListener(
+    "touchstart",
+    (e) => {
+      const ev = e as TouchEvent;
+      if (ev.touches.length !== 1) {
+        chatTouchTracking = false;
+        return;
+      }
+      const target = ev.target as HTMLElement | null;
+      if (target && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable)) {
+        chatTouchTracking = false;
+        return;
+      }
+      chatTouchStartX = ev.touches[0].clientX;
+      chatTouchStartY = ev.touches[0].clientY;
+      chatTouchTracking = true;
+    },
+    { passive: true }
+  );
+
+  layout.chatHost.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!chatTouchTracking) return;
+      const ev = e as TouchEvent;
+      if (ev.touches.length !== 1) return;
+      const dx = ev.touches[0].clientX - chatTouchStartX;
+      const dy = ev.touches[0].clientY - chatTouchStartY;
+      if (Math.abs(dx) > Math.abs(dy) + 6) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  layout.chatHost.addEventListener("touchend", resetChatTouch, { passive: true });
+  layout.chatHost.addEventListener("touchcancel", resetChatTouch, { passive: true });
+
   layout.chat.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
 

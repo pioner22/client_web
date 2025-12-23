@@ -1169,6 +1169,8 @@
   border: 0;
   background: transparent;
   position: relative;
+  width: min(70vw, 360px);
+  max-width: 100%;
 }
 
 .file-row-chat.file-row-image > .chat-file-preview {
@@ -1260,11 +1262,24 @@
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   overflow: hidden;
+  width: min(70vw, 360px);
+  max-width: 100%;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
 }
 
 .chat-file-preview:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: 2px;
+}
+
+.chat-file-preview:hover {
+  border-color: color-mix(in srgb, var(--focus), transparent 55%);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+  z-index: 1;
 }
 
 .chat-file-img {
@@ -1274,6 +1289,43 @@
   max-height: min(55vh, 420px);
   object-fit: cover;
   background: var(--panel2);
+  transition: transform 200ms ease;
+}
+
+.chat-file-preview:hover .chat-file-img {
+  transform: scale(1.03);
+}
+
+.chat-file-preview-album {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: grid;
+}
+
+.chat-file-preview-album .chat-file-img {
+  height: 100%;
+  max-height: none;
+}
+
+.chat-file-preview-album.chat-file-preview-empty {
+  min-height: auto;
+}
+
+.chat-file-preview-album .chat-file-placeholder {
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.chat-album-grid {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  max-width: min(72vw, 360px);
+}
+
+.chat-album-item {
+  position: relative;
 }
 
 .chat-file-preview-empty {
