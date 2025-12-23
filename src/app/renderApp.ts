@@ -14,6 +14,7 @@ import { focusElement } from "../helpers/ui/focus";
 import { createSearchPage, type SearchPage } from "../pages/search/createSearchPage";
 import { createProfilePage, type ProfilePage } from "../pages/profile/createProfilePage";
 import { createUserPage, type UserPage } from "../pages/user/createUserPage";
+import { createRoomPage, type RoomPage } from "../pages/room/createRoomPage";
 import { createFilesPage, type FilesPage } from "../pages/files/createFilesPage";
 import { createHelpPage, type HelpPage } from "../pages/help/createHelpPage";
 import { createGroupCreatePage, type CreateGroupPage } from "../pages/create/createGroupCreatePage";
@@ -22,6 +23,8 @@ import { createBoardCreatePage, type CreateBoardPage } from "../pages/create/cre
 let searchPage: SearchPage | null = null;
 let profilePage: ProfilePage | null = null;
 let userPage: UserPage | null = null;
+let groupPage: RoomPage | null = null;
+let boardPage: RoomPage | null = null;
 let filesPage: FilesPage | null = null;
 let helpPage: HelpPage | null = null;
 let groupCreatePage: CreateGroupPage | null = null;
@@ -36,6 +39,10 @@ function mountChat(layout: Layout, node: HTMLElement) {
 export interface RenderActions {
   onSelectTarget: (t: TargetRef) => void;
   onOpenUser: (id: string) => void;
+  onRoomMemberRemove: (kind: TargetRef["kind"], roomId: string, memberId: string) => void;
+  onBlockToggle: (memberId: string) => void;
+  onRoomWriteToggle: (kind: TargetRef["kind"], roomId: string, memberId: string, value: boolean) => void;
+  onRoomRefresh: (kind: TargetRef["kind"], roomId: string) => void;
   onOpenActionModal: (payload: ActionModalPayload) => void;
   onOpenHelp: () => void;
   onOpenGroupCreate: () => void;
@@ -114,12 +121,23 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     const me = String(state.selfId || "").trim();
     return Boolean(owner && me && owner !== me);
   })();
+  const isGroupWriteBlocked = (() => {
+    if (!chatInputVisible) return false;
+    if (!sel || sel.kind !== "group") return false;
+    const g = (state.groups || []).find((x) => x.id === sel.id);
+    const owner = String(g?.owner_id || "").trim();
+    const me = String(state.selfId || "").trim();
+    if (!me || (owner && owner === me)) return false;
+    const banned = (g?.post_banned || []).map((x) => String(x || "").trim()).filter(Boolean);
+    return banned.includes(me);
+  })();
 
   let composerDisabledReason: string | null = null;
   if (!chatInputVisible) composerDisabledReason = null;
   else if (state.conn !== "connected") composerDisabledReason = "Нет соединения";
   else if (!state.authed) composerDisabledReason = "Нажмите «Войти», чтобы писать";
   else if (!sel) composerDisabledReason = "Выберите чат слева";
+  else if (isGroupWriteBlocked) composerDisabledReason = "Вам запрещено писать в чате";
   else if (isBoardReadOnly) composerDisabledReason = "На доске пишет только владелец";
 
   const composerEnabled = chatInputVisible && composerDisabledReason === null;
@@ -348,6 +366,42 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     mountChat(layout, userPage.root);
     userPage.update(state);
     if (pageChanged) userPage.focus();
+  } else if (state.page === "group") {
+    if (!groupPage) {
+      groupPage = createRoomPage("group", {
+        onBack: () => actions.onSetPage("main"),
+        onOpenChat: (id: string) => {
+          actions.onSetPage("main");
+          actions.onSelectTarget({ kind: "group", id });
+        },
+        onOpenUser: (id: string) => actions.onOpenUser(id),
+        onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
+        onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
+        onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
+        onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
+      });
+    }
+    mountChat(layout, groupPage.root);
+    groupPage.update(state);
+    if (pageChanged) groupPage.focus();
+  } else if (state.page === "board") {
+    if (!boardPage) {
+      boardPage = createRoomPage("board", {
+        onBack: () => actions.onSetPage("main"),
+        onOpenChat: (id: string) => {
+          actions.onSetPage("main");
+          actions.onSelectTarget({ kind: "board", id });
+        },
+        onOpenUser: (id: string) => actions.onOpenUser(id),
+        onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
+        onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
+        onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
+        onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
+      });
+    }
+    mountChat(layout, boardPage.root);
+    boardPage.update(state);
+    if (pageChanged) boardPage.focus();
   } else if (state.page === "files") {
     if (!filesPage) {
       filesPage = createFilesPage({

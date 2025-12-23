@@ -90,6 +90,8 @@ export interface ContextMenuPayload {
 export type ConfirmAction =
   | { kind: "chat_clear"; peer: string }
   | { kind: "friend_remove"; peer: string }
+  | { kind: "group_member_remove"; groupId: string; memberId: string }
+  | { kind: "board_member_remove"; boardId: string; memberId: string }
   | { kind: "group_leave"; groupId: string }
   | { kind: "board_leave"; boardId: string }
   | { kind: "group_disband"; groupId: string }
@@ -143,7 +145,17 @@ export type ModalState =
   | { kind: "action"; payload: ActionModalPayload; message?: string }
   | { kind: "context_menu"; payload: ContextMenuPayload };
 
-export type PageKind = "main" | "search" | "profile" | "user" | "files" | "help" | "group_create" | "board_create";
+export type PageKind =
+  | "main"
+  | "search"
+  | "profile"
+  | "user"
+  | "group"
+  | "board"
+  | "files"
+  | "help"
+  | "group_create"
+  | "board_create";
 
 export type AuthMode = "auto" | "register" | "login";
 
@@ -218,6 +230,8 @@ export interface GroupEntry {
   name?: string | null;
   owner_id?: string | null;
   handle?: string | null;
+  members?: string[];
+  post_banned?: string[];
 }
 
 export interface BoardEntry {
@@ -225,6 +239,7 @@ export interface BoardEntry {
   name?: string | null;
   owner_id?: string | null;
   handle?: string | null;
+  members?: string[];
 }
 
 export interface SearchResultEntry {
@@ -321,6 +336,8 @@ export interface AppState {
 
   page: PageKind;
   userViewId: string | null;
+  groupViewId: string | null;
+  boardViewId: string | null;
   searchQuery: string;
   searchResults: SearchResultEntry[];
   groupCreateMessage: string;

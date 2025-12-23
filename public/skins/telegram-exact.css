@@ -176,6 +176,7 @@
   --modal-radius: 12px;
   --modal-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
   --modal-max-width: 520px;
+  --card-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
 html[data-skin="telegram-exact"] .row-title {

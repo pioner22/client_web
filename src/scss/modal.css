@@ -54,12 +54,12 @@
 
 .ctx-menu {
   position: fixed;
-  min-width: 240px;
-  max-width: min(360px, calc(100vw - 16px));
+  min-width: 200px;
+  max-width: min(300px, calc(100vw - 16px));
   background: var(--modal-bg);
   border: 1px solid var(--modal-border-color);
   border-radius: var(--r-lg);
-  padding: 6px;
+  padding: 4px;
   box-shadow: var(--modal-shadow);
   display: grid;
   gap: 2px;
@@ -90,7 +90,7 @@
 }
 
 .ctx-menu.ctx-menu-sheet .ctx-item {
-  padding: 10px 12px;
+  padding: 9px 12px;
   font-size: 13px;
   border-radius: var(--r-lg);
 }
@@ -98,12 +98,12 @@
 .ctx-title {
   color: var(--modal-title-color);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 6px 8px 8px;
+  padding: 4px 6px 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 50%);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -115,10 +115,10 @@
   background: transparent;
   border: 0;
   color: var(--text);
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: var(--r-md);
   font-family: var(--font-family);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.2;
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;

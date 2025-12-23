@@ -94,6 +94,12 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const skinSelect = el("select", { class: "modal-input", id: "profile-skin" }, []) as HTMLSelectElement;
   const skinHint = el("div", { class: "profile-hint" }, ["Скин хранится локально в браузере и применяется сразу"]);
 
+  const themeLabel = el("div", { class: "modal-label" }, ["Тема"]);
+  const btnLight = el("button", { class: "btn", type: "button", "data-theme": "light" }, ["Светлый"]);
+  const btnDark = el("button", { class: "btn", type: "button", "data-theme": "dark" }, ["Тёмный"]);
+  const themeToggle = el("div", { class: "theme-toggle", role: "group", "aria-label": "Тема" }, [btnLight, btnDark]);
+  const themeHint = el("div", { class: "profile-hint" }, ["Быстрое переключение темы (светлая/тёмная)"]);
+
   const btnSave = el("button", { class: "btn btn-primary", type: "button" }, ["Сохранить"]);
   const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnSave, btnRefresh]);
@@ -112,7 +118,15 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     bioInput,
   ]);
 
-  const ui = el("div", { class: "profile-card" }, [el("div", { class: "profile-card-title" }, ["Интерфейс"]), skinLabel, skinSelect, skinHint]);
+  const ui = el("div", { class: "profile-card" }, [
+    el("div", { class: "profile-card-title" }, ["Интерфейс"]),
+    themeLabel,
+    themeToggle,
+    themeHint,
+    skinLabel,
+    skinSelect,
+    skinHint,
+  ]);
 
   const root = el("div", { class: "page page-profile" }, [
     title,
@@ -134,6 +148,8 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   btnSave.addEventListener("click", () => save());
   btnRefresh.addEventListener("click", () => actions.onRefresh());
   skinSelect.addEventListener("change", () => actions.onSkinChange(skinSelect.value));
+  btnLight.addEventListener("click", () => actions.onSkinChange(btnLight.getAttribute("data-skin") || "telegram-exact"));
+  btnDark.addEventListener("click", () => actions.onSkinChange(btnDark.getAttribute("data-skin") || "default"));
 
   avatarPreview.addEventListener("click", () => avatarFile.click());
   btnAvatarUpload.addEventListener("click", () => avatarFile.click());
@@ -213,6 +229,20 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     if (document.activeElement !== skinSelect && skinSelect.value !== state.skin) {
       skinSelect.value = state.skin;
     }
+
+    const lightPreferred =
+      skins.find((s) => s.id === "telegram-exact")?.id ||
+      skins.find((s) => s.id === "telegram-web")?.id ||
+      skins.find((s) => s.id !== "default")?.id ||
+      "default";
+    const darkPreferred = skins.find((s) => s.id === "default")?.id || skins[0]?.id || "default";
+    btnLight.setAttribute("data-skin", lightPreferred);
+    btnDark.setAttribute("data-skin", darkPreferred);
+
+    const lightSkins = new Set(["telegram-web", "telegram-exact", "showcase"]);
+    const isLight = lightSkins.has(state.skin);
+    btnLight.classList.toggle("btn-active", isLight);
+    btnDark.classList.toggle("btn-active", !isLight);
   }
 
   return {

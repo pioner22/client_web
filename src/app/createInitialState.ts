@@ -58,6 +58,8 @@ export function createInitialState(): AppState {
     chatSearchPos: 0,
     page: "main",
     userViewId: null,
+    groupViewId: null,
+    boardViewId: null,
     searchQuery: "",
     searchResults: [],
     groupCreateMessage: "",

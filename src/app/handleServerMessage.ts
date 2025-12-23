@@ -115,6 +115,7 @@ function humanizeError(raw: string): string {
   if (!code) return "ошибка";
   const map: Record<string, string> = {
     not_in_group: "Вы не участник этого чата (примите приглашение или попросите добавить вас)",
+    group_post_forbidden: "В этом чате вам запрещено писать",
     board_post_forbidden: "На доске писать может только владелец",
     board_check_failed: "Не удалось проверить права на доску",
     group_check_failed: "Не удалось проверить доступ к чату",
@@ -611,28 +612,133 @@ export function handleServerMessage(
   }
   if (t === "groups") {
     const raw = Array.isArray(msg?.groups) ? msg.groups : [];
-    const groups: GroupEntry[] = raw
-      .map((g: any) => ({
-        id: String(g?.id ?? ""),
-        name: (g?.name ?? null) as any,
-        owner_id: (g?.owner_id ?? null) as any,
-        handle: (g?.handle ?? null) as any,
-      }))
-      .filter((g: GroupEntry) => g.id);
-    patch({ groups });
+    patch((prev) => {
+      const prevMap = new Map(prev.groups.map((g) => [g.id, g]));
+      const groups: GroupEntry[] = raw
+        .map((g: any) => {
+          const id = String(g?.id ?? "");
+          const prevEntry = prevMap.get(id);
+          const nextMembers = Array.isArray(g?.members) ? (g.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
+          const nextPostBanned = Array.isArray(g?.post_banned)
+            ? (g.post_banned as any[]).map((m) => String(m || "").trim()).filter(Boolean)
+            : null;
+          return {
+            id,
+            name: (g?.name ?? prevEntry?.name ?? null) as any,
+            owner_id: (g?.owner_id ?? prevEntry?.owner_id ?? null) as any,
+            handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
+            ...(nextMembers ? { members: nextMembers } : prevEntry?.members ? { members: prevEntry.members } : {}),
+            ...(nextPostBanned ? { post_banned: nextPostBanned } : prevEntry?.post_banned ? { post_banned: prevEntry.post_banned } : {}),
+          } as GroupEntry;
+        })
+        .filter((g: GroupEntry) => g.id);
+      return { ...prev, groups };
+    });
     return;
   }
   if (t === "group_added" || t === "group_updated") {
     const g = msg?.group ?? null;
-    const upd: GroupEntry | null = g
-      ? { id: String(g?.id ?? ""), name: (g?.name ?? null) as any, owner_id: (g?.owner_id ?? null) as any, handle: (g?.handle ?? null) as any }
-      : null;
-    if (!upd?.id) return;
     patch((prev) => {
+      const id = g ? String(g?.id ?? "") : "";
+      if (!id) return prev;
+      const hasMembers = Array.isArray(g?.members);
+      const nextMembers = hasMembers ? (g.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
+      const hasPostBanned = Array.isArray(g?.post_banned);
+      const nextPostBanned = hasPostBanned ? (g.post_banned as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
+      const prevEntry = prev.groups.find((x) => x.id === id);
+      const upd: GroupEntry = {
+        id,
+        name: (g?.name ?? prevEntry?.name ?? null) as any,
+        owner_id: (g?.owner_id ?? prevEntry?.owner_id ?? null) as any,
+        handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
+        ...(hasMembers ? { members: nextMembers || [] } : prevEntry?.members ? { members: prevEntry.members } : {}),
+        ...(hasPostBanned ? { post_banned: nextPostBanned || [] } : prevEntry?.post_banned ? { post_banned: prevEntry.post_banned } : {}),
+      };
       const next = prev.groups.filter((x) => x.id !== upd.id);
       next.push(upd);
       next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
       return { ...prev, groups: next, pendingGroupInvites: prev.pendingGroupInvites.filter((inv) => inv.groupId !== upd.id) };
+    });
+    return;
+  }
+  if (t === "group_info_result") {
+    const ok = Boolean(msg?.ok);
+    const g = msg?.group ?? null;
+    const gid = String(g?.id ?? msg?.group_id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason || "ошибка");
+      patch({ status: `Не удалось получить чат: ${reason}` });
+      return;
+    }
+    if (!gid) return;
+    const members = Array.isArray(g?.members) ? g.members.map((m: any) => String(m || "").trim()).filter(Boolean) : [];
+    const postBanned = Array.isArray(g?.post_banned) ? g.post_banned.map((m: any) => String(m || "").trim()).filter(Boolean) : [];
+    patch((prev) => {
+      const prevEntry = prev.groups.find((x) => x.id === gid);
+      const upd: GroupEntry = {
+        id: gid,
+        name: (g?.name ?? prevEntry?.name ?? null) as any,
+        owner_id: (g?.owner_id ?? prevEntry?.owner_id ?? null) as any,
+        handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
+        members,
+        post_banned: postBanned,
+      };
+      const next = prev.groups.filter((x) => x.id !== gid);
+      next.push(upd);
+      next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+      return { ...prev, groups: next };
+    });
+    return;
+  }
+  if (t === "group_post_set_result") {
+    const ok = Boolean(msg?.ok);
+    const gid = String(msg?.group_id ?? "").trim();
+    const member = String(msg?.member_id ?? "").trim();
+    const value = Boolean(msg?.value);
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "bad_args"
+          ? "Некорректные данные"
+          : reason === "forbidden_or_not_found"
+            ? "Только владелец может менять права"
+            : reason === "not_in_group"
+              ? "Пользователь не найден в чате"
+              : "Не удалось изменить права";
+      patch({ status: `Изменение прав не выполнено: ${message}` });
+      return;
+    }
+    if (!gid || !member) return;
+    patch((prev) => {
+      const prevEntry = prev.groups.find((x) => x.id === gid);
+      if (!prevEntry) return prev;
+      const nextBanned = new Set((prevEntry.post_banned || []).map((x) => String(x || "").trim()).filter(Boolean));
+      if (value) nextBanned.add(member);
+      else nextBanned.delete(member);
+      const upd: GroupEntry = { ...prevEntry, post_banned: Array.from(nextBanned) };
+      const next = prev.groups.filter((x) => x.id !== gid);
+      next.push(upd);
+      next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+      return { ...prev, groups: next, status: value ? `Запрещено писать: ${member}` : `Разрешено писать: ${member}` };
+    });
+    return;
+  }
+  if (t === "group_post_update") {
+    const gid = String(msg?.group_id ?? "").trim();
+    const member = String(msg?.member_id ?? "").trim();
+    const value = Boolean(msg?.value);
+    if (!gid || !member) return;
+    patch((prev) => {
+      const prevEntry = prev.groups.find((x) => x.id === gid);
+      if (!prevEntry) return prev;
+      const nextBanned = new Set((prevEntry.post_banned || []).map((x) => String(x || "").trim()).filter(Boolean));
+      if (value) nextBanned.add(member);
+      else nextBanned.delete(member);
+      const upd: GroupEntry = { ...prevEntry, post_banned: Array.from(nextBanned) };
+      const next = prev.groups.filter((x) => x.id !== gid);
+      next.push(upd);
+      next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+      return { ...prev, groups: next };
     });
     return;
   }
@@ -667,6 +773,9 @@ export function handleServerMessage(
         name: (b?.name ?? null) as any,
         owner_id: (b?.owner_id ?? null) as any,
         handle: (b?.handle ?? null) as any,
+        ...(Array.isArray(b?.members)
+          ? { members: (b.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) }
+          : {}),
       }))
       .filter((b: BoardEntry) => b.id);
     patch({ boards });
@@ -674,15 +783,50 @@ export function handleServerMessage(
   }
   if (t === "board_added" || t === "board_updated") {
     const b = msg?.board ?? null;
-    const upd: BoardEntry | null = b
-      ? { id: String(b?.id ?? ""), name: (b?.name ?? null) as any, owner_id: (b?.owner_id ?? null) as any, handle: (b?.handle ?? null) as any }
-      : null;
-    if (!upd?.id) return;
     patch((prev) => {
+      const id = b ? String(b?.id ?? "") : "";
+      if (!id) return prev;
+      const hasMembers = Array.isArray(b?.members);
+      const nextMembers = hasMembers ? (b.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
+      const prevEntry = prev.boards.find((x) => x.id === id);
+      const upd: BoardEntry = {
+        id,
+        name: (b?.name ?? prevEntry?.name ?? null) as any,
+        owner_id: (b?.owner_id ?? prevEntry?.owner_id ?? null) as any,
+        handle: (b?.handle ?? prevEntry?.handle ?? null) as any,
+        ...(hasMembers ? { members: nextMembers || [] } : prevEntry?.members ? { members: prevEntry.members } : {}),
+      };
       const next = prev.boards.filter((x) => x.id !== upd.id);
       next.push(upd);
       next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
       return { ...prev, boards: next, pendingBoardInvites: prev.pendingBoardInvites.filter((inv) => inv.boardId !== upd.id) };
+    });
+    return;
+  }
+  if (t === "board_info_result") {
+    const ok = Boolean(msg?.ok);
+    const b = msg?.board ?? null;
+    const bid = String(b?.id ?? msg?.board_id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason || "ошибка");
+      patch({ status: `Не удалось получить доску: ${reason}` });
+      return;
+    }
+    if (!bid) return;
+    const members = Array.isArray(b?.members) ? b.members.map((m: any) => String(m || "").trim()).filter(Boolean) : [];
+    patch((prev) => {
+      const prevEntry = prev.boards.find((x) => x.id === bid);
+      const upd: BoardEntry = {
+        id: bid,
+        name: (b?.name ?? prevEntry?.name ?? null) as any,
+        owner_id: (b?.owner_id ?? prevEntry?.owner_id ?? null) as any,
+        handle: (b?.handle ?? prevEntry?.handle ?? null) as any,
+        members,
+      };
+      const next = prev.boards.filter((x) => x.id !== bid);
+      next.push(upd);
+      next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+      return { ...prev, boards: next };
     });
     return;
   }

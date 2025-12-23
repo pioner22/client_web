@@ -42,6 +42,7 @@
   padding: var(--sp-4);
   display: grid;
   gap: var(--sp-3);
+  box-shadow: var(--card-shadow, none);
 }
 
 .profile-card-title {
@@ -126,6 +127,129 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.theme-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+}
+
+.theme-toggle .btn {
+  justify-content: center;
+}
+
+.page.page-room {
+  align-content: start;
+}
+
+.profile-members-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.profile-members-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.members-list {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.members-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--muted);
+  border-radius: var(--r-md);
+  border: 1px dashed color-mix(in srgb, var(--line), transparent 35%);
+  background: color-mix(in srgb, var(--panel), transparent 60%);
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 40%);
+  background: color-mix(in srgb, var(--panel2), transparent 12%);
+}
+
+.member-main {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.member-main .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 12px;
+}
+
+.member-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.member-name {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-sub {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.member-badge {
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--focus), transparent 85%);
+}
+
+.member-badge-self {
+  background: color-mix(in srgb, var(--good), transparent 82%);
+}
+
+.member-badge-warn {
+  background: color-mix(in srgb, var(--bad), transparent 80%);
+}
+
+.member-badge-muted {
+  background: color-mix(in srgb, var(--warn), transparent 82%);
+}
+
+.member-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .profile-avatar-btn {

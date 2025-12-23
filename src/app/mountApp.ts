@@ -577,6 +577,17 @@ export function mountApp(root: HTMLElement) {
       return;
     }
 
+    const chatProfileBtn = target?.closest("button[data-action='chat-profile-open']") as HTMLButtonElement | null;
+    if (chatProfileBtn) {
+      const st = store.get();
+      if (!st.selected) return;
+      e.preventDefault();
+      if (st.selected.kind === "dm") openUserPage(st.selected.id);
+      else if (st.selected.kind === "group") openGroupPage(st.selected.id);
+      else if (st.selected.kind === "board") openBoardPage(st.selected.id);
+      return;
+    }
+
     const historyMoreBtn = target?.closest("button[data-action='chat-history-more']") as HTMLButtonElement | null;
     if (historyMoreBtn) {
       e.preventDefault();
@@ -1547,6 +1558,8 @@ export function mountApp(root: HTMLElement) {
       ...prev,
       page,
       ...(page !== "user" ? { userViewId: null } : {}),
+      ...(page !== "group" ? { groupViewId: null } : {}),
+      ...(page !== "board" ? { boardViewId: null } : {}),
       ...(page !== "main" ? { mobileSidebarTab: "menu" as MobileSidebarTab } : {}),
       ...(page !== "main" ? { chatSearchOpen: false, chatSearchQuery: "", chatSearchHits: [], chatSearchPos: 0 } : {}),
     }));
@@ -1560,6 +1573,28 @@ export function mountApp(root: HTMLElement) {
     const st = store.get();
     if (st.authed && st.conn === "connected") {
       gateway.send({ type: "profile_get", id: uid });
+    }
+  }
+
+  function openGroupPage(id: string) {
+    const gid = String(id || "").trim();
+    if (!gid) return;
+    setPage("group");
+    store.set({ groupViewId: gid, status: `Чат: ${gid}` });
+    const st = store.get();
+    if (st.authed && st.conn === "connected") {
+      gateway.send({ type: "group_info", group_id: gid });
+    }
+  }
+
+  function openBoardPage(id: string) {
+    const bid = String(id || "").trim();
+    if (!bid) return;
+    setPage("board");
+    store.set({ boardViewId: bid, status: `Доска: ${bid}` });
+    const st = store.get();
+    if (st.authed && st.conn === "connected") {
+      gateway.send({ type: "board_info", board_id: bid });
     }
   }
 
@@ -2694,6 +2729,18 @@ export function mountApp(root: HTMLElement) {
     if (action.kind === "friend_remove") {
       gateway.send({ type: "friend_remove", peer: action.peer });
       store.set({ status: `Удаление контакта: ${action.peer}` });
+      close();
+      return;
+    }
+    if (action.kind === "group_member_remove") {
+      gateway.send({ type: "group_remove", group_id: action.groupId, members: [action.memberId] });
+      store.set({ status: `Удаление участника: ${action.memberId}` });
+      close();
+      return;
+    }
+    if (action.kind === "board_member_remove") {
+      gateway.send({ type: "board_remove", board_id: action.boardId, members: [action.memberId] });
+      store.set({ status: `Удаление участника: ${action.memberId}` });
       close();
       return;
     }
@@ -4615,6 +4662,7 @@ export function mountApp(root: HTMLElement) {
       const isOwner = Boolean(g?.owner_id && st.selfId && String(g.owner_id) === String(st.selfId));
       title = `Чат: ${name}`;
       items.push({ id: "open", label: "Открыть" });
+      items.push({ id: "group_profile", label: "Профиль чата" });
       const pinKey = roomKey(target.id);
       items.push({ id: "pin_toggle", label: st.pinned.includes(pinKey) ? "Открепить" : "Закрепить" });
       items.push({ id: "copy_id", label: "Скопировать ID" });
@@ -4635,6 +4683,7 @@ export function mountApp(root: HTMLElement) {
       const isOwner = Boolean(b?.owner_id && st.selfId && String(b.owner_id) === String(st.selfId));
       title = `Доска: ${name}`;
       items.push({ id: "open", label: "Открыть" });
+      items.push({ id: "board_profile", label: "Профиль доски" });
       const pinKey = roomKey(target.id);
       items.push({ id: "pin_toggle", label: st.pinned.includes(pinKey) ? "Открепить" : "Закрепить" });
       items.push({ id: "copy_id", label: "Скопировать ID" });
@@ -4756,6 +4805,17 @@ export function mountApp(root: HTMLElement) {
     if (itemId === "avatar_remove") {
       const kind = avatarKindForTarget(t.kind);
       if (kind) removeAvatar(kind, t.id);
+      close();
+      return;
+    }
+
+    if (itemId === "group_profile" && t.kind === "group") {
+      openGroupPage(t.id);
+      close();
+      return;
+    }
+    if (itemId === "board_profile" && t.kind === "board") {
+      openBoardPage(t.id);
       close();
       return;
     }
@@ -5094,6 +5154,8 @@ export function mountApp(root: HTMLElement) {
         v: 1,
         page: st.page,
         userViewId: st.userViewId,
+        groupViewId: st.groupViewId,
+        boardViewId: st.boardViewId,
         selected: st.selected,
         input,
         drafts: st.drafts,
@@ -5117,6 +5179,8 @@ export function mountApp(root: HTMLElement) {
     | {
         page?: PageKind;
         userViewId?: string | null;
+        groupViewId?: string | null;
+        boardViewId?: string | null;
         selected?: TargetRef | null;
         input?: string;
         drafts?: Record<string, string>;
@@ -5140,8 +5204,10 @@ export function mountApp(root: HTMLElement) {
       const obj = parsed as any;
       if (obj.v !== 1) return null;
 
-      const page: PageKind | undefined = ["main", "search", "profile", "user", "files"].includes(obj.page) ? obj.page : undefined;
+      const page: PageKind | undefined = ["main", "search", "profile", "user", "group", "board", "files"].includes(obj.page) ? obj.page : undefined;
       const userViewId = typeof obj.userViewId === "string" && obj.userViewId.trim() ? obj.userViewId.trim() : null;
+      const groupViewId = typeof obj.groupViewId === "string" && obj.groupViewId.trim() ? obj.groupViewId.trim() : null;
+      const boardViewId = typeof obj.boardViewId === "string" && obj.boardViewId.trim() ? obj.boardViewId.trim() : null;
 
       const selectedRaw = obj.selected;
       const selected: TargetRef | null =
@@ -5168,6 +5234,8 @@ export function mountApp(root: HTMLElement) {
       return {
         page,
         userViewId,
+        groupViewId,
+        boardViewId,
         selected,
         input,
         drafts,
@@ -5822,7 +5890,103 @@ export function mountApp(root: HTMLElement) {
       const st = store.get();
       if (page === "profile" && st.authed && st.conn === "connected") {
         gateway.send({ type: "profile_get" });
+      } else if (page === "group" && st.authed && st.conn === "connected" && st.groupViewId) {
+        gateway.send({ type: "group_info", group_id: st.groupViewId });
+      } else if (page === "board" && st.authed && st.conn === "connected" && st.boardViewId) {
+        gateway.send({ type: "board_info", board_id: st.boardViewId });
       }
+    },
+    onRoomMemberRemove: (kind: TargetRef["kind"], roomId: string, memberId: string) => {
+      const st = store.get();
+      const rid = String(roomId || "").trim();
+      const mid = String(memberId || "").trim();
+      if (!rid || !mid) return;
+      if (st.conn !== "connected" || !st.authed) {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      if (kind === "group") {
+        const g = st.groups.find((x) => x.id === rid);
+        const isOwner = Boolean(g?.owner_id && st.selfId && String(g.owner_id) === String(st.selfId));
+        if (!isOwner) {
+          store.set({ status: "Только владелец может удалять участников" });
+          return;
+        }
+        openConfirmModal({
+          title: "Удалить участника?",
+          message: `Удалить ${mid} из чата?`,
+          confirmLabel: "Удалить",
+          danger: true,
+          action: { kind: "group_member_remove", groupId: rid, memberId: mid },
+        });
+        return;
+      }
+      if (kind === "board") {
+        const b = st.boards.find((x) => x.id === rid);
+        const isOwner = Boolean(b?.owner_id && st.selfId && String(b.owner_id) === String(st.selfId));
+        if (!isOwner) {
+          store.set({ status: "Только владелец может удалять участников" });
+          return;
+        }
+        openConfirmModal({
+          title: "Удалить участника?",
+          message: `Удалить ${mid} из доски?`,
+          confirmLabel: "Удалить",
+          danger: true,
+          action: { kind: "board_member_remove", boardId: rid, memberId: mid },
+        });
+      }
+    },
+    onBlockToggle: (memberId: string) => {
+      const st = store.get();
+      const mid = String(memberId || "").trim();
+      if (!mid) return;
+      if (st.conn !== "connected" || !st.authed) {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      const nextValue = !st.blocked.includes(mid);
+      gateway.send({ type: "block_set", peer: mid, value: nextValue });
+      showToast(nextValue ? `Заблокировано: ${mid}` : `Разблокировано: ${mid}`, {
+        kind: nextValue ? "warn" : "info",
+        undo: () => gateway.send({ type: "block_set", peer: mid, value: !nextValue }),
+      });
+    },
+    onRoomWriteToggle: (kind: TargetRef["kind"], roomId: string, memberId: string, value: boolean) => {
+      const st = store.get();
+      const rid = String(roomId || "").trim();
+      const mid = String(memberId || "").trim();
+      if (!rid || !mid) return;
+      if (kind !== "group") return;
+      if (st.conn !== "connected" || !st.authed) {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      const g = st.groups.find((x) => x.id === rid);
+      const isOwner = Boolean(g?.owner_id && st.selfId && String(g.owner_id) === String(st.selfId));
+      if (!isOwner) {
+        store.set({ status: "Только владелец может менять права" });
+        return;
+      }
+      if (mid === st.selfId) {
+        store.set({ status: "Нельзя запретить писать владельцу" });
+        return;
+      }
+      gateway.send({ type: "group_post_set", group_id: rid, member_id: mid, value });
+      showToast(value ? `Запрет писать: ${mid}` : `Разрешено писать: ${mid}`, {
+        kind: value ? "warn" : "info",
+        undo: () => gateway.send({ type: "group_post_set", group_id: rid, member_id: mid, value: !value }),
+      });
+    },
+    onRoomRefresh: (kind: TargetRef["kind"], roomId: string) => {
+      const st = store.get();
+      const rid = String(roomId || "").trim();
+      if (!rid || st.conn !== "connected" || !st.authed) {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      if (kind === "group") gateway.send({ type: "group_info", group_id: rid });
+      else if (kind === "board") gateway.send({ type: "board_info", board_id: rid });
     },
     onSetMobileSidebarTab: (tab: MobileSidebarTab) => setMobileSidebarTab(tab),
     onSetSidebarQuery: (query: string) => {
@@ -5960,12 +6124,14 @@ export function mountApp(root: HTMLElement) {
 
   const restored = consumeRestartState();
 	  if (restored) {
-	    store.set((prev) => ({
-	      ...prev,
-	      ...(restored.page ? { page: restored.page } : {}),
-	      userViewId: restored.userViewId ?? prev.userViewId,
-	      ...(restored.selected ? { selected: restored.selected } : {}),
-	      input: restored.input ?? prev.input,
+    store.set((prev) => ({
+      ...prev,
+      ...(restored.page ? { page: restored.page } : {}),
+      userViewId: restored.userViewId ?? prev.userViewId,
+      groupViewId: restored.groupViewId ?? prev.groupViewId,
+      boardViewId: restored.boardViewId ?? prev.boardViewId,
+      ...(restored.selected ? { selected: restored.selected } : {}),
+      input: restored.input ?? prev.input,
 	      drafts: restored.drafts ?? prev.drafts,
 	      pinned: restored.pinned ?? prev.pinned,
 	      chatSearchOpen: restored.chatSearchOpen ?? prev.chatSearchOpen,

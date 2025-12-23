@@ -140,6 +140,16 @@
     padding: var(--sp-4);
   }
 
+  .member-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .member-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   /* Страницы (help/profile/search/files/create) на мобильных выглядят как «экран приложения», а не popup-card. */
   .chat.chat-page {
     padding: 0;

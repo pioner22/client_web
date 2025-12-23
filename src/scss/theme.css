@@ -282,6 +282,7 @@
   --modal-radius: var(--r-lg);
   --modal-pad: var(--sp-5);
   --modal-shadow: 0 10px 35px rgba(0, 0, 0, 0.5);
+  --card-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
   --modal-title-color: var(--text);
   --modal-line-color: var(--muted);
   --modal-line-mt: 6px;

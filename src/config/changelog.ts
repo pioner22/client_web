@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.125",
+    date: "2025-12-23",
+    added: ["Профили чатов/досок: список участников и быстрые действия"],
+    improved: [
+      "Чаты: запрет писать для отдельных участников (индикатор + блокировка композера)",
+      "Профиль: быстрый переключатель светлого/тёмного скина",
+      "Контекст‑меню: компактнее и ближе к Telegram",
+    ],
+  },
+  {
     version: "0.1.124",
     date: "2025-12-23",
     improved: [

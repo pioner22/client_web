@@ -554,6 +554,15 @@
   flex: 1 1 auto;
 }
 
+.btn.chat-info-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1;
+}
+
 .chat-pinned {
   display: flex;
   align-items: center;

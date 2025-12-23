@@ -498,6 +498,19 @@ export function renderChat(layout: Layout, state: AppState) {
       el(
         "button",
         {
+          class: "btn chat-info-btn",
+          type: "button",
+          "data-action": "chat-profile-open",
+          title: "Профиль чата",
+          "aria-label": "Профиль чата",
+        },
+        ["ℹ︎"]
+      )
+    );
+    titleChildren.push(
+      el(
+        "button",
+        {
           class: state.chatSearchOpen ? "btn chat-search-toggle btn-active" : "btn chat-search-toggle",
           type: "button",
           "data-action": state.chatSearchOpen ? "chat-search-close" : "chat-search-open",

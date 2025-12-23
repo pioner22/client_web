@@ -11,6 +11,16 @@ function viewTitle(state: AppState): string {
     const dn = p?.display_name ? String(p.display_name).trim() : "";
     return dn ? `Контакт: ${dn}` : "Контакт";
   }
+  if (state.page === "group") {
+    const id = String(state.groupViewId || "").trim();
+    const g = id ? state.groups?.find((x) => x.id === id) : null;
+    return `Чат: ${String(g?.name || id || "—")}`;
+  }
+  if (state.page === "board") {
+    const id = String(state.boardViewId || "").trim();
+    const b = id ? state.boards?.find((x) => x.id === id) : null;
+    return `Доска: ${String(b?.name || id || "—")}`;
+  }
   if (state.page === "files") return "Файлы";
   if (state.page === "group_create") return "Создать чат";
   if (state.page === "board_create") return "Создать доску";

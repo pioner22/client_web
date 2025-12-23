@@ -17,6 +17,16 @@ export function renderHeader(layout: Layout, state: AppState) {
     const dn = p?.display_name ? String(p.display_name).trim() : "";
     title = dn ? `Контакт: ${dn}` : "Контакт";
   }
+  else if (state.page === "group") {
+    const id = String(state.groupViewId || "").trim();
+    const g = id ? state.groups?.find((x) => x.id === id) : null;
+    title = `Чат: ${String(g?.name || id || "—")}`;
+  }
+  else if (state.page === "board") {
+    const id = String(state.boardViewId || "").trim();
+    const b = id ? state.boards?.find((x) => x.id === id) : null;
+    title = `Доска: ${String(b?.name || id || "—")}`;
+  }
   else if (state.page === "files") title = "Файлы";
   else if (state.page === "group_create") title = "Создать чат";
   else if (state.page === "board_create") title = "Создать доску";
