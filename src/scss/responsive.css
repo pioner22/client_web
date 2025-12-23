@@ -7,6 +7,10 @@
     right: 0;
     /* iOS: при открытии клавиатуры visualViewport может иметь offsetTop -> фиксируем "прыжки". */
     top: var(--app-vv-top, 0px);
+    /* iOS: если клавиатура открыта, уводим низ приложения до визуального viewport (above keyboard). */
+    bottom: var(--app-vv-bottom, 0px);
+    height: auto;
+    min-height: 0;
     padding: 0;
   }
 

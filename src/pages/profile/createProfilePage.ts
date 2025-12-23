@@ -1,5 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
+import { focusElement } from "../../helpers/ui/focus";
 import type { AppState } from "../../stores/types";
 
 export interface ProfilePageActions {
@@ -219,8 +220,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     update,
     focus: () => {
       if (window.matchMedia && window.matchMedia("(max-width: 820px)").matches) return;
-      displayNameInput.focus();
-      displayNameInput.select();
+      focusElement(displayNameInput, { select: true });
     },
   };
 }

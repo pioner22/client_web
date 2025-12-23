@@ -10,6 +10,7 @@ import { renderToast } from "../components/toast/renderToast";
 import { el } from "../helpers/dom/el";
 import { conversationKey } from "../helpers/chat/conversationKey";
 import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
+import { focusElement } from "../helpers/ui/focus";
 import { createSearchPage, type SearchPage } from "../pages/search/createSearchPage";
 import { createProfilePage, type ProfilePage } from "../pages/profile/createProfilePage";
 import { createUserPage, type UserPage } from "../pages/user/createUserPage";
@@ -245,11 +246,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     if (state.chatSearchOpen && searchHadFocus) {
       const nextSearch = layout.chatTop.querySelector("#chat-search-input") as HTMLInputElement | null;
       if (nextSearch) {
-        try {
-          nextSearch.focus({ preventScroll: true });
-        } catch {
-          // ignore
-        }
+        focusElement(nextSearch);
         try {
           const len = nextSearch.value.length;
           const start = searchSelStart === null ? len : Math.max(0, Math.min(len, searchSelStart));
@@ -377,18 +374,18 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       const pw2 = document.getElementById("auth-pw2") as HTMLInputElement | null;
       const skin = document.getElementById("auth-skin") as HTMLSelectElement | null;
       if (prevActiveId === "auth-skin" && skin) skin.focus();
-      else if (prevActiveId === "auth-pw2" && pw2) pw2.focus();
-      else if (prevActiveId === "auth-pw1" && pw1) pw1.focus();
-      else if (prevActiveId === "auth-pw" && pw) pw.focus();
-      else if (prevActiveId === "auth-id" && id) id.focus();
+      else if (prevActiveId === "auth-pw2" && pw2) focusElement(pw2);
+      else if (prevActiveId === "auth-pw1" && pw1) focusElement(pw1);
+      else if (prevActiveId === "auth-pw" && pw) focusElement(pw);
+      else if (prevActiveId === "auth-id" && id) focusElement(id);
       else if (!hadAuthModal) {
-        if (state.authMode === "register" && pw1) pw1.focus();
+        if (state.authMode === "register" && pw1) focusElement(pw1);
         else if (state.authMode === "login") {
-          if (id && !id.value) id.focus();
-          else if (pw) pw.focus();
-          else if (id) id.focus();
+          if (id && !id.value) focusElement(id);
+          else if (pw) focusElement(pw);
+          else if (id) focusElement(id);
         } else if (id) {
-          id.focus();
+          focusElement(id);
         }
       }
     });
@@ -400,7 +397,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     if (input && input.value !== prevMembersAdd) input.value = prevMembersAdd;
     if (entry && entry.value !== prevMembersAddEntry) entry.value = prevMembersAddEntry;
     queueMicrotask(() => {
-      if (entry) entry.focus();
+      focusElement(entry);
     });
   }
 
@@ -408,10 +405,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     const input = document.getElementById("members-remove-input") as HTMLInputElement | null;
     if (input && input.value !== prevMembersRemove) input.value = prevMembersRemove;
     queueMicrotask(() => {
-      if (input) {
-        input.focus();
-        input.select();
-      }
+      focusElement(input, { select: true });
     });
   }
 
@@ -419,10 +413,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     const input = document.getElementById("rename-name") as HTMLInputElement | null;
     if (input && input.value !== prevRename) input.value = prevRename;
     queueMicrotask(() => {
-      if (input) {
-        input.focus();
-        input.select();
-      }
+      focusElement(input, { select: true });
     });
   }
 

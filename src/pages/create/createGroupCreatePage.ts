@@ -1,4 +1,5 @@
 import { el } from "../../helpers/dom/el";
+import { focusElement } from "../../helpers/ui/focus";
 import type { AppState } from "../../stores/types";
 
 export interface CreateGroupPageActions {
@@ -93,12 +94,7 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
       if (hidden) hidden.value = "";
       if (entry) entry.value = "";
       chips?.replaceChildren();
-      try {
-        nameInput.focus();
-        nameInput.select();
-      } catch {
-        // ignore
-      }
+      focusElement(nameInput, { select: true });
     },
   };
 }

@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.111",
+    date: "2025-12-23",
+    fixed: ["iPhone/PWA: #app на мобилке теперь «поджимается» снизу по visualViewport (bottom var) — меньше шансов на чёрную полосу и «улёт» композера при фокусе"],
+    improved: ["iOS PWA: input‑assistant (Undo/Redo/✓) применяется и при программном фокусе полей (модалки/страницы) — панель появляется реже"],
+    added: ["Helper: `focusElement` для безопасного фокуса на input/textarea", "Regress: обновлены тесты viewport/mobile fullscreen под `--app-vv-bottom`"],
+  },
+  {
     version: "0.1.110",
     date: "2025-12-23",
     improved: [

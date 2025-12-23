@@ -2,6 +2,7 @@ import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { formatTime } from "../../helpers/time";
+import { focusElement } from "../../helpers/ui/focus";
 import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 
 function collectAttentionPeers(state: AppState): Set<string> {
@@ -336,11 +337,7 @@ export function renderSidebar(
             clearBtn.addEventListener("click", (e) => {
               e.preventDefault();
               onSetSidebarQuery("");
-              try {
-                input.focus({ preventScroll: true });
-              } catch {
-                // ignore
-              }
+              focusElement(input);
             });
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();

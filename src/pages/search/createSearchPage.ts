@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { applyLegacyIdMask } from "../../helpers/id/legacyIdMask";
+import { focusElement } from "../../helpers/ui/focus";
 import type { AppState, SearchResultEntry, TargetRef } from "../../stores/types";
 
 export interface SearchPageActions {
@@ -209,8 +210,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     root,
     update,
     focus: () => {
-      input.focus();
-      input.select();
+      focusElement(input, { select: true });
     },
   };
 }

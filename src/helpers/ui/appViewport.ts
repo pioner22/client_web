@@ -2,7 +2,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let rafId: number | null = null;
   let lastHeight = 0;
 
-  const read = (): { height: number; keyboard: boolean; vvTop: number } => {
+  const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 48;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
@@ -48,12 +48,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const keyboard = Boolean(vvHeight && base && coveredBottom >= keyboardThreshold);
     const resolved = keyboard ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
-    return { height: height > 0 ? height : 0, keyboard, vvTop };
+    return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom) };
   };
 
   const apply = () => {
     rafId = null;
-    const { height, keyboard, vvTop } = read();
+    const { height, keyboard, vvTop, vvBottom } = read();
     if (!height) return;
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
@@ -66,6 +66,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // "black strip" + composer jumps upward. Anchor the fixed app to visualViewport.offsetTop.
     if (keyboard && vvTop >= 1) root.style.setProperty("--app-vv-top", `${vvTop}px`);
     else root.style.removeProperty("--app-vv-top");
+
+    // Similarly, when keyboard is open we want the fixed app to end at the visual viewport bottom.
+    // Expose the covered bottom (usually keyboard height) as CSS var so mobile layout can use `bottom: ...`
+    // instead of relying solely on `height: ...` (more stable on iOS).
+    if (keyboard && vvBottom >= 1) root.style.setProperty("--app-vv-bottom", `${vvBottom}px`);
+    else root.style.removeProperty("--app-vv-bottom");
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;
@@ -108,5 +114,6 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     root.style.removeProperty("--app-vh");
     root.style.removeProperty("--safe-bottom");
     root.style.removeProperty("--app-vv-top");
+    root.style.removeProperty("--app-vv-bottom");
   };
 }

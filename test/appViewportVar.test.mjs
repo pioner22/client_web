@@ -273,10 +273,12 @@ test("viewport var: installAppViewportHeightVar переключается на 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "390px");
     assert.equal(style._props.get("--safe-bottom"), "0px");
+    assert.equal(style._props.get("--app-vv-bottom"), "310px");
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
     assert.equal(style._props.has("--safe-bottom"), false);
+    assert.equal(style._props.has("--app-vv-bottom"), false);
     assert.equal(rafCb !== null, true);
   } finally {
     await helper.cleanup();
@@ -322,6 +324,7 @@ test("viewport var: при фокусе на input/textarea переключае
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "642px");
     assert.equal(style._props.get("--safe-bottom"), "0px");
+    assert.equal(style._props.get("--app-vv-bottom"), "58px");
     cleanup();
   } finally {
     await helper.cleanup();
@@ -384,11 +387,13 @@ test("viewport var: учитывает visualViewport.offsetTop, чтобы не
     assert.equal(style._props.get("--app-vh"), "520px");
     assert.equal(style._props.get("--safe-bottom"), "0px");
     assert.equal(style._props.get("--app-vv-top"), "120px");
+    assert.equal(style._props.get("--app-vv-bottom"), "204px");
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
     assert.equal(style._props.has("--safe-bottom"), false);
     assert.equal(style._props.has("--app-vv-top"), false);
+    assert.equal(style._props.has("--app-vv-bottom"), false);
   } finally {
     await helper.cleanup();
     if (prev.window === undefined) delete globalThis.window;

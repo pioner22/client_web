@@ -1,5 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { applyLegacyIdMask } from "../../helpers/id/legacyIdMask";
+import { focusElement } from "../../helpers/ui/focus";
 import type { AuthMode, SkinInfo } from "../../stores/types";
 
 export interface AuthModalActions {
@@ -44,16 +45,7 @@ export function renderAuthModal(
       } catch {
         // ignore
       }
-      try {
-        input.focus({ preventScroll: true });
-      } catch {
-        input.focus();
-      }
-      try {
-        input.select();
-      } catch {
-        // ignore
-      }
+      focusElement(input, { select: true });
     });
 
     return el("div", { class: "field-with-action auth-id-lock" }, [input, toggle]);
@@ -87,11 +79,7 @@ export function renderAuthModal(
     toggle.addEventListener("click", () => {
       const visible = String(input.type || "").toLowerCase() === "password";
       apply(visible);
-      try {
-        input.focus({ preventScroll: true });
-      } catch {
-        input.focus();
-      }
+      focusElement(input);
     });
 
     const wrap = el("div", { class: "field-with-action" }, [input, toggle]);
