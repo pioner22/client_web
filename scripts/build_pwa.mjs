@@ -93,6 +93,108 @@ const BUILD_ID = ${JSON.stringify(buildId)};
 const CACHE_PREFIX = "yagodka-web-cache-";
 const CACHE = CACHE_PREFIX + BUILD_ID;
 const PRECACHE_URLS = ${JSON.stringify(precacheUrls, null, 2)};
+const RUNTIME_CACHE = CACHE_PREFIX + "runtime";
+const RUNTIME_LIMIT = 220;
+const RUNTIME_MAX_BYTES = 8 * 1024 * 1024;
+const RUNTIME_EXT_RE = /\.(js|css|jpe?g|png|gif|webp|avif|svg|ico|woff2?|ttf|otf|wasm|webmanifest)(?:\?.*)?$/i;
+const RUNTIME_PATH_RE = /^\\/(assets|icons|skins)\\//i;
+const RUNTIME_SPECIAL = new Set(["/manifest.webmanifest", "/sw.js"]);
+const SHARE_PATH_RE = /\\/share\\/?$/i;
+const SHARE_FALLBACK_ID = "__broadcast__";
+const shareQueue = new Map();
+
+function isNavigationRequest(req) {
+  return req.mode === "navigate" || req.destination === "document";
+}
+
+function isStaticAssetUrl(url) {
+  const path = url.pathname || "/";
+  if (RUNTIME_SPECIAL.has(path)) return true;
+  if (RUNTIME_PATH_RE.test(path)) return true;
+  return RUNTIME_EXT_RE.test(path);
+}
+
+function isCacheableResponse(res) {
+  if (!res || !res.ok) return false;
+  const cc = String(res.headers.get("cache-control") || "").toLowerCase();
+  if (cc.includes("no-store")) return false;
+  if (cc.includes("private")) return false;
+  const len = Number(res.headers.get("content-length") || 0);
+  if (len && len > RUNTIME_MAX_BYTES) return false;
+  return true;
+}
+
+async function trimRuntimeCache(cache) {
+  try {
+    const keys = await cache.keys();
+    if (keys.length <= RUNTIME_LIMIT) return;
+    const overflow = keys.length - RUNTIME_LIMIT;
+    for (let i = 0; i < overflow; i += 1) {
+      const req = keys[i];
+      await cache.delete(req);
+    }
+  } catch {}
+}
+
+function normalizeSharePayload(formData) {
+  const files = [];
+  try {
+    for (const f of formData.getAll("files") || []) {
+      if (f && typeof f === "object" && typeof f.arrayBuffer === "function") files.push(f);
+    }
+  } catch {}
+  const title = String(formData.get("title") || "").trim();
+  const text = String(formData.get("text") || "").trim();
+  const url = String(formData.get("url") || "").trim();
+  return { files, title, text, url };
+}
+
+function enqueueShare(clientId, payload) {
+  const key = clientId || SHARE_FALLBACK_ID;
+  const arr = shareQueue.get(key) || [];
+  arr.push(payload);
+  shareQueue.set(key, arr.slice(-8));
+}
+
+async function postShareToClient(client, payloads) {
+  if (!client || !payloads || !payloads.length) return;
+  for (const payload of payloads) {
+    try {
+      client.postMessage({ type: "PWA_SHARE", payload });
+    } catch {}
+  }
+}
+
+async function flushShareQueue(client) {
+  if (!client) return;
+  const own = shareQueue.get(client.id) || [];
+  const fallback = shareQueue.get(SHARE_FALLBACK_ID) || [];
+  if (!own.length && !fallback.length) return;
+  shareQueue.delete(client.id);
+  shareQueue.delete(SHARE_FALLBACK_ID);
+  await postShareToClient(client, [...own, ...fallback]);
+}
+
+async function handleShareFetch(event) {
+  try {
+    const formData = await event.request.formData();
+    const payload = normalizeSharePayload(formData);
+    const clientId = event.resultingClientId || "";
+    enqueueShare(clientId, payload);
+    if (clientId) {
+      const client = await self.clients.get(clientId);
+      if (client) await flushShareQueue(client);
+    } else {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      if (clients && clients.length) {
+        for (const c of clients) {
+          await flushShareQueue(c);
+        }
+      }
+    }
+  } catch {}
+  return Response.redirect("./", 303);
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -146,17 +248,28 @@ self.addEventListener("message", (event) => {
       .then((clients) => clients.forEach((c) => c.postMessage(payload)))
       .catch(() => {});
   }
+  if (data.type === "PWA_SHARE_READY") {
+    const source = event && event.source;
+    if (source && typeof source.id === "string") {
+      flushShareQueue(source);
+    }
+  }
 });
-
-function isNavigationRequest(req) {
-  return req.mode === "navigate" || req.destination === "document";
-}
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (!req || req.method !== "GET") return;
+  if (!req) return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+
+  if (SHARE_PATH_RE.test(url.pathname)) {
+    if (req.method === "POST") {
+      event.respondWith(handleShareFetch(event));
+    }
+    return;
+  }
+
+  if (req.method !== "GET") return;
 
   // App shell: отдаём index.html из кэша, чтобы не смешивать версии index+assets.
   if (isNavigationRequest(req)) {
@@ -171,14 +284,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (!isStaticAssetUrl(url)) return;
+
   event.respondWith(
     (async () => {
-      const cache = await caches.open(CACHE);
+      const precache = await caches.open(CACHE);
+      const cachedPre = await precache.match(req);
+      if (cachedPre) return cachedPre;
+      const cache = await caches.open(RUNTIME_CACHE);
       const cached = await cache.match(req);
       if (cached) return cached;
       const res = await fetch(req);
-      if (res && res.ok) {
-        cache.put(req, res.clone()).catch(() => {});
+      if (isCacheableResponse(res)) {
+        try {
+          cache.put(req, res.clone());
+          trimRuntimeCache(cache);
+        } catch {}
       }
       return res;
     })()

@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.126",
+    date: "2025-12-23",
+    added: ["PWA: share_target (Поделиться → Yagodka) с приёмом файлов через Service Worker"],
+    improved: ["PWA: runtime‑кэш теперь только для статических ассетов, с лимитами и без кэширования лишних GET"],
+  },
+  {
     version: "0.1.125",
     date: "2025-12-23",
     added: ["Профили чатов/досок: список участников и быстрые действия"],

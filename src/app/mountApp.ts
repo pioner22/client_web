@@ -336,6 +336,13 @@ export function mountApp(root: HTMLElement) {
   const store = new Store<AppState>(createInitialState());
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
   const layout = createLayout(root, { iosStandalone });
+  type PwaSharePayload = {
+    files: File[];
+    title: string;
+    text: string;
+    url: string;
+  };
+  const pendingShareQueue: PwaSharePayload[] = [];
 
   function maybeApplyIosInputAssistant(target: EventTarget | null) {
     if (!iosStandalone) return;
@@ -355,6 +362,111 @@ export function mountApp(root: HTMLElement) {
     applyIosInputAssistantWorkaround(node, modeAttr === "strict" ? "strict" : "predictive");
   }
 
+  function normalizeSharePayload(raw: any): PwaSharePayload | null {
+    if (!raw || typeof raw !== "object") return null;
+    const filesRaw = Array.isArray(raw.files) ? raw.files : [];
+    const files = filesRaw.filter((f) => f && typeof f === "object" && typeof (f as any).arrayBuffer === "function") as File[];
+    const title = String(raw.title ?? "").trim();
+    const text = String(raw.text ?? "").trim();
+    const url = String(raw.url ?? "").trim();
+    if (!files.length && !title && !text && !url) return null;
+    return { files, title, text, url };
+  }
+
+  function formatShareCaption(payload: PwaSharePayload): string {
+    const parts = [payload.title, payload.text, payload.url].map((v) => String(v || "").trim()).filter(Boolean);
+    if (!parts.length) return "";
+    let caption = parts.join("\n").trim();
+    if (caption.length > APP_MSG_MAX_LEN) caption = caption.slice(0, APP_MSG_MAX_LEN);
+    return caption;
+  }
+
+  function appendShareTextToComposer(text: string, target: TargetRef) {
+    if (!text) return;
+    const prevText = String(layout.input.value || "");
+    const next = prevText ? `${prevText}\n${text}` : text;
+    const nextTrimmed = next.length > APP_MSG_MAX_LEN ? next.slice(0, APP_MSG_MAX_LEN) : next;
+    layout.input.value = nextTrimmed;
+    autosizeInput(layout.input);
+    store.set((prev) => {
+      const key = conversationKey(target);
+      const drafts = updateDraftMap(prev.drafts, key, nextTrimmed);
+      return { ...prev, input: nextTrimmed, drafts };
+    });
+    scheduleSaveDrafts(store);
+  }
+
+  function canSendShareNow(st: AppState, target: TargetRef | null): { ok: boolean; reason: string } {
+    if (st.conn !== "connected") return { ok: false, reason: "Нет соединения" };
+    if (!st.authed) return { ok: false, reason: "Сначала войдите или зарегистрируйтесь" };
+    if (!target) return { ok: false, reason: "Выберите контакт или чат слева" };
+    if (target.kind === "group") {
+      const g = st.groups.find((x) => x.id === target.id);
+      const me = String(st.selfId || "").trim();
+      const owner = String(g?.owner_id || "").trim();
+      const banned = (g?.post_banned || []).map((x) => String(x || "").trim()).filter(Boolean);
+      if (me && owner && me !== owner && banned.includes(me)) {
+        return { ok: false, reason: "Вам запрещено писать в чате" };
+      }
+    }
+    if (target.kind === "board") {
+      const b = st.boards.find((x) => x.id === target.id);
+      const owner = String(b?.owner_id || "").trim();
+      const me = String(st.selfId || "").trim();
+      if (owner && me && owner !== me) {
+        return { ok: false, reason: "На доске писать может только владелец" };
+      }
+    }
+    return { ok: true, reason: "" };
+  }
+
+  function flushPendingShareQueue() {
+    if (!pendingShareQueue.length) return;
+    const st = store.get();
+    const target = st.selected;
+    const canSend = canSendShareNow(st, target);
+    if (!canSend.ok) {
+      store.set({ status: canSend.reason });
+      return;
+    }
+    if (!target) return;
+    const payloads = pendingShareQueue.splice(0, pendingShareQueue.length);
+    let sentFiles = 0;
+    let textOnly = 0;
+    for (const payload of payloads) {
+      const caption = formatShareCaption(payload);
+      const files = payload.files || [];
+      if (files.length) {
+        const canCaption = Boolean(caption) && files.length === 1 && !st.editing;
+        for (let i = 0; i < files.length; i += 1) {
+          sendFile(files[i], target, i === 0 && canCaption ? caption : "");
+          sentFiles += 1;
+        }
+        if (caption && !canCaption) {
+          if (!st.editing) appendShareTextToComposer(caption, target);
+          else store.set({ status: "Подпись из share не добавлена: вы редактируете сообщение" });
+        }
+      } else if (caption) {
+        textOnly += 1;
+        if (!st.editing) appendShareTextToComposer(caption, target);
+      }
+    }
+    if (sentFiles > 0) {
+      showToast(`Поделиться: отправлено файлов — ${sentFiles}`, { kind: "success" });
+    } else if (textOnly > 0) {
+      showToast("Поделиться: текст добавлен в поле ввода", { kind: "info" });
+    }
+  }
+
+  function enqueueSharePayload(payload: PwaSharePayload) {
+    pendingShareQueue.push(payload);
+    if (pendingShareQueue.length > 8) pendingShareQueue.splice(0, pendingShareQueue.length - 8);
+    const fileCount = payload.files?.length || 0;
+    const label = fileCount ? `Файлов: ${fileCount}` : "Текст";
+    showToast(`Поделиться: получено (${label})`, { kind: "info", timeoutMs: 4000 });
+    flushPendingShareQueue();
+  }
+
   maybeApplyIosInputAssistant(layout.input);
 
   // iOS standalone (PWA): стараемся применить workaround ДО focus, т.к. WebKit решает,
@@ -364,6 +476,13 @@ export function mountApp(root: HTMLElement) {
     document.addEventListener("touchstart", (e) => maybeApplyIosInputAssistant(e.target), true);
     document.addEventListener("focusin", (e) => maybeApplyIosInputAssistant(e.target), true);
   }
+
+  window.addEventListener("yagodka:pwa-share", (e: Event) => {
+    const ev = e as CustomEvent;
+    const payload = normalizeSharePayload(ev?.detail);
+    if (!payload) return;
+    enqueueSharePayload(payload);
+  });
   let prevPinnedMessagesRef = store.get().pinnedMessages;
   store.subscribe(() => {
     const st = store.get();
@@ -375,6 +494,25 @@ export function mountApp(root: HTMLElement) {
       prevPinnedMessagesRef = st.pinnedMessages;
       scheduleSavePinnedMessages(store);
     }
+  });
+  let sharePrevConn: ConnStatus = store.get().conn;
+  let sharePrevAuthed = store.get().authed;
+  let sharePrevSelKey = store.get().selected ? conversationKey(store.get().selected) : "";
+  store.subscribe(() => {
+    if (!pendingShareQueue.length) {
+      const st = store.get();
+      sharePrevConn = st.conn;
+      sharePrevAuthed = st.authed;
+      sharePrevSelKey = st.selected ? conversationKey(st.selected) : "";
+      return;
+    }
+    const st = store.get();
+    const nextSelKey = st.selected ? conversationKey(st.selected) : "";
+    const changed = st.conn !== sharePrevConn || st.authed !== sharePrevAuthed || nextSelKey !== sharePrevSelKey;
+    sharePrevConn = st.conn;
+    sharePrevAuthed = st.authed;
+    sharePrevSelKey = nextSelKey;
+    if (changed) flushPendingShareQueue();
   });
   const historyRequested = new Set<string>();
   const historyDeltaRequestedAt = new Map<string, number>();
@@ -3344,6 +3482,16 @@ export function mountApp(root: HTMLElement) {
     if (target.kind === "board" && !st.boards.some((b) => b.id === target.id)) {
       store.set({ status: `Вы не участник доски: ${target.id}` });
       return;
+    }
+    if (target.kind === "group") {
+      const g = st.groups.find((g) => g.id === target.id);
+      const me = String(st.selfId || "").trim();
+      const owner = String(g?.owner_id || "").trim();
+      const banned = (g?.post_banned || []).map((x) => String(x || "").trim()).filter(Boolean);
+      if (me && owner && me !== owner && banned.includes(me)) {
+        store.set({ status: "Вам запрещено писать в чате" });
+        return;
+      }
     }
     if (target.kind === "board") {
       const b = st.boards.find((b) => b.id === target.id);

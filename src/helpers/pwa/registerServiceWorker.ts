@@ -2,6 +2,7 @@ let updateRegistration: ServiceWorkerRegistration | null = null;
 let updateNotified = false;
 let updatePollTimer: number | null = null;
 let lastBuildId = "";
+let shareReadySent = false;
 
 // Test-only hook (used by node --test) to inject a fake SW registration.
 export function __setUpdateRegistrationForTest(reg: ServiceWorkerRegistration | null) {
@@ -92,6 +93,10 @@ function notifyBuildId(buildId: unknown) {
   window.dispatchEvent(new CustomEvent("yagodka:pwa-build", { detail: { buildId: id } }));
 }
 
+function notifySharePayload(payload: unknown) {
+  window.dispatchEvent(new CustomEvent("yagodka:pwa-share", { detail: payload }));
+}
+
 function requestBuildId(reg?: ServiceWorkerRegistration) {
   try {
     const msg = { type: "GET_BUILD_ID" };
@@ -102,6 +107,23 @@ function requestBuildId(reg?: ServiceWorkerRegistration) {
     }
     const fallback = reg?.active || reg?.waiting || reg?.installing || null;
     fallback?.postMessage?.(msg);
+  } catch {
+    // ignore
+  }
+}
+
+function requestSharePayload(reg?: ServiceWorkerRegistration) {
+  try {
+    const msg = { type: "PWA_SHARE_READY" };
+    const controller = navigator.serviceWorker.controller;
+    if (controller) {
+      controller.postMessage(msg);
+      shareReadySent = true;
+      return;
+    }
+    const fallback = reg?.active || reg?.waiting || reg?.installing || null;
+    fallback?.postMessage?.(msg);
+    shareReadySent = true;
   } catch {
     // ignore
   }
@@ -137,6 +159,7 @@ function startUpdatePolling(reg: ServiceWorkerRegistration) {
   // Also kick a check shortly after startup.
   window.setTimeout(run, 3_000);
   requestBuildId(reg);
+  if (!shareReadySent) requestSharePayload(reg);
 }
 
 export function registerServiceWorker() {
@@ -164,8 +187,12 @@ export function registerServiceWorker() {
     if (!data || typeof data !== "object") return;
     const type = (data as any).type;
     if (type === "BUILD_ID") notifyBuildId((data as any).buildId);
+    if (type === "PWA_SHARE") notifySharePayload((data as any).payload);
   });
-  navigator.serviceWorker.addEventListener("controllerchange", () => requestBuildId());
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    requestBuildId();
+    requestSharePayload();
+  });
 
   window.addEventListener("load", () => {
     navigator.serviceWorker
@@ -190,7 +217,13 @@ export function registerServiceWorker() {
         });
 
         requestBuildId(reg);
-        navigator.serviceWorker.ready.then(() => requestBuildId(reg)).catch(() => {});
+        requestSharePayload(reg);
+        navigator.serviceWorker.ready
+          .then(() => {
+            requestBuildId(reg);
+            requestSharePayload(reg);
+          })
+          .catch(() => {});
       })
       .catch(() => {});
   });
