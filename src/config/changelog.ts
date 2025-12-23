@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.107",
+    date: "2025-12-23",
+    improved: ["Mobile: список диалогов ближе к Telegram (сепараторы, time/unread в колонку, крупнее аватар)"],
+    added: ["Mobile: online‑точка на аватаре в списке диалогов", "Regress: `mobileDialogsListCss.test.mjs`"],
+  },
+  {
     version: "0.1.106",
     date: "2025-12-23",
     fixed: [

@@ -105,6 +105,7 @@
   display: grid;
   place-items: center;
   flex: 0 0 auto;
+  position: relative;
   font-size: var(--avatar-font-size);
   font-weight: 700;
   color: var(--avatar-text);
@@ -117,6 +118,20 @@
   color: transparent;
   background-size: cover;
   background-position: center;
+}
+
+/* Telegram-like: online dot for dialogs list (only when row marks it). */
+.row[data-online="1"] .avatar::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--good);
+  border: 2px solid var(--sidebar-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--good), transparent 60%);
 }
 
 .row:disabled {

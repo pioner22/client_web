@@ -144,6 +144,7 @@ function friendRow(
   ]);
   btn.setAttribute("data-ctx-kind", "dm");
   btn.setAttribute("data-ctx-id", f.id);
+  btn.setAttribute("data-online", f.online ? "1" : "0");
   btn.addEventListener("click", (e) => {
     const ev = e as MouseEvent;
     // Prevent Ctrl+Click / RMB quirks (macOS) from triggering navigation when opening context menu.

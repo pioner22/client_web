@@ -200,6 +200,7 @@ test("sidebar: Ctrl+Click/ПКМ не активирует строку (не м
 
       const btn = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
       assert.ok(btn, "row button not found");
+      assert.equal(btn.getAttribute("data-online"), "1");
 
       btn.dispatchEvent({ type: "click", ctrlKey: true, button: 0 });
       assert.equal(calls.length, 0);
