@@ -10,6 +10,20 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.115",
+    date: "2025-12-23",
+    improved: [
+      "Медиа: изображения из истории больше не «пропадают» после перезахода — восстанавливаем превью из CacheStorage (blob cache) и подставляем `blob:` URL в UI",
+      "Медиа: для последних маленьких картинок делаем тихую подзагрузку (без спама в статус‑строке), чтобы чат выглядел как «настоящий» мессенджер",
+    ],
+    added: [
+      "Helper: `fileBlobCache` (CacheStorage) для превью изображений",
+      "Repro: `public/repro/ios-input-assistant.html` — страница для проверки iOS PWA панели над клавиатурой",
+      "Regress: `fileBlobCache.test.mjs`",
+      "Regress: `iosInputAssistantReproPage.test.mjs`",
+    ],
+  },
+  {
     version: "0.1.114",
     date: "2025-12-23",
     improved: [

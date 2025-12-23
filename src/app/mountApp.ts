@@ -29,6 +29,7 @@ import {
   savePinnedMessagesForUser,
   togglePinnedMessage,
 } from "../helpers/chat/pinnedMessages";
+import { getCachedFileBlob, isImageLikeFile, putCachedFileBlob } from "../helpers/files/fileBlobCache";
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
@@ -380,6 +381,13 @@ export function mountApp(root: HTMLElement) {
   let pendingFileViewer: { fileId: string; name: string; size: number; mime: string | null } | null = null;
   let transferSeq = 0;
   let localChatMsgSeq = 0;
+  const cachedPreviewsAttempted = new Set<string>();
+  const previewPrefetchAttempted = new Set<string>();
+  const silentFileGets = new Set<string>();
+  let previewWarmupTimer: number | null = null;
+  let previewWarmupInFlight = false;
+  let previewWarmupLastKey = "";
+  let previewWarmupLastSig = "";
   const mobileSidebarMq = window.matchMedia("(max-width: 820px)");
   const coarsePointerMq = window.matchMedia("(pointer: coarse)");
   const anyFinePointerMq = window.matchMedia("(any-pointer: fine)");
@@ -2940,6 +2948,168 @@ export function mountApp(root: HTMLElement) {
     return `ft-${Date.now()}-${transferSeq}`;
   }
 
+  function shouldCachePreview(name: string, mime: string | null | undefined, size: number): boolean {
+    const bytes = Number(size ?? 0) || 0;
+    if (bytes <= 0) return false;
+    if (!isImageLikeFile(name, mime)) return false;
+    // Keep it small and safe for iOS storage limits; we cache previews only.
+    return bytes <= 6 * 1024 * 1024;
+  }
+
+  async function restoreCachedPreviewIntoTransfers(opts: {
+    key: string;
+    fileId: string;
+    name: string;
+    size: number;
+    mime: string | null;
+    direction: "in" | "out";
+    peer: string;
+    room: string | null;
+  }): Promise<boolean> {
+    const st = store.get();
+    if (!st.authed || !st.selfId) return false;
+    const uid = st.selfId;
+    const cacheKey = `${uid}:${opts.fileId}`;
+    if (cachedPreviewsAttempted.has(cacheKey)) return false;
+    cachedPreviewsAttempted.add(cacheKey);
+
+    const cached = await getCachedFileBlob(uid, opts.fileId);
+    if (!cached) return false;
+    let url: string | null = null;
+    try {
+      url = URL.createObjectURL(cached.blob);
+    } catch {
+      url = null;
+    }
+    if (!url) return false;
+
+    store.set((prev) => {
+      const existing = prev.fileTransfers.find((t) => String(t.id || "").trim() === opts.fileId);
+      if (existing) {
+        const nextTransfers = prev.fileTransfers.map((t) => {
+          if (String(t.id || "").trim() !== opts.fileId) return t;
+          if (t.url && t.url !== url) {
+            try {
+              URL.revokeObjectURL(t.url);
+            } catch {
+              // ignore
+            }
+          }
+          return { ...t, url };
+        });
+        return { ...prev, fileTransfers: nextTransfers };
+      }
+      const entry: FileTransferEntry = {
+        localId: `ft-cache-${opts.fileId}`,
+        id: opts.fileId,
+        name: opts.name,
+        size: opts.size,
+        direction: opts.direction,
+        peer: opts.peer || "—",
+        room: opts.room,
+        status: "complete",
+        progress: 100,
+        url,
+      };
+      return { ...prev, fileTransfers: [entry, ...prev.fileTransfers] };
+    });
+    scheduleSaveFileTransfers(store);
+    return true;
+  }
+
+  function scheduleWarmupCachedPreviews() {
+    if (previewWarmupTimer !== null) return;
+    previewWarmupTimer = window.setTimeout(() => {
+      previewWarmupTimer = null;
+      void warmupCachedPreviewsForSelected();
+    }, 120);
+  }
+
+  function convoSig(msgs: any[]): string {
+    const last = msgs && msgs.length ? msgs[msgs.length - 1] : null;
+    const lastKey = last ? String((last.id ?? last.ts ?? "") as any) : "";
+    return `${msgs?.length || 0}:${lastKey}`;
+  }
+
+  async function warmupCachedPreviewsForSelected(): Promise<void> {
+    if (previewWarmupInFlight) return;
+    const st = store.get();
+    if (!st.authed || !st.selfId) return;
+    if (st.page !== "main") return;
+    if (!st.selected) return;
+    if (st.modal && st.modal.kind !== "context_menu") return;
+    const key = conversationKey(st.selected);
+    if (!key) return;
+    if (!st.historyLoaded[key] || st.historyLoading[key]) return;
+
+    const msgs = st.conversations[key] || [];
+    if (!msgs.length) return;
+    const sig = convoSig(msgs);
+    if (key === previewWarmupLastKey && sig === previewWarmupLastSig) return;
+    previewWarmupLastKey = key;
+    previewWarmupLastSig = sig;
+
+    previewWarmupInFlight = true;
+    try {
+      const tail = msgs.slice(Math.max(0, msgs.length - 40));
+      const tasks: Array<{
+        fileId: string;
+        name: string;
+        size: number;
+        mime: string | null;
+        direction: "in" | "out";
+        peer: string;
+        room: string | null;
+      }> = [];
+      const seen = new Set<string>();
+      for (const m of tail.reverse()) {
+        const att = m?.attachment;
+        if (!att || att.kind !== "file") continue;
+        const fid = typeof att.fileId === "string" ? att.fileId.trim() : "";
+        if (!fid || seen.has(fid)) continue;
+        const name = String(att.name || "");
+        const mime = typeof att.mime === "string" ? att.mime : null;
+        const size = Number(att.size ?? 0) || 0;
+        if (!shouldCachePreview(name, mime, size)) continue;
+        const already = st.fileTransfers.find((t) => String(t.id || "").trim() === fid && Boolean(t.url));
+        if (already) continue;
+        seen.add(fid);
+        tasks.push({
+          fileId: fid,
+          name: name || "файл",
+          size,
+          mime,
+          direction: m.kind === "out" ? "out" : "in",
+          peer: String(m.kind === "out" ? (m.to || m.room || "") : (m.from || "")) || "—",
+          room: typeof m.room === "string" ? m.room : null,
+        });
+        if (tasks.length >= 8) break;
+      }
+      for (const t of tasks) {
+        const restored = await restoreCachedPreviewIntoTransfers({ key, ...t });
+        if (!restored) {
+          try {
+            const latest = store.get();
+            const uid = latest.selfId;
+            if (!uid) continue;
+            if (latest.conn !== "connected") continue;
+            // Only prefetch small images to avoid wasting traffic/storage.
+            if (t.size > 1.5 * 1024 * 1024) continue;
+            const k = `${uid}:${t.fileId}`;
+            if (previewPrefetchAttempted.has(k)) continue;
+            previewPrefetchAttempted.add(k);
+            silentFileGets.add(t.fileId);
+            gateway.send({ type: "file_get", file_id: t.fileId });
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } finally {
+      previewWarmupInFlight = false;
+    }
+  }
+
   function updateTransfers(match: (entry: FileTransferEntry) => boolean, apply: (entry: FileTransferEntry) => FileTransferEntry) {
     store.set((prev) => {
       let changed = false;
@@ -3305,6 +3475,14 @@ export function mountApp(root: HTMLElement) {
         progress: 0,
         error: null,
       }));
+      try {
+        const st = store.get();
+        if (st.selfId && shouldCachePreview(activeUpload.file.name || "файл", activeUpload.file.type || null, activeUpload.file.size || 0)) {
+          void putCachedFileBlob(st.selfId, fileId, activeUpload.file, { mime: activeUpload.file.type || null, size: activeUpload.file.size || 0 });
+        }
+      } catch {
+        // ignore
+      }
       store.set({ status: `Загрузка на сервер: ${activeUpload.file.name || "файл"}` });
       void uploadFileChunks(activeUpload);
       return true;
@@ -3347,6 +3525,7 @@ export function mountApp(root: HTMLElement) {
       const size = Number(msg?.size ?? 0) || 0;
       const from = String(msg?.from ?? "").trim() || "—";
       const room = typeof msg?.room === "string" ? msg.room : null;
+      const silent = silentFileGets.has(fileId);
       downloadByFileId.set(fileId, { fileId, name, size, from, room, chunks: [], received: 0, lastProgress: 0 });
       store.set((prev) => {
         const transfers = [...prev.fileTransfers];
@@ -3370,7 +3549,7 @@ export function mountApp(root: HTMLElement) {
           ...prev,
           fileTransfers: transfers,
           fileOffersIn: prev.fileOffersIn.filter((entry) => entry.id !== fileId),
-          status: `Скачивание: ${name}`,
+          ...(silent ? {} : { status: `Скачивание: ${name}` }),
         };
       });
       return true;
@@ -3396,19 +3575,31 @@ export function mountApp(root: HTMLElement) {
     if (t === "file_download_complete") {
       const fileId = String(msg?.file_id ?? "").trim();
       if (!fileId) return true;
+      const silent = silentFileGets.has(fileId);
       const download = downloadByFileId.get(fileId);
       if (download) {
         downloadByFileId.delete(fileId);
-        const blob = new Blob(download.chunks, { type: guessMimeTypeByName(download.name) });
+        silentFileGets.delete(fileId);
+        const mime = guessMimeTypeByName(download.name);
+        const blob = new Blob(download.chunks, { type: mime });
         const url = URL.createObjectURL(blob);
         updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "complete", progress: 100, url }));
-        store.set({ status: `Файл готов: ${download.name}` });
+        if (!silent) store.set({ status: `Файл готов: ${download.name}` });
+        try {
+          const st = store.get();
+          if (st.selfId && shouldCachePreview(download.name || "файл", mime, download.size || blob.size || 0)) {
+            void putCachedFileBlob(st.selfId, fileId, blob, { mime, size: download.size || blob.size || 0 });
+          }
+        } catch {
+          // ignore
+        }
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) {
           const pv = pendingFileViewer;
           pendingFileViewer = null;
           store.set({ modal: { kind: "file_viewer", url, name: pv.name, size: pv.size, mime: pv.mime } });
         }
       } else {
+        silentFileGets.delete(fileId);
         updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "complete", progress: 100 }));
       }
       return true;
@@ -3418,14 +3609,16 @@ export function mountApp(root: HTMLElement) {
       const reason = String(msg?.reason ?? "ошибка");
       const peer = String(msg?.peer ?? "").trim();
       const detail = peer ? `${reason} (${peer})` : reason;
+      const silent = fileId ? silentFileGets.has(fileId) : false;
       if (fileId) {
+        silentFileGets.delete(fileId);
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
         const upload = uploadByFileId.get(fileId);
         if (upload) upload.aborted = true;
         if (downloadByFileId.has(fileId)) downloadByFileId.delete(fileId);
         updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "error", error: detail }));
       }
-      store.set({ status: `Ошибка файла: ${detail}` });
+      if (!silent) store.set({ status: `Ошибка файла: ${detail}` });
       return true;
     }
     return false;
@@ -3452,6 +3645,16 @@ export function mountApp(root: HTMLElement) {
     historyRequested.clear();
     historyDeltaRequestedAt.clear();
     lastReadSentAt.clear();
+    cachedPreviewsAttempted.clear();
+    previewPrefetchAttempted.clear();
+    silentFileGets.clear();
+    previewWarmupLastKey = "";
+    previewWarmupLastSig = "";
+    previewWarmupInFlight = false;
+    if (previewWarmupTimer !== null) {
+      window.clearTimeout(previewWarmupTimer);
+      previewWarmupTimer = null;
+    }
 
     const toRevoke = (st.fileTransfers || [])
       .map((entry) => entry.url)
@@ -5729,6 +5932,9 @@ export function mountApp(root: HTMLElement) {
       if (st.page === "main" && st.selected && !st.modal && !mobileSidebarMq.matches) {
         scheduleFocusComposer();
       }
+    }
+    if (st.authed && st.selfId) {
+      scheduleWarmupCachedPreviews();
     }
     prevAuthed = st.authed;
   });
