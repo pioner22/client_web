@@ -153,6 +153,20 @@
 
 .row-sel {
   background: var(--row-bg-selected);
+  color: var(--row-text-selected);
+}
+
+.row-sel .row-sub,
+.row-sel .row-time,
+.row-sel .row-prefix,
+.row-sel .row-id {
+  color: var(--row-text-selected-muted);
+}
+
+.row-sel .row-unread {
+  background: var(--row-unread-selected-bg);
+  color: var(--row-unread-selected-text);
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--row-unread-selected-text), transparent 70%);
 }
 
 .row-attn {

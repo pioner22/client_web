@@ -1,13 +1,14 @@
 import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { focusElement } from "../../helpers/ui/focus";
-import type { AppState } from "../../stores/types";
+import type { AppState, ThemeMode } from "../../stores/types";
 
 export interface ProfilePageActions {
   onDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onRefresh: () => void;
   onSkinChange: (skinId: string) => void;
+  onThemeChange: (theme: ThemeMode) => void;
   onAvatarSelect: (file: File | null) => void;
   onAvatarClear: () => void;
   onPushEnable: () => void;
@@ -168,8 +169,8 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   btnSave.addEventListener("click", () => save());
   btnRefresh.addEventListener("click", () => actions.onRefresh());
   skinSelect.addEventListener("change", () => actions.onSkinChange(skinSelect.value));
-  btnLight.addEventListener("click", () => actions.onSkinChange(btnLight.getAttribute("data-skin") || "telegram-exact"));
-  btnDark.addEventListener("click", () => actions.onSkinChange(btnDark.getAttribute("data-skin") || "default"));
+  btnLight.addEventListener("click", () => actions.onThemeChange("light"));
+  btnDark.addEventListener("click", () => actions.onThemeChange("dark"));
   btnPushEnable.addEventListener("click", () => actions.onPushEnable());
   btnPushDisable.addEventListener("click", () => actions.onPushDisable());
   btnPwaUpdate.addEventListener("click", () => actions.onForcePwaUpdate());
@@ -253,17 +254,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
       skinSelect.value = state.skin;
     }
 
-    const lightPreferred =
-      skins.find((s) => s.id === "telegram-exact")?.id ||
-      skins.find((s) => s.id === "telegram-web")?.id ||
-      skins.find((s) => s.id !== "default")?.id ||
-      "default";
-    const darkPreferred = skins.find((s) => s.id === "default")?.id || skins[0]?.id || "default";
-    btnLight.setAttribute("data-skin", lightPreferred);
-    btnDark.setAttribute("data-skin", darkPreferred);
-
-    const lightSkins = new Set(["telegram-web", "telegram-exact", "showcase"]);
-    const isLight = lightSkins.has(state.skin);
+    const isLight = state.theme === "light";
     btnLight.classList.toggle("btn-active", isLight);
     btnDark.classList.toggle("btn-active", !isLight);
 

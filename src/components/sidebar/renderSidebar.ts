@@ -251,6 +251,7 @@ export function renderSidebar(
   if (isMobile) {
     const rawTab = state.mobileSidebarTab;
     const activeTab: MobileSidebarTab = rawTab === "contacts" || rawTab === "menu" ? rawTab : "chats";
+    if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
     const topTitle = activeTab === "contacts" ? "Контакты" : activeTab === "menu" ? "Меню" : "Чаты";
 
     const top = el("div", { class: "sidebar-mobile-top" }, [
@@ -596,6 +597,8 @@ export function renderSidebar(
     );
     return;
   }
+
+  if ("dataset" in target) delete (target as HTMLElement).dataset.sidebarTab;
 
   const pinnedRows: HTMLElement[] = [];
   for (const key of pinnedKeys) {

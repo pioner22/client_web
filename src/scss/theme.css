@@ -211,6 +211,10 @@
   --row-radius: 10px;
   --row-bg-hover: var(--panel2);
   --row-bg-selected: var(--sel);
+  --row-text-selected: var(--text);
+  --row-text-selected-muted: color-mix(in srgb, var(--text), var(--muted) 40%);
+  --row-unread-selected-bg: var(--panel);
+  --row-unread-selected-text: var(--focus);
   --row-star-color: var(--warn);
   --row-dot-online: var(--good);
   --row-dot-offline: var(--muted);
@@ -292,4 +296,12 @@
   --modal-warn-mt: 8px;
   --modal-actions-gap: var(--sp-2);
   --modal-actions-mt: 10px;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }

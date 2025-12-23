@@ -281,6 +281,8 @@ export interface SkinInfo {
   title: string;
 }
 
+export type ThemeMode = "light" | "dark";
+
 export interface AppState {
   conn: ConnStatus;
   authed: boolean;
@@ -294,6 +296,7 @@ export interface AppState {
 
   skin: string;
   skins: SkinInfo[];
+  theme: ThemeMode;
 
   mobileSidebarTab: MobileSidebarTab;
   sidebarQuery: string;

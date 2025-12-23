@@ -1,5 +1,5 @@
 import type { Layout } from "../components/layout/types";
-import type { ActionModalPayload, AppState, MobileSidebarTab, PageKind, TargetRef } from "../stores/types";
+import type { ActionModalPayload, AppState, MobileSidebarTab, PageKind, TargetRef, ThemeMode } from "../stores/types";
 import { APP_MSG_MAX_LEN } from "../config/app";
 import { renderHeader } from "../components/header/renderHeader";
 import { renderSidebar } from "../components/sidebar/renderSidebar";
@@ -59,6 +59,7 @@ export interface RenderActions {
   onReloadUpdate: () => void;
   onApplyPwaUpdate: () => void;
   onSkinChange: (skinId: string) => void;
+  onThemeChange: (theme: ThemeMode) => void;
   onGroupCreate: () => void;
   onBoardCreate: () => void;
   onMembersAdd: () => void;
@@ -349,6 +350,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onSave: actions.onProfileSave,
         onRefresh: actions.onProfileRefresh,
         onSkinChange: actions.onSkinChange,
+        onThemeChange: actions.onThemeChange,
         onAvatarSelect: actions.onProfileAvatarSelect,
         onAvatarClear: actions.onProfileAvatarClear,
         onPushEnable: actions.onPushEnable,

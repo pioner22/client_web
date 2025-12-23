@@ -50,11 +50,11 @@ export function applySkin(id: string): void {
   document.head.appendChild(link);
 }
 
-export async function fetchAvailableSkins(): Promise<SkinInfo[]> {
+export async function fetchAvailableSkins(): Promise<SkinInfo[] | null> {
   const defaultSkin: SkinInfo = { id: "default", title: "По умолчанию" };
   try {
     const res = await fetch("./skins/skins.json", { headers: { Accept: "application/json" } });
-    if (!res.ok) return [defaultSkin];
+    if (!res.ok) return null;
     const data = (await res.json()) as any;
     const raw = Array.isArray(data?.skins) ? data.skins : [];
     const byId = new Map<string, SkinInfo>();
@@ -73,6 +73,6 @@ export async function fetchAvailableSkins(): Promise<SkinInfo[]> {
     });
     return out;
   } catch {
-    return [defaultSkin];
+    return null;
   }
 }

@@ -16,6 +16,7 @@ import type {
   PageKind,
   SearchResultEntry,
   TargetRef,
+  ThemeMode,
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { newestServerMessageId } from "../helpers/chat/historySync";
@@ -44,6 +45,7 @@ import {
   type BeforeInstallPromptEvent,
 } from "../helpers/pwa/installPrompt";
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
+import { applyTheme, storeTheme } from "../helpers/theme/theme";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
 import { nowTs } from "../helpers/time";
 import { applyLegacyIdMask } from "../helpers/id/legacyIdMask";
@@ -337,6 +339,7 @@ function guessMimeTypeByName(name: string): string {
 
 export function mountApp(root: HTMLElement) {
   const store = new Store<AppState>(createInitialState());
+  applyTheme(store.get().theme);
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
   const layout = createLayout(root, { iosStandalone });
   type PwaSharePayload = {
@@ -1907,6 +1910,7 @@ export function mountApp(root: HTMLElement) {
 
   async function initSkins() {
     const skins = await fetchAvailableSkins();
+    if (!skins) return;
     store.set({ skins });
     const current = normalizeSkinId(store.get().skin);
     if (!skins.some((s) => s.id === current)) {
@@ -1914,6 +1918,13 @@ export function mountApp(root: HTMLElement) {
       storeSkinId("default");
       applySkin("default");
     }
+  }
+
+  function setTheme(mode: ThemeMode) {
+    const theme: ThemeMode = mode === "light" ? "light" : "dark";
+    store.set({ theme, status: `Тема: ${theme === "light" ? "светлая" : "тёмная"}` });
+    storeTheme(theme);
+    applyTheme(theme);
   }
 
   function setSkin(id: string) {
@@ -6746,6 +6757,7 @@ export function mountApp(root: HTMLElement) {
     onReloadUpdate: () => window.location.reload(),
     onApplyPwaUpdate: () => void applyPwaUpdateNow(),
     onSkinChange: (skinId: string) => setSkin(skinId),
+    onThemeChange: (theme: ThemeMode) => setTheme(theme),
     onGroupCreate: () => createGroup(),
     onBoardCreate: () => createBoard(),
     onMembersAdd: () => membersAddSubmit(),

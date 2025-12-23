@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.137",
+    date: "2025-12-23",
+    improved: [
+      "Профиль: переключение светлой/тёмной темы больше не меняет скин",
+      "Telegram-exact: добавлен тёмный режим с адаптивными токенами",
+      "Меню (мобильное): крупные кнопки и более заметная подсветка",
+    ],
+    fixed: [
+      "Скины: при ошибке загрузки списка текущий скин не сбрасывается",
+      "Список чатов: выбранный контакт читается лучше (контраст в selected)",
+    ],
+  },
+  {
     version: "0.1.136",
     date: "2025-12-23",
     fixed: ["PWA: исправлен некорректный regex в SW (регистрация в Chrome/Safari)"],

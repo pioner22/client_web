@@ -480,6 +480,43 @@
     background: transparent;
   }
 
+  .sidebar[data-sidebar-tab="menu"] {
+    --row-pad-y: 12px;
+    --row-pad-x: 14px;
+    --row-gap: 12px;
+    --row-radius: 14px;
+    --row-bg: color-mix(in srgb, var(--panel2), transparent 8%);
+    --row-bg-hover: color-mix(in srgb, var(--panel2), var(--panel) 20%);
+    --row-bg-selected: color-mix(in srgb, var(--focus), transparent 82%);
+  }
+
+  .sidebar[data-sidebar-tab="menu"] .row {
+    border: 1px solid color-mix(in srgb, var(--line), transparent 55%);
+    background: var(--row-bg);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--panel), transparent 86%);
+  }
+
+  .sidebar[data-sidebar-tab="menu"] .row:active {
+    background: color-mix(in srgb, var(--row-bg-selected), var(--panel) 60%);
+  }
+
+  .sidebar[data-sidebar-tab="menu"] .row-prefix {
+    width: 26px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--focus);
+  }
+
+  .sidebar[data-sidebar-tab="menu"] .row-label {
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  .sidebar[data-sidebar-tab="menu"] .row-sub {
+    font-size: 12px;
+  }
+
   .sidebar .row-tail {
     flex-direction: column;
     align-items: flex-end;

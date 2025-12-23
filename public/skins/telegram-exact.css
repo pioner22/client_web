@@ -125,6 +125,10 @@
   --row-radius: 0px;
   --row-bg-hover: rgba(0, 0, 0, 0.04);
   --row-bg-selected: #3390ec;
+  --row-text-selected: #ffffff;
+  --row-text-selected-muted: rgba(255, 255, 255, 0.85);
+  --row-unread-selected-bg: #ffffff;
+  --row-unread-selected-text: #3390ec;
   --row-star-color: #f5b400;
   --row-dot-online: #3390ec;
   --row-dot-offline: rgba(112, 117, 121, 0.9);
@@ -179,6 +183,93 @@
   --card-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ===== Core palette ===== */
+  --bg: #0e1621;
+  --panel: #17212b;
+  --panel2: #1b2735;
+  --line: rgba(255, 255, 255, 0.06);
+  --text: #e6e9ee;
+  --muted: #8b9bb0;
+  --good: #3ba748;
+  --warn: #f5b400;
+  --bad: #ff5c5d;
+  --sel: rgba(43, 82, 120, 0.45);
+  --focus: #4ea4f6;
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  /* ===== Selection / scrollbar ===== */
+  --selection-bg: rgba(78, 164, 246, 0.35);
+  --selection-text: #ffffff;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+
+  /* ===== Header / sidebar ===== */
+  --header-border-color: rgba(255, 255, 255, 0.06);
+  --sidebar-bg: var(--panel);
+  --sidebar-border-color: rgba(255, 255, 255, 0.06);
+
+  /* ===== Chat / composer ===== */
+  --chat-bg: #0e1621;
+  --composer-bg: var(--panel);
+  --composer-border-color: rgba(255, 255, 255, 0.06);
+
+  --composer-field-bg: #1b2735;
+  --composer-field-border-color: rgba(255, 255, 255, 0.08);
+  --composer-field-text: var(--text);
+  --composer-field-focus-border: #4ea4f6;
+  --composer-field-placeholder: rgba(139, 155, 176, 0.7);
+
+  /* ===== Buttons ===== */
+  --btn-bg: rgba(255, 255, 255, 0.04);
+  --btn-border-color: rgba(255, 255, 255, 0.08);
+  --btn-text: rgba(230, 233, 238, 0.82);
+  --btn-bg-hover: rgba(255, 255, 255, 0.07);
+  --btn-border-hover: rgba(255, 255, 255, 0.12);
+  --btn-text-hover: #ffffff;
+  --btn-bg-active: rgba(78, 164, 246, 0.2);
+
+  /* ===== Sidebar rows ===== */
+  --row-text: #e6e9ee;
+  --row-bg-hover: rgba(255, 255, 255, 0.04);
+  --row-bg-selected: #2b5278;
+  --row-dot-online: #4ea4f6;
+  --row-dot-offline: rgba(139, 155, 176, 0.8);
+  --row-prefix-color: rgba(139, 155, 176, 0.85);
+  --row-text-selected: #ffffff;
+  --row-text-selected-muted: rgba(255, 255, 255, 0.8);
+  --row-unread-selected-bg: #ffffff;
+  --row-unread-selected-text: #2b5278;
+
+  /* ===== Avatars ===== */
+  --avatar-border-color: rgba(255, 255, 255, 0.1);
+  --avatar-text: #ffffff;
+
+  /* ===== Messages ===== */
+  --msg-status-read-color: #4ea4f6;
+  --msg-time-color: rgba(139, 155, 176, 0.85);
+  --msg-from-in-color: #6ea7d8;
+  --msg-from-out-color: #6ea7d8;
+  --msg-sep-color: rgba(139, 155, 176, 0.6);
+  --msg-text-in-color: #e6e9ee;
+  --msg-text-out-color: #e6e9ee;
+
+  --msg-in-bg: #182533;
+  --msg-in-border-color: rgba(255, 255, 255, 0.06);
+  --msg-out-bg: #2b5278;
+  --msg-out-border-color: rgba(255, 255, 255, 0.08);
+
+  /* ===== Modals ===== */
+  --overlay-bg: rgba(0, 0, 0, 0.5);
+  --modal-bg: #17212b;
+  --modal-border-color: rgba(255, 255, 255, 0.12);
+  --modal-shadow: 0 16px 56px rgba(0, 0, 0, 0.45);
+  --card-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
 html[data-skin="telegram-exact"] .row-title {
   font-weight: 500;
   font-size: 16px;
@@ -188,28 +279,28 @@ html[data-skin="telegram-exact"] .row-title {
 html[data-skin="telegram-exact"] .row-sub {
   font-size: 14px;
   line-height: 1.35;
-  color: #707579;
+  color: var(--muted);
 }
 
 html[data-skin="telegram-exact"] .row-time {
   font-size: 12px;
-  color: rgba(112, 117, 121, 0.9);
+  color: var(--muted);
 }
 
 html[data-skin="telegram-exact"] .row.row-sel {
-  color: #ffffff;
+  color: var(--row-text-selected);
 }
 
 html[data-skin="telegram-exact"] .row.row-sel .row-sub,
 html[data-skin="telegram-exact"] .row.row-sel .row-time,
 html[data-skin="telegram-exact"] .row.row-sel .row-prefix,
 html[data-skin="telegram-exact"] .row.row-sel .row-id {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--row-text-selected-muted);
 }
 
 html[data-skin="telegram-exact"] .row.row-sel .row-unread {
-  background: #ffffff;
-  color: #3390ec;
+  background: var(--row-unread-selected-bg);
+  color: var(--row-unread-selected-text);
 }
 
 html[data-skin="telegram-exact"] .sidebar .row[data-ctx-kind] {
@@ -223,7 +314,7 @@ html[data-skin="telegram-exact"] .sidebar .row[data-ctx-kind]::after {
   right: 0;
   bottom: 0;
   height: 1px;
-  background: rgba(0, 0, 0, 0.07);
+  background: color-mix(in srgb, var(--line), transparent 40%);
   pointer-events: none;
 }
 
@@ -314,8 +405,6 @@ html[data-skin="telegram-exact"] .btn.composer-send::after {
     --msg-body-max-width: 86%;
     --msg-avatar-size: 32px;
     --msg-avatar-font-size: 12px;
-    --msg-in-bg: #ffffff;
-    --msg-out-bg: #e7ffdb;
     --msg-in-border-width: 0px;
     --msg-out-border-width: 0px;
     --composer-pad-y: 6px;
@@ -323,6 +412,11 @@ html[data-skin="telegram-exact"] .btn.composer-send::after {
     --composer-gap: 6px;
     --composer-field-radius: 18px;
     --composer-field-min-h: 38px;
+  }
+
+  :root[data-theme="light"] {
+    --msg-in-bg: #ffffff;
+    --msg-out-bg: #e7ffdb;
   }
 
   html[data-skin="telegram-exact"] .msg-in .msg-body,
