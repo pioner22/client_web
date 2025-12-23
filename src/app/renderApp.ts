@@ -217,7 +217,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       })
     : null;
 
-  const inlineModal = Boolean(state.modal && state.modal.kind !== "context_menu");
+  // Большинство модалок рендерим inline (в теле чата), чтобы не перекрывать всё приложение.
+  // Исключения:
+  // - context_menu: всегда поверх (overlay) из-за позиционирования по курсору/тапу
+  // - file_viewer: поверх (overlay) как fullscreen viewer (Telegram‑паттерн)
+  const inlineModal = Boolean(state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer");
   layout.chat.classList.toggle("chat-page", state.page !== "main" || inlineModal);
   const showChatTop = state.page === "main" && !inlineModal;
   layout.chatTop.classList.toggle("hidden", !showChatTop);
@@ -343,8 +347,15 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   renderFooter(layout.footer, state);
   renderToast(layout.toastHost, state.toast);
 
-  if (state.modal?.kind === "context_menu" && modalNode) {
+  if (state.modal?.kind === "file_viewer" && modalNode) {
     layout.overlay.classList.remove("hidden");
+    layout.overlay.classList.remove("overlay-context");
+    layout.overlay.classList.remove("overlay-context-sheet");
+    layout.overlay.classList.add("overlay-viewer");
+    layout.overlay.replaceChildren(modalNode);
+  } else if (state.modal?.kind === "context_menu" && modalNode) {
+    layout.overlay.classList.remove("hidden");
+    layout.overlay.classList.remove("overlay-viewer");
     layout.overlay.classList.add("overlay-context");
     layout.overlay.classList.toggle("overlay-context-sheet", modalNode.classList.contains("ctx-menu-sheet"));
     layout.overlay.replaceChildren(modalNode);
@@ -352,6 +363,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.overlay.classList.add("hidden");
     layout.overlay.classList.remove("overlay-context");
     layout.overlay.classList.remove("overlay-context-sheet");
+    layout.overlay.classList.remove("overlay-viewer");
     layout.overlay.replaceChildren();
   }
 

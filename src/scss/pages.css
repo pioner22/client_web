@@ -539,6 +539,7 @@
 .file-row > .chat-file-preview {
   grid-column: 1 / -1;
   border-radius: calc(var(--r-md) - 2px);
+  border: 0;
 }
 
 .file-file-preview {

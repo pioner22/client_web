@@ -1106,7 +1106,8 @@ export function mountApp(root: HTMLElement) {
   });
 
   layout.overlay.addEventListener("click", (e) => {
-    if (store.get().modal?.kind !== "context_menu") return;
+    const kind = store.get().modal?.kind;
+    if (kind !== "context_menu" && kind !== "file_viewer") return;
     if (e.target !== layout.overlay) return;
     e.preventDefault();
     store.set({ modal: null });

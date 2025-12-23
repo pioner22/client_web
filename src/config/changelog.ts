@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.114",
+    date: "2025-12-23",
+    improved: [
+      "Медиа: file viewer теперь открывается поверх приложения (fullscreen overlay) — ближе к Telegram и не «ломает» чат/прокрутку",
+      "Медиа: превью изображений в чате стало чуть крупнее и аккуратнее (без лишних рамок)",
+      "Файлы: превью изображений в списке файлов без лишней обводки (без «двойной рамки»)",
+    ],
+    fixed: ["Viewer: клик по фону закрывает просмотр (как ожидаемо на мобильных)"],
+    added: ["Regress: `fileViewerOverlayPolicy.test.mjs` (overlay + CSS)"],
+  },
+  {
     version: "0.1.113",
     date: "2025-12-23",
     fixed: [

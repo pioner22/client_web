@@ -1188,7 +1188,7 @@
   display: block;
   width: 100%;
   height: auto;
-  max-height: 320px;
+  max-height: min(55vh, 420px);
   object-fit: cover;
   background: var(--panel2);
 }
