@@ -290,6 +290,7 @@ export interface SkinInfo {
 }
 
 export type ThemeMode = "light" | "dark";
+export type MessageViewMode = "bubble" | "plain" | "compact";
 
 export interface AppState {
   conn: ConnStatus;
@@ -305,6 +306,7 @@ export interface AppState {
   skin: string;
   skins: SkinInfo[];
   theme: ThemeMode;
+  messageView: MessageViewMode;
 
   mobileSidebarTab: MobileSidebarTab;
   sidebarQuery: string;

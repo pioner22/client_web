@@ -4,10 +4,12 @@ import { getStoredSkinId } from "../helpers/skin/skin";
 import { resolveInitialTheme } from "../helpers/theme/theme";
 import { getStoredAuthId, getStoredSessionToken, isSessionAutoAuthBlocked } from "../helpers/auth/session";
 import { getPushOptOut } from "../helpers/pwa/pushPrefs";
+import { getStoredMessageView } from "../helpers/ui/messageView";
 
 export function createInitialState(): AppState {
   const skin = getStoredSkinId();
   const theme = resolveInitialTheme(skin);
+  const messageView = getStoredMessageView();
   const rememberedId = getStoredAuthId();
   const sessionToken = getStoredSessionToken();
   const autoBlocked = isSessionAutoAuthBlocked();
@@ -49,6 +51,7 @@ export function createInitialState(): AppState {
     skin,
     skins: [{ id: "default", title: "По умолчанию" }],
     theme,
+    messageView,
     mobileSidebarTab: "chats",
     sidebarQuery: "",
     friends: [],

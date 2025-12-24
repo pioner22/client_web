@@ -1,7 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { focusElement } from "../../helpers/ui/focus";
-import type { AppState, ThemeMode } from "../../stores/types";
+import type { AppState, MessageViewMode, ThemeMode } from "../../stores/types";
 
 export interface ProfilePageActions {
   onDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
@@ -9,6 +9,7 @@ export interface ProfilePageActions {
   onRefresh: () => void;
   onSkinChange: (skinId: string) => void;
   onThemeChange: (theme: ThemeMode) => void;
+  onMessageViewChange: (view: MessageViewMode) => void;
   onAvatarSelect: (file: File | null) => void;
   onAvatarClear: () => void;
   onPushEnable: () => void;
@@ -104,6 +105,14 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const themeToggle = el("div", { class: "theme-toggle", role: "group", "aria-label": "Тема" }, [btnLight, btnDark]);
   const themeHint = el("div", { class: "profile-hint" }, ["Быстрое переключение темы (светлая/тёмная)"]);
 
+  const msgViewLabel = el("label", { class: "modal-label", for: "profile-msg-view" }, ["Отображение сообщений"]);
+  const msgViewSelect = el("select", { class: "modal-input", id: "profile-msg-view" }, [
+    el("option", { value: "bubble" }, ["Облачка"]),
+    el("option", { value: "plain" }, ["Текстовый список"]),
+    el("option", { value: "compact" }, ["Компактный"]),
+  ]) as HTMLSelectElement;
+  const msgViewHint = el("div", { class: "profile-hint" }, ["Стиль истории сообщений (сохраняется в браузере)"]);
+
   const pushLabel = el("div", { class: "modal-label" }, ["Уведомления (PWA)"]);
   const pushStatus = el("div", { class: "profile-hint" }, ["—"]);
   const btnPushEnable = el("button", { class: "btn btn-primary", type: "button" }, ["Включить"]);
@@ -138,6 +147,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     themeLabel,
     themeToggle,
     themeHint,
+    msgViewLabel,
+    msgViewSelect,
+    msgViewHint,
     pushLabel,
     pushActions,
     pushStatus,
@@ -174,6 +186,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   btnPushEnable.addEventListener("click", () => actions.onPushEnable());
   btnPushDisable.addEventListener("click", () => actions.onPushDisable());
   btnPwaUpdate.addEventListener("click", () => actions.onForcePwaUpdate());
+  msgViewSelect.addEventListener("change", () => actions.onMessageViewChange(msgViewSelect.value as MessageViewMode));
 
   avatarPreview.addEventListener("click", () => avatarFile.click());
   btnAvatarUpload.addEventListener("click", () => avatarFile.click());
@@ -257,6 +270,10 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     const isLight = state.theme === "light";
     btnLight.classList.toggle("btn-active", isLight);
     btnDark.classList.toggle("btn-active", !isLight);
+
+    if (document.activeElement !== msgViewSelect && msgViewSelect.value !== state.messageView) {
+      msgViewSelect.value = state.messageView;
+    }
 
     const pushSupported = Boolean(state.pwaPushSupported);
     const perm = state.pwaPushPermission;

@@ -18,6 +18,7 @@ import type {
   SearchResultEntry,
   TargetRef,
   ThemeMode,
+  MessageViewMode,
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { newestServerMessageId } from "../helpers/chat/historySync";
@@ -48,6 +49,7 @@ import {
 } from "../helpers/pwa/installPrompt";
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
+import { applyMessageView, normalizeMessageView, storeMessageView } from "../helpers/ui/messageView";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
 import { nowTs } from "../helpers/time";
 import { applyLegacyIdMask } from "../helpers/id/legacyIdMask";
@@ -348,6 +350,7 @@ function guessMimeTypeByName(name: string): string {
 export function mountApp(root: HTMLElement) {
   const store = new Store<AppState>(createInitialState());
   applyTheme(store.get().theme);
+  applyMessageView(store.get().messageView);
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
   const layout = createLayout(root, { iosStandalone });
   type PwaSharePayload = {
@@ -2110,6 +2113,14 @@ export function mountApp(root: HTMLElement) {
     store.set({ skin: finalId, status: `Скин: ${title}` });
     storeSkinId(finalId);
     applySkin(finalId);
+  }
+
+  function setMessageView(view: string) {
+    const mode = normalizeMessageView(view);
+    const label = mode === "plain" ? "Текстовый" : mode === "compact" ? "Компактный" : "Облачка";
+    store.set({ messageView: mode, status: `Отображение сообщений: ${label}` });
+    storeMessageView(mode);
+    applyMessageView(mode);
   }
 
   const gateway = new GatewayClient(
@@ -7352,6 +7363,7 @@ export function mountApp(root: HTMLElement) {
     onApplyPwaUpdate: () => void applyPwaUpdateNow(),
     onSkinChange: (skinId: string) => setSkin(skinId),
     onThemeChange: (theme: ThemeMode) => setTheme(theme),
+    onMessageViewChange: (view: MessageViewMode) => setMessageView(view),
     onGroupCreate: () => createGroup(),
     onBoardCreate: () => createBoard(),
     onMembersAdd: () => membersAddSubmit(),
