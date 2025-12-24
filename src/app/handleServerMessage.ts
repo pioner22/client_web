@@ -1966,6 +1966,7 @@ export function handleServerMessage(
     const resultPeer = msg?.peer ? String(msg.peer) : undefined;
     const key = resultRoom ? roomKey(resultRoom) : resultPeer ? dmKey(resultPeer) : "";
     if (!key) return;
+    const isPreview = Boolean(msg?.preview);
     const beforeIdRaw = msg?.before_id;
     const hasBefore = beforeIdRaw !== undefined && beforeIdRaw !== null;
     const hasMore = hasBefore ? Boolean(msg?.has_more) : undefined;
@@ -2061,6 +2062,13 @@ export function handleServerMessage(
       const prevCursor = (prev as any).historyCursor || {};
       const prevHasMoreMap = (prev as any).historyHasMore || {};
       const prevLoadingMap = (prev as any).historyLoading || {};
+      if (isPreview) {
+        return {
+          ...prev,
+          conversations: { ...prev.conversations, [key]: nextConv },
+          outbox,
+        };
+      }
       return {
         ...prev,
         conversations: { ...prev.conversations, [key]: nextConv },

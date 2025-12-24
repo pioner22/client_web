@@ -899,14 +899,37 @@ export function mountApp(root: HTMLElement) {
     pushAutoAttemptAt = now;
     void syncExistingPushSubscription();
   });
+
+  store.subscribe(() => {
+    const st = store.get();
+    const friendsChanged = st.friends !== previewFriendsRef;
+    const connChanged = st.conn !== previewConn || st.authed !== previewAuthed;
+    previewFriendsRef = st.friends;
+    previewConn = st.conn;
+    previewAuthed = st.authed;
+    if (!st.authed || st.conn !== "connected") return;
+    if (!friendsChanged && !connChanged) return;
+    for (const f of st.friends || []) {
+      const id = String(f?.id || "").trim();
+      if (!id) continue;
+      enqueueHistoryPreview({ kind: "dm", id });
+    }
+  });
   const historyRequested = new Set<string>();
   const historyDeltaRequestedAt = new Map<string, number>();
+  const historyPreviewRequested = new Set<string>();
+  const historyPreviewLastAt = new Map<string, number>();
+  const historyPreviewQueue: TargetRef[] = [];
+  let historyPreviewTimer: number | null = null;
   let autoAuthAttemptedForConn = false;
   let lastConn: ConnStatus = "connecting";
   const lastReadSentAt = new Map<string, number>();
   let pwaAutoApplyTimer: number | null = null;
   let pwaForceInFlight = false;
   let lastUserInputAt = Date.now();
+  let previewFriendsRef = store.get().friends;
+  let previewConn: ConnStatus = store.get().conn;
+  let previewAuthed = store.get().authed;
   const uploadQueue: UploadState[] = [];
   let activeUpload: UploadState | null = null;
   const uploadByFileId = new Map<string, UploadState>();
@@ -2117,7 +2140,7 @@ export function mountApp(root: HTMLElement) {
 
   function setMessageView(view: string) {
     const mode = normalizeMessageView(view);
-    const label = mode === "plain" ? "Текстовый" : mode === "compact" ? "Компактный" : "Облачка";
+    const label = mode === "plain" ? "Текстовый" : mode === "compact" ? "Компактный" : "Елочка";
     store.set({ messageView: mode, status: `Отображение сообщений: ${label}` });
     storeMessageView(mode);
     applyMessageView(mode);
@@ -2144,7 +2167,10 @@ export function mountApp(root: HTMLElement) {
       }
       if (t === "history_result") {
         const key = msg?.room ? roomKey(String(msg.room)) : msg?.peer ? dmKey(String(msg.peer)) : "";
-        if (key) historyRequested.delete(key);
+        if (key) {
+          historyRequested.delete(key);
+          historyPreviewRequested.delete(key);
+        }
       }
       if (handleFileMessage(msg)) return;
       handleServerMessage(msg, store.get(), gateway, (p) => store.set(p));
@@ -2373,6 +2399,51 @@ export function mountApp(root: HTMLElement) {
     } else {
       gateway.send({ type: "history", room: t.id, since_id: since, limit });
     }
+  }
+
+  function requestHistoryPreview(t: TargetRef) {
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") return;
+    const key = conversationKey(t);
+    if (!key) return;
+    if (historyPreviewRequested.has(key)) return;
+    if (st.historyLoaded[key]) return;
+    if ((st.conversations[key] || []).length) return;
+    const last = historyPreviewLastAt.get(key) ?? 0;
+    const now = Date.now();
+    if (now - last < 5 * 60 * 1000) return;
+    historyPreviewLastAt.set(key, now);
+    historyPreviewRequested.add(key);
+    if (t.kind === "dm") {
+      gateway.send({ type: "history", peer: t.id, before_id: 0, limit: 1, preview: true });
+    } else {
+      gateway.send({ type: "history", room: t.id, before_id: 0, limit: 1, preview: true });
+    }
+  }
+
+  function drainHistoryPreviewQueue() {
+    historyPreviewTimer = null;
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") {
+      historyPreviewQueue.length = 0;
+      return;
+    }
+    let sent = 0;
+    while (historyPreviewQueue.length && sent < 6) {
+      const t = historyPreviewQueue.shift();
+      if (!t) continue;
+      requestHistoryPreview(t);
+      sent += 1;
+    }
+    if (historyPreviewQueue.length) {
+      historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 350);
+    }
+  }
+
+  function enqueueHistoryPreview(t: TargetRef) {
+    historyPreviewQueue.push(t);
+    if (historyPreviewTimer !== null) return;
+    historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 200);
   }
 
   let historyPrependAnchor: { key: string; scrollHeight: number; scrollTop: number } | null = null;

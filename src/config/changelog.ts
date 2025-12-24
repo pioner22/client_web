@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.157",
+    date: "2025-12-24",
+    improved: ["Отображение сообщений: режимы «Елочка/Список/Компактный» заметно меняют вид на мобильных"],
+    fixed: ["Профиль: режим «Елочка» отображается корректным названием"],
+  },
+  {
+    version: "0.1.156",
+    date: "2025-12-24",
+    improved: ["Контакты: превью последнего сообщения под именем без открытия чата"],
+  },
+  {
     version: "0.1.155",
     date: "2025-12-24",
     added: ["Файлы: окно отправки с превью и подписью (как в Telegram)"],

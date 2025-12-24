@@ -107,7 +107,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
 
   const msgViewLabel = el("label", { class: "modal-label", for: "profile-msg-view" }, ["Отображение сообщений"]);
   const msgViewSelect = el("select", { class: "modal-input", id: "profile-msg-view" }, [
-    el("option", { value: "bubble" }, ["Облачка"]),
+    el("option", { value: "bubble" }, ["Елочка"]),
     el("option", { value: "plain" }, ["Текстовый список"]),
     el("option", { value: "compact" }, ["Компактный"]),
   ]) as HTMLSelectElement;
