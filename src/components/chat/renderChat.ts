@@ -305,6 +305,38 @@ function renderRichText(text: string): Array<HTMLElement | string> {
   return out.length ? out : [s];
 }
 
+const EMOJI_SEGMENT_RE = /\p{Extended_Pictographic}/u;
+
+function isEmojiOnlyText(text: string): boolean {
+  const raw = String(text ?? "");
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
+    const seg = new Intl.Segmenter("en", { granularity: "grapheme" });
+    let hasEmoji = false;
+    for (const part of seg.segment(trimmed)) {
+      const chunk = part.segment;
+      if (!chunk || !chunk.trim()) continue;
+      if (EMOJI_SEGMENT_RE.test(chunk)) {
+        hasEmoji = true;
+        continue;
+      }
+      return false;
+    }
+    return hasEmoji;
+  }
+  let hasEmoji = false;
+  for (const ch of Array.from(trimmed)) {
+    if (!ch.trim()) continue;
+    if (EMOJI_SEGMENT_RE.test(ch)) {
+      hasEmoji = true;
+      continue;
+    }
+    return false;
+  }
+  return hasEmoji;
+}
+
 function roomLabel(name: string | null | undefined, id: string, handle?: string | null): string {
   const base = name ? `${name} (${id})` : id;
   if (handle) {
@@ -441,7 +473,8 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
         return el("div", { class: "msg msg-sys" }, [el("div", { class: "msg-body" }, bodyChildren)]);
       }
     }
-    bodyChildren.push(el("div", { class: "msg-text" }, renderRichText(m.text)));
+    const emojiOnlySys = isEmojiOnlyText(m.text || "");
+    bodyChildren.push(el("div", { class: `msg-text${emojiOnlySys ? " msg-emoji-only" : ""}` }, renderRichText(m.text)));
     if (m.attachment?.kind === "action") {
       const actions = sysActions(m.attachment.payload);
       if (actions) bodyChildren.push(actions);
@@ -534,10 +567,12 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
     bodyChildren.push(el("div", { class: fileRowClass }, rowChildren));
     const caption = String(m.text || "").trim();
     if (caption && !caption.startsWith("[file]")) {
-      bodyChildren.push(el("div", { class: "msg-text msg-caption" }, renderRichText(caption)));
+      const emojiOnlyCaption = isEmojiOnlyText(caption);
+      bodyChildren.push(el("div", { class: `msg-text msg-caption${emojiOnlyCaption ? " msg-emoji-only" : ""}` }, renderRichText(caption)));
     }
   } else {
-    bodyChildren.push(el("div", { class: "msg-text" }, renderRichText(m.text)));
+    const emojiOnly = isEmojiOnlyText(m.text || "");
+    bodyChildren.push(el("div", { class: `msg-text${emojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(m.text)));
   }
   bodyChildren.push(el("div", { class: "msg-meta" }, meta));
   const lineChildren: HTMLElement[] = [];
