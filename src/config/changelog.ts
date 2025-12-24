@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.146",
+    date: "2025-12-24",
+    fixed: [
+      "Сеть: автопереподключение ставится на паузу при offline/background (меньше «бесконечного» reconnect)",
+      "iPhone: ограничиваем объём локальной истории при смене чатов (меньше зависаний/чёрного экрана)",
+    ],
+  },
+  {
     version: "0.1.145",
     date: "2025-12-24",
     improved: ["Контакты: убраны дубли «Info/Создать чат/Создать доску» из контакт‑листа на десктопе (есть в меню)"],

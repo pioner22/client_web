@@ -7,6 +7,7 @@ import { el } from "../helpers/dom/el";
 import type {
   ActionModalPayload,
   AppState,
+  ChatMessage,
   ConnStatus,
   ConfirmAction,
   ContextMenuTargetKind,
@@ -71,6 +72,10 @@ import { createRafScrollLock } from "../helpers/ui/rafScrollLock";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 
 const ROOM_INFO_MAX = 2000;
+const IOS_ACTIVE_CONV_LIMIT = 320;
+const IOS_INACTIVE_CONV_LIMIT = 120;
+const DEFAULT_ACTIVE_CONV_LIMIT = 800;
+const DEFAULT_INACTIVE_CONV_LIMIT = 300;
 
 function autosizeInput(el: HTMLTextAreaElement) {
   el.style.height = "auto";
@@ -991,6 +996,41 @@ export function mountApp(root: HTMLElement) {
         window.setTimeout(() => void tryFocusComposer(), 0);
       });
     });
+  }
+
+  function trimConversation(conv: ChatMessage[], limit: number): { list: ChatMessage[]; cursor: number | null } {
+    if (!Array.isArray(conv) || conv.length <= limit) return { list: conv, cursor: null };
+    const next = conv.slice(Math.max(0, conv.length - limit));
+    let minId: number | null = null;
+    for (const m of next) {
+      const id = m?.id;
+      if (typeof id !== "number" || !Number.isFinite(id) || id <= 0) continue;
+      minId = minId === null ? id : Math.min(minId, id);
+    }
+    return { list: next, cursor: minId };
+  }
+
+  function applyConversationLimits(prev: AppState, activeKey: string): { conversations: Record<string, ChatMessage[]>; historyCursor: Record<string, number> } | null {
+    const ios = isIOS();
+    const activeLimit = ios ? IOS_ACTIVE_CONV_LIMIT : DEFAULT_ACTIVE_CONV_LIMIT;
+    const inactiveLimit = ios ? IOS_INACTIVE_CONV_LIMIT : DEFAULT_INACTIVE_CONV_LIMIT;
+    let conversations = prev.conversations;
+    let historyCursor = prev.historyCursor;
+    let changed = false;
+    for (const [key, conv] of Object.entries(prev.conversations || {})) {
+      const limit = key === activeKey ? activeLimit : inactiveLimit;
+      if (!Array.isArray(conv) || conv.length <= limit) continue;
+      const trimmed = trimConversation(conv, limit);
+      if (trimmed.list === conv) continue;
+      if (!changed) {
+        conversations = { ...prev.conversations };
+        historyCursor = { ...prev.historyCursor };
+        changed = true;
+      }
+      conversations[key] = trimmed.list;
+      if (trimmed.cursor && Number.isFinite(trimmed.cursor)) historyCursor[key] = trimmed.cursor;
+    }
+    return changed ? { conversations, historyCursor } : null;
   }
 
   let chatJumpRaf: number | null = null;
@@ -2371,18 +2411,22 @@ export function mountApp(root: HTMLElement) {
     const prevText = leavingEdit ? prev.editing?.prevDraft || "" : layout.input.value || "";
     const nextDrafts = prevKey ? updateDraftMap(prev.drafts, prevKey, prevText) : prev.drafts;
     const nextText = nextDrafts[nextKey] ?? "";
-    store.set((p) => ({
-      ...p,
-      selected: t,
-      page: "main",
-      drafts: nextDrafts,
-      input: nextText,
-      editing: leavingEdit ? null : p.editing,
-      chatSearchOpen: false,
-      chatSearchQuery: "",
-      chatSearchHits: [],
-      chatSearchPos: 0,
-    }));
+    store.set((p) => {
+      const trimmed = nextKey ? applyConversationLimits(p, nextKey) : null;
+      return {
+        ...p,
+        selected: t,
+        page: "main",
+        drafts: nextDrafts,
+        input: nextText,
+        editing: leavingEdit ? null : p.editing,
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        ...(trimmed ? { conversations: trimmed.conversations, historyCursor: trimmed.historyCursor } : {}),
+      };
+    });
     try {
       if (layout.input.value !== nextText) layout.input.value = nextText;
       autosizeInput(layout.input);
