@@ -4277,6 +4277,35 @@ export function mountApp(root: HTMLElement) {
     });
   }
 
+  function removeConversationFileMessage(key: string, localId: string) {
+    const lid = String(localId || "").trim();
+    if (!lid) return;
+    store.set((prev) => {
+      const conv = prev.conversations[key];
+      if (!Array.isArray(conv) || conv.length === 0) return prev;
+      const next = conv.filter((m: any) => String(m?.attachment?.localId ?? "") !== lid);
+      if (next.length === conv.length) return prev;
+      return { ...prev, conversations: { ...prev.conversations, [key]: next } };
+    });
+  }
+
+  function formatFileOfferError(reason: string): string {
+    const r = String(reason || "").trim();
+    if (!r) return "ошибка";
+    if (r === "file_too_large") return "слишком большой файл";
+    if (r === "file_quota_exceeded") return "превышен лимит хранилища";
+    if (r === "too_many_offers") return "слишком много активных отправок";
+    if (r === "not_authorized") return "нет доступа к контакту";
+    if (r === "blocked_by_recipient") return "получатель заблокировал вас";
+    if (r === "blocked_by_sender") return "вы заблокировали получателя";
+    if (r === "not_in_group") return "вы не участник чата";
+    if (r === "group_post_forbidden") return "вам запрещено писать в чате";
+    if (r === "board_post_forbidden") return "на доске писать может только владелец";
+    if (r === "invalid_room_id") return "неверный адресат";
+    if (r === "server_storage_error") return "ошибка хранения на сервере";
+    return r;
+  }
+
   function addFileOffer(offer: FileOfferIn) {
     store.set((prev) => {
       if (prev.fileOffersIn.some((entry) => entry.id === offer.id)) return prev;
@@ -4590,9 +4619,28 @@ export function mountApp(root: HTMLElement) {
       if (!ok) {
         const reason = String(msg?.reason ?? "ошибка");
         const localId = activeUpload.localId;
-        updateTransferByLocalId(localId, (entry) => ({ ...entry, status: "error", error: reason }));
+        const targetKey = conversationKey(activeUpload.target);
+        removeConversationFileMessage(targetKey, localId);
+        const readable = formatFileOfferError(reason);
+        if (targetKey) {
+          store.set((prev) => ({
+            ...prev,
+            status: `Отправка отклонена: ${readable}`,
+            conversations: upsertConversation(prev, targetKey, {
+              kind: "sys",
+              from: "",
+              to: "",
+              room: activeUpload.target.kind === "dm" ? undefined : activeUpload.target.id,
+              text: `Файл не отправлен: ${readable}`,
+              ts: nowTs(),
+              id: null,
+            }).conversations,
+          }));
+        } else {
+          store.set({ status: `Отправка отклонена: ${readable}` });
+        }
+        updateTransferByLocalId(localId, (entry) => ({ ...entry, status: "error", error: readable }));
         activeUpload = null;
-        store.set({ status: `Отправка отклонена: ${reason}` });
         startNextUpload();
         return true;
       }
@@ -5541,6 +5589,55 @@ export function mountApp(root: HTMLElement) {
   };
   vv?.addEventListener("resize", onViewportResize, { passive: true });
 
+  function normalizeClipboardFile(file: File): File {
+    const name = String(file?.name || "").trim();
+    if (name) return file;
+    const type = String(file?.type || "").toLowerCase();
+    let ext = "";
+    if (type.includes("/")) {
+      const raw = type.split("/")[1] || "";
+      const base = raw.replace("+xml", "");
+      if (base === "jpeg") ext = "jpg";
+      else if (base === "svg") ext = "svg";
+      else if (base === "x-icon") ext = "ico";
+      else ext = base;
+    }
+    const suffix = ext ? `.${ext}` : "";
+    const filename = `clipboard-${Date.now()}${suffix}`;
+    try {
+      return new File([file], filename, { type: file.type || undefined, lastModified: file.lastModified || Date.now() });
+    } catch {
+      return file;
+    }
+  }
+
+  function consumeCaptionForFiles(st: AppState, files: File[]): string {
+    const caption = String(layout.input.value || "").trimEnd();
+    if (!caption) return "";
+    if (st.editing) {
+      store.set({ status: "Подпись не добавлена: вы редактируете сообщение" });
+      return "";
+    }
+    if (files.length !== 1) {
+      store.set({ status: "Подпись не добавлена: можно добавить только к одному файлу" });
+      return "";
+    }
+    const key = st.selected ? conversationKey(st.selected) : "";
+    store.set((prev) => ({
+      ...prev,
+      input: "",
+      drafts: key ? updateDraftMap(prev.drafts, key, "") : prev.drafts,
+    }));
+    try {
+      layout.input.value = "";
+      autosizeInput(layout.input);
+    } catch {
+      // ignore
+    }
+    scheduleSaveDrafts(store);
+    return caption;
+  }
+
   layout.input.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && emojiOpen) {
       e.preventDefault();
@@ -5575,13 +5672,13 @@ export function mountApp(root: HTMLElement) {
     const ev = e as ClipboardEvent;
     const dt = ev.clipboardData;
     if (!dt) return;
-    const files = Array.from(dt.files || []);
+    const files = Array.from(dt.files || []).map(normalizeClipboardFile);
     if (!files.length) {
       try {
         for (const it of Array.from(dt.items || [])) {
           if (it.kind !== "file") continue;
           const f = it.getAsFile();
-          if (f) files.push(f);
+          if (f) files.push(normalizeClipboardFile(f));
         }
       } catch {
         // ignore
@@ -5605,7 +5702,10 @@ export function mountApp(root: HTMLElement) {
       return;
     }
     ev.preventDefault();
-    for (const f of files) sendFile(f, st.selected);
+    const caption = consumeCaptionForFiles(st, files);
+    for (let i = 0; i < files.length; i += 1) {
+      sendFile(files[i], st.selected, i === 0 ? caption : "");
+    }
   });
 
   let dragDepth = 0;
@@ -5665,7 +5765,10 @@ export function mountApp(root: HTMLElement) {
       store.set({ status: "Выберите контакт или чат слева" });
       return;
     }
-    for (const f of files) sendFile(f, st.selected);
+    const caption = consumeCaptionForFiles(st, files);
+    for (let i = 0; i < files.length; i += 1) {
+      sendFile(files[i], st.selected, i === 0 ? caption : "");
+    }
   });
 
   layout.attachBtn.addEventListener("click", () => {

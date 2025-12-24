@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.153",
+    date: "2025-12-24",
+    improved: ["Файлы: вставка/drag&drop берут подпись из поля ввода (если один файл)"],
+    fixed: ["Файлы: вставка из буфера нормализует имя/расширение, отказ сервера больше не выглядит как «отправлено»"],
+  },
+  {
     version: "0.1.152",
     date: "2025-12-24",
     fixed: ["Чат: авто‑прокрутка к последнему сообщению при открытии и после отправки"],
