@@ -545,7 +545,7 @@ export function renderSidebar(
     });
     searchRow.setAttribute("title", "Поиск пользователей по ID или @handle");
     const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
-      sub: "Имя, @handle, аватар, выход",
+      sub: "Имя, @handle, аватар",
       time: null,
       hasDraft: false,
     });
@@ -682,25 +682,6 @@ export function renderSidebar(
     return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
   });
 
-  const accountRows: HTMLElement[] = [];
-  if (state.conn === "connected" && !state.authed) {
-    const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
-      sub: "Вход или регистрация",
-      time: null,
-      hasDraft: false,
-    });
-    loginRow.setAttribute("title", "Войти или зарегистрироваться");
-    accountRows.push(loginRow);
-  } else if (state.authed) {
-    const logoutRow = roomRow("⎋", "Выход (F10)", false, () => onAuthLogout(), undefined, {
-      sub: "Завершить сессию",
-      time: null,
-      hasDraft: false,
-    });
-    logoutRow.setAttribute("title", "Выйти из аккаунта (F10)");
-    accountRows.push(logoutRow);
-  }
-
   target.replaceChildren(
     el("div", { class: "sidebar-mobile-top" }, [
       el(
@@ -711,7 +692,6 @@ export function renderSidebar(
       el("div", { class: "sidebar-mobile-title" }, ["Меню"]),
     ]),
     el("div", { class: "pane-title" }, ["Контакты"]),
-    ...(accountRows.length ? [el("div", { class: "pane-section" }, ["Аккаунт"]), ...accountRows] : []),
     ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),
     ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
     el("div", { class: "pane-section" }, [`Доски (${boardsRest.length})`]),
