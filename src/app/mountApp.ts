@@ -1039,6 +1039,7 @@ export function mountApp(root: HTMLElement) {
   let lastHistoryAutoAt = 0;
   let lastHistoryAutoKey = "";
   let suppressChatClickUntil = 0;
+  let pendingChatAutoScroll: { key: string; waitForHistory: boolean } | null = null;
 
   const updateChatJumpVisibility = () => {
     chatJumpRaf = null;
@@ -1057,6 +1058,36 @@ export function mountApp(root: HTMLElement) {
     if (chatJumpRaf !== null) return;
     chatJumpRaf = window.requestAnimationFrame(updateChatJumpVisibility);
   };
+
+  function markChatAutoScroll(key: string, waitForHistory = false) {
+    const k = String(key || "").trim();
+    if (!k) return;
+    pendingChatAutoScroll = { key: k, waitForHistory };
+  }
+
+  function scrollChatToBottom(key: string) {
+    const k = String(key || "").trim();
+    if (!k) return;
+    const host = layout.chatHost;
+    const hostState = host as any;
+    hostState.__stickBottom = { key: k, active: true, at: Date.now() };
+    const stickNow = () => {
+      if (String(host.getAttribute("data-chat-key") || "") !== k) return;
+      host.scrollTop = host.scrollHeight;
+    };
+    queueMicrotask(stickNow);
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(stickNow);
+    } else {
+      stickNow();
+    }
+    window.setTimeout(stickNow, 80);
+    const images = typeof host.querySelectorAll === "function" ? host.querySelectorAll("img.chat-file-img") : [];
+    for (const img of images) {
+      img.addEventListener("load", stickNow, { once: true });
+    }
+    scheduleChatJumpVisibility();
+  }
 
   function maybeAutoLoadMoreHistory(scrollTop: number, scrollingUp: boolean) {
     const now = Date.now();
@@ -2294,6 +2325,7 @@ export function mountApp(root: HTMLElement) {
 
     // 1) Первый заход в чат: забираем "хвост" (последние сообщения), чтобы быстро заполнить экран.
     if (!st.historyLoaded[key]) {
+      markChatAutoScroll(key, true);
       historyRequested.add(key);
       store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
       if (t.kind === "dm") {
@@ -2407,6 +2439,10 @@ export function mountApp(root: HTMLElement) {
     }
     const prevKey = prev.selected ? conversationKey(prev.selected) : "";
     const nextKey = conversationKey(t);
+    if (nextKey) {
+      const waitForHistory = !Boolean(prev.historyLoaded && prev.historyLoaded[nextKey]);
+      markChatAutoScroll(nextKey, waitForHistory);
+    }
     const leavingEdit = Boolean(prev.editing && prevKey && prev.editing.key === prevKey && prevKey !== nextKey);
     const prevText = leavingEdit ? prev.editing?.prevDraft || "" : layout.input.value || "";
     const nextDrafts = prevKey ? updateDraftMap(prev.drafts, prevKey, prevText) : prev.drafts;
@@ -5051,6 +5087,7 @@ export function mountApp(root: HTMLElement) {
     }
 
     const convKey = key;
+    if (convKey) markChatAutoScroll(convKey, false);
     const localId = makeOutboxLocalId();
     const ts = nowTs();
     const nowMs = Date.now();
@@ -7556,6 +7593,18 @@ export function mountApp(root: HTMLElement) {
           layout.chatHost.scrollTop = historyPrependAnchor.scrollTop + delta;
         }
         historyPrependAnchor = null;
+      }
+    }
+    const autoScrollKey = st.selected ? conversationKey(st.selected) : "";
+    if (pendingChatAutoScroll && pendingChatAutoScroll.key !== autoScrollKey) {
+      pendingChatAutoScroll = null;
+    }
+    if (pendingChatAutoScroll && autoScrollKey && st.page === "main" && (!st.modal || st.modal.kind === "context_menu")) {
+      const waitForHistory = pendingChatAutoScroll.waitForHistory;
+      const loaded = Boolean(st.historyLoaded && st.historyLoaded[autoScrollKey]);
+      if (!waitForHistory || loaded) {
+        scrollChatToBottom(autoScrollKey);
+        pendingChatAutoScroll = null;
       }
     }
     scheduleChatJumpVisibility();
