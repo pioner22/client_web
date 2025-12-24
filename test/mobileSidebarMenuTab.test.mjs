@@ -191,7 +191,7 @@ function mkState(tab) {
   };
 }
 
-test("mobile sidebar: 3 вкладки (Чаты/Контакты/Меню)", async () => {
+test("mobile sidebar: 4 вкладки (Контакты/Доски/Чаты/Меню)", async () => {
   const helper = await loadRenderSidebar();
   try {
     withDomStubs(
@@ -200,7 +200,7 @@ test("mobile sidebar: 3 вкладки (Чаты/Контакты/Меню)", as
         helper.renderSidebar(target, mkState("chats"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
-        assert.deepEqual(labels, ["Чаты", "Контакты", "Меню"]);
+        assert.deepEqual(labels, ["Контакты", "Доски", "Чаты", "Меню"]);
       },
       { isMobile: true }
     );

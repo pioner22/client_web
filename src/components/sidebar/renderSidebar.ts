@@ -271,9 +271,11 @@ export function renderSidebar(
 
   if (isMobile) {
     const rawTab = state.mobileSidebarTab;
-    const activeTab: MobileSidebarTab = rawTab === "contacts" || rawTab === "menu" ? rawTab : "chats";
+    const activeTab: MobileSidebarTab =
+      rawTab === "contacts" || rawTab === "menu" || rawTab === "boards" ? rawTab : "chats";
     if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
-    const topTitle = activeTab === "contacts" ? "Контакты" : activeTab === "menu" ? "Меню" : "Чаты";
+    const topTitle =
+      activeTab === "contacts" ? "Контакты" : activeTab === "boards" ? "Доски" : activeTab === "menu" ? "Меню" : "Чаты";
 
     const top = el("div", { class: "sidebar-mobile-top" }, [
       el(
@@ -284,17 +286,6 @@ export function renderSidebar(
       el("div", { class: "sidebar-mobile-title" }, [topTitle]),
     ]);
 
-    const tabChats = el(
-      "button",
-      {
-        class: activeTab === "chats" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === "chats"),
-        title: "Чаты",
-      },
-      ["Чаты"]
-    ) as HTMLButtonElement;
     const tabContacts = el(
       "button",
       {
@@ -305,6 +296,28 @@ export function renderSidebar(
         title: "Контакты",
       },
       ["Контакты"]
+    ) as HTMLButtonElement;
+    const tabBoards = el(
+      "button",
+      {
+        class: activeTab === "boards" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "boards"),
+        title: "Доски",
+      },
+      ["Доски"]
+    ) as HTMLButtonElement;
+    const tabChats = el(
+      "button",
+      {
+        class: activeTab === "chats" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "chats"),
+        title: "Чаты",
+      },
+      ["Чаты"]
     ) as HTMLButtonElement;
     const tabMenu = el(
       "button",
@@ -319,8 +332,14 @@ export function renderSidebar(
     ) as HTMLButtonElement;
     tabChats.addEventListener("click", () => onSetMobileSidebarTab("chats"));
     tabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
+    tabBoards.addEventListener("click", () => onSetMobileSidebarTab("boards"));
     tabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
-    const tabs = el("div", { class: "sidebar-tabs", role: "tablist", "aria-label": "Раздел" }, [tabChats, tabContacts, tabMenu]);
+    const tabs = el("div", { class: "sidebar-tabs sidebar-tabs-bottom", role: "tablist", "aria-label": "Раздел" }, [
+      tabContacts,
+      tabBoards,
+      tabChats,
+      tabMenu,
+    ]);
 
     const searchBar =
       activeTab === "menu"
@@ -329,7 +348,7 @@ export function renderSidebar(
             const input = el("input", {
               class: "sidebar-search-input",
               type: "search",
-              placeholder: activeTab === "contacts" ? "Поиск контакта" : "Поиск",
+              placeholder: activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск",
               "aria-label": "Поиск",
               "data-ios-assistant": "off",
               autocomplete: "off",
@@ -364,9 +383,12 @@ export function renderSidebar(
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
 
-    const sticky = el("div", { class: "sidebar-mobile-sticky" }, [top, tabs, ...(searchBar ? [searchBar] : [])]);
+    const sticky = el("div", { class: "sidebar-mobile-sticky" }, [top, ...(searchBar ? [searchBar] : [])]);
+    const bottom = el("div", { class: "sidebar-mobile-bottom" }, [tabs]);
 
-    const pinnedRows: HTMLElement[] = [];
+    const pinnedChatRows: HTMLElement[] = [];
+    const pinnedBoardRows: HTMLElement[] = [];
+    const pinnedContactRows: HTMLElement[] = [];
     for (const key of pinnedKeys) {
       if (key.startsWith("dm:")) {
         const id = key.slice(3);
@@ -375,7 +397,9 @@ export function renderSidebar(
         if (!matchesFriend(f)) continue;
         const k = dmKey(f.id);
         const meta = previewForConversation(state, k, "dm", drafts[k]);
-        pinnedRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser));
+        const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
+        pinnedChatRows.push(row);
+        pinnedContactRows.push(row);
         continue;
       }
       if (key.startsWith("room:")) {
@@ -385,7 +409,7 @@ export function renderSidebar(
           if (!matchesRoom(g)) continue;
           const k = roomKey(g.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
-          pinnedRows.push(
+          pinnedChatRows.push(
             roomRow(
               null,
               String(g.name || g.id),
@@ -402,7 +426,7 @@ export function renderSidebar(
           if (!matchesRoom(b)) continue;
           const k = roomKey(b.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
-          pinnedRows.push(
+          pinnedBoardRows.push(
             roomRow(
               null,
               String(b.name || b.id),
@@ -444,22 +468,6 @@ export function renderSidebar(
           ),
         });
       }
-      for (const b of restBoards) {
-        if (!matchesRoom(b)) continue;
-        const k = roomKey(b.id);
-        const meta = previewForConversation(state, k, "room", drafts[k]);
-        dialogItems.push({
-          sortTs: lastTsForKey(k),
-          row: roomRow(
-            null,
-            String(b.name || b.id),
-            Boolean(sel && sel.kind === "board" && sel.id === b.id),
-            () => onSelect({ kind: "board", id: b.id }),
-            { kind: "board", id: b.id },
-            meta
-          ),
-        });
-      }
 
       for (const f of state.friends) {
         const k = dmKey(f.id);
@@ -495,23 +503,57 @@ export function renderSidebar(
 
       target.replaceChildren(
         sticky,
-        ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),
+        ...(pinnedChatRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedChatRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Диалоги"]),
-        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])])
+        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
+        bottom
+      );
+      return;
+    }
+
+    if (activeTab === "boards") {
+      const boardItems: Array<{ sortTs: number; row: HTMLElement }> = [];
+      for (const b of restBoards) {
+        if (!matchesRoom(b)) continue;
+        const k = roomKey(b.id);
+        const meta = previewForConversation(state, k, "room", drafts[k]);
+        boardItems.push({
+          sortTs: lastTsForKey(k),
+          row: roomRow(
+            null,
+            String(b.name || b.id),
+            Boolean(sel && sel.kind === "board" && sel.id === b.id),
+            () => onSelect({ kind: "board", id: b.id }),
+            { kind: "board", id: b.id },
+            meta
+          ),
+        });
+      }
+      boardItems.sort((a, b) => b.sortTs - a.sortTs);
+      const boardRows = boardItems.map((x) => x.row);
+
+      target.replaceChildren(
+        sticky,
+        ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
+        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
+        ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])]),
+        bottom
       );
       return;
     }
 
     const onlineRows = online.map((f) => {
       const k = dmKey(f.id);
+      if (pinnedSet.has(k)) return null;
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-    });
+    }).filter(Boolean) as HTMLElement[];
     const offlineRows = offline.map((f) => {
       const k = dmKey(f.id);
+      if (pinnedSet.has(k)) return null;
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-    });
+    }).filter(Boolean) as HTMLElement[];
 
     const unknownAttnRows = unknownAttnPeers
       .filter((id) => (hasSidebarQuery ? matchesQuery(id) : true))
@@ -526,7 +568,7 @@ export function renderSidebar(
 
     if (activeTab === "contacts") {
       if (hasSidebarQuery) {
-        const allFriends = (state.friends || []).filter((f) => matchesFriend(f));
+        const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
         allFriends.sort((a, b) => {
           if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
           const an = displayNameForFriend(state, a);
@@ -541,17 +583,23 @@ export function renderSidebar(
         const allRows = [...unknownAttnRows, ...rows];
         target.replaceChildren(
           sticky,
-          ...(allRows.length ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows] : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])])
+          ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
+          ...(allRows.length
+            ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
+            : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]),
+          bottom
         );
         return;
       }
       target.replaceChildren(
         sticky,
+        ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
         ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
         el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
         ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
         el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
-        ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])])
+        ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
+        bottom
       );
       return;
     }
@@ -634,7 +682,8 @@ export function renderSidebar(
       el("div", { class: "pane-section" }, ["Создание"]),
       ...createRows,
       el("div", { class: "pane-section" }, ["Справка"]),
-      infoRow
+      infoRow,
+      bottom
     );
     return;
   }
@@ -701,6 +750,50 @@ export function renderSidebar(
     return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
   });
 
+  const scrollToSidebarSection = (section: "contacts" | "boards" | "chats") => {
+    const node = target.querySelector(`[data-sidebar-section="${section}"]`);
+    if (!node) return;
+    try {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      node.scrollIntoView(true);
+    }
+  };
+
+  const desktopTabContacts = el(
+    "button",
+    { class: "sidebar-tab", type: "button", role: "tab", "aria-label": "Контакты" },
+    ["Контакты"]
+  ) as HTMLButtonElement;
+  const desktopTabBoards = el(
+    "button",
+    { class: "sidebar-tab", type: "button", role: "tab", "aria-label": "Доски" },
+    ["Доски"]
+  ) as HTMLButtonElement;
+  const desktopTabChats = el(
+    "button",
+    { class: "sidebar-tab", type: "button", role: "tab", "aria-label": "Чаты" },
+    ["Чаты"]
+  ) as HTMLButtonElement;
+  const desktopTabs = el(
+    "div",
+    { class: "sidebar-tabs sidebar-tabs-desktop", role: "tablist", "aria-label": "Быстрый переход" },
+    [desktopTabContacts, desktopTabBoards, desktopTabChats]
+  );
+  const desktopTabsList = [desktopTabContacts, desktopTabBoards, desktopTabChats];
+  desktopTabs.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const dir = e.key === "ArrowRight" ? 1 : -1;
+    const idx = desktopTabsList.findIndex((b) => b === document.activeElement);
+    const next = idx < 0 ? 0 : (idx + dir + desktopTabsList.length) % desktopTabsList.length;
+    e.preventDefault();
+    desktopTabsList[next]?.focus();
+  });
+  desktopTabContacts.addEventListener("click", () => scrollToSidebarSection("contacts"));
+  desktopTabBoards.addEventListener("click", () => scrollToSidebarSection("boards"));
+  desktopTabChats.addEventListener("click", () => scrollToSidebarSection("chats"));
+  const desktopBottom = el("div", { class: "sidebar-desktop-bottom" }, [desktopTabs]);
+
   target.replaceChildren(
     el("div", { class: "sidebar-mobile-top" }, [
       el(
@@ -710,10 +803,10 @@ export function renderSidebar(
       ),
       el("div", { class: "sidebar-mobile-title" }, ["Меню"]),
     ]),
-    el("div", { class: "pane-title" }, ["Контакты"]),
+    el("div", { class: "pane-title", "data-sidebar-section": "contacts" }, ["Контакты"]),
     ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),
     ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
-    el("div", { class: "pane-section" }, [`Доски (${boardsRest.length})`]),
+    el("div", { class: "pane-section", "data-sidebar-section": "boards" }, [`Доски (${boardsRest.length})`]),
     ...(boardsRest.length
       ? boardsRest.map((b) =>
           (() => {
@@ -730,7 +823,7 @@ export function renderSidebar(
           })()
         )
       : [el("div", { class: "pane-section" }, ["(нет)"])]),
-    el("div", { class: "pane-section" }, [`Чаты (${groupsRest.length})`]),
+    el("div", { class: "pane-section", "data-sidebar-section": "chats" }, [`Чаты (${groupsRest.length})`]),
     ...(groupsRest.length
       ? groupsRest.map((g) =>
           (() => {
@@ -758,6 +851,7 @@ export function renderSidebar(
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-    })
+    }),
+    desktopBottom
   );
 }

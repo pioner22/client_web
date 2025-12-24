@@ -92,10 +92,25 @@
     margin-bottom: var(--sp-2);
   }
 
+  .sidebar-mobile-bottom {
+    display: block;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: var(--sidebar-bg);
+    padding-top: var(--sp-2);
+    padding-bottom: calc(var(--sp-2) + env(safe-area-inset-bottom));
+    margin-top: var(--sp-2);
+  }
+
   .sidebar-mobile-top {
     display: flex;
     padding-bottom: var(--sp-2);
     margin-bottom: var(--sp-2);
+  }
+
+  .sidebar-desktop-bottom {
+    display: none;
   }
 
   /* На мобильных не перегружаем шапку версиями/ID: важнее заголовок и статус. */

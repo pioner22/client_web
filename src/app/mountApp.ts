@@ -1910,7 +1910,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function setMobileSidebarTab(tab: MobileSidebarTab) {
-    const next: MobileSidebarTab = tab === "contacts" || tab === "menu" ? tab : "chats";
+    const next: MobileSidebarTab = tab === "contacts" || tab === "menu" || tab === "boards" ? tab : "chats";
     if (store.get().mobileSidebarTab === next) return;
     store.set({ mobileSidebarTab: next });
   }

@@ -176,7 +176,7 @@ export type PageKind =
 
 export type AuthMode = "auto" | "register" | "login";
 
-export type MobileSidebarTab = "chats" | "contacts" | "menu";
+export type MobileSidebarTab = "chats" | "contacts" | "boards" | "menu";
 
 export type TargetKind = "dm" | "group" | "board";
 

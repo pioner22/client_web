@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.161",
+    date: "2025-12-24",
+    improved: [
+      "Мобильная боковая панель: вкладки перенесены вниз и добавлена вкладка «Доски»",
+      "Десктоп: нижняя навигация по разделам в сайдбаре (Контакты/Доски/Чаты)",
+    ],
+  },
+  {
     version: "0.1.160",
     date: "2025-12-24",
     improved: ["Контекстное меню: группировка, эмодзи‑иконки, компактный mobile‑sheet без затемнения"],
