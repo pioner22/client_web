@@ -3,21 +3,23 @@
   html #app {
     --app-outer-pad: 0px;
     position: fixed;
-    inset: 0;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
     width: 100%;
     height: var(--app-vh);
+    height: auto;
+    min-height: 0;
     overscroll-behavior: none;
     padding: 0;
   }
 
   html.app-vv-offset #app {
-    position: fixed;
-    left: 0;
-    right: 0;
     /* iOS: при открытии клавиатуры visualViewport может иметь offsetTop -> фиксируем "прыжки". */
     top: var(--app-vv-top, 0px);
-    /* На iOS PWA иногда layout viewport “короче” safe-area: держим высоту через JS var(--app-vh). */
-    height: var(--app-vh);
+    bottom: var(--app-vv-bottom, 0px);
+    height: auto;
     min-height: 0;
   }
 
@@ -70,7 +72,8 @@
   }
 
   .sidebar {
-    display: block;
+    display: flex;
+    flex-direction: column;
     position: absolute;
     top: 0;
     bottom: 0;
@@ -82,6 +85,7 @@
     transform: translateX(-110%);
     transition: transform 160ms ease;
     z-index: 41;
+    overflow: hidden;
   }
 
   .sidebar.sidebar-mobile-open {
@@ -99,8 +103,6 @@
 
   .sidebar-mobile-bottom {
     display: block;
-    position: sticky;
-    bottom: 0;
     z-index: 3;
     background: var(--sidebar-bg);
     padding-top: var(--sp-2);

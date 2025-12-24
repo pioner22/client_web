@@ -246,6 +246,12 @@ export function renderSidebar(
   const sidebarQueryRaw = compactOneLine(String((state as any).sidebarQuery || ""));
   const sidebarQuery = sidebarQueryRaw.toLowerCase();
   const hasSidebarQuery = Boolean(sidebarQuery);
+  const body = (() => {
+    const existing = target.querySelector(".sidebar-body") as HTMLElement | null;
+    if (existing) return existing;
+    return el("div", { class: "sidebar-body" });
+  })();
+  body.classList.toggle("sidebar-mobile-body", isMobile);
 
   const matchesQuery = (raw: string): boolean => {
     if (!hasSidebarQuery) return true;
@@ -399,6 +405,10 @@ export function renderSidebar(
 
     const sticky = el("div", { class: "sidebar-mobile-sticky" }, [top, ...(searchBar ? [searchBar] : [])]);
     const bottom = el("div", { class: "sidebar-mobile-bottom" }, [tabs]);
+    const mountMobile = (children: HTMLElement[]) => {
+      body.replaceChildren(...children);
+      target.replaceChildren(sticky, body, bottom);
+    };
 
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
@@ -485,13 +495,11 @@ export function renderSidebar(
       dialogItems.sort((a, b) => b.sortTs - a.sortTs);
       const dialogRows = dialogItems.map((x) => x.row);
 
-      target.replaceChildren(
-        sticky,
+      mountMobile([
         ...(pinnedChatRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedChatRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
-        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
-        bottom
-      );
+        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])])
+      ]);
       return;
     }
 
@@ -516,13 +524,11 @@ export function renderSidebar(
       boardItems.sort((a, b) => b.sortTs - a.sortTs);
       const boardRows = boardItems.map((x) => x.row);
 
-      target.replaceChildren(
-        sticky,
+      mountMobile([
         ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
-        ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])]),
-        bottom
-      );
+        ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])])
+      ]);
       return;
     }
 
@@ -571,26 +577,22 @@ export function renderSidebar(
           return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
         });
         const allRows = [...unknownAttnRows, ...rows];
-        target.replaceChildren(
-          sticky,
+        mountMobile([
           ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
           ...(allRows.length
             ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
-            : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]),
-          bottom
-        );
+            : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])])
+        ]);
         return;
       }
-      target.replaceChildren(
-        sticky,
+      mountMobile([
         ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
         ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
         el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
         ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
         el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
-        ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
-        bottom
-      );
+        ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])])
+      ]);
       return;
     }
 
@@ -663,8 +665,7 @@ export function renderSidebar(
       ]),
     ]);
 
-    target.replaceChildren(
-      sticky,
+    mountMobile([
       tips,
       el("div", { class: "pane-section" }, ["Навигация"]),
       ...navRows,
@@ -672,9 +673,8 @@ export function renderSidebar(
       el("div", { class: "pane-section" }, ["Создание"]),
       ...createRows,
       el("div", { class: "pane-section" }, ["Справка"]),
-      infoRow,
-      bottom
-    );
+      infoRow
+    ]);
     return;
   }
 
@@ -784,7 +784,7 @@ export function renderSidebar(
   desktopTabChats.addEventListener("click", () => scrollToSidebarSection("chats"));
   const desktopBottom = el("div", { class: "sidebar-desktop-bottom" }, [desktopTabs]);
 
-  target.replaceChildren(
+  body.replaceChildren(
     el("div", { class: "sidebar-mobile-top" }, [
       el(
         "button",
@@ -842,6 +842,6 @@ export function renderSidebar(
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     }),
-    desktopBottom
   );
+  target.replaceChildren(body, desktopBottom);
 }

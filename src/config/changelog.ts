@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.164",
+    date: "2025-12-24",
+    fixed: [
+      "Мобильный fullscreen: #app привязан к top/bottom visualViewport, меньше шансов на чёрную полосу",
+      "Сайдбар: список скроллится в отдельном контейнере, нижние вкладки остаются на месте",
+      "Контекстное меню: стабилизация скролла учитывает новый контейнер сайдбара",
+    ],
+  },
+  {
     version: "0.1.163",
     date: "2025-12-24",
     improved: [

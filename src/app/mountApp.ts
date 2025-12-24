@@ -5807,18 +5807,29 @@ export function mountApp(root: HTMLElement) {
     true
   );
 
-  let inputRaf: number | null = null;
+  let autosizeRaf: number | null = null;
   let pendingInputValue: string | null = null;
   let lastCommittedInput = layout.input.value || "";
+  let inputCommitTimer: number | null = null;
+  let lastCommitAt = 0;
+  const INPUT_COMMIT_MS = 140;
 
-  const flushInputUpdate = () => {
-    inputRaf = null;
+  const scheduleAutosize = () => {
+    if (autosizeRaf !== null) return;
+    autosizeRaf = window.requestAnimationFrame(() => {
+      autosizeRaf = null;
+      autosizeInput(layout.input);
+    });
+  };
+
+  const commitInputUpdate = () => {
+    if (inputCommitTimer !== null) {
+      window.clearTimeout(inputCommitTimer);
+      inputCommitTimer = null;
+    }
     const value = pendingInputValue ?? layout.input.value ?? "";
     pendingInputValue = null;
-    if (value === lastCommittedInput) {
-      autosizeInput(layout.input);
-      return;
-    }
+    if (value === lastCommittedInput) return;
     lastCommittedInput = value;
     store.set((prev) => {
       const key = prev.selected ? conversationKey(prev.selected) : "";
@@ -5826,18 +5837,31 @@ export function mountApp(root: HTMLElement) {
       const drafts = key && !isEditing ? updateDraftMap(prev.drafts, key, value) : prev.drafts;
       return { ...prev, input: value, drafts };
     });
-    autosizeInput(layout.input);
     scheduleSaveDrafts(store);
   };
 
   layout.input.addEventListener("input", () => {
     lastUserInputAt = Date.now();
     pendingInputValue = layout.input.value || "";
-    if (inputRaf !== null) return;
-    inputRaf = window.requestAnimationFrame(flushInputUpdate);
+    scheduleAutosize();
+    const now = Date.now();
+    if (now - lastCommitAt >= INPUT_COMMIT_MS) {
+      lastCommitAt = now;
+      commitInputUpdate();
+      return;
+    }
+    if (inputCommitTimer !== null) return;
+    const delay = Math.max(24, INPUT_COMMIT_MS - (now - lastCommitAt));
+    inputCommitTimer = window.setTimeout(() => {
+      lastCommitAt = Date.now();
+      commitInputUpdate();
+    }, delay);
   });
-  layout.input.addEventListener("focus", () => autosizeInput(layout.input));
-  layout.input.addEventListener("blur", () => autosizeInput(layout.input));
+  layout.input.addEventListener("focus", () => scheduleAutosize());
+  layout.input.addEventListener("blur", () => {
+    scheduleAutosize();
+    commitInputUpdate();
+  });
 
   const vv = window.visualViewport;
   const onViewportResize = () => {
@@ -7089,8 +7113,8 @@ export function mountApp(root: HTMLElement) {
   const SIDEBAR_CTX_SCROLL_MAX_AGE_MS = 1200;
 
   function rememberSidebarCtxScroll() {
-    sidebarCtxPrevTop = layout.sidebar.scrollTop;
-    sidebarCtxPrevLeft = layout.sidebar.scrollLeft;
+    sidebarCtxPrevTop = layout.sidebarBody.scrollTop;
+    sidebarCtxPrevLeft = layout.sidebarBody.scrollLeft;
     sidebarCtxPrevAt = Date.now();
     sidebarCtxHasPrev = true;
   }
@@ -7105,8 +7129,8 @@ export function mountApp(root: HTMLElement) {
 
   function readSidebarCtxScrollSnapshot() {
     const r = readScrollSnapshot({
-      curTop: layout.sidebar.scrollTop,
-      curLeft: layout.sidebar.scrollLeft,
+      curTop: layout.sidebarBody.scrollTop,
+      curLeft: layout.sidebarBody.scrollLeft,
       prevTop: sidebarCtxPrevTop,
       prevLeft: sidebarCtxPrevLeft,
       prevAt: sidebarCtxPrevAt,
@@ -7117,8 +7141,8 @@ export function mountApp(root: HTMLElement) {
   }
 
   function restoreSidebarCtxScroll(top: number, left: number) {
-    if (layout.sidebar.scrollTop !== top) layout.sidebar.scrollTop = top;
-    if (layout.sidebar.scrollLeft !== left) layout.sidebar.scrollLeft = left;
+    if (layout.sidebarBody.scrollTop !== top) layout.sidebarBody.scrollTop = top;
+    if (layout.sidebarBody.scrollLeft !== left) layout.sidebarBody.scrollLeft = left;
   }
 
   const sidebarCtxScrollLock = createRafScrollLock({
@@ -7323,17 +7347,17 @@ export function mountApp(root: HTMLElement) {
           document.documentElement.dataset.sidebarLongPressUntil = String(suppressUntil);
         }
         armSidebarClickSuppression(2400);
-        const prevTop = layout.sidebar.scrollTop;
-        const prevLeft = layout.sidebar.scrollLeft;
+        const prevTop = layout.sidebarBody.scrollTop;
+        const prevLeft = layout.sidebarBody.scrollLeft;
         sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 2400);
         openContextMenu({ kind, id }, longPressStartX, longPressStartY);
         window.requestAnimationFrame(() => {
-          if (layout.sidebar.scrollTop !== prevTop) layout.sidebar.scrollTop = prevTop;
-          if (layout.sidebar.scrollLeft !== prevLeft) layout.sidebar.scrollLeft = prevLeft;
+          if (layout.sidebarBody.scrollTop !== prevTop) layout.sidebarBody.scrollTop = prevTop;
+          if (layout.sidebarBody.scrollLeft !== prevLeft) layout.sidebarBody.scrollLeft = prevLeft;
       });
       window.setTimeout(() => {
-        if (layout.sidebar.scrollTop !== prevTop) layout.sidebar.scrollTop = prevTop;
-        if (layout.sidebar.scrollLeft !== prevLeft) layout.sidebar.scrollLeft = prevLeft;
+        if (layout.sidebarBody.scrollTop !== prevTop) layout.sidebarBody.scrollTop = prevTop;
+        if (layout.sidebarBody.scrollLeft !== prevLeft) layout.sidebarBody.scrollLeft = prevLeft;
       }, 0);
     }, 520);
   });
@@ -7348,7 +7372,7 @@ export function mountApp(root: HTMLElement) {
 
   layout.sidebar.addEventListener("pointerup", () => clearLongPress());
   layout.sidebar.addEventListener("pointercancel", () => clearLongPress());
-  layout.sidebar.addEventListener("scroll", () => clearLongPress(), { passive: true });
+  layout.sidebarBody.addEventListener("scroll", () => clearLongPress(), { passive: true });
 
   // If long-press opened the menu, suppress the click that would otherwise activate the row.
   layout.sidebar.addEventListener(

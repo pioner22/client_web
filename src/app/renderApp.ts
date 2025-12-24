@@ -179,8 +179,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   }
 
   renderHeader(layout, state);
-  const sidebarScrollTop = layout.sidebar.scrollTop;
-  const sidebarScrollLeft = layout.sidebar.scrollLeft;
+  const sidebarScrollTop = layout.sidebarBody.scrollTop;
+  const sidebarScrollLeft = layout.sidebarBody.scrollLeft;
   const prevSidebarSearch = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
   const sidebarSearchHadFocus = Boolean(prevSidebarSearch && document.activeElement === prevSidebarSearch);
   const sidebarSearchSelStart = prevSidebarSearch?.selectionStart ?? null;
@@ -199,8 +199,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onAuthOpen,
     actions.onAuthLogout
   );
-  if (layout.sidebar.scrollTop !== sidebarScrollTop) layout.sidebar.scrollTop = sidebarScrollTop;
-  if (layout.sidebar.scrollLeft !== sidebarScrollLeft) layout.sidebar.scrollLeft = sidebarScrollLeft;
+  if (layout.sidebarBody.scrollTop !== sidebarScrollTop) layout.sidebarBody.scrollTop = sidebarScrollTop;
+  if (layout.sidebarBody.scrollLeft !== sidebarScrollLeft) layout.sidebarBody.scrollLeft = sidebarScrollLeft;
   if (sidebarSearchHadFocus) {
     const nextSidebarSearch = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
     if (nextSidebarSearch) {

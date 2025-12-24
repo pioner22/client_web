@@ -61,6 +61,16 @@
   padding: var(--sidebar-pad);
   padding-left: calc(var(--sidebar-pad) + env(safe-area-inset-left));
   padding-right: calc(var(--sidebar-pad) + env(safe-area-inset-right));
+  padding-bottom: 3px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-body {
+  flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
   overflow: auto;

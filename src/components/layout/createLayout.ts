@@ -10,6 +10,8 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const header = el("header", { class: "hdr" }, [headerLeft, headerRight, hotkeys]);
 
   const sidebar = el("aside", { class: "sidebar" });
+  const sidebarBody = el("div", { class: "sidebar-body" });
+  sidebar.appendChild(sidebarBody);
   const chatTop = el("div", { class: "chat-top hidden" });
   const chatHost = el("div", { class: "chat-host" });
   const chatJump = el(
@@ -87,6 +89,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     headerRight,
     hotkeys,
     sidebar,
+    sidebarBody,
     chat,
     chatTop,
     chatHost,
