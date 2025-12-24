@@ -484,9 +484,10 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
     ]);
   }
   const fromId = String(m.from || "").trim();
+  const isPlainView = state.messageView === "plain";
   const showFrom =
     m.kind === "in" &&
-    (Boolean(m.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board"));
+    (Boolean(m.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board") || isPlainView);
   const fromLabel = resolveUserLabel(state, fromId, friendLabels);
   const canOpenProfile = Boolean(fromId);
   const meta = buildMessageMeta(m);
@@ -503,6 +504,8 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
       : { class: "msg-from" };
     const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
     bodyChildren.push(node);
+  } else if (isPlainView && m.kind === "out") {
+    bodyChildren.push(el("div", { class: "msg-from msg-from-self" }, ["Я"]));
   }
   const info = getFileAttachmentInfo(state, m);
   if (info) {
@@ -601,9 +604,10 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
   const first = items[0];
   const last = items[items.length - 1];
   const fromId = String(first.msg.from || "").trim();
+  const isPlainView = state.messageView === "plain";
   const showFrom =
     first.msg.kind === "in" &&
-    (Boolean(first.msg.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board"));
+    (Boolean(first.msg.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board") || isPlainView);
   const fromLabel = resolveUserLabel(state, fromId, friendLabels);
   const canOpenProfile = Boolean(fromId);
   const bodyChildren: HTMLElement[] = [];
@@ -619,6 +623,8 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
       : { class: "msg-from" };
     const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
     bodyChildren.push(node);
+  } else if (isPlainView && first.msg.kind === "out") {
+    bodyChildren.push(el("div", { class: "msg-from msg-from-self" }, ["Я"]));
   }
 
   const gridItems: HTMLElement[] = [];

@@ -903,16 +903,30 @@ export function mountApp(root: HTMLElement) {
   store.subscribe(() => {
     const st = store.get();
     const friendsChanged = st.friends !== previewFriendsRef;
+    const groupsChanged = st.groups !== previewGroupsRef;
+    const boardsChanged = st.boards !== previewBoardsRef;
     const connChanged = st.conn !== previewConn || st.authed !== previewAuthed;
     previewFriendsRef = st.friends;
+    previewGroupsRef = st.groups;
+    previewBoardsRef = st.boards;
     previewConn = st.conn;
     previewAuthed = st.authed;
     if (!st.authed || st.conn !== "connected") return;
-    if (!friendsChanged && !connChanged) return;
+    if (!friendsChanged && !groupsChanged && !boardsChanged && !connChanged) return;
     for (const f of st.friends || []) {
       const id = String(f?.id || "").trim();
       if (!id) continue;
       enqueueHistoryPreview({ kind: "dm", id });
+    }
+    for (const g of st.groups || []) {
+      const id = String(g?.id || "").trim();
+      if (!id) continue;
+      enqueueHistoryPreview({ kind: "group", id });
+    }
+    for (const b of st.boards || []) {
+      const id = String(b?.id || "").trim();
+      if (!id) continue;
+      enqueueHistoryPreview({ kind: "board", id });
     }
   });
   const historyRequested = new Set<string>();
@@ -928,6 +942,8 @@ export function mountApp(root: HTMLElement) {
   let pwaForceInFlight = false;
   let lastUserInputAt = Date.now();
   let previewFriendsRef = store.get().friends;
+  let previewGroupsRef = store.get().groups;
+  let previewBoardsRef = store.get().boards;
   let previewConn: ConnStatus = store.get().conn;
   let previewAuthed = store.get().authed;
   const uploadQueue: UploadState[] = [];
@@ -1207,6 +1223,13 @@ export function mountApp(root: HTMLElement) {
       const dx = ev.touches[0].clientX - chatTouchStartX;
       const dy = ev.touches[0].clientY - chatTouchStartY;
       if (Math.abs(dx) > Math.abs(dy) + 6) {
+        e.preventDefault();
+        return;
+      }
+      const host = layout.chatHost;
+      const top = host.scrollTop <= 0;
+      const bottom = host.scrollTop + host.clientHeight >= host.scrollHeight - 1;
+      if ((dy > 0 && top) || (dy < 0 && bottom)) {
         e.preventDefault();
       }
     },

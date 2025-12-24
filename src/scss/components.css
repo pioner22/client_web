@@ -972,6 +972,67 @@
   font-weight: 700;
 }
 
+/* ===== Message view modes ===== */
+:root[data-msg-view="compact"] .msg-avatar,
+:root[data-msg-view="plain"] .msg-avatar {
+  display: none;
+}
+
+:root[data-msg-view="compact"] .msg-body {
+  gap: 2px;
+}
+
+:root[data-msg-view="plain"] .msg-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+:root[data-msg-view="plain"] .msg-meta {
+  order: 0;
+  margin-right: 2px;
+  gap: 4px;
+}
+
+:root[data-msg-view="plain"] .msg-meta .msg-status,
+:root[data-msg-view="plain"] .msg-meta .msg-edited {
+  display: none;
+}
+
+:root[data-msg-view="plain"] .msg-time::before {
+  content: "[";
+}
+
+:root[data-msg-view="plain"] .msg-time::after {
+  content: "] -";
+}
+
+:root[data-msg-view="plain"] .msg-from {
+  order: 1;
+  font-weight: 600;
+}
+
+:root[data-msg-view="plain"] .msg-from::after {
+  content: ":";
+  margin-left: 4px;
+}
+
+:root[data-msg-view="plain"] .msg-text {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+:root[data-msg-view="plain"] .file-row {
+  order: 2;
+  flex: 1 1 100%;
+}
+
+:root[data-msg-view="plain"] .msg.msg-cont .msg-from {
+  display: inline-flex;
+}
+
 .chat-history-more-wrap {
   display: flex;
   justify-content: center;

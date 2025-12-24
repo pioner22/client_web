@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.158",
+    date: "2025-12-24",
+    improved: [
+      "Чаты/доски: превью последнего сообщения под именем (как у контактов)",
+      "Отображение сообщений: «Елочка/Компактный/Текстовый» теперь визуально отличаются",
+    ],
+    fixed: ["Чат: уменьшен «желе‑эффект» при прокрутке на touch"],
+  },
+  {
     version: "0.1.157",
     date: "2025-12-24",
     improved: ["Отображение сообщений: режимы «Елочка/Список/Компактный» заметно меняют вид на мобильных"],
