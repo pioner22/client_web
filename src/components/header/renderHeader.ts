@@ -94,6 +94,7 @@ export function renderHeader(layout: Layout, state: AppState) {
   );
   layout.headerRight.textContent = state.status || "";
 
+  const f10Label = state.authed ? "выход" : "зайти";
   layout.hotkeys.replaceChildren(
     ...[
       ["F1", "info"],
@@ -102,7 +103,7 @@ export function renderHeader(layout: Layout, state: AppState) {
       ["F5", "чат+"],
       ["F6", "доска+"],
       ["F7", "файлы"],
-      ["F10", "выход"],
+      ["F10", f10Label],
     ].map(([k, v]) =>
       el(
         "button",
