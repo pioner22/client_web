@@ -2,6 +2,11 @@
   /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
   html #app {
     --app-outer-pad: 0px;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: var(--app-vh);
+    overscroll-behavior: none;
     padding: 0;
   }
 

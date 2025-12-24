@@ -5807,9 +5807,19 @@ export function mountApp(root: HTMLElement) {
     true
   );
 
-  layout.input.addEventListener("input", () => {
-    lastUserInputAt = Date.now();
-    const value = layout.input.value || "";
+  let inputRaf: number | null = null;
+  let pendingInputValue: string | null = null;
+  let lastCommittedInput = layout.input.value || "";
+
+  const flushInputUpdate = () => {
+    inputRaf = null;
+    const value = pendingInputValue ?? layout.input.value ?? "";
+    pendingInputValue = null;
+    if (value === lastCommittedInput) {
+      autosizeInput(layout.input);
+      return;
+    }
+    lastCommittedInput = value;
     store.set((prev) => {
       const key = prev.selected ? conversationKey(prev.selected) : "";
       const isEditing = Boolean(prev.editing && key && prev.editing.key === key);
@@ -5818,6 +5828,13 @@ export function mountApp(root: HTMLElement) {
     });
     autosizeInput(layout.input);
     scheduleSaveDrafts(store);
+  };
+
+  layout.input.addEventListener("input", () => {
+    lastUserInputAt = Date.now();
+    pendingInputValue = layout.input.value || "";
+    if (inputRaf !== null) return;
+    inputRaf = window.requestAnimationFrame(flushInputUpdate);
   });
   layout.input.addEventListener("focus", () => autosizeInput(layout.input));
   layout.input.addEventListener("blur", () => autosizeInput(layout.input));
