@@ -66,6 +66,36 @@ export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBo
     ]
   );
 
+  const descriptionLabel = el("label", { class: "modal-label", for: "board-description" }, ["Описание (опционально)"]);
+  const descriptionInput = el("textarea", {
+    class: "modal-input",
+    id: "board-description",
+    placeholder: "Коротко о доске…",
+    rows: "3",
+    maxlength: "2000",
+    autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
+    inputmode: "text",
+    enterkeyhint: "done",
+  }) as HTMLTextAreaElement;
+
+  const rulesLabel = el("label", { class: "modal-label", for: "board-rules" }, ["Правила (опционально)"]);
+  const rulesInput = el("textarea", {
+    class: "modal-input",
+    id: "board-rules",
+    placeholder: "Например: только новости, без рекламы…",
+    rows: "4",
+    maxlength: "2000",
+    autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
+    inputmode: "text",
+    enterkeyhint: "done",
+  }) as HTMLTextAreaElement;
+
   const warn = el("div", { class: "page-warn" }, [""]);
 
   const btnCreate = el("button", { class: "btn", type: "button" }, ["Создать"]);
@@ -81,12 +111,19 @@ export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBo
     handleLabel,
     handleInput,
   ]);
+  const infoCard = el("div", { class: "page-card" }, [
+    el("div", { class: "page-card-title" }, ["Описание и правила"]),
+    descriptionLabel,
+    descriptionInput,
+    rulesLabel,
+    rulesInput,
+  ]);
   const membersCard = el("div", { class: "page-card" }, [
     el("div", { class: "page-card-title" }, ["Участники"]),
     membersLabel,
     membersField,
   ]);
-  const root = el("div", { class: "page page-create" }, [title, mainCard, membersCard, warn, actionsRow, hint]);
+  const root = el("div", { class: "page page-create" }, [title, mainCard, infoCard, membersCard, warn, actionsRow, hint]);
 
   function submit() {
     actions.onCreate();
@@ -96,6 +133,8 @@ export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBo
   btnCancel.addEventListener("click", () => actions.onCancel());
 
   root.addEventListener("keydown", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.tagName === "TEXTAREA") return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -115,6 +154,8 @@ export function createBoardCreatePage(actions: CreateBoardPageActions): CreateBo
     focus: () => {
       nameInput.value = "";
       handleInput.value = "";
+      descriptionInput.value = "";
+      rulesInput.value = "";
       const hidden = root.querySelector("#board-members") as HTMLInputElement | null;
       const entry = root.querySelector("#board-members-entry") as HTMLInputElement | null;
       const chips = root.querySelector("#board-members-chips") as HTMLElement | null;

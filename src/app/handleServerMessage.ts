@@ -649,6 +649,10 @@ export function handleServerMessage(
         .map((g: any) => {
           const id = String(g?.id ?? "");
           const prevEntry = prevMap.get(id);
+          const hasDescription = g && Object.prototype.hasOwnProperty.call(g, "description");
+          const hasRules = g && Object.prototype.hasOwnProperty.call(g, "rules");
+          const description = hasDescription ? (g?.description ?? null) : (prevEntry?.description ?? null);
+          const rules = hasRules ? (g?.rules ?? null) : (prevEntry?.rules ?? null);
           const nextMembers = Array.isArray(g?.members) ? (g.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
           const nextPostBanned = Array.isArray(g?.post_banned)
             ? (g.post_banned as any[]).map((m) => String(m || "").trim()).filter(Boolean)
@@ -658,6 +662,8 @@ export function handleServerMessage(
             name: (g?.name ?? prevEntry?.name ?? null) as any,
             owner_id: (g?.owner_id ?? prevEntry?.owner_id ?? null) as any,
             handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
+            description,
+            rules,
             ...(nextMembers ? { members: nextMembers } : prevEntry?.members ? { members: prevEntry.members } : {}),
             ...(nextPostBanned ? { post_banned: nextPostBanned } : prevEntry?.post_banned ? { post_banned: prevEntry.post_banned } : {}),
           } as GroupEntry;
@@ -672,16 +678,22 @@ export function handleServerMessage(
     patch((prev) => {
       const id = g ? String(g?.id ?? "") : "";
       if (!id) return prev;
+      const hasDescription = g && Object.prototype.hasOwnProperty.call(g, "description");
+      const hasRules = g && Object.prototype.hasOwnProperty.call(g, "rules");
       const hasMembers = Array.isArray(g?.members);
       const nextMembers = hasMembers ? (g.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
       const hasPostBanned = Array.isArray(g?.post_banned);
       const nextPostBanned = hasPostBanned ? (g.post_banned as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
       const prevEntry = prev.groups.find((x) => x.id === id);
+      const description = hasDescription ? (g?.description ?? null) : (prevEntry?.description ?? null);
+      const rules = hasRules ? (g?.rules ?? null) : (prevEntry?.rules ?? null);
       const upd: GroupEntry = {
         id,
         name: (g?.name ?? prevEntry?.name ?? null) as any,
         owner_id: (g?.owner_id ?? prevEntry?.owner_id ?? null) as any,
         handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
+        description,
+        rules,
         ...(hasMembers ? { members: nextMembers || [] } : prevEntry?.members ? { members: prevEntry.members } : {}),
         ...(hasPostBanned ? { post_banned: nextPostBanned || [] } : prevEntry?.post_banned ? { post_banned: prevEntry.post_banned } : {}),
       };
@@ -706,11 +718,15 @@ export function handleServerMessage(
     const postBanned = Array.isArray(g?.post_banned) ? g.post_banned.map((m: any) => String(m || "").trim()).filter(Boolean) : [];
     patch((prev) => {
       const prevEntry = prev.groups.find((x) => x.id === gid);
+      const hasDescription = g && Object.prototype.hasOwnProperty.call(g, "description");
+      const hasRules = g && Object.prototype.hasOwnProperty.call(g, "rules");
       const upd: GroupEntry = {
         id: gid,
         name: (g?.name ?? prevEntry?.name ?? null) as any,
         owner_id: (g?.owner_id ?? prevEntry?.owner_id ?? null) as any,
         handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
+        description: (hasDescription ? g?.description : prevEntry?.description) as any,
+        rules: (hasRules ? g?.rules : prevEntry?.rules) as any,
         members,
         post_banned: postBanned,
       };
@@ -799,15 +815,21 @@ export function handleServerMessage(
   if (t === "boards") {
     const raw = Array.isArray(msg?.boards) ? msg.boards : [];
     const boards: BoardEntry[] = raw
-      .map((b: any) => ({
-        id: String(b?.id ?? ""),
-        name: (b?.name ?? null) as any,
-        owner_id: (b?.owner_id ?? null) as any,
-        handle: (b?.handle ?? null) as any,
-        ...(Array.isArray(b?.members)
-          ? { members: (b.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) }
-          : {}),
-      }))
+      .map((b: any) => {
+        const hasDescription = b && Object.prototype.hasOwnProperty.call(b, "description");
+        const hasRules = b && Object.prototype.hasOwnProperty.call(b, "rules");
+        return {
+          id: String(b?.id ?? ""),
+          name: (b?.name ?? null) as any,
+          owner_id: (b?.owner_id ?? null) as any,
+          handle: (b?.handle ?? null) as any,
+          description: (hasDescription ? b?.description : null) as any,
+          rules: (hasRules ? b?.rules : null) as any,
+          ...(Array.isArray(b?.members)
+            ? { members: (b.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) }
+            : {}),
+        };
+      })
       .filter((b: BoardEntry) => b.id);
     patch({ boards });
     return;
@@ -817,14 +839,20 @@ export function handleServerMessage(
     patch((prev) => {
       const id = b ? String(b?.id ?? "") : "";
       if (!id) return prev;
+      const hasDescription = b && Object.prototype.hasOwnProperty.call(b, "description");
+      const hasRules = b && Object.prototype.hasOwnProperty.call(b, "rules");
       const hasMembers = Array.isArray(b?.members);
       const nextMembers = hasMembers ? (b.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
       const prevEntry = prev.boards.find((x) => x.id === id);
+      const description = hasDescription ? (b?.description ?? null) : (prevEntry?.description ?? null);
+      const rules = hasRules ? (b?.rules ?? null) : (prevEntry?.rules ?? null);
       const upd: BoardEntry = {
         id,
         name: (b?.name ?? prevEntry?.name ?? null) as any,
         owner_id: (b?.owner_id ?? prevEntry?.owner_id ?? null) as any,
         handle: (b?.handle ?? prevEntry?.handle ?? null) as any,
+        description,
+        rules,
         ...(hasMembers ? { members: nextMembers || [] } : prevEntry?.members ? { members: prevEntry.members } : {}),
       };
       const next = prev.boards.filter((x) => x.id !== upd.id);
@@ -847,11 +875,15 @@ export function handleServerMessage(
     const members = Array.isArray(b?.members) ? b.members.map((m: any) => String(m || "").trim()).filter(Boolean) : [];
     patch((prev) => {
       const prevEntry = prev.boards.find((x) => x.id === bid);
+      const hasDescription = b && Object.prototype.hasOwnProperty.call(b, "description");
+      const hasRules = b && Object.prototype.hasOwnProperty.call(b, "rules");
       const upd: BoardEntry = {
         id: bid,
         name: (b?.name ?? prevEntry?.name ?? null) as any,
         owner_id: (b?.owner_id ?? prevEntry?.owner_id ?? null) as any,
         handle: (b?.handle ?? prevEntry?.handle ?? null) as any,
+        description: (hasDescription ? b?.description : prevEntry?.description) as any,
+        rules: (hasRules ? b?.rules : prevEntry?.rules) as any,
         members,
       };
       const next = prev.boards.filter((x) => x.id !== bid);
@@ -916,6 +948,56 @@ export function handleServerMessage(
     }));
     return;
   }
+  if (t === "group_set_info_result") {
+    const ok = Boolean(msg?.ok);
+    const gid = String(msg?.group_id ?? msg?.group?.id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "not_authenticated"
+          ? "Нужно авторизоваться"
+          : reason === "rate_limited"
+            ? "Слишком часто. Попробуйте позже"
+            : reason === "bad_gid"
+              ? "Некорректный ID чата"
+              : reason === "description_too_long"
+                ? "Описание слишком длинное"
+                : reason === "rules_too_long"
+                  ? "Правила слишком длинные"
+                  : reason === "forbidden_or_not_found"
+                    ? "Только владелец может менять информацию"
+                    : "Не удалось обновить информацию";
+      patch({ status: `Обновление не выполнено: ${message}` });
+      return;
+    }
+    const g = msg?.group ?? null;
+    if (g?.id) {
+      patch((prev) => {
+        const id = String(g?.id ?? "");
+        if (!id) return prev;
+        const prevEntry = prev.groups.find((x) => x.id === id);
+        const hasDescription = g && Object.prototype.hasOwnProperty.call(g, "description");
+        const hasRules = g && Object.prototype.hasOwnProperty.call(g, "rules");
+        const upd: GroupEntry = {
+          id,
+          name: (g?.name ?? prevEntry?.name ?? null) as any,
+          owner_id: (g?.owner_id ?? prevEntry?.owner_id ?? null) as any,
+          handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
+          description: (hasDescription ? g?.description : prevEntry?.description) as any,
+          rules: (hasRules ? g?.rules : prevEntry?.rules) as any,
+          members: prevEntry?.members,
+          post_banned: prevEntry?.post_banned,
+        };
+        const next = prev.groups.filter((x) => x.id !== upd.id);
+        next.push(upd);
+        next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+        return { ...prev, groups: next, status: "Информация чата обновлена" };
+      });
+      return;
+    }
+    patch({ status: gid ? `Информация чата обновлена: ${gid}` : "Информация чата обновлена" });
+    return;
+  }
   if (t === "board_rename_result") {
     const ok = Boolean(msg?.ok);
     const bid = String(msg?.board_id ?? "").trim();
@@ -946,6 +1028,55 @@ export function handleServerMessage(
       modal: prev.modal?.kind === "rename" && prev.modal.targetKind === "board" && (!bid || prev.modal.targetId === bid) ? null : prev.modal,
       status: name ? `Доска переименована: ${name}` : "Доска переименована",
     }));
+    return;
+  }
+  if (t === "board_set_info_result") {
+    const ok = Boolean(msg?.ok);
+    const bid = String(msg?.board_id ?? msg?.board?.id ?? "").trim();
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const message =
+        reason === "not_authenticated"
+          ? "Нужно авторизоваться"
+          : reason === "rate_limited"
+            ? "Слишком часто. Попробуйте позже"
+            : reason === "bad_id"
+              ? "Некорректный ID доски"
+              : reason === "description_too_long"
+                ? "Описание слишком длинное"
+                : reason === "rules_too_long"
+                  ? "Правила слишком длинные"
+                  : reason === "forbidden_or_not_found"
+                    ? "Только владелец может менять информацию"
+                    : "Не удалось обновить информацию";
+      patch({ status: `Обновление не выполнено: ${message}` });
+      return;
+    }
+    const b = msg?.board ?? null;
+    if (b?.id) {
+      patch((prev) => {
+        const id = String(b?.id ?? "");
+        if (!id) return prev;
+        const prevEntry = prev.boards.find((x) => x.id === id);
+        const hasDescription = b && Object.prototype.hasOwnProperty.call(b, "description");
+        const hasRules = b && Object.prototype.hasOwnProperty.call(b, "rules");
+        const upd: BoardEntry = {
+          id,
+          name: (b?.name ?? prevEntry?.name ?? null) as any,
+          owner_id: (b?.owner_id ?? prevEntry?.owner_id ?? null) as any,
+          handle: (b?.handle ?? prevEntry?.handle ?? null) as any,
+          description: (hasDescription ? b?.description : prevEntry?.description) as any,
+          rules: (hasRules ? b?.rules : prevEntry?.rules) as any,
+          members: prevEntry?.members,
+        };
+        const next = prev.boards.filter((x) => x.id !== upd.id);
+        next.push(upd);
+        next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+        return { ...prev, boards: next, status: "Информация доски обновлена" };
+      });
+      return;
+    }
+    patch({ status: bid ? `Информация доски обновлена: ${bid}` : "Информация доски обновлена" });
     return;
   }
   if (t === "group_disband_result") {
@@ -1035,6 +1166,10 @@ export function handleServerMessage(
           ? "Введите название чата"
           : reason === "name_too_long"
             ? "Название слишком длинное"
+            : reason === "description_too_long"
+              ? "Описание слишком длинное"
+              : reason === "rules_too_long"
+                ? "Правила слишком длинные"
             : reason === "rate_limited"
               ? "Слишком часто. Попробуйте позже"
               : reason === "not_authenticated"
@@ -1051,7 +1186,17 @@ export function handleServerMessage(
     if (g?.id) {
       patch((prev) => ({
         ...prev,
-        groups: [...prev.groups.filter((x) => x.id !== String(g.id)), { id: String(g.id), name: g.name ?? null, owner_id: g.owner_id ?? null, handle: g.handle ?? null }],
+        groups: [
+          ...prev.groups.filter((x) => x.id !== String(g.id)),
+          {
+            id: String(g.id),
+            name: g.name ?? null,
+            owner_id: g.owner_id ?? null,
+            handle: g.handle ?? null,
+            description: g.description ?? null,
+            rules: g.rules ?? null,
+          },
+        ],
         groupCreateMessage: "",
         page: prev.page === "group_create" ? "main" : prev.page,
         status: `Чат создан: ${String(g.name || g.id)}`,
@@ -1068,6 +1213,10 @@ export function handleServerMessage(
           ? "Введите название доски"
           : reason === "name_too_long"
             ? "Название слишком длинное"
+            : reason === "description_too_long"
+              ? "Описание слишком длинное"
+              : reason === "rules_too_long"
+                ? "Правила слишком длинные"
             : reason === "handle_invalid"
               ? "Некорректный хэндл"
               : reason === "handle_taken"
@@ -1088,7 +1237,17 @@ export function handleServerMessage(
     if (b?.id) {
       patch((prev) => ({
         ...prev,
-        boards: [...prev.boards.filter((x) => x.id !== String(b.id)), { id: String(b.id), name: b.name ?? null, owner_id: b.owner_id ?? null, handle: b.handle ?? null }],
+        boards: [
+          ...prev.boards.filter((x) => x.id !== String(b.id)),
+          {
+            id: String(b.id),
+            name: b.name ?? null,
+            owner_id: b.owner_id ?? null,
+            handle: b.handle ?? null,
+            description: b.description ?? null,
+            rules: b.rules ?? null,
+          },
+        ],
         boardCreateMessage: "",
         page: prev.page === "board_create" ? "main" : prev.page,
         status: `Доска создана: ${String(b.name || b.id)}`,
@@ -1185,6 +1344,8 @@ export function handleServerMessage(
       from,
       name: (msg?.name ?? group?.name ?? null) as any,
       handle: (msg?.handle ?? group?.handle ?? null) as any,
+      description: (msg?.description ?? group?.description ?? null) as any,
+      rules: (msg?.rules ?? group?.rules ?? null) as any,
     };
     patch((prev) => {
       const prevInv = Array.isArray((prev as any).pendingGroupInvites) ? (prev as any).pendingGroupInvites : [];
@@ -1276,6 +1437,8 @@ export function handleServerMessage(
       from,
       name: (msg?.name ?? board?.name ?? null) as any,
       handle: (msg?.handle ?? board?.handle ?? null) as any,
+      description: (msg?.description ?? board?.description ?? null) as any,
+      rules: (msg?.rules ?? board?.rules ?? null) as any,
     };
     patch((prev) => {
       const prevInv = Array.isArray((prev as any).pendingBoardInvites) ? (prev as any).pendingBoardInvites : [];

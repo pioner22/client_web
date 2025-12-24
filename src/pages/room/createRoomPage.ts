@@ -10,6 +10,7 @@ export interface RoomPageActions {
   onBlockToggle: (memberId: string) => void;
   onWriteToggle: (kind: TargetKind, roomId: string, memberId: string, value: boolean) => void;
   onRefresh: (kind: TargetKind, roomId: string) => void;
+  onInfoSave: (kind: TargetKind, roomId: string, description: string, rules: string) => void;
 }
 
 export interface RoomPage {
@@ -72,6 +73,47 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
     el("div", { class: "profile-field" }, [el("div", { class: "profile-field-label" }, ["Ссылка"]), handleValue]),
   ]);
 
+  const descriptionLabel = el("div", { class: "profile-field-label" }, ["Описание"]);
+  const descriptionValue = el("div", { class: "profile-field-value profile-text" }, ["—"]);
+  const descriptionInput = el("textarea", {
+    class: "modal-input profile-textarea",
+    id: `${kind}-description`,
+    rows: "4",
+    maxlength: "2000",
+    placeholder: "Описание чата/доски",
+    autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
+    inputmode: "text",
+  }) as HTMLTextAreaElement;
+  const descriptionField = el("div", { class: "profile-field" }, [descriptionLabel, descriptionValue, descriptionInput]);
+
+  const rulesLabel = el("div", { class: "profile-field-label" }, ["Правила"]);
+  const rulesValue = el("div", { class: "profile-field-value profile-text" }, ["—"]);
+  const rulesInput = el("textarea", {
+    class: "modal-input profile-textarea",
+    id: `${kind}-rules`,
+    rows: "5",
+    maxlength: "2000",
+    placeholder: "Правила и рекомендации",
+    autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
+    inputmode: "text",
+  }) as HTMLTextAreaElement;
+  const rulesField = el("div", { class: "profile-field" }, [rulesLabel, rulesValue, rulesInput]);
+
+  const btnInfoSave = el("button", { class: "btn btn-primary", type: "button" }, ["Сохранить"]);
+  const infoActions = el("div", { class: "profile-actions" }, [btnInfoSave]);
+  const infoCard = el("div", { class: "profile-card" }, [
+    el("div", { class: "profile-card-title" }, ["Описание и правила"]),
+    descriptionField,
+    rulesField,
+    infoActions,
+  ]);
+
   const membersTitle = el("div", { class: "profile-card-title" }, ["Участники"]);
   const membersCount = el("div", { class: "profile-members-count" }, ["0"]);
   const membersHead = el("div", { class: "profile-members-head" }, [membersTitle, membersCount]);
@@ -84,7 +126,22 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
 
   const hint = el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
 
-  const root = el("div", { class: "page page-profile page-room" }, [title, head, about, membersCard, actionsRow, hint]);
+  const root = el("div", { class: "page page-profile page-room" }, [title, head, about, infoCard, membersCard, actionsRow, hint]);
+
+  let currentRoomId = "";
+  let currentIsOwner = false;
+  let lastRoomKey = "";
+  let lastDescription = "";
+  let lastRules = "";
+  let draftDescription = "";
+  let draftRules = "";
+
+  const normalizeInfo = (value: string) => value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+
+  const updateInfoSaveState = () => {
+    const dirty = normalizeInfo(draftDescription) !== normalizeInfo(lastDescription) || normalizeInfo(draftRules) !== normalizeInfo(lastRules);
+    btnInfoSave.disabled = !currentIsOwner || !currentRoomId || !dirty;
+  };
 
   btnChat.addEventListener("click", () => {
     const roomId = String(root.getAttribute("data-room-id") || "").trim();
@@ -96,6 +153,23 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
     const roomId = String(root.getAttribute("data-room-id") || "").trim();
     if (!roomId) return;
     actions.onRefresh(kind, roomId);
+  });
+
+  descriptionInput.addEventListener("input", () => {
+    draftDescription = descriptionInput.value;
+    updateInfoSaveState();
+  });
+
+  rulesInput.addEventListener("input", () => {
+    draftRules = rulesInput.value;
+    updateInfoSaveState();
+  });
+
+  btnInfoSave.addEventListener("click", () => {
+    if (!currentRoomId) return;
+    const description = normalizeInfo(draftDescription);
+    const rules = normalizeInfo(draftRules);
+    actions.onInfoSave(kind, currentRoomId, description, rules);
   });
 
   function renderMembers(state: AppState, roomId: string, ownerId: string) {
@@ -173,12 +247,15 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
 
   function update(state: AppState) {
     const roomId = String(kind === "group" ? state.groupViewId || "" : state.boardViewId || "").trim();
-    root.setAttribute("data-room-id", roomId);
 
     const entry = kind === "group" ? state.groups.find((g) => g.id === roomId) : state.boards.find((b) => b.id === roomId);
     const name = String(entry?.name || roomId || "—");
     const handle = String(entry?.handle || "").trim();
     const ownerId = String(entry?.owner_id || "").trim();
+    const description = String(entry?.description || "");
+    const rules = String(entry?.rules || "");
+    const roomKey = `${kind}:${roomId}`;
+    const isOwner = Boolean(ownerId && state.selfId && String(ownerId) === String(state.selfId));
 
     profileName.textContent = name || "—";
     profileHandle.textContent = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "Ссылка не задана";
@@ -206,6 +283,40 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
 
     (btnChat as HTMLButtonElement).disabled = !roomId;
     (btnRefresh as HTMLButtonElement).disabled = !roomId;
+
+    currentRoomId = roomId;
+    currentIsOwner = isOwner;
+    root.setAttribute("data-room-id", roomId);
+
+    if (roomKey !== lastRoomKey) {
+      lastRoomKey = roomKey;
+      lastDescription = description;
+      lastRules = rules;
+      draftDescription = description;
+      draftRules = rules;
+      descriptionInput.value = description;
+      rulesInput.value = rules;
+    } else {
+      if (document.activeElement !== descriptionInput && description !== lastDescription) {
+        lastDescription = description;
+        draftDescription = description;
+        descriptionInput.value = description;
+      }
+      if (document.activeElement !== rulesInput && rules !== lastRules) {
+        lastRules = rules;
+        draftRules = rules;
+        rulesInput.value = rules;
+      }
+    }
+
+    descriptionValue.textContent = description || "Описание не задано";
+    rulesValue.textContent = rules || "Правила не заданы";
+    descriptionInput.classList.toggle("hidden", !isOwner);
+    rulesInput.classList.toggle("hidden", !isOwner);
+    descriptionValue.classList.toggle("hidden", isOwner);
+    rulesValue.classList.toggle("hidden", isOwner);
+    infoActions.classList.toggle("hidden", !isOwner);
+    updateInfoSaveState();
   }
 
   return {

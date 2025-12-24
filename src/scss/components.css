@@ -1056,6 +1056,86 @@
   padding-top: 4px;
 }
 
+.msg-sys .invite-card {
+  margin: 0 auto;
+}
+
+.invite-card {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 15%);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--panel), transparent 8%);
+  box-shadow: var(--card-shadow, none);
+  width: 100%;
+  max-width: min(560px, 100%);
+}
+
+.invite-title {
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.invite-meta {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.invite-meta-line {
+  line-height: 1.35;
+}
+
+.invite-section {
+  display: grid;
+  gap: 6px;
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 25%);
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
+}
+
+.invite-section-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.invite-text {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.invite-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.invite-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  justify-content: flex-start;
+}
+
+.invite-action-btn {
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
 .msg-action-btn {
   min-height: 40px;
   padding: 8px 14px;

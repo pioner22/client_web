@@ -305,51 +305,126 @@ function renderRichText(text: string): Array<HTMLElement | string> {
   return out.length ? out : [s];
 }
 
+function roomLabel(name: string | null | undefined, id: string, handle?: string | null): string {
+  const base = name ? `${name} (${id})` : id;
+  if (handle) {
+    const h = handle.startsWith("@") ? handle : `@${handle}`;
+    return `${base} ${h}`;
+  }
+  return base;
+}
+
+function renderMultilineText(text: string): HTMLElement {
+  const cleaned = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = cleaned.split("\n");
+  const nodes = lines.map((line) => el("div", { class: "invite-line" }, renderRichText(line)));
+  return el("div", { class: "invite-text" }, nodes);
+}
+
 function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string, string>): HTMLElement {
+  const actionBtn = (
+    label: string,
+    attrs: Record<string, string>,
+    cls: string,
+    baseClass: string = "msg-action-btn"
+  ): HTMLElement => el("button", { class: `btn ${baseClass} ${cls}`.trim(), type: "button", ...attrs }, [label]);
+
+  function renderInviteCard(payload: any, text: string): HTMLElement | null {
+    if (!payload || typeof payload !== "object") return null;
+    const kind = String(payload.kind || "");
+    if (kind !== "group_invite" && kind !== "board_invite") return null;
+    const isGroup = kind === "group_invite";
+    const roomId = String(payload.groupId || payload.group_id || payload.boardId || payload.board_id || "").trim();
+    if (!roomId) return null;
+    const name = String(payload.name || "").trim() || null;
+    const handle = String(payload.handle || "").trim() || null;
+    const from = String(payload.from || "").trim();
+    const description = String(payload.description || "").trim();
+    const rules = String(payload.rules || "").trim();
+    const title = text || (isGroup ? "Приглашение в чат" : "Приглашение в доску");
+    const label = roomLabel(name, roomId, handle);
+
+    const metaLines: HTMLElement[] = [];
+    metaLines.push(el("div", { class: "invite-meta-line" }, [isGroup ? `Чат: ${label}` : `Доска: ${label}`]));
+    if (from) metaLines.push(el("div", { class: "invite-meta-line" }, [`От: ${from}`]));
+    const meta = el("div", { class: "invite-meta" }, metaLines);
+
+    const sections: HTMLElement[] = [];
+    if (description) {
+      sections.push(el("div", { class: "invite-section" }, [el("div", { class: "invite-section-title" }, ["Описание"]), renderMultilineText(description)]));
+    }
+    if (rules) {
+      sections.push(el("div", { class: "invite-section" }, [el("div", { class: "invite-section-title" }, ["Правила"]), renderMultilineText(rules)]));
+    }
+    if (!sections.length) {
+      sections.push(el("div", { class: "invite-empty" }, ["Описание и правила не указаны"]));
+    }
+
+    const baseAttrs: Record<string, string> = isGroup ? { "data-group-id": roomId } : { "data-board-id": roomId };
+    if (from) baseAttrs["data-from"] = from;
+
+    const actions = el("div", { class: "invite-actions" }, [
+      actionBtn(
+        "Вступить",
+        { ...baseAttrs, "data-action": isGroup ? "group-invite-accept" : "board-invite-accept" },
+        "btn-primary",
+        "invite-action-btn"
+      ),
+      actionBtn(
+        "Отклонить",
+        { ...baseAttrs, "data-action": isGroup ? "group-invite-decline" : "board-invite-decline" },
+        "",
+        "invite-action-btn"
+      ),
+      actionBtn(
+        "Спам",
+        { ...baseAttrs, "data-action": isGroup ? "group-invite-block" : "board-invite-block" },
+        "btn-danger",
+        "invite-action-btn"
+      ),
+    ]);
+
+    return el("div", { class: "invite-card" }, [el("div", { class: "invite-title" }, [title]), meta, ...sections, actions]);
+  }
+
   function sysActions(payload: any): HTMLElement | null {
     if (!payload || typeof payload !== "object") return null;
     const kind = String(payload.kind || "");
     const buttons: HTMLElement[] = [];
 
-    const btn = (
-      label: string,
-      attrs: Record<string, string>,
-      cls: string
-    ): HTMLElement => el("button", { class: `btn msg-action-btn ${cls}`.trim(), type: "button", ...attrs }, [label]);
-
     if (kind === "auth_in") {
       const peer = String(payload.peer || "").trim();
       if (peer) {
-        buttons.push(btn("Принять", { "data-action": "auth-accept", "data-peer": peer }, "btn-primary"));
-        buttons.push(btn("Отклонить", { "data-action": "auth-decline", "data-peer": peer }, "btn-danger"));
+        buttons.push(actionBtn("Принять", { "data-action": "auth-accept", "data-peer": peer }, "btn-primary"));
+        buttons.push(actionBtn("Отклонить", { "data-action": "auth-decline", "data-peer": peer }, "btn-danger"));
       }
     } else if (kind === "auth_out") {
       const peer = String(payload.peer || "").trim();
       if (peer) {
-        buttons.push(btn("Отменить", { "data-action": "auth-cancel", "data-peer": peer }, "btn-danger"));
+        buttons.push(actionBtn("Отменить", { "data-action": "auth-cancel", "data-peer": peer }, "btn-danger"));
       }
     } else if (kind === "group_invite") {
       const groupId = String(payload.groupId || payload.group_id || "").trim();
       if (groupId) {
-        buttons.push(btn("Принять", { "data-action": "group-invite-accept", "data-group-id": groupId }, "btn-primary"));
-        buttons.push(btn("Отклонить", { "data-action": "group-invite-decline", "data-group-id": groupId }, "btn-danger"));
+        buttons.push(actionBtn("Принять", { "data-action": "group-invite-accept", "data-group-id": groupId }, "btn-primary"));
+        buttons.push(actionBtn("Отклонить", { "data-action": "group-invite-decline", "data-group-id": groupId }, "btn-danger"));
       }
     } else if (kind === "group_join_request") {
       const groupId = String(payload.groupId || payload.group_id || "").trim();
       const peer = String(payload.from || payload.peer || "").trim();
       if (groupId && peer) {
         buttons.push(
-          btn("Принять", { "data-action": "group-join-accept", "data-group-id": groupId, "data-peer": peer }, "btn-primary")
+          actionBtn("Принять", { "data-action": "group-join-accept", "data-group-id": groupId, "data-peer": peer }, "btn-primary")
         );
         buttons.push(
-          btn("Отклонить", { "data-action": "group-join-decline", "data-group-id": groupId, "data-peer": peer }, "btn-danger")
+          actionBtn("Отклонить", { "data-action": "group-join-decline", "data-group-id": groupId, "data-peer": peer }, "btn-danger")
         );
       }
     } else if (kind === "board_invite") {
       const boardId = String(payload.boardId || payload.board_id || "").trim();
       if (boardId) {
-        buttons.push(btn("Принять", { "data-action": "board-invite-accept", "data-board-id": boardId }, "btn-primary"));
-        buttons.push(btn("Отклонить", { "data-action": "board-invite-decline", "data-board-id": boardId }, "btn-danger"));
+        buttons.push(actionBtn("Принять", { "data-action": "board-invite-accept", "data-board-id": boardId }, "btn-primary"));
+        buttons.push(actionBtn("Отклонить", { "data-action": "board-invite-decline", "data-board-id": boardId }, "btn-danger"));
       }
     }
 
@@ -358,7 +433,15 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
   }
 
   if (m.kind === "sys") {
-    const bodyChildren: HTMLElement[] = [el("div", { class: "msg-text" }, renderRichText(m.text))];
+    const bodyChildren: HTMLElement[] = [];
+    if (m.attachment?.kind === "action") {
+      const card = renderInviteCard(m.attachment.payload, m.text);
+      if (card) {
+        bodyChildren.push(card);
+        return el("div", { class: "msg msg-sys" }, [el("div", { class: "msg-body" }, bodyChildren)]);
+      }
+    }
+    bodyChildren.push(el("div", { class: "msg-text" }, renderRichText(m.text)));
     if (m.attachment?.kind === "action") {
       const actions = sysActions(m.attachment.payload);
       if (actions) bodyChildren.push(actions);

@@ -123,6 +123,15 @@
   word-break: break-word;
 }
 
+.profile-text {
+  white-space: pre-wrap;
+}
+
+.profile-textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
 .profile-bio-text {
   white-space: pre-wrap;
 }

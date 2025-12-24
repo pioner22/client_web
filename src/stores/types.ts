@@ -30,6 +30,8 @@ export interface ActionModalGroupInvite {
   from: string;
   name?: string | null;
   handle?: string | null;
+  description?: string | null;
+  rules?: string | null;
 }
 
 export interface ActionModalGroupJoinRequest {
@@ -46,6 +48,8 @@ export interface ActionModalBoardInvite {
   from: string;
   name?: string | null;
   handle?: string | null;
+  description?: string | null;
+  rules?: string | null;
 }
 
 export interface ActionModalFileOffer {
@@ -230,6 +234,8 @@ export interface GroupEntry {
   name?: string | null;
   owner_id?: string | null;
   handle?: string | null;
+  description?: string | null;
+  rules?: string | null;
   members?: string[];
   post_banned?: string[];
 }
@@ -239,6 +245,8 @@ export interface BoardEntry {
   name?: string | null;
   owner_id?: string | null;
   handle?: string | null;
+  description?: string | null;
+  rules?: string | null;
   members?: string[];
 }
 

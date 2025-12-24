@@ -70,6 +70,8 @@ import {
 import { createRafScrollLock } from "../helpers/ui/rafScrollLock";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 
+const ROOM_INFO_MAX = 2000;
+
 function autosizeInput(el: HTMLTextAreaElement) {
   el.style.height = "auto";
   const style = window.getComputedStyle(el);
@@ -1326,6 +1328,27 @@ export function mountApp(root: HTMLElement) {
       return;
     }
 
+    const groupInviteBlockBtn = target?.closest("button[data-action='group-invite-block']") as HTMLButtonElement | null;
+    if (groupInviteBlockBtn) {
+      const groupId = String(groupInviteBlockBtn.getAttribute("data-group-id") || "").trim();
+      if (!groupId) return;
+      const fromAttr = String(groupInviteBlockBtn.getAttribute("data-from") || "").trim();
+      const from = fromAttr || String(store.get().pendingGroupInvites.find((x) => x.groupId === groupId)?.from || "").trim();
+      e.preventDefault();
+      closeMobileSidebar();
+      if (from) {
+        const st = store.get();
+        if (st.conn === "connected" && st.authed) {
+          gateway.send({ type: "block_set", peer: from, value: true });
+          showToast(`Заблокировано: ${from}`, { kind: "warn" });
+        } else {
+          store.set({ status: "Нет соединения" });
+        }
+      }
+      declineGroupInvite(groupId);
+      return;
+    }
+
     const groupJoinAcceptBtn = target?.closest("button[data-action='group-join-accept']") as HTMLButtonElement | null;
     if (groupJoinAcceptBtn) {
       const groupId = String(groupJoinAcceptBtn.getAttribute("data-group-id") || "").trim();
@@ -1364,6 +1387,27 @@ export function mountApp(root: HTMLElement) {
       if (!boardId) return;
       e.preventDefault();
       closeMobileSidebar();
+      declineBoardInvite(boardId);
+      return;
+    }
+
+    const boardInviteBlockBtn = target?.closest("button[data-action='board-invite-block']") as HTMLButtonElement | null;
+    if (boardInviteBlockBtn) {
+      const boardId = String(boardInviteBlockBtn.getAttribute("data-board-id") || "").trim();
+      if (!boardId) return;
+      const fromAttr = String(boardInviteBlockBtn.getAttribute("data-from") || "").trim();
+      const from = fromAttr || String(store.get().pendingBoardInvites.find((x) => x.boardId === boardId)?.from || "").trim();
+      e.preventDefault();
+      closeMobileSidebar();
+      if (from) {
+        const st = store.get();
+        if (st.conn === "connected" && st.authed) {
+          gateway.send({ type: "block_set", peer: from, value: true });
+          showToast(`Заблокировано: ${from}`, { kind: "warn" });
+        } else {
+          store.set({ status: "Нет соединения" });
+        }
+      }
       declineBoardInvite(boardId);
       return;
     }
@@ -3066,8 +3110,20 @@ export function mountApp(root: HTMLElement) {
       return;
     }
     const name = (document.getElementById("group-name") as HTMLInputElement | null)?.value?.trim() ?? "";
+    const rawDescription = (document.getElementById("group-description") as HTMLTextAreaElement | null)?.value ?? "";
+    const rawRules = (document.getElementById("group-rules") as HTMLTextAreaElement | null)?.value ?? "";
+    const description = rawDescription.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+    const rules = rawRules.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
     if (!name) {
       store.set({ groupCreateMessage: "Введите название чата" });
+      return;
+    }
+    if (description.length > ROOM_INFO_MAX) {
+      store.set({ groupCreateMessage: "Описание слишком длинное" });
+      return;
+    }
+    if (rules.length > ROOM_INFO_MAX) {
+      store.set({ groupCreateMessage: "Правила слишком длинные" });
       return;
     }
     consumeCreateMembersEntry("group_create", true);
@@ -3092,9 +3148,15 @@ export function mountApp(root: HTMLElement) {
         store.set({ groupCreateMessage: `Не удалось найти: ${res.missing.slice(0, 6).join(", ")}${res.missing.length > 6 ? "…" : ""}` });
         return;
       }
-      gateway.send({ type: "group_create", name, members: res.members });
+      const payload: any = { type: "group_create", name, members: res.members };
+      if (description) payload.description = description;
+      if (rules) payload.rules = rules;
+      gateway.send(payload);
     } else {
-      gateway.send({ type: "group_create", name });
+      const payload: any = { type: "group_create", name };
+      if (description) payload.description = description;
+      if (rules) payload.rules = rules;
+      gateway.send(payload);
     }
     store.set({ status: "Создание чата…", groupCreateMessage: "" });
   }
@@ -3110,8 +3172,20 @@ export function mountApp(root: HTMLElement) {
     }
     const name = (document.getElementById("board-name") as HTMLInputElement | null)?.value?.trim() ?? "";
     const handleRaw = (document.getElementById("board-handle") as HTMLInputElement | null)?.value ?? "";
+    const rawDescription = (document.getElementById("board-description") as HTMLTextAreaElement | null)?.value ?? "";
+    const rawRules = (document.getElementById("board-rules") as HTMLTextAreaElement | null)?.value ?? "";
+    const description = rawDescription.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+    const rules = rawRules.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
     if (!name) {
       store.set({ boardCreateMessage: "Введите название доски" });
+      return;
+    }
+    if (description.length > ROOM_INFO_MAX) {
+      store.set({ boardCreateMessage: "Описание слишком длинное" });
+      return;
+    }
+    if (rules.length > ROOM_INFO_MAX) {
+      store.set({ boardCreateMessage: "Правила слишком длинные" });
       return;
     }
     const handle = handleRaw ? normalizeHandle(handleRaw) : null;
@@ -3141,9 +3215,15 @@ export function mountApp(root: HTMLElement) {
         store.set({ boardCreateMessage: `Не удалось найти: ${res.missing.slice(0, 6).join(", ")}${res.missing.length > 6 ? "…" : ""}` });
         return;
       }
-      gateway.send({ type: "board_create", name, handle: handle || undefined, members: res.members });
+      const payload: any = { type: "board_create", name, handle: handle || undefined, members: res.members };
+      if (description) payload.description = description;
+      if (rules) payload.rules = rules;
+      gateway.send(payload);
     } else {
-      gateway.send({ type: "board_create", name, handle: handle || undefined });
+      const payload: any = { type: "board_create", name, handle: handle || undefined };
+      if (description) payload.description = description;
+      if (rules) payload.rules = rules;
+      gateway.send(payload);
     }
     store.set({ status: "Создание доски…", boardCreateMessage: "" });
   }
@@ -3252,6 +3332,41 @@ export function mountApp(root: HTMLElement) {
     }
     gateway.send({ type: "board_rename", board_id: modal.targetId, name });
     store.set({ modal: { ...modal, message: "Сохраняем…" }, status: "Переименование…" });
+  }
+
+  function saveRoomInfo(kind: TargetRef["kind"], roomId: string, description: string, rules: string) {
+    const st = store.get();
+    const rid = String(roomId || "").trim();
+    if (!rid) return;
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    if (st.conn !== "connected") {
+      store.set({ status: "Нет соединения" });
+      return;
+    }
+    const entry = kind === "group" ? st.groups.find((g) => g.id === rid) : st.boards.find((b) => b.id === rid);
+    const ownerId = String(entry?.owner_id || "").trim();
+    if (!ownerId || ownerId !== String(st.selfId || "").trim()) {
+      store.set({ status: "Только владелец может менять описание" });
+      return;
+    }
+    if (description.length > ROOM_INFO_MAX) {
+      store.set({ status: "Описание слишком длинное" });
+      return;
+    }
+    if (rules.length > ROOM_INFO_MAX) {
+      store.set({ status: "Правила слишком длинные" });
+      return;
+    }
+    if (kind === "group") {
+      gateway.send({ type: "group_set_info", group_id: rid, description: description || null, rules: rules || null });
+      store.set({ status: "Сохраняем информацию чата…" });
+      return;
+    }
+    gateway.send({ type: "board_set_info", board_id: rid, description: description || null, rules: rules || null });
+    store.set({ status: "Сохраняем информацию доски…" });
   }
 
   function inviteUserSubmit() {
@@ -6941,6 +7056,9 @@ export function mountApp(root: HTMLElement) {
       }
       if (kind === "group") gateway.send({ type: "group_info", group_id: rid });
       else if (kind === "board") gateway.send({ type: "board_info", board_id: rid });
+    },
+    onRoomInfoSave: (kind: TargetRef["kind"], roomId: string, description: string, rules: string) => {
+      saveRoomInfo(kind, roomId, description, rules);
     },
     onSetMobileSidebarTab: (tab: MobileSidebarTab) => setMobileSidebarTab(tab),
     onSetSidebarQuery: (query: string) => {

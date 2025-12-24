@@ -52,6 +52,36 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
     ]
   );
 
+  const descriptionLabel = el("label", { class: "modal-label", for: "group-description" }, ["Описание (опционально)"]);
+  const descriptionInput = el("textarea", {
+    class: "modal-input",
+    id: "group-description",
+    placeholder: "Коротко о чате…",
+    rows: "3",
+    maxlength: "2000",
+    autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
+    inputmode: "text",
+    enterkeyhint: "done",
+  }) as HTMLTextAreaElement;
+
+  const rulesLabel = el("label", { class: "modal-label", for: "group-rules" }, ["Правила (опционально)"]);
+  const rulesInput = el("textarea", {
+    class: "modal-input",
+    id: "group-rules",
+    placeholder: "Например: без спама, уважение, темы…",
+    rows: "4",
+    maxlength: "2000",
+    autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
+    inputmode: "text",
+    enterkeyhint: "done",
+  }) as HTMLTextAreaElement;
+
   const warn = el("div", { class: "page-warn" }, [""]);
 
   const btnCreate = el("button", { class: "btn", type: "button" }, ["Создать"]);
@@ -61,12 +91,19 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
   const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — создать | Esc — назад"]);
 
   const mainCard = el("div", { class: "page-card" }, [el("div", { class: "page-card-title" }, ["Основное"]), nameLabel, nameInput]);
+  const infoCard = el("div", { class: "page-card" }, [
+    el("div", { class: "page-card-title" }, ["Описание и правила"]),
+    descriptionLabel,
+    descriptionInput,
+    rulesLabel,
+    rulesInput,
+  ]);
   const membersCard = el("div", { class: "page-card" }, [
     el("div", { class: "page-card-title" }, ["Участники"]),
     membersLabel,
     membersField,
   ]);
-  const root = el("div", { class: "page page-create" }, [title, mainCard, membersCard, warn, actionsRow, hint]);
+  const root = el("div", { class: "page page-create" }, [title, mainCard, infoCard, membersCard, warn, actionsRow, hint]);
 
   function submit() {
     actions.onCreate();
@@ -76,6 +113,8 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
   btnCancel.addEventListener("click", () => actions.onCancel());
 
   root.addEventListener("keydown", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.tagName === "TEXTAREA") return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -94,6 +133,8 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
     },
     focus: () => {
       nameInput.value = "";
+      descriptionInput.value = "";
+      rulesInput.value = "";
       const hidden = root.querySelector("#group-members") as HTMLInputElement | null;
       const entry = root.querySelector("#group-members-entry") as HTMLInputElement | null;
       const chips = root.querySelector("#group-members-chips") as HTMLElement | null;
