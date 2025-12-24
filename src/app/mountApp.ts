@@ -4317,6 +4317,100 @@ export function mountApp(root: HTMLElement) {
     return r;
   }
 
+  function revokeFileSendPreviews(previewUrls?: Array<string | null>) {
+    if (!previewUrls || !previewUrls.length) return;
+    for (const url of previewUrls) {
+      if (!url) continue;
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  function restoreComposerInput(target: TargetRef, text: string) {
+    if (!text) return;
+    const key = conversationKey(target);
+    store.set((prev) => {
+      const drafts = updateDraftMap(prev.drafts, key, text);
+      const isCurrent = prev.selected ? conversationKey(prev.selected) === key : false;
+      return { ...prev, input: isCurrent ? text : prev.input, drafts };
+    });
+    const isCurrent = store.get().selected ? conversationKey(store.get().selected as TargetRef) === key : false;
+    if (isCurrent) {
+      try {
+        layout.input.value = text;
+        autosizeInput(layout.input);
+      } catch {
+        // ignore
+      }
+    }
+    scheduleSaveDrafts(store);
+  }
+
+  function detachComposerCaption(st: AppState): { caption: string; restoreInput: string | null } {
+    const caption = String(layout.input.value || "").trimEnd();
+    if (!caption) return { caption: "", restoreInput: null };
+    if (st.editing) {
+      store.set({ status: "Подпись не добавлена: вы редактируете сообщение" });
+      return { caption: "", restoreInput: null };
+    }
+    const key = st.selected ? conversationKey(st.selected) : "";
+    store.set((prev) => ({
+      ...prev,
+      input: "",
+      drafts: key ? updateDraftMap(prev.drafts, key, "") : prev.drafts,
+    }));
+    try {
+      layout.input.value = "";
+      autosizeInput(layout.input);
+    } catch {
+      // ignore
+    }
+    scheduleSaveDrafts(store);
+    return { caption, restoreInput: caption };
+  }
+
+  function openFileSendModal(files: File[], target: TargetRef) {
+    if (!files.length) return;
+    const st = store.get();
+    const captionDisabled = st.editing || files.length !== 1;
+    let captionHint = "";
+    if (st.editing) captionHint = "Подпись недоступна во время редактирования";
+    else if (files.length !== 1) captionHint = "Подпись доступна только для одного файла";
+    let caption = "";
+    let restoreInput: string | null = null;
+    if (!captionDisabled && st.page === "main") {
+      const res = detachComposerCaption(st);
+      caption = res.caption;
+      restoreInput = res.restoreInput;
+    } else if (files.length !== 1 && st.page === "main") {
+      const draft = String(layout.input.value || "").trim();
+      if (draft) store.set({ status: "Подпись доступна только для одного файла" });
+    }
+    const previewUrls = files.map((file) => {
+      if (!isImageLikeFile(file?.name || "", file?.type || null)) return null;
+      try {
+        return URL.createObjectURL(file);
+      } catch {
+        return null;
+      }
+    });
+    store.set({
+      modal: {
+        kind: "file_send",
+        files,
+        target,
+        caption,
+        captionDisabled,
+        captionHint,
+        restoreInput,
+        previewUrls,
+      },
+    });
+  }
+
   function addFileOffer(offer: FileOfferIn) {
     store.set((prev) => {
       if (prev.fileOffersIn.some((entry) => entry.id === offer.id)) return prev;
@@ -4497,6 +4591,22 @@ export function mountApp(root: HTMLElement) {
       return { ...withMsg, fileTransfers: [entry, ...withMsg.fileTransfers], status: `Файл предложен: ${entry.name}` };
     });
     queueUpload(localId, file, target, captionText);
+  }
+
+  function confirmFileSend(captionText: string) {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "file_send") return;
+    const files = modal.files || [];
+    const target = modal.target;
+    revokeFileSendPreviews(modal.previewUrls);
+    store.set({ modal: null });
+    if (!files.length) return;
+    const caption = String(captionText || "").trimEnd();
+    const canCaption = files.length === 1 && Boolean(caption);
+    for (let i = 0; i < files.length; i += 1) {
+      sendFile(files[i], target, i === 0 && canCaption ? caption : "");
+    }
   }
 
   function acceptFileOffer(fileId: string) {
@@ -5622,33 +5732,6 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
-  function consumeCaptionForFiles(st: AppState, files: File[]): string {
-    const caption = String(layout.input.value || "").trimEnd();
-    if (!caption) return "";
-    if (st.editing) {
-      store.set({ status: "Подпись не добавлена: вы редактируете сообщение" });
-      return "";
-    }
-    if (files.length !== 1) {
-      store.set({ status: "Подпись не добавлена: можно добавить только к одному файлу" });
-      return "";
-    }
-    const key = st.selected ? conversationKey(st.selected) : "";
-    store.set((prev) => ({
-      ...prev,
-      input: "",
-      drafts: key ? updateDraftMap(prev.drafts, key, "") : prev.drafts,
-    }));
-    try {
-      layout.input.value = "";
-      autosizeInput(layout.input);
-    } catch {
-      // ignore
-    }
-    scheduleSaveDrafts(store);
-    return caption;
-  }
-
   layout.input.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && emojiOpen) {
       e.preventDefault();
@@ -5713,10 +5796,7 @@ export function mountApp(root: HTMLElement) {
       return;
     }
     ev.preventDefault();
-    const caption = consumeCaptionForFiles(st, files);
-    for (let i = 0; i < files.length; i += 1) {
-      sendFile(files[i], st.selected, i === 0 ? caption : "");
-    }
+    openFileSendModal(files, st.selected);
   });
 
   let dragDepth = 0;
@@ -5776,10 +5856,7 @@ export function mountApp(root: HTMLElement) {
       store.set({ status: "Выберите контакт или чат слева" });
       return;
     }
-    const caption = consumeCaptionForFiles(st, files);
-    for (let i = 0; i < files.length; i += 1) {
-      sendFile(files[i], st.selected, i === 0 ? caption : "");
-    }
+    openFileSendModal(files, st.selected);
   });
 
   layout.attachBtn.addEventListener("click", () => {
@@ -5822,22 +5899,7 @@ export function mountApp(root: HTMLElement) {
         const files = Array.from(input.files || []);
         input.remove();
         if (!files.length) return;
-        const st2 = store.get();
-        const canCaption = !st2.editing && files.length === 1;
-        const caption = canCaption ? String(layout.input.value || "").trimEnd() : "";
-        if (caption) {
-          store.set((prev) => ({ ...prev, input: "" }));
-          try {
-            layout.input.value = "";
-            autosizeInput(layout.input);
-          } catch {
-            // ignore
-          }
-          scheduleSaveDrafts(store);
-        }
-        for (let i = 0; i < files.length; i += 1) {
-          sendFile(files[i], target, i === 0 ? caption : "");
-        }
+        openFileSendModal(files, target);
       },
       { once: true }
     );
@@ -5847,6 +5909,12 @@ export function mountApp(root: HTMLElement) {
   function closeModal() {
     const st = store.get();
     if (!st.modal) return;
+    if (st.modal.kind === "file_send") {
+      revokeFileSendPreviews(st.modal.previewUrls);
+      if (st.modal.restoreInput) restoreComposerInput(st.modal.target, st.modal.restoreInput);
+      store.set({ modal: null });
+      return;
+    }
     if (st.modal.kind === "members_add") {
       clearMembersAddLookups();
     }
@@ -7382,7 +7450,28 @@ export function mountApp(root: HTMLElement) {
     onGroupJoinDecline: (groupId: string, peer: string) => declineGroupJoin(groupId, peer),
     onBoardInviteJoin: (boardId: string) => joinBoardFromInvite(boardId),
     onBoardInviteDecline: (boardId: string) => declineBoardInvite(boardId),
-    onFileSend: (file: File | null, target: TargetRef | null) => sendFile(file, target),
+    onFileSendConfirm: (captionText: string) => confirmFileSend(captionText),
+    onFileSend: (file: File | null, target: TargetRef | null) => {
+      const st = store.get();
+      if (st.conn !== "connected") {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      if (!st.authed) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      if (!file) {
+        store.set({ status: "Выберите файл" });
+        return;
+      }
+      const tgt = target ?? st.selected;
+      if (!tgt) {
+        store.set({ status: "Выберите контакт или чат слева" });
+        return;
+      }
+      openFileSendModal([file], tgt);
+    },
     onFileOfferAccept: (fileId: string) => acceptFileOffer(fileId),
     onFileOfferReject: (fileId: string) => rejectFileOffer(fileId),
     onClearCompletedFiles: () => clearCompletedFiles(),

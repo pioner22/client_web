@@ -6,6 +6,7 @@ import { renderMembersAddModal } from "./renderMembersAddModal";
 import { renderMembersRemoveModal } from "./renderMembersRemoveModal";
 import { renderRenameModal } from "./renderRenameModal";
 import { renderConfirmModal } from "./renderConfirmModal";
+import { renderFileSendModal } from "./renderFileSendModal";
 import { renderFileViewerModal } from "./renderFileViewerModal";
 import { renderInviteUserModal } from "./renderInviteUserModal";
 import { renderActionModal } from "./renderActionModal";
@@ -25,6 +26,7 @@ export interface ModalActions {
   onMembersRemove: () => void;
   onRename: () => void;
   onInviteUser: () => void;
+  onFileSendConfirm: (captionText: string) => void;
   onAuthAccept: (peer: string) => void;
   onAuthDecline: (peer: string) => void;
   onAuthCancel: (peer: string) => void;
@@ -85,6 +87,12 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
   if (kind === "confirm") {
     return renderConfirmModal(modal.title, modal.message, modal.confirmLabel, modal.cancelLabel, modal.danger, {
       onConfirm: actions.onConfirm,
+      onCancel: actions.onClose,
+    });
+  }
+  if (kind === "file_send") {
+    return renderFileSendModal(modal.files, modal.caption ?? "", { previewUrls: modal.previewUrls, captionDisabled: modal.captionDisabled, captionHint: modal.captionHint }, {
+      onSend: actions.onFileSendConfirm,
       onCancel: actions.onClose,
     });
   }

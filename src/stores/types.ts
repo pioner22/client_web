@@ -8,6 +8,7 @@ export type ModalKind =
   | "members_remove"
   | "rename"
   | "confirm"
+  | "file_send"
   | "file_viewer"
   | "invite_user"
   | "action"
@@ -144,6 +145,16 @@ export type ModalState =
   | { kind: "members_remove"; targetKind: "group" | "board"; targetId: string; title: string; message?: string }
   | { kind: "rename"; targetKind: "group" | "board"; targetId: string; title: string; currentName: string | null; message?: string }
   | { kind: "confirm"; title: string; message: string; action: ConfirmAction; confirmLabel?: string; cancelLabel?: string; danger?: boolean }
+  | {
+      kind: "file_send";
+      files: File[];
+      target: TargetRef;
+      caption?: string;
+      captionDisabled?: boolean;
+      captionHint?: string;
+      restoreInput?: string | null;
+      previewUrls?: Array<string | null>;
+    }
   | { kind: "file_viewer"; url: string; name: string; size: number; mime?: string | null }
   | { kind: "invite_user"; peer: string; message?: string }
   | { kind: "action"; payload: ActionModalPayload; message?: string }
