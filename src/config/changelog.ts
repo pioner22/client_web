@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.151",
+    date: "2025-12-24",
+    improved: ["Поиск: добавлены локальные результаты по контактам, чатам/доскам и истории сообщений"],
+  },
+  {
     version: "0.1.150",
     date: "2025-12-24",
     improved: ["Hotkeys: F10 показывает «выход» или «зайти» в зависимости от статуса входа"],

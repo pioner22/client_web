@@ -77,6 +77,7 @@ export interface RenderActions {
   onAuthCancel: (peer: string) => void;
   onGroupJoin: (groupId: string) => void;
   onBoardJoin: (boardId: string) => void;
+  onOpenHistoryHit: (t: TargetRef, query: string, msgIdx?: number) => void;
   onGroupInviteAccept: (groupId: string) => void;
   onGroupInviteDecline: (groupId: string) => void;
   onGroupJoinAccept: (groupId: string, peer: string) => void;
@@ -347,6 +348,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onAuthCancel: actions.onAuthCancel,
         onGroupJoin: actions.onGroupJoin,
         onBoardJoin: actions.onBoardJoin,
+        onOpenHistoryHit: actions.onOpenHistoryHit,
       });
     }
     mountChat(layout, searchPage.root);

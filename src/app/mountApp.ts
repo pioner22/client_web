@@ -2515,6 +2515,24 @@ export function mountApp(root: HTMLElement) {
     queueMicrotask(() => focusChatSearch(true));
   }
 
+  function openChatFromSearch(target: TargetRef, query: string, msgIdx?: number) {
+    const q = String(query || "").trim();
+    if (!q) return;
+    selectTarget(target);
+    const apply = () => {
+      const st = store.get();
+      if (!st.selected) return;
+      if (conversationKey(st.selected) !== conversationKey(target)) return;
+      store.set((prev) => ({ ...prev, chatSearchOpen: true, chatSearchQuery: q }));
+      if (Number.isFinite(msgIdx)) scrollToChatMsgIdx(Number(msgIdx));
+    };
+    queueMicrotask(apply);
+    window.setTimeout(apply, 0);
+    if (Number.isFinite(msgIdx)) {
+      window.setTimeout(() => scrollToChatMsgIdx(Number(msgIdx)), 160);
+    }
+  }
+
   function setChatSearchQuery(query: string) {
     const q = String(query ?? "");
     store.set((prev) => {
@@ -7262,6 +7280,9 @@ export function mountApp(root: HTMLElement) {
       if (!q) return;
       lastSearchIssued = q;
       gateway.send({ type: "search", query: q });
+    },
+    onOpenHistoryHit: (target: TargetRef, query: string, msgIdx?: number) => {
+      openChatFromSearch(target, query, msgIdx);
     },
     onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => {
       lastUserInputAt = Date.now();
