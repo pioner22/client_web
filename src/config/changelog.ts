@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.145",
+    date: "2025-12-24",
+    improved: ["Контакты: убраны дубли «Info/Создать чат/Создать доску» из контакт‑листа на десктопе (есть в меню)"],
+  },
+  {
     version: "0.1.144",
     date: "2025-12-24",
     improved: ["Авторизация: вход по ID или @логину (если логин задан)"],
