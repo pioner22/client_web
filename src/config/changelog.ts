@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.160",
+    date: "2025-12-24",
+    improved: ["Контекстное меню: группировка, эмодзи‑иконки, компактный mobile‑sheet без затемнения"],
+    fixed: ["Mobile long‑press: открытие контекстного меню больше не активирует чат"],
+  },
+  {
     version: "0.1.159",
     date: "2025-12-24",
     fixed: ["Производительность: снижена нагрузка при вводе (превью в списках не пересчитываются на каждое нажатие)"],

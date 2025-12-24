@@ -64,6 +64,15 @@ function compactOneLine(raw: string): string {
     .trim();
 }
 
+function shouldSuppressRowClick(btn: HTMLElement): boolean {
+  const now = Date.now();
+  const localUntil = Number(btn.getAttribute("data-ctx-suppress-until") || 0);
+  if (Number.isFinite(localUntil) && localUntil > now) return true;
+  if (typeof document === "undefined" || !document.documentElement) return false;
+  const rootUntil = Number(document.documentElement.dataset.sidebarClickSuppressUntil || 0);
+  return Number.isFinite(rootUntil) && rootUntil > now;
+}
+
 function isImageName(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("image/")) return true;
@@ -148,6 +157,11 @@ function friendRow(
   btn.setAttribute("data-online", f.online ? "1" : "0");
   btn.addEventListener("click", (e) => {
     const ev = e as MouseEvent;
+    if (shouldSuppressRowClick(btn)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     // Prevent Ctrl+Click / RMB quirks (macOS) from triggering navigation when opening context menu.
     if (ev.ctrlKey) return;
     if (typeof ev.button === "number" && ev.button !== 0) return;
@@ -187,6 +201,11 @@ function roomRow(
   }
   btn.addEventListener("click", (e) => {
     const ev = e as MouseEvent;
+    if (shouldSuppressRowClick(btn)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     if (ev.ctrlKey) return;
     if (typeof ev.button === "number" && ev.button !== 0) return;
     onClick();

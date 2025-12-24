@@ -10,6 +10,7 @@ import type {
   ChatMessage,
   ConnStatus,
   ConfirmAction,
+  ContextMenuItem,
   ContextMenuTargetKind,
   FileOfferIn,
   FileTransferEntry,
@@ -6048,82 +6049,158 @@ export function mountApp(root: HTMLElement) {
     if (st.modal) return;
 
     const canAct = st.conn === "connected" && st.authed;
-    const items: { id: string; label: string; danger?: boolean; disabled?: boolean }[] = [];
+    const items: ContextMenuItem[] = [];
     let title = "";
     const ak = avatarKindForTarget(target.kind);
     const hasAvatar = ak ? Boolean(getStoredAvatar(ak, target.id)) : false;
+    let sepId = 0;
+    const addSeparator = () => {
+      if (!items.length) return;
+      const last = items[items.length - 1];
+      if (last?.separator) return;
+      sepId += 1;
+      items.push({ id: `sep-${sepId}`, label: "", separator: true });
+    };
+    const addGroup = (group: ContextMenuItem[]) => {
+      if (!group.length) return;
+      if (items.length) addSeparator();
+      items.push(...group);
+    };
+    const makeItem = (
+      id: string,
+      label: string,
+      icon: string,
+      opts: Pick<ContextMenuItem, "danger" | "disabled"> = {}
+    ): ContextMenuItem => ({
+      id,
+      label,
+      icon,
+      ...opts,
+    });
 
     if (target.kind === "dm") {
       title = `Контакт: ${target.id}`;
-      items.push({ id: "open", label: "Открыть" });
       const pinKey = dmKey(target.id);
-      items.push({ id: "pin_toggle", label: st.pinned.includes(pinKey) ? "Открепить" : "Закрепить" });
-      items.push({ id: "copy_id", label: "Скопировать ID" });
-      items.push({ id: "invite_user", label: "Пригласить в чат/доску…", disabled: !canAct });
       const unread = st.friends.find((f) => f.id === target.id)?.unread ?? 0;
-      if (unread > 0) items.push({ id: "mark_read", label: "Пометить прочитанным", disabled: !canAct });
-      items.push({ id: "avatar_set", label: hasAvatar ? "Сменить аватар…" : "Установить аватар…" });
-      if (hasAvatar) items.push({ id: "avatar_remove", label: "Удалить аватар", danger: true });
-      items.push({ id: "mute_toggle", label: st.muted.includes(target.id) ? "Включить звук" : "Заглушить", disabled: !canAct });
-      items.push({ id: "block_toggle", label: st.blocked.includes(target.id) ? "Разблокировать" : "Заблокировать", disabled: !canAct });
-      items.push({ id: "chat_clear", label: "Очистить историю", danger: true, disabled: !canAct });
-      items.push({ id: "friend_remove", label: "Удалить контакт", danger: true, disabled: !canAct });
+      const isPinned = st.pinned.includes(pinKey);
+      const isMuted = st.muted.includes(target.id);
+      const isBlocked = st.blocked.includes(target.id);
+      addGroup([
+        makeItem("open", "Открыть", "💬"),
+        makeItem("pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌"),
+      ]);
+      addGroup([
+        makeItem("copy_id", "Скопировать ID", "🆔"),
+        makeItem("invite_user", "Пригласить в чат/доску…", "➕", { disabled: !canAct }),
+        ...(unread > 0 ? [makeItem("mark_read", "Пометить прочитанным", "✅", { disabled: !canAct })] : []),
+      ]);
+      addGroup([
+        makeItem("avatar_set", hasAvatar ? "Сменить аватар…" : "Установить аватар…", "🖼️"),
+        ...(hasAvatar ? [makeItem("avatar_remove", "Удалить аватар", "🗑️", { danger: true })] : []),
+      ]);
+      addGroup([
+        makeItem("mute_toggle", isMuted ? "Включить звук" : "Заглушить", isMuted ? "🔔" : "🔕", { disabled: !canAct }),
+        makeItem("block_toggle", isBlocked ? "Разблокировать" : "Заблокировать", isBlocked ? "🔓" : "⛔", {
+          disabled: !canAct,
+        }),
+      ]);
+      addGroup([
+        makeItem("chat_clear", "Очистить историю", "🧹", { danger: true, disabled: !canAct }),
+        makeItem("friend_remove", "Удалить контакт", "🗑️", { danger: true, disabled: !canAct }),
+      ]);
     } else if (target.kind === "group") {
       const g = st.groups.find((x) => x.id === target.id);
       const name = String(g?.name || target.id);
       const isOwner = Boolean(g?.owner_id && st.selfId && String(g.owner_id) === String(st.selfId));
       title = `Чат: ${name}`;
-      items.push({ id: "open", label: "Открыть" });
-      items.push({ id: "group_profile", label: "Профиль чата" });
       const pinKey = roomKey(target.id);
-      items.push({ id: "pin_toggle", label: st.pinned.includes(pinKey) ? "Открепить" : "Закрепить" });
-      items.push({ id: "copy_id", label: "Скопировать ID" });
-      items.push({ id: "mute_toggle", label: st.muted.includes(target.id) ? "Включить звук" : "Заглушить", disabled: !canAct });
-      if (isOwner) items.push({ id: "group_rename", label: "Переименовать…", disabled: !canAct });
-      if (isOwner) items.push({ id: "group_add_members", label: "Добавить участников…", disabled: !canAct });
-      if (isOwner) items.push({ id: "group_remove_members", label: "Удалить участников…", danger: true, disabled: !canAct });
-      items.push({ id: "avatar_set", label: hasAvatar ? "Сменить аватар…" : "Установить аватар…" });
-      if (hasAvatar) items.push({ id: "avatar_remove", label: "Удалить аватар", danger: true });
+      const isPinned = st.pinned.includes(pinKey);
+      const isMuted = st.muted.includes(target.id);
+      addGroup([
+        makeItem("open", "Открыть", "💬"),
+        makeItem("group_profile", "Профиль чата", "👥"),
+      ]);
+      addGroup([
+        makeItem("pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌"),
+        makeItem("copy_id", "Скопировать ID", "🆔"),
+        makeItem("mute_toggle", isMuted ? "Включить звук" : "Заглушить", isMuted ? "🔔" : "🔕", {
+          disabled: !canAct,
+        }),
+      ]);
       if (isOwner) {
-        items.push({ id: "group_disband", label: "Удалить чат (для всех)", danger: true, disabled: !canAct });
-      } else {
-        items.push({ id: "group_leave", label: "Покинуть чат", danger: true, disabled: !canAct });
+        addGroup([
+          makeItem("group_rename", "Переименовать…", "✏️", { disabled: !canAct }),
+          makeItem("group_add_members", "Добавить участников…", "➕", { disabled: !canAct }),
+          makeItem("group_remove_members", "Удалить участников…", "➖", { danger: true, disabled: !canAct }),
+        ]);
       }
+      addGroup([
+        makeItem("avatar_set", hasAvatar ? "Сменить аватар…" : "Установить аватар…", "🖼️"),
+        ...(hasAvatar ? [makeItem("avatar_remove", "Удалить аватар", "🗑️", { danger: true })] : []),
+      ]);
+      addGroup([
+        isOwner
+          ? makeItem("group_disband", "Удалить чат (для всех)", "🗑️", { danger: true, disabled: !canAct })
+          : makeItem("group_leave", "Покинуть чат", "🚪", { danger: true, disabled: !canAct }),
+      ]);
     } else if (target.kind === "board") {
       const b = st.boards.find((x) => x.id === target.id);
       const name = String(b?.name || target.id);
       const isOwner = Boolean(b?.owner_id && st.selfId && String(b.owner_id) === String(st.selfId));
       title = `Доска: ${name}`;
-      items.push({ id: "open", label: "Открыть" });
-      items.push({ id: "board_profile", label: "Профиль доски" });
       const pinKey = roomKey(target.id);
-      items.push({ id: "pin_toggle", label: st.pinned.includes(pinKey) ? "Открепить" : "Закрепить" });
-      items.push({ id: "copy_id", label: "Скопировать ID" });
-      items.push({ id: "mute_toggle", label: st.muted.includes(target.id) ? "Включить звук" : "Заглушить", disabled: !canAct });
-      if (isOwner) items.push({ id: "board_rename", label: "Переименовать…", disabled: !canAct });
-      if (isOwner) items.push({ id: "board_add_members", label: "Добавить участников…", disabled: !canAct });
-      if (isOwner) items.push({ id: "board_remove_members", label: "Удалить участников…", danger: true, disabled: !canAct });
-      items.push({ id: "avatar_set", label: hasAvatar ? "Сменить аватар…" : "Установить аватар…" });
-      if (hasAvatar) items.push({ id: "avatar_remove", label: "Удалить аватар", danger: true });
+      const isPinned = st.pinned.includes(pinKey);
+      const isMuted = st.muted.includes(target.id);
+      addGroup([
+        makeItem("open", "Открыть", "💬"),
+        makeItem("board_profile", "Профиль доски", "📋"),
+      ]);
+      addGroup([
+        makeItem("pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌"),
+        makeItem("copy_id", "Скопировать ID", "🆔"),
+        makeItem("mute_toggle", isMuted ? "Включить звук" : "Заглушить", isMuted ? "🔔" : "🔕", {
+          disabled: !canAct,
+        }),
+      ]);
       if (isOwner) {
-        items.push({ id: "board_disband", label: "Удалить доску (для всех)", danger: true, disabled: !canAct });
-      } else {
-        items.push({ id: "board_leave", label: "Покинуть доску", danger: true, disabled: !canAct });
+        addGroup([
+          makeItem("board_rename", "Переименовать…", "✏️", { disabled: !canAct }),
+          makeItem("board_add_members", "Добавить участников…", "➕", { disabled: !canAct }),
+          makeItem("board_remove_members", "Удалить участников…", "➖", { danger: true, disabled: !canAct }),
+        ]);
       }
+      addGroup([
+        makeItem("avatar_set", hasAvatar ? "Сменить аватар…" : "Установить аватар…", "🖼️"),
+        ...(hasAvatar ? [makeItem("avatar_remove", "Удалить аватар", "🗑️", { danger: true })] : []),
+      ]);
+      addGroup([
+        isOwner
+          ? makeItem("board_disband", "Удалить доску (для всех)", "🗑️", { danger: true, disabled: !canAct })
+          : makeItem("board_leave", "Покинуть доску", "🚪", { danger: true, disabled: !canAct }),
+      ]);
     } else if (target.kind === "auth_in") {
       title = `Запрос: ${target.id}`;
-      items.push({ id: "copy_id", label: "Скопировать ID" });
-      items.push({ id: "avatar_set", label: hasAvatar ? "Сменить аватар…" : "Установить аватар…" });
-      if (hasAvatar) items.push({ id: "avatar_remove", label: "Удалить аватар", danger: true });
-      items.push({ id: "auth_accept", label: "Принять", disabled: !canAct });
-      items.push({ id: "auth_decline", label: "Отклонить", danger: true, disabled: !canAct });
-      items.push({ id: "block_toggle", label: st.blocked.includes(target.id) ? "Разблокировать" : "Заблокировать", disabled: !canAct });
+      const isBlocked = st.blocked.includes(target.id);
+      addGroup([
+        makeItem("copy_id", "Скопировать ID", "🆔"),
+        makeItem("avatar_set", hasAvatar ? "Сменить аватар…" : "Установить аватар…", "🖼️"),
+        ...(hasAvatar ? [makeItem("avatar_remove", "Удалить аватар", "🗑️", { danger: true })] : []),
+      ]);
+      addGroup([
+        makeItem("auth_accept", "Принять", "✅", { disabled: !canAct }),
+        makeItem("auth_decline", "Отклонить", "❌", { danger: true, disabled: !canAct }),
+        makeItem("block_toggle", isBlocked ? "Разблокировать" : "Заблокировать", isBlocked ? "🔓" : "⛔", {
+          disabled: !canAct,
+        }),
+      ]);
     } else if (target.kind === "auth_out") {
       title = `Ожидает: ${target.id}`;
-      items.push({ id: "copy_id", label: "Скопировать ID" });
-      items.push({ id: "avatar_set", label: hasAvatar ? "Сменить аватар…" : "Установить аватар…" });
-      if (hasAvatar) items.push({ id: "avatar_remove", label: "Удалить аватар", danger: true });
-      items.push({ id: "auth_cancel", label: "Отменить запрос", danger: true, disabled: !canAct });
+      addGroup([
+        makeItem("copy_id", "Скопировать ID", "🆔"),
+        makeItem("avatar_set", hasAvatar ? "Сменить аватар…" : "Установить аватар…", "🖼️"),
+        ...(hasAvatar ? [makeItem("avatar_remove", "Удалить аватар", "🗑️", { danger: true })] : []),
+      ]);
+      addGroup([makeItem("auth_cancel", "Отменить запрос", "❌", { danger: true, disabled: !canAct })]);
     } else if (target.kind === "message") {
       const selKey = st.selected ? conversationKey(st.selected) : "";
       const idx = Number.isFinite(Number(target.id)) ? Math.trunc(Number(target.id)) : -1;
@@ -6140,21 +6217,37 @@ export function mountApp(root: HTMLElement) {
       title = preview.length > 64 ? `${preview.slice(0, 61)}…` : preview;
 
       const fromId = msg?.from ? String(msg.from).trim() : "";
-      if (fromId) {
-        items.push({ id: "msg_profile", label: "Профиль отправителя", disabled: !canAct });
-      }
       const caption = msg?.attachment?.kind === "file" ? String(msg?.text || "").trim() : "";
-      items.push({
-        id: "msg_copy",
-        label: msg?.attachment?.kind === "file" ? (caption ? "Скопировать подпись" : "Скопировать имя файла") : "Скопировать текст",
-        disabled: !msg,
-      });
-      items.push({ id: "msg_pin_toggle", label: isPinned ? "Открепить" : "Закрепить", disabled: !canPin });
+      const copyLabel =
+        msg?.attachment?.kind === "file"
+          ? caption
+            ? "Скопировать подпись"
+            : "Скопировать имя файла"
+          : "Скопировать текст";
       const canEdit = Boolean(canPin && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
-      if (canEdit) items.push({ id: "msg_edit", label: msg?.attachment ? "Изменить подпись…" : "Изменить…", disabled: !canAct });
-      items.push({ id: "msg_delete_local", label: "Удалить у меня", danger: true, disabled: !msg });
       const canDeleteForAll = Boolean(canPin && canAct && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
-      if (canDeleteForAll) items.push({ id: "msg_delete", label: "Удалить", danger: true, disabled: !canAct });
+      const primary: ContextMenuItem[] = [];
+      if (fromId) primary.push(makeItem("msg_profile", "Профиль отправителя", "👤", { disabled: !canAct }));
+      primary.push(makeItem("msg_copy", copyLabel, "📋", { disabled: !msg }));
+      addGroup(primary);
+
+      const editGroup: ContextMenuItem[] = [
+        makeItem("msg_pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌", {
+          disabled: !canPin,
+        }),
+      ];
+      if (canEdit) {
+        editGroup.push(
+          makeItem("msg_edit", msg?.attachment ? "Изменить подпись…" : "Изменить…", "✏️", { disabled: !canAct })
+        );
+      }
+      addGroup(editGroup);
+
+      const dangerGroup: ContextMenuItem[] = [makeItem("msg_delete_local", "Удалить у меня", "🧹", { danger: true, disabled: !msg })];
+      if (canDeleteForAll) {
+        dangerGroup.push(makeItem("msg_delete", "Удалить", "🗑️", { danger: true, disabled: !canAct }));
+      }
+      addGroup(dangerGroup);
     }
 
     store.set({
@@ -6946,9 +7039,15 @@ export function mountApp(root: HTMLElement) {
       window.clearTimeout(suppressSidebarClickTimer);
       suppressSidebarClickTimer = null;
     }
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.sidebarClickSuppressUntil = String(Date.now() + ms);
+    }
     suppressSidebarClickTimer = window.setTimeout(() => {
       suppressSidebarClick = false;
       suppressSidebarClickTimer = null;
+      if (typeof document !== "undefined") {
+        delete document.documentElement.dataset.sidebarClickSuppressUntil;
+      }
     }, ms);
   }
 
@@ -6957,6 +7056,9 @@ export function mountApp(root: HTMLElement) {
     if (suppressSidebarClickTimer !== null) {
       window.clearTimeout(suppressSidebarClickTimer);
       suppressSidebarClickTimer = null;
+    }
+    if (typeof document !== "undefined") {
+      delete document.documentElement.dataset.sidebarClickSuppressUntil;
     }
   }
 
@@ -7198,10 +7300,12 @@ export function mountApp(root: HTMLElement) {
     longPressStartY = ev.clientY;
       longPressTimer = window.setTimeout(() => {
         longPressTimer = null;
-        armSidebarClickSuppression(1400);
+        const suppressUntil = Date.now() + 2400;
+        btn.setAttribute("data-ctx-suppress-until", String(suppressUntil));
+        armSidebarClickSuppression(2400);
         const prevTop = layout.sidebar.scrollTop;
         const prevLeft = layout.sidebar.scrollLeft;
-        sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 2000);
+        sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 2400);
         openContextMenu({ kind, id }, longPressStartX, longPressStartY);
         window.requestAnimationFrame(() => {
           if (layout.sidebar.scrollTop !== prevTop) layout.sidebar.scrollTop = prevTop;

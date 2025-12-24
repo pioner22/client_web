@@ -80,8 +80,10 @@ export interface ContextMenuTarget {
 export interface ContextMenuItem {
   id: string;
   label: string;
+  icon?: string;
   danger?: boolean;
   disabled?: boolean;
+  separator?: boolean;
 }
 
 export interface ContextMenuPayload {

@@ -66,11 +66,18 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
 
   const title = el("div", { class: "ctx-title" }, [payload.title]);
 
-  const items = payload.items.map((it) => {
+  const nodes = payload.items.map((it) => {
+    if (it.separator) {
+      return el("div", { class: "ctx-sep", role: "separator", "aria-hidden": "true" });
+    }
     const cls = it.danger ? "ctx-item ctx-danger" : "ctx-item";
-    const btn = el("button", { class: cls, type: "button", role: "menuitem", ...(it.disabled ? { disabled: "true" } : {}) }, [
-      it.label,
-    ]) as HTMLButtonElement;
+    const icon = it.icon ? el("span", { class: "ctx-icon", "aria-hidden": "true" }, [it.icon]) : null;
+    const label = el("span", { class: "ctx-label" }, [it.label]);
+    const btn = el(
+      "button",
+      { class: cls, type: "button", role: "menuitem", ...(it.disabled ? { disabled: "true" } : {}) },
+      [...(icon ? [icon] : []), label]
+    ) as HTMLButtonElement;
     btn.addEventListener("click", () => {
       if (btn.disabled) return;
       actions.onSelect(it.id);
@@ -78,7 +85,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     return btn;
   });
 
-  root.append(title, ...items);
+  root.append(title, ...nodes);
 
   root.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
