@@ -7104,6 +7104,74 @@ export function mountApp(root: HTMLElement) {
     onRoomInfoSave: (kind: TargetRef["kind"], roomId: string, description: string, rules: string) => {
       saveRoomInfo(kind, roomId, description, rules);
     },
+    onRoomLeave: (kind: TargetRef["kind"], roomId: string) => {
+      const st = store.get();
+      const rid = String(roomId || "").trim();
+      if (!rid) return;
+      if (st.conn !== "connected" || !st.authed) {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      const entry = kind === "group" ? st.groups.find((x) => x.id === rid) : st.boards.find((x) => x.id === rid);
+      const name = String(entry?.name || rid);
+      const ownerId = String(entry?.owner_id || "");
+      const isOwner = Boolean(ownerId && st.selfId && String(ownerId) === String(st.selfId));
+      if (isOwner) {
+        store.set({ status: `Создатель не может покинуть ${kind === "group" ? "чат" : "доску"} — удалите её` });
+        return;
+      }
+      if (kind === "group") {
+        openConfirmModal({
+          title: "Покинуть чат?",
+          message: `Покинуть чат «${name}»?`,
+          confirmLabel: "Выйти",
+          danger: true,
+          action: { kind: "group_leave", groupId: rid },
+        });
+      } else if (kind === "board") {
+        openConfirmModal({
+          title: "Покинуть доску?",
+          message: `Покинуть доску «${name}»?`,
+          confirmLabel: "Выйти",
+          danger: true,
+          action: { kind: "board_leave", boardId: rid },
+        });
+      }
+    },
+    onRoomDisband: (kind: TargetRef["kind"], roomId: string) => {
+      const st = store.get();
+      const rid = String(roomId || "").trim();
+      if (!rid) return;
+      if (st.conn !== "connected" || !st.authed) {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      const entry = kind === "group" ? st.groups.find((x) => x.id === rid) : st.boards.find((x) => x.id === rid);
+      const name = String(entry?.name || rid);
+      const ownerId = String(entry?.owner_id || "");
+      const isOwner = Boolean(ownerId && st.selfId && String(ownerId) === String(st.selfId));
+      if (!isOwner) {
+        store.set({ status: "Только владелец может удалить чат/доску" });
+        return;
+      }
+      if (kind === "group") {
+        openConfirmModal({
+          title: "Удалить чат?",
+          message: `Удалить чат «${name}» для всех?`,
+          confirmLabel: "Удалить",
+          danger: true,
+          action: { kind: "group_disband", groupId: rid },
+        });
+      } else if (kind === "board") {
+        openConfirmModal({
+          title: "Удалить доску?",
+          message: `Удалить доску «${name}» для всех?`,
+          confirmLabel: "Удалить",
+          danger: true,
+          action: { kind: "board_disband", boardId: rid },
+        });
+      }
+    },
     onSetMobileSidebarTab: (tab: MobileSidebarTab) => setMobileSidebarTab(tab),
     onSetSidebarQuery: (query: string) => {
       const q = String(query ?? "");

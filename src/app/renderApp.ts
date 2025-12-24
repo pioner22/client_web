@@ -44,6 +44,8 @@ export interface RenderActions {
   onRoomWriteToggle: (kind: TargetRef["kind"], roomId: string, memberId: string, value: boolean) => void;
   onRoomRefresh: (kind: TargetRef["kind"], roomId: string) => void;
   onRoomInfoSave: (kind: TargetRef["kind"], roomId: string, description: string, rules: string) => void;
+  onRoomLeave: (kind: TargetRef["kind"], roomId: string) => void;
+  onRoomDisband: (kind: TargetRef["kind"], roomId: string) => void;
   onOpenActionModal: (payload: ActionModalPayload) => void;
   onOpenHelp: () => void;
   onOpenGroupCreate: () => void;
@@ -395,6 +397,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
         onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
         onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
+        onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
+        onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
       });
     }
     mountChat(layout, groupPage.root);
@@ -414,6 +418,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
         onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
         onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
+        onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
+        onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
       });
     }
     mountChat(layout, boardPage.root);

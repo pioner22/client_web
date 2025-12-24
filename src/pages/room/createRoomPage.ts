@@ -11,6 +11,8 @@ export interface RoomPageActions {
   onWriteToggle: (kind: TargetKind, roomId: string, memberId: string, value: boolean) => void;
   onRefresh: (kind: TargetKind, roomId: string) => void;
   onInfoSave: (kind: TargetKind, roomId: string, description: string, rules: string) => void;
+  onLeave: (kind: TargetKind, roomId: string) => void;
+  onDisband: (kind: TargetKind, roomId: string) => void;
 }
 
 export interface RoomPage {
@@ -120,13 +122,18 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
   const membersList = el("div", { class: "members-list" }, []);
   const membersCard = el("div", { class: "profile-card" }, [membersHead, membersList]);
 
+  const btnLeave = el("button", { class: "btn", type: "button" }, [`Покинуть ${titleText.toLowerCase()}`]);
+  const btnDisband = el("button", { class: "btn btn-danger", type: "button" }, [`Удалить ${titleText.toLowerCase()} (для всех)`]);
+  const manageActions = el("div", { class: "profile-actions" }, [btnLeave, btnDisband]);
+  const manageCard = el("div", { class: "profile-card" }, [el("div", { class: "profile-card-title" }, ["Управление"]), manageActions]);
+
   const btnChat = el("button", { class: "btn btn-primary", type: "button" }, ["Открыть чат"]);
   const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnChat, btnRefresh]);
 
   const hint = el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
 
-  const root = el("div", { class: "page page-profile page-room" }, [title, head, about, infoCard, membersCard, actionsRow, hint]);
+  const root = el("div", { class: "page page-profile page-room" }, [title, head, about, infoCard, membersCard, manageCard, actionsRow, hint]);
 
   let currentRoomId = "";
   let currentIsOwner = false;
@@ -153,6 +160,18 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
     const roomId = String(root.getAttribute("data-room-id") || "").trim();
     if (!roomId) return;
     actions.onRefresh(kind, roomId);
+  });
+
+  btnLeave.addEventListener("click", () => {
+    const roomId = String(root.getAttribute("data-room-id") || "").trim();
+    if (!roomId) return;
+    actions.onLeave(kind, roomId);
+  });
+
+  btnDisband.addEventListener("click", () => {
+    const roomId = String(root.getAttribute("data-room-id") || "").trim();
+    if (!roomId) return;
+    actions.onDisband(kind, roomId);
   });
 
   descriptionInput.addEventListener("input", () => {
@@ -255,7 +274,10 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
     const description = String(entry?.description || "");
     const rules = String(entry?.rules || "");
     const roomKey = `${kind}:${roomId}`;
-    const isOwner = Boolean(ownerId && state.selfId && String(ownerId) === String(state.selfId));
+    const me = String(state.selfId || "").trim();
+    const isOwner = Boolean(ownerId && me && String(ownerId) === String(me));
+    const members = Array.isArray(entry?.members) ? entry?.members || [] : [];
+    const isMember = Boolean(me && (isOwner || members.includes(me)));
 
     profileName.textContent = name || "—";
     profileHandle.textContent = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "Ссылка не задана";
@@ -283,6 +305,13 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
 
     (btnChat as HTMLButtonElement).disabled = !roomId;
     (btnRefresh as HTMLButtonElement).disabled = !roomId;
+    const canLeave = Boolean(roomId && isMember && !isOwner);
+    const canDisband = Boolean(roomId && isOwner);
+    btnLeave.classList.toggle("hidden", !canLeave);
+    btnDisband.classList.toggle("hidden", !canDisband);
+    manageCard.classList.toggle("hidden", !canLeave && !canDisband);
+    (btnLeave as HTMLButtonElement).disabled = !canLeave;
+    (btnDisband as HTMLButtonElement).disabled = !canDisband;
 
     currentRoomId = roomId;
     currentIsOwner = isOwner;
