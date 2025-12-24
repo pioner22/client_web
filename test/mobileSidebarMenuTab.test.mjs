@@ -271,7 +271,7 @@ test("mobile sidebar: поиск фильтрует список и вызыва
           fileOffersIn: [],
           selected: null,
           page: "main",
-          mobileSidebarTab: "chats",
+          mobileSidebarTab: "contacts",
           sidebarQuery: "али",
           conversations: {
             "dm:111-111-111": [{ ts: 1, from: "111-111-111", text: "привет", kind: "in" }],

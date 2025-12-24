@@ -10,6 +10,20 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.162",
+    date: "2025-12-24",
+    improved: [
+      "Сайдбар: вкладки разделены по типам (Контакты — активные ЛС, Чаты — группы, Доски — доски)",
+      "Компоузер: выровнен по ширине полотна чата, кнопки стали компактнее и прямоугольнее",
+      "Эмодзи‑панель: компактный размер и уменьшенные вкладки",
+      "Горячая клавиша: F1 стала крупнее",
+    ],
+    fixed: [
+      "Mobile long‑press: дополнительное подавление клика после открытия контекстного меню",
+      "Android/PWA: высота вьюпорта больше не опирается на outerHeight вне iOS",
+    ],
+  },
+  {
     version: "0.1.161",
     date: "2025-12-24",
     improved: [

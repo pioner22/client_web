@@ -7302,6 +7302,9 @@ export function mountApp(root: HTMLElement) {
         longPressTimer = null;
         const suppressUntil = Date.now() + 2400;
         btn.setAttribute("data-ctx-suppress-until", String(suppressUntil));
+        if (typeof document !== "undefined" && document.documentElement) {
+          document.documentElement.dataset.sidebarLongPressUntil = String(suppressUntil);
+        }
         armSidebarClickSuppression(2400);
         const prevTop = layout.sidebar.scrollTop;
         const prevLeft = layout.sidebar.scrollLeft;
@@ -7341,7 +7344,10 @@ export function mountApp(root: HTMLElement) {
       const consumed = consumeCtxClickSuppression(sidebarCtxClickSuppression, kind, id);
       sidebarCtxClickSuppression = consumed.state;
       const keySuppressed = consumed.suppressed;
-      const shouldSuppress = suppressSidebarClick || keySuppressed;
+      const root = typeof document !== "undefined" ? document.documentElement : null;
+      const longPressUntil = Number(root?.dataset.sidebarLongPressUntil || 0);
+      const longPressSuppressed = Number.isFinite(longPressUntil) && longPressUntil > Date.now();
+      const shouldSuppress = suppressSidebarClick || keySuppressed || longPressSuppressed;
       if (!shouldSuppress) return;
       e.preventDefault();
       e.stopPropagation();

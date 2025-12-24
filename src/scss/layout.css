@@ -96,14 +96,20 @@
 }
 
 .input-wrap {
-  display: block;
-  padding: var(--composer-pad-y) var(--composer-pad-x);
-  padding-left: calc(var(--composer-pad-x) + env(safe-area-inset-left));
-  padding-right: calc(var(--composer-pad-x) + env(safe-area-inset-right));
+  display: grid;
+  grid-template-columns: var(--grid-cols);
+  column-gap: var(--grid-gap);
+  padding: var(--composer-pad-y) var(--chat-pad);
+  padding-left: calc(var(--chat-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--chat-pad) + env(safe-area-inset-right));
   /* Avoid "double padding" feel on iOS: safe-area already provides spacing. */
   padding-bottom: max(var(--composer-pad-y), var(--safe-bottom, env(safe-area-inset-bottom)));
   border-top: var(--composer-border-width) solid var(--composer-border-color);
   background: var(--composer-bg);
+}
+
+.input-wrap > * {
+  grid-column: 2;
 }
 
 .composer-field {
@@ -156,11 +162,11 @@
 }
 
 .btn.composer-send {
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: 12px;
   font-size: 0;
   line-height: 1;
   display: grid;

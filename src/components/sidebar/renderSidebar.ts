@@ -70,7 +70,9 @@ function shouldSuppressRowClick(btn: HTMLElement): boolean {
   if (Number.isFinite(localUntil) && localUntil > now) return true;
   if (typeof document === "undefined" || !document.documentElement) return false;
   const rootUntil = Number(document.documentElement.dataset.sidebarClickSuppressUntil || 0);
-  return Number.isFinite(rootUntil) && rootUntil > now;
+  if (Number.isFinite(rootUntil) && rootUntil > now) return true;
+  const longPressUntil = Number(document.documentElement.dataset.sidebarLongPressUntil || 0);
+  return Number.isFinite(longPressUntil) && longPressUntil > now;
 }
 
 function isImageName(name: string, mime?: string | null): boolean {
@@ -269,6 +271,18 @@ export function renderSidebar(
     return matchesQuery([name, h, id].filter(Boolean).join(" "));
   };
 
+  const hasActiveDialogForFriend = (f: FriendEntry): boolean => {
+    const id = String(f.id || "").trim();
+    if (!id) return false;
+    const k = dmKey(id);
+    const conv = state.conversations[k] || [];
+    const hasConv = conv.length > 0;
+    const hasDraft = Boolean(String(drafts[k] || "").trim());
+    const unread = Math.max(0, Number(f.unread || 0) || 0);
+    const attention = attnSet.has(id);
+    return hasConv || hasDraft || unread > 0 || attention;
+  };
+
   if (isMobile) {
     const rawTab = state.mobileSidebarTab;
     const activeTab: MobileSidebarTab =
@@ -398,7 +412,6 @@ export function renderSidebar(
         const k = dmKey(f.id);
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
-        pinnedChatRows.push(row);
         pinnedContactRows.push(row);
         continue;
       }
@@ -469,42 +482,13 @@ export function renderSidebar(
         });
       }
 
-      for (const f of state.friends) {
-        const k = dmKey(f.id);
-        if (pinnedSet.has(k)) continue;
-        if (!matchesFriend(f)) continue;
-        const hasConv = Boolean((state.conversations[k] || []).length);
-        const hasDraft = Boolean(String(drafts[k] || "").trim());
-        const unread = Math.max(0, Number(f.unread || 0) || 0);
-        if (!hasSidebarQuery) {
-          if (!hasConv && !hasDraft && unread <= 0) continue; // "Чаты" — только начатые диалоги
-        }
-        const meta = previewForConversation(state, k, "dm", drafts[k]);
-        dialogItems.push({
-          sortTs: lastTsForKey(k),
-          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id)),
-        });
-      }
-      for (const id of unknownAttnPeers) {
-        if (hasSidebarQuery && !matchesQuery(id)) continue;
-        const k = dmKey(id);
-        const meta = previewForConversation(state, k, "dm", drafts[k]);
-        const hint = attentionHintForPeer(state, id);
-        const meta2 = meta.sub ? meta : { ...meta, sub: hint };
-        const pseudo: FriendEntry = { id, online: false, unread: 0 };
-        dialogItems.push({
-          sortTs: lastTsForKey(k),
-          row: friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true),
-        });
-      }
-
       dialogItems.sort((a, b) => b.sortTs - a.sortTs);
       const dialogRows = dialogItems.map((x) => x.row);
 
       target.replaceChildren(
         sticky,
         ...(pinnedChatRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedChatRows] : []),
-        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Диалоги"]),
+        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
         ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
         bottom
       );
@@ -542,18 +526,24 @@ export function renderSidebar(
       return;
     }
 
-    const onlineRows = online.map((f) => {
-      const k = dmKey(f.id);
-      if (pinnedSet.has(k)) return null;
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-    }).filter(Boolean) as HTMLElement[];
-    const offlineRows = offline.map((f) => {
-      const k = dmKey(f.id);
-      if (pinnedSet.has(k)) return null;
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-    }).filter(Boolean) as HTMLElement[];
+    const onlineRows = online
+      .map((f) => {
+        const k = dmKey(f.id);
+        if (pinnedSet.has(k)) return null;
+        if (!hasActiveDialogForFriend(f)) return null;
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+      })
+      .filter(Boolean) as HTMLElement[];
+    const offlineRows = offline
+      .map((f) => {
+        const k = dmKey(f.id);
+        if (pinnedSet.has(k)) return null;
+        if (!hasActiveDialogForFriend(f)) return null;
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+      })
+      .filter(Boolean) as HTMLElement[];
 
     const unknownAttnRows = unknownAttnPeers
       .filter((id) => (hasSidebarQuery ? matchesQuery(id) : true))
@@ -668,7 +658,7 @@ export function renderSidebar(
       el("summary", { class: "sidebar-tips-summary", title: "Короткие подсказки", "aria-label": "Подсказки" }, ["Подсказки"]),
       el("div", { class: "sidebar-tips-body" }, [
         el("div", { class: "sidebar-tip" }, ["ПКМ/долгий тап по контакту — меню действий."]),
-        el("div", { class: "sidebar-tip" }, ["В «Чаты» попадают только начатые диалоги."]),
+        el("div", { class: "sidebar-tip" }, ["«Контакты» — активные ЛС, «Чаты» — группы."]),
         el("div", { class: "sidebar-tip" }, ["Новые контакты удобнее добавлять через «Поиск»."]),
       ]),
     ]);
@@ -739,8 +729,8 @@ export function renderSidebar(
 
   const boardsRest = boards.filter((b) => !pinnedSet.has(roomKey(b.id)));
   const groupsRest = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
-  const onlineRest = online.filter((f) => !pinnedSet.has(dmKey(f.id)));
-  const offlineRest = offline.filter((f) => !pinnedSet.has(dmKey(f.id)));
+  const onlineRest = online.filter((f) => !pinnedSet.has(dmKey(f.id)) && hasActiveDialogForFriend(f));
+  const offlineRest = offline.filter((f) => !pinnedSet.has(dmKey(f.id)) && hasActiveDialogForFriend(f));
   const unknownAttnRows = unknownAttnPeers.map((id) => {
     const k = dmKey(id);
     const meta = previewForConversation(state, k, "dm", drafts[k]);

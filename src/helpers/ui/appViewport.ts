@@ -45,7 +45,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
         else if (isIos && base > 0 && avail >= base && avail - base <= USE_SCREEN_HEIGHT_SLACK_PX) candidates.push(avail);
       }
       const outer = Math.round(Number((window as any).outerHeight) || 0);
-      if (outer > 0 && base > 0 && outer >= base && outer - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
+      if ((isIos || iosStandalone) && outer > 0 && base > 0 && outer >= base && outer - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
         candidates.push(outer);
       }
       base = Math.max(...candidates);

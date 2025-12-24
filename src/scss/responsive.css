@@ -458,9 +458,14 @@
 
   /* Composer: closer to Telegram pill + stable "bar" feel. */
   .input-wrap {
+    grid-template-columns: 1fr;
     background: color-mix(in srgb, var(--composer-bg), transparent 10%);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
+  }
+
+  .input-wrap > * {
+    grid-column: 1;
   }
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

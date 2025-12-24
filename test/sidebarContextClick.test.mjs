@@ -180,8 +180,8 @@ test("sidebar: Ctrl+Click/ПКМ не активирует строку (не м
         fileOffersIn: [],
         selected: null,
         page: "main",
-        mobileSidebarTab: "chats",
-        conversations: { "dm:123-456-789": [] },
+        mobileSidebarTab: "contacts",
+        conversations: { "dm:123-456-789": [{ ts: 1, from: "123-456-789", text: "привет", kind: "in" }] },
         drafts: {},
       };
 
@@ -233,8 +233,8 @@ test("sidebar: показывает display_name вместо ID (если из�
         fileOffersIn: [],
         selected: null,
         page: "main",
-        mobileSidebarTab: "chats",
-        conversations: { "dm:123-456-789": [] },
+        mobileSidebarTab: "contacts",
+        conversations: { "dm:123-456-789": [{ ts: 1, from: "123-456-789", text: "привет", kind: "in" }] },
         drafts: {},
       };
 

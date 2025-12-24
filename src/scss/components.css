@@ -34,6 +34,21 @@
   cursor: pointer;
 }
 
+.hk-btn[data-key="F1"] {
+  min-height: 36px;
+  padding: calc(var(--hk-pad-y) + 2px) calc(var(--hk-pad-x) + 6px);
+}
+
+.hk-btn[data-key="F1"] .hk-kbd {
+  min-width: 40px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.hk-btn[data-key="F1"] .hk-label {
+  font-size: 13px;
+}
+
 .hk-kbd {
   display: inline-grid;
   place-items: center;
@@ -367,6 +382,28 @@
   border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
   background: color-mix(in srgb, var(--panel2), transparent 25%);
   margin-bottom: var(--sp-3);
+  position: relative;
+  overflow: visible;
+}
+
+.sidebar-tabs::before,
+.sidebar-tabs::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 2px;
+  background: color-mix(in srgb, var(--line), transparent 30%);
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+.sidebar-tabs::before {
+  left: -18px;
+}
+
+.sidebar-tabs::after {
+  right: -18px;
 }
 
 .sidebar-tabs.sidebar-tabs-bottom {
@@ -1579,11 +1616,11 @@
 }
 
 .btn.composer-attach {
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: 12px;
   border-color: transparent;
   background: transparent;
   color: var(--btn-text);
@@ -1594,11 +1631,11 @@
 }
 
 .btn.composer-emoji {
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: 12px;
   border-color: transparent;
   background: transparent;
   color: var(--btn-text);
@@ -1674,15 +1711,15 @@
   position: absolute;
   left: 0;
   bottom: calc(100% + 10px);
-  width: min(390px, 100%);
-  max-height: min(56vh, 420px);
+  width: min(312px, 100%);
+  max-height: min(44vh, 340px);
   z-index: 20;
   display: grid;
   grid-template-rows: auto auto 1fr;
-  gap: 6px;
-  padding: 10px 10px 8px;
+  gap: 5px;
+  padding: 8px 8px 6px;
   border: 1px solid var(--modal-border-color);
-  border-radius: 16px;
+  border-radius: 14px;
   background:
     radial-gradient(130% 80% at 10% 0%, color-mix(in srgb, var(--focus), transparent 94%), transparent 60%),
     radial-gradient(130% 80% at 90% 0%, color-mix(in srgb, var(--accent), transparent 96%), transparent 60%),
@@ -1708,13 +1745,13 @@
 .emoji-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .btn.emoji-close {
-  min-width: 32px;
-  width: 32px;
-  height: 32px;
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 999px;
   font-size: 18px;
@@ -1724,12 +1761,12 @@
 .emoji-search {
   flex: 1 1 auto;
   min-width: 0;
-  height: 34px;
+  height: 28px;
   position: relative;
   display: flex;
   align-items: center;
   border-radius: 12px;
-  padding: 0 30px 0 34px;
+  padding: 0 28px 0 30px;
   background: color-mix(in srgb, var(--panel2), transparent 6%);
   border: 1px solid color-mix(in srgb, var(--line), transparent 25%);
   color: var(--muted);
@@ -1741,9 +1778,9 @@
 .emoji-search::before {
   content: "";
   position: absolute;
-  left: 12px;
-  width: 16px;
-  height: 16px;
+  left: 10px;
+  width: 14px;
+  height: 14px;
   background: currentColor;
   opacity: 0.65;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M11 2a9 9 0 1 1 5.3 16.3l3.7 3.7a1 1 0 0 1-1.4 1.4l-3.7-3.7A9 9 0 0 1 11 2Zm0 2a7 7 0 1 0 0 14a7 7 0 0 0 0-14Z'/%3E%3C/svg%3E")
@@ -1765,7 +1802,7 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
   outline: none;
 }
@@ -1805,8 +1842,8 @@
 .emoji-tabs {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 2px 6px;
+  gap: 5px;
+  padding: 0 2px 5px;
   border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 20%);
   overflow-x: auto;
   scrollbar-width: none;
@@ -1818,16 +1855,16 @@
 }
 
 .emoji-tab {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   border: 0;
   padding: 0;
   display: grid;
   place-items: center;
   background: transparent;
   color: var(--muted);
-  font-size: 36px;
+  font-size: 28px;
   line-height: 1;
   cursor: pointer;
   transition:
@@ -1855,13 +1892,13 @@
 .emoji-content {
   overflow: auto;
   min-height: 0;
-  padding: 2px 2px 6px;
+  padding: 2px 2px 5px;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
 
 .emoji-section {
-  padding: 2px 2px 8px;
+  padding: 2px 2px 6px;
 }
 
 .emoji-section-title {
@@ -1869,36 +1906,36 @@
   top: 0;
   z-index: 1;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--muted), transparent 10%);
-  padding: 6px 0 4px;
+  padding: 5px 0 4px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--modal-bg), transparent 0%), color-mix(in srgb, var(--modal-bg), transparent 18%));
 }
 
 .emoji-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
   padding: 2px 2px 4px;
 }
 
 .emoji-btn {
   width: 100%;
-  max-width: 64px;
+  max-width: 52px;
   aspect-ratio: 1 / 1;
   justify-self: center;
   padding: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 0;
   background: transparent;
   color: var(--text);
   cursor: pointer;
   display: grid;
   place-items: center;
-  font-size: 44px;
+  font-size: 36px;
   line-height: 1;
   user-select: none;
   transition:
@@ -1935,18 +1972,18 @@
 @media (pointer: coarse) {
   .emoji-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px;
   }
 
   .emoji-btn {
-    max-width: 72px;
-    font-size: 48px;
+    max-width: 60px;
+    font-size: 40px;
   }
 
   .emoji-tab {
-    width: 56px;
-    height: 56px;
-    font-size: 40px;
+    width: 48px;
+    height: 48px;
+    font-size: 34px;
   }
 }
 
