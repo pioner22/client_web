@@ -900,15 +900,36 @@ export function mountApp(root: HTMLElement) {
     void syncExistingPushSubscription();
   });
 
+  const previewIdsSignature = (items: Array<{ id?: string }>) =>
+    items.map((entry) => String(entry?.id || "").trim()).filter(Boolean).join("|");
+
   store.subscribe(() => {
     const st = store.get();
-    const friendsChanged = st.friends !== previewFriendsRef;
-    const groupsChanged = st.groups !== previewGroupsRef;
-    const boardsChanged = st.boards !== previewBoardsRef;
+    const friendsRefChanged = st.friends !== previewFriendsRef;
+    const groupsRefChanged = st.groups !== previewGroupsRef;
+    const boardsRefChanged = st.boards !== previewBoardsRef;
+    let nextFriendsSig = previewFriendsSig;
+    let nextGroupsSig = previewGroupsSig;
+    let nextBoardsSig = previewBoardsSig;
+    if (friendsRefChanged) {
+      previewFriendsRef = st.friends;
+      nextFriendsSig = previewIdsSignature(st.friends || []);
+    }
+    if (groupsRefChanged) {
+      previewGroupsRef = st.groups;
+      nextGroupsSig = previewIdsSignature(st.groups || []);
+    }
+    if (boardsRefChanged) {
+      previewBoardsRef = st.boards;
+      nextBoardsSig = previewIdsSignature(st.boards || []);
+    }
+    const friendsChanged = nextFriendsSig !== previewFriendsSig;
+    const groupsChanged = nextGroupsSig !== previewGroupsSig;
+    const boardsChanged = nextBoardsSig !== previewBoardsSig;
     const connChanged = st.conn !== previewConn || st.authed !== previewAuthed;
-    previewFriendsRef = st.friends;
-    previewGroupsRef = st.groups;
-    previewBoardsRef = st.boards;
+    previewFriendsSig = nextFriendsSig;
+    previewGroupsSig = nextGroupsSig;
+    previewBoardsSig = nextBoardsSig;
     previewConn = st.conn;
     previewAuthed = st.authed;
     if (!st.authed || st.conn !== "connected") return;
@@ -944,6 +965,9 @@ export function mountApp(root: HTMLElement) {
   let previewFriendsRef = store.get().friends;
   let previewGroupsRef = store.get().groups;
   let previewBoardsRef = store.get().boards;
+  let previewFriendsSig = previewIdsSignature(previewFriendsRef || []);
+  let previewGroupsSig = previewIdsSignature(previewGroupsRef || []);
+  let previewBoardsSig = previewIdsSignature(previewBoardsRef || []);
   let previewConn: ConnStatus = store.get().conn;
   let previewAuthed = store.get().authed;
   const uploadQueue: UploadState[] = [];
