@@ -475,6 +475,18 @@
     grid-column: 1;
   }
 
+  .composer-row {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-row > .composer-field {
+    grid-column: 1;
+  }
+
+  .sidebar-bottom-dock {
+    display: none;
+  }
+
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .input-wrap {
       background: var(--composer-bg);

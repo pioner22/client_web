@@ -4,6 +4,7 @@ export interface Layout {
   hotkeys: HTMLElement;
   sidebar: HTMLElement;
   sidebarBody: HTMLElement;
+  sidebarDock: HTMLElement;
   chat: HTMLElement;
   chatTop: HTMLElement;
   chatHost: HTMLElement;

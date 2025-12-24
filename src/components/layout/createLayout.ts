@@ -43,6 +43,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     "☺︎",
   ]) as HTMLButtonElement;
   const sendBtn = el("button", { class: "btn composer-send", type: "button", "aria-label": "Отправить" }, ["Отправить"]);
+  const sidebarDock = el("div", { class: "sidebar-bottom-dock", "aria-hidden": "true" });
   const editBar = el("div", { class: "composer-edit hidden", id: "composer-edit", role: "status", "aria-live": "polite" }, [
     el("div", { class: "composer-edit-body" }, [
       el("div", { class: "composer-edit-title" }, ["Редактирование"]),
@@ -64,11 +65,8 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     el("span", { class: "composer-hint", "aria-hidden": "true" }, ["Shift+Enter — новая строка"]),
     el("span", { class: "composer-count", "aria-hidden": "true" }, ["0/4000"]),
   ]);
-  const inputWrap = el("div", { class: "input-wrap" }, [
-    editBar,
-    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, input, sendBtn]),
-    composerMeta,
-  ]);
+  const composerRow = el("div", { class: "composer-row" }, [sidebarDock, el("div", { class: "composer-field" }, [attachBtn, emojiBtn, input, sendBtn])]);
+  const inputWrap = el("div", { class: "input-wrap" }, [editBar, composerRow, composerMeta]);
 
   const footer = el("footer", { class: "footer" });
   const toastHost = el("div", { class: "toast-host hidden", "aria-live": "polite", "aria-atomic": "true" });
@@ -90,6 +88,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     hotkeys,
     sidebar,
     sidebarBody,
+    sidebarDock,
     chat,
     chatTop,
     chatHost,

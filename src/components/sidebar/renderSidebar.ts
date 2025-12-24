@@ -227,10 +227,26 @@ export function renderSidebar(
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void,
   onSetSidebarQuery: (query: string) => void,
   onAuthOpen: () => void,
-  onAuthLogout: () => void
+  onAuthLogout: () => void,
+  sidebarDock?: HTMLElement | null
 ) {
   const isMobile =
     typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
+
+  const toggleClass = (node: HTMLElement | null | undefined, cls: string, enabled: boolean) => {
+    if (!node) return;
+    const list = (node as HTMLElement).classList;
+    if (list && typeof list.toggle === "function") {
+      list.toggle(cls, enabled);
+      return;
+    }
+    const raw = String((node as any).className || "");
+    const parts = raw.split(/\s+/).filter(Boolean);
+    const has = parts.includes(cls);
+    if (enabled && !has) parts.push(cls);
+    if (!enabled && has) parts.splice(parts.indexOf(cls), 1);
+    (node as any).className = parts.join(" ");
+  };
 
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
@@ -247,11 +263,21 @@ export function renderSidebar(
   const sidebarQuery = sidebarQueryRaw.toLowerCase();
   const hasSidebarQuery = Boolean(sidebarQuery);
   const body = (() => {
-    const existing = target.querySelector(".sidebar-body") as HTMLElement | null;
+    const existing =
+      typeof (target as HTMLElement | null)?.querySelector === "function"
+        ? ((target as HTMLElement).querySelector(".sidebar-body") as HTMLElement | null)
+        : null;
     if (existing) return existing;
+    const cached = (target as any)._sidebarBody as HTMLElement | null | undefined;
+    if (cached) return cached;
     return el("div", { class: "sidebar-body" });
   })();
-  body.classList.toggle("sidebar-mobile-body", isMobile);
+  if (!(target as any)._sidebarBody) (target as any)._sidebarBody = body;
+  toggleClass(body, "sidebar-mobile-body", isMobile);
+  if (sidebarDock) {
+    toggleClass(sidebarDock, "hidden", isMobile);
+    if (isMobile) sidebarDock.replaceChildren();
+  }
 
   const matchesQuery = (raw: string): boolean => {
     if (!hasSidebarQuery) return true;
@@ -741,7 +767,8 @@ export function renderSidebar(
   });
 
   const scrollToSidebarSection = (section: "contacts" | "boards" | "chats") => {
-    const node = target.querySelector(`[data-sidebar-section="${section}"]`);
+    if (typeof (target as HTMLElement | null)?.querySelector !== "function") return;
+    const node = (target as HTMLElement).querySelector(`[data-sidebar-section="${section}"]`);
     if (!node) return;
     try {
       node.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -782,7 +809,11 @@ export function renderSidebar(
   desktopTabContacts.addEventListener("click", () => scrollToSidebarSection("contacts"));
   desktopTabBoards.addEventListener("click", () => scrollToSidebarSection("boards"));
   desktopTabChats.addEventListener("click", () => scrollToSidebarSection("chats"));
-  const desktopBottom = el("div", { class: "sidebar-desktop-bottom" }, [desktopTabs]);
+  const useDock = Boolean(sidebarDock && !isMobile);
+  if (useDock && sidebarDock) {
+    sidebarDock.replaceChildren(desktopTabs);
+  }
+  const desktopBottom = useDock ? null : el("div", { class: "sidebar-desktop-bottom" }, [desktopTabs]);
 
   body.replaceChildren(
     el("div", { class: "sidebar-mobile-top" }, [
@@ -843,5 +874,9 @@ export function renderSidebar(
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     }),
   );
-  target.replaceChildren(body, desktopBottom);
+  if (desktopBottom) {
+    target.replaceChildren(body, desktopBottom);
+  } else {
+    target.replaceChildren(body);
+  }
 }

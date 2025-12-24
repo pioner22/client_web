@@ -109,7 +109,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
 
   // Контекстное меню не должно "ломать" макет и прятать composer.
   const chatInputVisible = state.page === "main" && (!state.modal || state.modal.kind === "context_menu");
-  layout.inputWrap.classList.toggle("hidden", !chatInputVisible);
+  const isMobile = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
+  layout.inputWrap.classList.toggle("hidden", !chatInputVisible && isMobile);
+  layout.inputWrap.classList.toggle("input-wrap-no-composer", !chatInputVisible);
 
   const rawInput = (layout.input.value || state.input || "").toString();
   const sendText = rawInput.trimEnd();
@@ -197,7 +199,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onSetMobileSidebarTab,
     actions.onSetSidebarQuery,
     actions.onAuthOpen,
-    actions.onAuthLogout
+    actions.onAuthLogout,
+    layout.sidebarDock
   );
   if (layout.sidebarBody.scrollTop !== sidebarScrollTop) layout.sidebarBody.scrollTop = sidebarScrollTop;
   if (layout.sidebarBody.scrollLeft !== sidebarScrollLeft) layout.sidebarBody.scrollLeft = sidebarScrollLeft;

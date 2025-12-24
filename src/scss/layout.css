@@ -122,6 +122,36 @@
   grid-column: 2;
 }
 
+.input-wrap > .composer-row {
+  grid-column: 1 / -1;
+}
+
+.composer-row {
+  display: grid;
+  grid-template-columns: var(--grid-cols);
+  column-gap: var(--grid-gap);
+  align-items: end;
+  min-height: var(--composer-field-min-h);
+}
+
+.composer-row > .sidebar-bottom-dock {
+  grid-column: 1;
+}
+
+.composer-row > .composer-field {
+  grid-column: 2;
+}
+
+.sidebar-bottom-dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--composer-field-min-h);
+  padding: 0 var(--sidebar-pad);
+  border-right: var(--sidebar-border-width) solid var(--sidebar-border-color);
+  background: var(--sidebar-bg);
+}
+
 .composer-field {
   display: flex;
   align-items: flex-end;
@@ -144,6 +174,12 @@
   color: var(--prompt-color);
   font-size: 12px;
   line-height: 1.2;
+}
+
+.input-wrap.input-wrap-no-composer .composer-field,
+.input-wrap.input-wrap-no-composer .composer-meta,
+.input-wrap.input-wrap-no-composer .composer-edit {
+  display: none;
 }
 
 /* Telegram-like: подсказки/счётчик показываем только когда это реально нужно. */
