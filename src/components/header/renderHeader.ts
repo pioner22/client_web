@@ -86,40 +86,6 @@ export function renderHeader(layout: Layout, state: AppState) {
     " ",
     el("span", { class: "hdr-label" }, ["Ваш ID: "]),
     el("span", { class: "hdr-id" }, [headerId]),
-    ...(state.conn === "connected" && !state.authed
-      ? state.authMode === "auto"
-        ? [
-            " ",
-            el(
-              "button",
-              {
-                class: "hk-btn hdr-auth hdr-authing",
-                type: "button",
-                "data-action": "auth-open",
-                title: "Автовход… (нажмите, чтобы войти вручную)",
-                "aria-label": "Автовход…",
-              },
-              ["Входим…"]
-            ),
-          ]
-        : [
-            " ",
-            el(
-              "button",
-              { class: "hk-btn hdr-auth", type: "button", "data-action": "auth-open", title: "Войти", "aria-label": "Войти" },
-              ["Войти"]
-            ),
-          ]
-      : state.conn === "connected" && state.authed
-        ? [
-            " ",
-            el(
-              "button",
-              { class: "hk-btn hdr-logout", type: "button", "data-action": "auth-logout", title: "Выйти", "aria-label": "Выйти" },
-              ["Выйти"]
-            ),
-          ]
-      : []),
     "  ",
     el("span", { class: "hdr-ver", title: verTitle || undefined }, [`v${webBuild.version || "—"}`]),
     el("span", { class: "hdr-sep" }, [" | "]),
@@ -136,6 +102,7 @@ export function renderHeader(layout: Layout, state: AppState) {
       ["F5", "чат+"],
       ["F6", "доска+"],
       ["F7", "файлы"],
+      ["F10", "выход"],
     ].map(([k, v]) =>
       el(
         "button",

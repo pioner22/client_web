@@ -53,6 +53,8 @@ export interface RenderActions {
   onAuthLogin: () => void;
   onAuthRegister: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
+  onAuthOpen: () => void;
+  onAuthLogout: () => void;
   onCloseModal: () => void;
   onConfirmModal: () => void;
   onDismissUpdate: () => void;
@@ -187,7 +189,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onOpenGroupCreate,
     actions.onOpenBoardCreate,
     actions.onSetMobileSidebarTab,
-    actions.onSetSidebarQuery
+    actions.onSetSidebarQuery,
+    actions.onAuthOpen,
+    actions.onAuthLogout
   );
   if (layout.sidebar.scrollTop !== sidebarScrollTop) layout.sidebar.scrollTop = sidebarScrollTop;
   if (layout.sidebar.scrollLeft !== sidebarScrollLeft) layout.sidebar.scrollLeft = sidebarScrollLeft;

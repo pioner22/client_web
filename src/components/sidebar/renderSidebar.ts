@@ -204,7 +204,9 @@ export function renderSidebar(
   onCreateGroup: () => void,
   onCreateBoard: () => void,
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void,
-  onSetSidebarQuery: (query: string) => void
+  onSetSidebarQuery: (query: string) => void,
+  onAuthOpen: () => void,
+  onAuthLogout: () => void
 ) {
   const isMobile =
     typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
@@ -576,6 +578,25 @@ export function renderSidebar(
     });
     infoRow.setAttribute("title", "Подсказки по клавишам и журнал обновлений");
 
+    const accountRows: HTMLElement[] = [];
+    if (state.conn === "connected" && !state.authed) {
+      const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
+        sub: "Вход или регистрация",
+        time: null,
+        hasDraft: false,
+      });
+      loginRow.setAttribute("title", "Войти или зарегистрироваться");
+      accountRows.push(loginRow);
+    } else if (state.authed) {
+      const logoutRow = roomRow("⎋", "Выход (F10)", false, () => onAuthLogout(), undefined, {
+        sub: "Завершить сессию",
+        time: null,
+        hasDraft: false,
+      });
+      logoutRow.setAttribute("title", "Выйти из аккаунта (F10)");
+      accountRows.push(logoutRow);
+    }
+
     const tips = el("details", { class: "sidebar-tips" }, [
       el("summary", { class: "sidebar-tips-summary", title: "Короткие подсказки", "aria-label": "Подсказки" }, ["Подсказки"]),
       el("div", { class: "sidebar-tips-body" }, [
@@ -590,6 +611,7 @@ export function renderSidebar(
       tips,
       el("div", { class: "pane-section" }, ["Навигация"]),
       ...navRows,
+      ...(accountRows.length ? [el("div", { class: "pane-section" }, ["Аккаунт"]), ...accountRows] : []),
       el("div", { class: "pane-section" }, ["Создание"]),
       ...createRows,
       el("div", { class: "pane-section" }, ["Справка"]),
@@ -660,6 +682,25 @@ export function renderSidebar(
     return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
   });
 
+  const accountRows: HTMLElement[] = [];
+  if (state.conn === "connected" && !state.authed) {
+    const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
+      sub: "Вход или регистрация",
+      time: null,
+      hasDraft: false,
+    });
+    loginRow.setAttribute("title", "Войти или зарегистрироваться");
+    accountRows.push(loginRow);
+  } else if (state.authed) {
+    const logoutRow = roomRow("⎋", "Выход (F10)", false, () => onAuthLogout(), undefined, {
+      sub: "Завершить сессию",
+      time: null,
+      hasDraft: false,
+    });
+    logoutRow.setAttribute("title", "Выйти из аккаунта (F10)");
+    accountRows.push(logoutRow);
+  }
+
   target.replaceChildren(
     el("div", { class: "sidebar-mobile-top" }, [
       el(
@@ -673,6 +714,7 @@ export function renderSidebar(
     roomRow("?", "Info", state.page === "help", () => onSetPage("help")),
     roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup()),
     roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard()),
+    ...(accountRows.length ? [el("div", { class: "pane-section" }, ["Аккаунт"]), ...accountRows] : []),
     ...(pinnedRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedRows] : []),
     ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
     el("div", { class: "pane-section" }, [`Доски (${boardsRest.length})`]),

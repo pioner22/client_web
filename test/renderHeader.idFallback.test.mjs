@@ -163,7 +163,7 @@ test("renderHeader: показывает remembered ID, если selfId отсу
   }
 });
 
-test("renderHeader: в режиме авто-входа показывает «Входим…» (и даёт открыть вход вручную)", async () => {
+test("renderHeader: в режиме авто-входа не показывает кнопку входа в шапке (перенесено в меню)", async () => {
   const helper = await loadRenderHeader();
   try {
     withDomStubs(() => {
@@ -185,8 +185,7 @@ test("renderHeader: в режиме авто-входа показывает «�
         selected: null,
       });
       const btn = findByClass(layout.headerLeft, "hdr-auth");
-      assert.ok(btn, "hdr-auth button not found");
-      assert.ok(getText(btn).includes("Входим"), "hdr-auth text should indicate auto-login");
+      assert.equal(btn, null, "hdr-auth button should be removed from header");
     });
   } finally {
     await helper.cleanup();

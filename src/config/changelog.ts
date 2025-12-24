@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.142",
+    date: "2025-12-23",
+    improved: ["Меню: кнопки входа/выхода перенесены в меню, добавлен выход по F10"],
+    fixed: ["Hotkeys: F10 не конфликтует с Shift+F10 (контекстное меню)"],
+  },
+  {
     version: "0.1.141",
     date: "2025-12-23",
     improved: [

@@ -6274,6 +6274,18 @@ export function mountApp(root: HTMLElement) {
       setPage("help");
       return;
     }
+    if (key === "F10") {
+      if (st.authed) {
+        logout();
+        return;
+      }
+      store.set((prev) => ({
+        ...prev,
+        authMode: prev.authRememberedId ? "login" : "register",
+        modal: { kind: "auth" },
+      }));
+      return;
+    }
     if (!st.authed) return;
     if (key === "F2") {
       setPage("profile");
@@ -6391,6 +6403,8 @@ export function mountApp(root: HTMLElement) {
       }
       return;
     }
+
+    if (e.key === "F10" && e.shiftKey) return;
 
     if (e.key.startsWith("F")) {
       e.preventDefault();
@@ -6934,6 +6948,13 @@ export function mountApp(root: HTMLElement) {
       if (store.get().sidebarQuery === q) return;
       store.set({ sidebarQuery: q });
     },
+    onAuthOpen: () =>
+      store.set((prev) => ({
+        ...prev,
+        authMode: prev.authRememberedId ? "login" : "register",
+        modal: { kind: "auth" },
+      })),
+    onAuthLogout: () => logout(),
     onAuthLogin: () => authLogin(),
     onAuthRegister: () => authRegister(),
     onAuthModeChange: (mode: "register" | "login") => store.set({ authMode: mode, modal: { kind: "auth" } }),
