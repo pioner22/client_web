@@ -239,6 +239,8 @@ export function handleServerMessage(
     const message =
       reason === "no_such_user"
         ? "Пользователь не найден"
+        : reason === "bad_id_format"
+          ? "Неверный формат ID/@логина"
         : reason === "bad_password"
           ? "Неверный пароль"
           : reason === "rate_limited"

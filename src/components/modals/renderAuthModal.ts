@@ -88,7 +88,7 @@ export function renderAuthModal(
 
   const box = el("div", { class: "modal modal-auth" });
   const tabRegister = el("button", { class: "btn auth-tab", type: "button" }, ["Регистрация"]);
-  const tabLogin = el("button", { class: "btn auth-tab", type: "button" }, ["Войти по ID"]);
+  const tabLogin = el("button", { class: "btn auth-tab", type: "button" }, ["Войти по ID/@логину"]);
   const btnClose = el("button", { class: "btn auth-close", type: "button", title: "Закрыть", "aria-label": "Закрыть" }, [
     "×",
   ]);
@@ -167,9 +167,9 @@ export function renderAuthModal(
       class: "modal-input",
       id: "auth-id",
       name: "username",
-      placeholder: "517-048-184",
+      placeholder: "517-048-184 или @login",
       "data-ios-assistant": "off",
-      inputmode: "numeric",
+      inputmode: "text",
       autocomplete: "off",
       autocorrect: "off",
       autocapitalize: "off",
@@ -194,8 +194,8 @@ export function renderAuthModal(
     }) as HTMLInputElement;
 
     body.append(
-      el("div", { class: "modal-title" }, ["Войти по ID"]),
-      el("label", { class: "modal-label", for: "auth-id" }, ["ID:"]),
+      el("div", { class: "modal-title" }, ["Войти по ID/@логину"]),
+      el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин:"]),
       wrapWithIdUnlock(idInput, hasRemembered),
       el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль:"]),
       wrapWithPasswordToggle(pwInput)
