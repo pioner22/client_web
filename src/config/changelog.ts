@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.191",
+    date: "2025-12-26",
+    fixed: [
+      "iOS клавиатура: safe-area снизу принудительно = 0 при крупном `visualViewport` сдвиге (даже если activeElement ещё не input) — меньше пустой полосы над клавиатурой",
+    ],
+  },
+  {
     version: "0.1.190",
     date: "2025-12-26",
     fixed: [

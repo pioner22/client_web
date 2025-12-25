@@ -111,11 +111,13 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       activeEditable = false;
     }
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
+    const keyboardByViewport = Boolean(vvHeight && layout && coveredBottom >= USE_VISUAL_VIEWPORT_DIFF_PX);
     const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
+    const keyboardVisible = Boolean(keyboard || (iosEnv && keyboardByViewport));
     const useVisualViewportHeight = Boolean(iosEnv && vvHeight && vvHeight > 0 && base > 0 && base - vvHeight >= USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX);
-    const resolved = keyboard ? vvHeight : useVisualViewportHeight ? vvHeight : base;
+    const resolved = keyboardVisible ? vvHeight : useVisualViewportHeight ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
-    return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom), gapBottom };
+    return { height: height > 0 ? height : 0, keyboard: keyboardVisible, vvTop, vvBottom: Math.round(coveredBottom), gapBottom };
   };
 
   const apply = () => {
@@ -131,6 +133,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
     // and creates an ugly gap above the keyboard. Override it to 0 while keyboard is open.
+    // Use viewport-based detection too: sometimes activeElement is not yet an input when resize fires.
     if (keyboard) {
       setVar("--safe-bottom-pad", "0px");
       setVar("--safe-bottom-raw", "0px");
