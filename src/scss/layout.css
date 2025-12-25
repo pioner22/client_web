@@ -87,7 +87,8 @@
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   /* Prevent browser scroll anchoring from jumping the list during re-renders/context menus. */
   overflow-anchor: none;
@@ -112,7 +113,8 @@
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overflow-anchor: none;
   overscroll-behavior: contain;

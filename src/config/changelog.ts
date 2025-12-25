@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.187",
+    date: "2025-12-25",
+    fixed: ["Mobile: отключён горизонтальный скролл в списках/истории (меньше «сдвигов» и полос прокрутки)"],
+  },
+  {
     version: "0.1.186",
     date: "2025-12-25",
     fixed: ["Chat: меньше «прыжков» истории при обновлениях/перерендере (упрощён pinned-bottom автоскролл)"],
