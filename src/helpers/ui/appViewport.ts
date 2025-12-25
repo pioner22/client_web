@@ -3,12 +3,26 @@ import { isIOS, isStandaloneDisplayMode } from "./iosInputAssistant";
 export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let rafId: number | null = null;
   let lastHeight = 0;
+  let lastLayout = 0;
+  let lastStableLayout = 0;
   const isIos = isIOS();
   const iosStandalone = isIos && isStandaloneDisplayMode();
   const docEl = typeof document !== "undefined" ? document.documentElement : null;
 
+  try {
+    if (isIos && docEl?.classList) docEl.classList.add("is-ios");
+    if (iosStandalone && docEl?.classList) docEl.classList.add("is-standalone");
+  } catch {
+    // ignore
+  }
+
+  const varCache = new Map<string, string | null>();
+
   const setVar = (name: string, value: string | null) => {
     const docStyle = docEl && (docEl as HTMLElement).style ? (docEl as HTMLElement).style : null;
+    const prev = varCache.get(name);
+    if (prev === value) return;
+    varCache.set(name, value);
     if (value === null) {
       root.style.removeProperty(name);
       docStyle?.removeProperty(name);
@@ -25,11 +39,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
-    // "Layout viewport" height (used for vvTop/vvBottom math). Keep this independent from any screen.height hacks.
-    const layout = Math.max(inner, client);
-
-    // "Full app" height when keyboard is closed.
-    const base = layout;
+    // Prefer the *visual* viewport height for app layout (like tweb `--vh`),
+    // otherwise fixed/fullscreen elements may end up behind Safari UI and get clipped.
+    const base = inner > 0 ? inner : client;
     const iosEnv = isIos || iosStandalone;
     const safeBottomRaw = (() => {
       if (!docEl || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return 0;
@@ -45,15 +57,17 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // Track the gap so CSS can paint it without forcing a taller layout.
     let gapBottom = 0;
     let screenGap = 0;
+    let screenMax = 0;
     try {
-      let screenMax = 0;
       const sh = Math.round(Number((window as any).screen?.height) || 0);
       if (sh > 0) screenMax = Math.max(screenMax, sh);
       const avail = Math.round(Number((window as any).screen?.availHeight) || 0);
       if (avail > 0) screenMax = Math.max(screenMax, avail);
       const outer = Math.round(Number((window as any).outerHeight) || 0);
       if (iosEnv && outer > 0) screenMax = Math.max(screenMax, outer);
-      if (iosEnv && base > 0 && screenMax > base) {
+      // Only treat screen.height deltas as a "gap" in standalone mode.
+      // In Safari, the difference often includes browser chrome and should NOT affect layout height.
+      if (iosStandalone && base > 0 && screenMax > base) {
         const diff = screenMax - base;
         screenGap = diff;
         if (diff >= 6 && diff <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = diff;
@@ -77,10 +91,16 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       if (Number.isFinite(pt) && pt) return Math.round(pt);
       return 0;
     })();
+    // "Layout viewport" height: stable baseline for vvTop/vvBottom math.
+    // When iOS keyboard opens WebKit may shrink innerHeight/clientHeight; keep the pre-keyboard height to compute coveredBottom.
+    const layoutBase = Math.max(inner, client);
+    const layout = Math.max(layoutBase, lastStableLayout);
+    lastLayout = layout;
     // For our "fullscreen fixed app" we only care about viewport shifts *down*.
     // Clamp to a sane range to avoid weird negative values on iOS/WebKit edge cases.
     let vvTop = Math.max(0, vvTopRaw);
-    if (layout && vvHeight) vvTop = Math.max(0, Math.min(vvTop, Math.max(0, layout - vvHeight)));
+    const layoutClamp = Math.max(layout, iosEnv ? screenMax : 0);
+    if (layoutClamp && vvHeight) vvTop = Math.max(0, Math.min(vvTop, Math.max(0, layoutClamp - vvHeight)));
     // Bottom area covered by keyboard (or other UI) in the *layout viewport* coordinate space.
     const coveredBottom = layout && vvHeight ? Math.max(0, layout - (vvHeight + vvTop)) : 0;
     let activeEditable = false;
@@ -93,7 +113,8 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     }
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
     const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
-    const resolved = keyboard ? vvHeight : base + gapBottom;
+    // In iOS standalone mode (PWA), include the safe-area gap in fullscreen height so the composer can sit flush to the bottom.
+    const resolved = keyboard ? vvHeight : base + (iosStandalone ? gapBottom : 0);
     const height = Math.round(Number(resolved) || 0);
     return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom), gapBottom };
   };
@@ -105,6 +126,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
       return;
     }
+
+    const vh = +((height * 0.01) as number).toFixed(2);
+    setVar("--vh", `${vh}px`);
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
     // and creates an ugly gap above the keyboard. Override it to 0 while keyboard is open.
@@ -119,14 +143,10 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // iOS Safari/PWA: when the keyboard opens WebKit can scroll the *visual* viewport (offsetTop > 0).
     // If we only shrink height to visualViewport.height, the app ends above the visible bottom and leaves a
     // "black strip" + composer jumps upward. Anchor the fixed app to visualViewport.offsetTop.
-    if (keyboard && vvTop >= 1) setVar("--app-vv-top", `${vvTop}px`);
+    const shouldOffset = Boolean(keyboard && vvTop >= 1);
+    if (shouldOffset) setVar("--app-vv-top", `${vvTop}px`);
     else setVar("--app-vv-top", null);
-
-    const shouldOffset = Boolean(keyboard);
-    if (docEl?.classList) {
-      if (shouldOffset) docEl.classList.add("app-vv-offset");
-      else docEl.classList.remove("app-vv-offset");
-    }
+    if (docEl?.classList) docEl.classList.toggle("app-vv-offset", shouldOffset);
 
     // Similarly, when keyboard is open we want the fixed app to end at the visual viewport bottom.
     // Expose the covered bottom (usually keyboard height) as CSS var so mobile layout can use `bottom: ...`
@@ -140,6 +160,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;
+    if (!keyboard) lastStableLayout = lastLayout;
     setVar("--app-vh", `${height}px`);
   };
 
@@ -161,7 +182,6 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   };
   const vv = window.visualViewport;
   window.addEventListener("resize", onResize, { passive: true });
-  window.addEventListener("scroll", onResize, { passive: true });
   window.addEventListener("pageshow", onResize, { passive: true });
   window.addEventListener("orientationchange", onResize, { passive: true });
   vv?.addEventListener("resize", onResize, { passive: true });
@@ -180,7 +200,6 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       rafId = null;
     }
     window.removeEventListener("resize", onResize);
-    window.removeEventListener("scroll", onResize);
     window.removeEventListener("pageshow", onResize);
     window.removeEventListener("orientationchange", onResize);
     vv?.removeEventListener("resize", onResize);
@@ -190,6 +209,13 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       doc.removeEventListener("focusout", onResize);
       doc.removeEventListener("visibilitychange", onVisibility);
     }
+    try {
+      if (isIos && docEl?.classList) docEl.classList.remove("is-ios");
+      if (iosStandalone && docEl?.classList) docEl.classList.remove("is-standalone");
+    } catch {
+      // ignore
+    }
+    setVar("--vh", null);
     setVar("--app-vh", null);
     setVar("--safe-bottom-pad", null);
     setVar("--safe-bottom-raw", null);

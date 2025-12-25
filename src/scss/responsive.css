@@ -11,10 +11,10 @@
     height: 100svh;
     height: 100dvh;
     height: var(--app-vh);
-    height: max(100dvh, var(--app-vh));
     min-height: 100vh;
     min-height: 100svh;
     min-height: 100dvh;
+    min-height: var(--app-vh);
     overscroll-behavior: none;
     padding: 0;
   }
@@ -163,6 +163,7 @@
 
   .page {
     padding: var(--sp-4);
+    padding-bottom: calc(var(--sp-4) + var(--safe-bottom-pad));
   }
 
   .member-row {

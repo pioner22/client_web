@@ -17,3 +17,13 @@ test("mobile safe-area: composer bottom padding avoids extra gap", async () => {
   const css = await readFile(path.resolve("src/scss/layout.css"), "utf8");
   assert.match(css, /\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*max\b/);
 });
+
+test("mobile safe-area: safe-bottom-pad clamp covers iPhone inset", async () => {
+  const css = await readFile(path.resolve("src/scss/base.css"), "utf8");
+  assert.match(css, /--safe-bottom-pad:\s*clamp\(\s*0px\s*,\s*env\(safe-area-inset-bottom\)\s*,\s*44px\s*\)\s*;/);
+});
+
+test("mobile safe-area: pages have bottom padding for home indicator", async () => {
+  const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
+  assert.match(css, /\.page\s*\{[\s\S]*?padding-bottom:\s*calc\(\s*var\(--sp-4\)\s*\+\s*var\(--safe-bottom-pad\)\s*\)\s*;/);
+});

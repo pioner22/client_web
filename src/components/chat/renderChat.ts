@@ -176,7 +176,7 @@ function getFileAttachmentInfo(state: AppState, m: ChatMessage): FileAttachmentI
     (att.localId ? state.fileTransfers.find((t) => t.localId === att.localId) : null) ||
     (att.fileId ? state.fileTransfers.find((t) => t.id === att.fileId) : null) ||
     null;
-  const offer = !transfer && att.fileId ? state.fileOffersIn.find((o) => o.id === att.fileId) : null;
+  const offer = !transfer && att.fileId ? state.fileOffersIn.find((o) => o.id === att.fileId) ?? null : null;
   const name = String(transfer?.name || offer?.name || att.name || "файл");
   const size = Number(transfer?.size ?? offer?.size ?? att.size ?? 0) || 0;
   const mime = att.mime || transfer?.mime || null;

@@ -383,7 +383,7 @@ export function mountApp(root: HTMLElement) {
   function normalizeSharePayload(raw: any): PwaSharePayload | null {
     if (!raw || typeof raw !== "object") return null;
     const filesRaw = Array.isArray(raw.files) ? raw.files : [];
-    const files = filesRaw.filter((f) => f && typeof f === "object" && typeof (f as any).arrayBuffer === "function") as File[];
+    const files = filesRaw.filter((f: unknown) => f && typeof f === "object" && typeof (f as any).arrayBuffer === "function") as File[];
     const title = String(raw.title ?? "").trim();
     const text = String(raw.text ?? "").trim();
     const url = String(raw.url ?? "").trim();
@@ -618,14 +618,14 @@ export function mountApp(root: HTMLElement) {
     return "неизвестная ошибка";
   }
 
-  function vapidKeyToUint8Array(key: string): Uint8Array {
+  function vapidKeyToUint8Array(key: string): Uint8Array<ArrayBuffer> {
     const raw = String(key || "").trim();
-    if (!raw) return new Uint8Array();
+    if (!raw) return new Uint8Array(new ArrayBuffer(0));
     const base64 = raw.replace(/-/g, "+").replace(/_/g, "/");
     const pad = base64.length % 4;
     const padded = base64 + (pad ? "=".repeat(4 - pad) : "");
     const bin = atob(padded);
-    const bytes = new Uint8Array(bin.length);
+    const bytes = new Uint8Array(new ArrayBuffer(bin.length));
     for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
     return bytes;
   }
@@ -674,7 +674,7 @@ export function mountApp(root: HTMLElement) {
     if (reg) return reg;
     let fallback: ServiceWorkerRegistration | null = null;
     try {
-      fallback = await navigator.serviceWorker.getRegistration();
+      fallback = (await navigator.serviceWorker.getRegistration()) ?? null;
     } catch {
       fallback = null;
     }
@@ -866,7 +866,8 @@ export function mountApp(root: HTMLElement) {
   });
   let sharePrevConn: ConnStatus = store.get().conn;
   let sharePrevAuthed = store.get().authed;
-  let sharePrevSelKey = store.get().selected ? conversationKey(store.get().selected) : "";
+  const initialSelected = store.get().selected;
+  let sharePrevSelKey = initialSelected ? conversationKey(initialSelected) : "";
   store.subscribe(() => {
     if (!pendingShareQueue.length) {
       const st = store.get();
@@ -4019,7 +4020,7 @@ export function mountApp(root: HTMLElement) {
     return `/__yagodka_stream__/files/${encodeURIComponent(fileId)}?${params.toString()}`;
   }
 
-  function triggerBrowserDownload(url: string, name: string) {
+  function triggerBrowserDownload(url: string, name: string): void {
     try {
       const a = document.createElement("a");
       a.href = url;
@@ -4128,20 +4129,6 @@ export function mountApp(root: HTMLElement) {
     return Boolean(name || mime);
   }
 
-  function triggerBrowserDownload(url: string, name: string): void {
-    try {
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = name || "file";
-      link.rel = "noopener";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch {
-      // ignore
-    }
-  }
-
   async function tryServeFileFromCache(
     fileId: string,
     meta: { name: string; size: number; mime: string | null }
@@ -4169,7 +4156,7 @@ export function mountApp(root: HTMLElement) {
     store.set((prev) => {
       const existing = prev.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
       if (existing) {
-        const nextTransfers = prev.fileTransfers.map((t) => {
+        const nextTransfers = prev.fileTransfers.map<FileTransferEntry>((t) => {
           if (String(t.id || "").trim() !== fileId) return t;
           if (t.url && t.url !== url) {
             try {
@@ -4494,7 +4481,7 @@ export function mountApp(root: HTMLElement) {
   function openFileSendModal(files: File[], target: TargetRef) {
     if (!files.length) return;
     const st = store.get();
-    const captionDisabled = st.editing || files.length !== 1;
+    const captionDisabled = Boolean(st.editing) || files.length !== 1;
     let captionHint = "";
     if (st.editing) captionHint = "Подпись недоступна во время редактирования";
     else if (files.length !== 1) captionHint = "Подпись доступна только для одного файла";
@@ -4854,12 +4841,13 @@ export function mountApp(root: HTMLElement) {
       return true;
     }
     if (t === "file_offer_result") {
-      if (!activeUpload) return true;
+      const upload = activeUpload;
+      if (!upload) return true;
       const ok = Boolean(msg?.ok);
       if (!ok) {
         const reason = String(msg?.reason ?? "ошибка");
-        const localId = activeUpload.localId;
-        const targetKey = conversationKey(activeUpload.target);
+        const localId = upload.localId;
+        const targetKey = conversationKey(upload.target);
         removeConversationFileMessage(targetKey, localId);
         const readable = formatFileOfferError(reason);
         if (targetKey) {
@@ -4870,7 +4858,7 @@ export function mountApp(root: HTMLElement) {
               kind: "sys",
               from: "",
               to: "",
-              room: activeUpload.target.kind === "dm" ? undefined : activeUpload.target.id,
+              room: upload.target.kind === "dm" ? undefined : upload.target.id,
               text: `Файл не отправлен: ${readable}`,
               ts: nowTs(),
               id: null,
@@ -4886,7 +4874,7 @@ export function mountApp(root: HTMLElement) {
       }
       const fileId = String(msg?.file_id ?? "").trim();
       if (!fileId) {
-        const localId = activeUpload.localId;
+        const localId = upload.localId;
         updateTransferByLocalId(localId, (entry) => ({ ...entry, status: "error", error: "missing_file_id" }));
         activeUpload = null;
         startNextUpload();
@@ -4895,8 +4883,8 @@ export function mountApp(root: HTMLElement) {
       const rawMsgId = msg?.msg_id;
       const msgId = typeof rawMsgId === "number" && Number.isFinite(rawMsgId) ? rawMsgId : null;
       try {
-        const key = conversationKey(activeUpload.target);
-        updateConversationFileMessage(key, activeUpload.localId, (m) => {
+        const key = conversationKey(upload.target);
+        updateConversationFileMessage(key, upload.localId, (m) => {
           const att = m?.attachment?.kind === "file" ? m.attachment : null;
           if (!att) return m;
           return { ...m, ...(msgId !== null ? { id: msgId } : {}), attachment: { ...att, fileId } };
@@ -4904,9 +4892,9 @@ export function mountApp(root: HTMLElement) {
       } catch {
         // ignore
       }
-      activeUpload.fileId = fileId;
-      uploadByFileId.set(fileId, activeUpload);
-      updateTransferByLocalId(activeUpload.localId, (entry) => ({
+      upload.fileId = fileId;
+      uploadByFileId.set(fileId, upload);
+      updateTransferByLocalId(upload.localId, (entry) => ({
         ...entry,
         id: fileId,
         status: "uploading",
@@ -4915,15 +4903,15 @@ export function mountApp(root: HTMLElement) {
       }));
       try {
         const st = store.get();
-        if (st.selfId && shouldCacheFile(activeUpload.file.name || "файл", activeUpload.file.type || null, activeUpload.file.size || 0)) {
-          void putCachedFileBlob(st.selfId, fileId, activeUpload.file, { mime: activeUpload.file.type || null, size: activeUpload.file.size || 0 });
+        if (st.selfId && shouldCacheFile(upload.file.name || "файл", upload.file.type || null, upload.file.size || 0)) {
+          void putCachedFileBlob(st.selfId, fileId, upload.file, { mime: upload.file.type || null, size: upload.file.size || 0 });
           void enforceFileCachePolicy(st.selfId, { force: true });
         }
       } catch {
         // ignore
       }
-      store.set({ status: `Загрузка на сервер: ${activeUpload.file.name || "файл"}` });
-      void uploadFileChunks(activeUpload);
+      store.set({ status: `Загрузка на сервер: ${upload.file.name || "файл"}` });
+      void uploadFileChunks(upload);
       return true;
     }
     if (t === "file_accept_notice") {

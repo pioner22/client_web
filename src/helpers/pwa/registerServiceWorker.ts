@@ -222,7 +222,7 @@ export function registerServiceWorker() {
     (async () => {
       let reg: ServiceWorkerRegistration | null = null;
       try {
-        reg = await navigator.serviceWorker.getRegistration();
+        reg = (await navigator.serviceWorker.getRegistration()) ?? null;
       } catch {
         reg = null;
       }

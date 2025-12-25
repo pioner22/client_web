@@ -395,8 +395,9 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       const overlay = badge.kind === "video" ? el("div", { class: "file-preview-overlay" }, ["▶"]) : null;
       const children = overlay ? [media, overlay] : [media];
       rowChildren.push(el("button", attrs, children));
-      if (!previewUrl && fileId && state.selfId) {
-        void ensureCachedPreview(state.selfId, fileId, entry.mime ?? null);
+      const userId = state.selfId;
+      if (!previewUrl && fileId && userId) {
+        void ensureCachedPreview(userId, fileId, entry.mime ?? null);
       }
     }
     rowChildren.push(
@@ -449,28 +450,31 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   clearBtn.addEventListener("click", () => actions.onClearCompleted());
   cacheLimitSelect.addEventListener("change", () => {
     const st = lastState;
-    if (!st?.selfId) return;
-    const prefs = loadFileCachePrefs(st.selfId);
+    const userId = st?.selfId;
+    if (!st || !userId) return;
+    const prefs = loadFileCachePrefs(userId);
     prefs.maxBytes = Number(cacheLimitSelect.value || prefs.maxBytes) || prefs.maxBytes;
-    saveFileCachePrefs(st.selfId, prefs);
-    void cleanupFileCache(st.selfId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => refreshCacheStats(st));
+    saveFileCachePrefs(userId, prefs);
+    void cleanupFileCache(userId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => refreshCacheStats(st));
   });
   cacheCleanSelect.addEventListener("change", () => {
     const st = lastState;
-    if (!st?.selfId) return;
-    const prefs = loadFileCachePrefs(st.selfId);
+    const userId = st?.selfId;
+    if (!st || !userId) return;
+    const prefs = loadFileCachePrefs(userId);
     prefs.autoCleanMs = Number(cacheCleanSelect.value || prefs.autoCleanMs) || prefs.autoCleanMs;
-    saveFileCachePrefs(st.selfId, prefs);
-    void cleanupFileCache(st.selfId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => {
+    saveFileCachePrefs(userId, prefs);
+    void cleanupFileCache(userId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => {
       prefs.lastCleanAt = Date.now();
-      saveFileCachePrefs(st.selfId, prefs);
+      saveFileCachePrefs(userId, prefs);
       refreshCacheStats(st);
     });
   });
   cacheClearBtn.addEventListener("click", () => {
     const st = lastState;
-    if (!st?.selfId) return;
-    void clearFileCache(st.selfId).then(() => refreshCacheStats(st));
+    const userId = st?.selfId;
+    if (!st || !userId) return;
+    void clearFileCache(userId).then(() => refreshCacheStats(st));
   });
 
   root.addEventListener("click", (e) => {
@@ -483,88 +487,91 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     actions.onOpenUser(peerId);
   });
 
+  function update(state: AppState) {
+    lastState = state;
+    updateFileMeta();
+
+    const userId = state.selfId;
+    const canUseCache = Boolean(userId && state.authed);
+    cacheLimitSelect.disabled = !canUseCache;
+    cacheCleanSelect.disabled = !canUseCache;
+    cacheClearBtn.disabled = !canUseCache;
+    if (canUseCache && userId) {
+      const prefs = loadFileCachePrefs(userId);
+      cacheLimitSelect.value = String(prefs.maxBytes);
+      cacheCleanSelect.value = String(prefs.autoCleanMs);
+      const now = Date.now();
+      if (prefs.autoCleanMs > 0 && now - prefs.lastCleanAt >= prefs.autoCleanMs) {
+        void cleanupFileCache(userId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => {
+          prefs.lastCleanAt = now;
+          saveFileCachePrefs(userId, prefs);
+          refreshCacheStats(state);
+        });
+      } else {
+        scheduleCacheStatsRefresh();
+      }
+    } else {
+      cacheInfo.textContent = "Кэш доступен после входа.";
+    }
+
+    const options: HTMLElement[] = [el("option", { value: "" }, ["— адресат —"])];
+    const dmOptions = state.friends.map((f) => el("option", { value: targetValue({ kind: "dm", id: f.id }) }, [f.id]));
+    if (dmOptions.length) options.push(el("optgroup", { label: "Контакты" }, dmOptions));
+    const groupOptions = state.groups.map((g) =>
+      el("option", { value: targetValue({ kind: "group", id: g.id }) }, [String(g.name || g.id)])
+    );
+    if (groupOptions.length) options.push(el("optgroup", { label: "Чаты" }, groupOptions));
+    const boardOptions = state.boards.map((b) =>
+      el("option", { value: targetValue({ kind: "board", id: b.id }) }, [String(b.name || b.id)])
+    );
+    if (boardOptions.length) options.push(el("optgroup", { label: "Доски" }, boardOptions));
+    targetSelect.replaceChildren(...options);
+
+    const fallback = state.selected ? targetValue(state.selected) : "";
+    let preferred = targetLocked ? selectedTarget : fallback;
+    const hasPreferred = Array.from(targetSelect.options).some((opt) => opt.value === preferred);
+    if (!hasPreferred) {
+      preferred = fallback;
+      targetLocked = false;
+    }
+    if (Array.from(targetSelect.options).some((opt) => opt.value === preferred)) {
+      targetSelect.value = preferred;
+    }
+    selectedTarget = targetSelect.value;
+
+    if (!state.fileOffersIn.length) {
+      offersList.replaceChildren(
+        el("div", { class: "page-empty" }, [
+          el("div", { class: "page-empty-title" }, ["Нет входящих файлов"]),
+          el("div", { class: "page-empty-sub" }, ["Когда вам отправят файл, он появится здесь"]),
+        ])
+      );
+    } else {
+      offersList.replaceChildren(...state.fileOffersIn.map((offer) => renderOffer(offer, state)));
+    }
+
+    if (!state.fileTransfers.length) {
+      transfersList.replaceChildren(
+        el("div", { class: "page-empty" }, [
+          el("div", { class: "page-empty-title" }, ["Нет передач"]),
+          el("div", { class: "page-empty-sub" }, ["Отправьте файл через «Скрепку» в чате или выберите адресата выше"]),
+        ])
+      );
+    } else {
+      const groups = groupTransfers(state.fileTransfers);
+      transfersList.replaceChildren(...groups.map((group) => renderTransferGroup(group, state)));
+    }
+
+    const validPreviewIds = new Set(state.fileTransfers.map((entry) => String(entry.id || "").trim()).filter(Boolean));
+    cleanupPreviewUrls(validPreviewIds);
+
+    const hasClearable = state.fileTransfers.some((entry) => ["complete", "uploaded", "error", "rejected"].includes(entry.status));
+    clearBtn.disabled = !hasClearable;
+  }
+
   return {
     root,
-    update: (state: AppState) => {
-      lastState = state;
-      updateFileMeta();
-
-      const canUseCache = Boolean(state.selfId && state.authed);
-      cacheLimitSelect.disabled = !canUseCache;
-      cacheCleanSelect.disabled = !canUseCache;
-      cacheClearBtn.disabled = !canUseCache;
-      if (canUseCache && state.selfId) {
-        const prefs = loadFileCachePrefs(state.selfId);
-        cacheLimitSelect.value = String(prefs.maxBytes);
-        cacheCleanSelect.value = String(prefs.autoCleanMs);
-        const now = Date.now();
-        if (prefs.autoCleanMs > 0 && now - prefs.lastCleanAt >= prefs.autoCleanMs) {
-          void cleanupFileCache(state.selfId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => {
-            prefs.lastCleanAt = now;
-            saveFileCachePrefs(state.selfId, prefs);
-            refreshCacheStats(state);
-          });
-        } else {
-          scheduleCacheStatsRefresh();
-        }
-      } else {
-        cacheInfo.textContent = "Кэш доступен после входа.";
-      }
-
-      const options: HTMLElement[] = [el("option", { value: "" }, ["— адресат —"])];
-      const dmOptions = state.friends.map((f) => el("option", { value: targetValue({ kind: "dm", id: f.id }) }, [f.id]));
-      if (dmOptions.length) options.push(el("optgroup", { label: "Контакты" }, dmOptions));
-      const groupOptions = state.groups.map((g) =>
-        el("option", { value: targetValue({ kind: "group", id: g.id }) }, [String(g.name || g.id)])
-      );
-      if (groupOptions.length) options.push(el("optgroup", { label: "Чаты" }, groupOptions));
-      const boardOptions = state.boards.map((b) =>
-        el("option", { value: targetValue({ kind: "board", id: b.id }) }, [String(b.name || b.id)])
-      );
-      if (boardOptions.length) options.push(el("optgroup", { label: "Доски" }, boardOptions));
-      targetSelect.replaceChildren(...options);
-
-      const fallback = state.selected ? targetValue(state.selected) : "";
-      let preferred = targetLocked ? selectedTarget : fallback;
-      const hasPreferred = Array.from(targetSelect.options).some((opt) => opt.value === preferred);
-      if (!hasPreferred) {
-        preferred = fallback;
-        targetLocked = false;
-      }
-      if (Array.from(targetSelect.options).some((opt) => opt.value === preferred)) {
-        targetSelect.value = preferred;
-      }
-      selectedTarget = targetSelect.value;
-
-      if (!state.fileOffersIn.length) {
-        offersList.replaceChildren(
-          el("div", { class: "page-empty" }, [
-            el("div", { class: "page-empty-title" }, ["Нет входящих файлов"]),
-            el("div", { class: "page-empty-sub" }, ["Когда вам отправят файл, он появится здесь"]),
-          ])
-        );
-      } else {
-        offersList.replaceChildren(...state.fileOffersIn.map((offer) => renderOffer(offer, state)));
-      }
-
-      if (!state.fileTransfers.length) {
-        transfersList.replaceChildren(
-          el("div", { class: "page-empty" }, [
-            el("div", { class: "page-empty-title" }, ["Нет передач"]),
-            el("div", { class: "page-empty-sub" }, ["Отправьте файл через «Скрепку» в чате или выберите адресата выше"]),
-          ])
-        );
-      } else {
-        const groups = groupTransfers(state.fileTransfers);
-        transfersList.replaceChildren(...groups.map((group) => renderTransferGroup(group, state)));
-      }
-
-      const validPreviewIds = new Set(state.fileTransfers.map((entry) => String(entry.id || "").trim()).filter(Boolean));
-      cleanupPreviewUrls(validPreviewIds);
-
-      const hasClearable = state.fileTransfers.some((entry) => ["complete", "uploaded", "error", "rejected"].includes(entry.status));
-      clearBtn.disabled = !hasClearable;
-    },
+    update,
     focus: () => fileInput.focus(),
   };
 }

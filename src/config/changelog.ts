@@ -10,6 +10,24 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.180",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone: добавлен `html.is-ios { position: fixed }` как в tweb — меньше «прыжков»/скролла при фокусе на поле ввода",
+      "iPhone PWA: высота `--app-vh` снова включает safe‑area (в standalone режиме), чтобы компоузер не «висел» выше низа экрана",
+      "Viewport: добавили CSS переменную `--vh` (tweb‑style) и снизили лишние перерисовки при скролле (меньше дёргается история чата)",
+    ],
+  },
+  {
+    version: "0.1.179",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone: fullscreen высота теперь берётся из visual viewport (innerHeight) как в tweb — меньше шансов на обрезание низа интерфейса",
+      "Mobile: убран `max(100dvh, --app-vh)` (мог приводить к клипу под Safari UI)",
+      "Mobile: страницы получают нижний safe‑area padding, когда компоузер скрыт (Info/Profile/Search/Files)",
+    ],
+  },
+  {
     version: "0.1.178",
     date: "2025-12-25",
     fixed: ["iPhone PWA: fallback на safe-area inset для высоты #app, если screen gap недоступен"],

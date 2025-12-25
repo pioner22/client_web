@@ -255,7 +255,6 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onReloadUpdate: actions.onReloadUpdate,
         onApplyPwaUpdate: actions.onApplyPwaUpdate,
         onSkinChange: actions.onSkinChange,
-        onMessageViewChange: actions.onMessageViewChange,
         onMembersAdd: actions.onMembersAdd,
         onMembersRemove: actions.onMembersRemove,
         onRename: actions.onRename,
