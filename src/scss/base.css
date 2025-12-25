@@ -5,6 +5,7 @@ body {
   background: var(--app-bg);
   color: var(--app-text);
   margin: 0;
+  min-height: 100dvh;
   font-family: var(--font-family);
   font-size: var(--font-size);
   line-height: var(--line-height);
@@ -50,6 +51,19 @@ button {
   padding: var(--app-outer-pad);
   overflow: hidden;
   isolation: isolate;
+}
+
+/* iOS safe-area: paint bottom inset so rounded screens don't show black corners. */
+#app::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: env(safe-area-inset-bottom);
+  background: var(--app-bg);
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* iOS Safari/PWA: use -webkit-fill-available only as a fallback for engines without 100dvh.

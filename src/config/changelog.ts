@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.171",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone PWA: подложка safe‑area снизу закрашивается фоном приложения (без чёрных углов)",
+      "Mobile: html/body минимум 100dvh для стабильного фона на экранах со скруглением",
+    ],
+  },
+  {
     version: "0.1.170",
     date: "2025-12-25",
     fixed: [
