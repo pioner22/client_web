@@ -674,13 +674,17 @@ export function renderChat(layout: Layout, state: AppState) {
   const prevKey = String(scrollHost.getAttribute("data-chat-key") || "");
   const keyChanged = key !== prevKey;
   const prevScrollTop = scrollHost.scrollTop;
-  if (keyChanged && hostState.__stickBottom) hostState.__stickBottom = null;
-  const atBottom = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
+  const atBottomBefore = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
   const sticky = hostState.__stickBottom;
   const stickyActive = Boolean(sticky && sticky.active && sticky.key === key);
-  const stickToBottom = keyChanged || stickyActive || atBottom;
-  if (stickToBottom && key) hostState.__stickBottom = { key, active: true, at: Date.now() };
-  else if (hostState.__stickBottom && hostState.__stickBottom.key === key) hostState.__stickBottom.active = false;
+  // NOTE: autoscroll-on-open/sent is handled in app/mountApp.ts (pendingChatAutoScroll).
+  // Here we only keep pinned-bottom stable during re-renders/content growth for the *current* chat.
+  const shouldStick = Boolean(key && !keyChanged && (stickyActive || atBottomBefore));
+  if (keyChanged && hostState.__stickBottom) hostState.__stickBottom = null;
+  else if (key) {
+    if (shouldStick) hostState.__stickBottom = { key, active: true, at: Date.now() };
+    else if (hostState.__stickBottom && hostState.__stickBottom.key === key) hostState.__stickBottom.active = false;
+  }
   scrollHost.setAttribute("data-chat-key", key);
   if (!key && hostState.__chatLinesObserver && typeof hostState.__chatLinesObserver.disconnect === "function") {
     try {
@@ -944,7 +948,7 @@ export function renderChat(layout: Layout, state: AppState) {
     }
   }
 
-  if (!stickToBottom && !keyChanged) {
+  if (!shouldStick && !keyChanged) {
     // Some browsers (notably iOS/WebKit) may reset scrollTop when we replace the chat DOM.
     // Preserve the user's position in history unless we explicitly want to stick to bottom.
     try {
@@ -955,23 +959,16 @@ export function renderChat(layout: Layout, state: AppState) {
       // ignore
     }
   }
-  layout.chatJump.classList.toggle("hidden", stickToBottom);
-  if (stickToBottom && key) {
-    const shouldStick = () => {
-      const st = hostState.__stickBottom;
-      return Boolean(st && st.active && st.key === key);
-    };
+  const atBottomNow = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
+  layout.chatJump.classList.toggle("hidden", !key || shouldStick || atBottomNow);
+  if (shouldStick) {
     const stickNow = () => {
-      if (!shouldStick()) return;
-      if (String(scrollHost.getAttribute("data-chat-key") || "") !== key) return;
+      const curKey = String(scrollHost.getAttribute("data-chat-key") || "");
+      const st = hostState.__stickBottom;
+      if (!curKey || curKey !== key) return;
+      if (!st || !st.active || st.key !== key) return;
       scrollHost.scrollTop = scrollHost.scrollHeight;
     };
     queueMicrotask(stickNow);
-    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(stickNow);
-    } else {
-      stickNow();
-    }
-    if (typeof setTimeout === "function") setTimeout(stickNow, 80);
   }
 }
