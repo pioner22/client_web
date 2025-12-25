@@ -1152,10 +1152,6 @@ export function mountApp(root: HTMLElement) {
       stickNow();
     }
     window.setTimeout(stickNow, 80);
-    const images = typeof host.querySelectorAll === "function" ? host.querySelectorAll("img.chat-file-img") : [];
-    for (const img of images) {
-      img.addEventListener("load", stickNow, { once: true });
-    }
     scheduleChatJumpVisibility();
   }
 

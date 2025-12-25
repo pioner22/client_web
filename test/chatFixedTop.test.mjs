@@ -266,3 +266,55 @@ test("renderChat: закреп/поиск рендерятся в chatTop (не 
   }
 });
 
+test("renderChat: сохраняет scrollTop если replaceChildren сбрасывает его (iOS/WebKit)", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chatTop = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      chatTop.className = "chat-top";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+
+      chatHost.setAttribute("data-chat-key", "dm:123-456-789");
+      chatHost.scrollTop = 420;
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      // Simulate iOS/WebKit quirk: scrollTop may reset after a full DOM replacement.
+      const origReplace = chatHost.replaceChildren.bind(chatHost);
+      chatHost.replaceChildren = (...nodes) => {
+        origReplace(...nodes);
+        chatHost.scrollTop = 0;
+      };
+
+      const layout = { chatTop, chatHost, chatJump };
+      const state = {
+        selected: { kind: "dm", id: "123-456-789" },
+        conversations: {
+          "dm:123-456-789": [
+            { kind: "in", from: "123-456-789", to: "854-432-319", room: null, text: "привет", ts: 1700000000, id: 1 },
+          ],
+        },
+        historyHasMore: { "dm:123-456-789": false },
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [],
+        fileOffersIn: [],
+        groups: [],
+        boards: [],
+      };
+
+      helper.renderChat(layout, state);
+      assert.equal(chatHost.scrollTop, 420, "expected scrollTop restored after DOM replacement");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});

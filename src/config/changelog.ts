@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.183",
+    date: "2025-12-25",
+    fixed: [
+      "Chat: pinned-bottom теперь держится при изменении высоты контента (например, догрузка превью/картинок) — меньше «прыжков»",
+      "Chat: убраны лишние image-load слушатели в автоскролле (меньше дерганий и утечек слушателей)",
+    ],
+    improved: ["Tests: добавлен регресс-тест сохранения scrollTop при DOM replace (iOS/WebKit кейс)"],
+  },
+  {
     version: "0.1.182",
     date: "2025-12-25",
     fixed: [

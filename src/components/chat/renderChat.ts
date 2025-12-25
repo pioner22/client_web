@@ -673,6 +673,14 @@ export function renderChat(layout: Layout, state: AppState) {
   if (stickToBottom && key) hostState.__stickBottom = { key, active: true, at: Date.now() };
   else if (hostState.__stickBottom && hostState.__stickBottom.key === key) hostState.__stickBottom.active = false;
   scrollHost.setAttribute("data-chat-key", key);
+  if (!key && hostState.__chatLinesObserver && typeof hostState.__chatLinesObserver.disconnect === "function") {
+    try {
+      hostState.__chatLinesObserver.disconnect();
+      hostState.__chatLinesObserved = null;
+    } catch {
+      // ignore
+    }
+  }
 
   const friendLabels = new Map<string, string>();
   for (const f of state.friends || []) {
@@ -888,6 +896,43 @@ export function renderChat(layout: Layout, state: AppState) {
   if (searchBar) topChildren.push(searchBar);
   layout.chatTop.replaceChildren(...topChildren);
   scrollHost.replaceChildren(el("div", { class: "chat-lines" }, lines));
+
+  // iOS/WebKit: images and media previews may change the history height after render.
+  // Keep the chat pinned to bottom on content height changes, but only when pinned is active.
+  if (key && typeof ResizeObserver === "function") {
+    try {
+      if (!hostState.__chatLinesObserver) {
+        hostState.__chatLinesObserverRaf = null;
+        hostState.__chatLinesObserver = new ResizeObserver(() => {
+          const w = typeof window !== "undefined" ? window : null;
+          if (hostState.__chatLinesObserverRaf !== null) return;
+          const run = () => {
+            hostState.__chatLinesObserverRaf = null;
+            const curKey = String(scrollHost.getAttribute("data-chat-key") || "");
+            if (!curKey) return;
+            const st = hostState.__stickBottom;
+            if (!st || !st.active || st.key !== curKey) return;
+            scrollHost.scrollTop = scrollHost.scrollHeight;
+          };
+          if (w && typeof w.requestAnimationFrame === "function") {
+            hostState.__chatLinesObserverRaf = w.requestAnimationFrame(run);
+          } else {
+            hostState.__chatLinesObserverRaf = 1;
+            run();
+          }
+        });
+      }
+      const linesEl = scrollHost.firstElementChild as HTMLElement | null;
+      if (linesEl && hostState.__chatLinesObserved !== linesEl) {
+        hostState.__chatLinesObserver.disconnect();
+        hostState.__chatLinesObserver.observe(linesEl);
+        hostState.__chatLinesObserved = linesEl;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   if (!stickToBottom && !keyChanged) {
     // Some browsers (notably iOS/WebKit) may reset scrollTop when we replace the chat DOM.
     // Preserve the user's position in history unless we explicitly want to stick to bottom.
@@ -917,9 +962,5 @@ export function renderChat(layout: Layout, state: AppState) {
       stickNow();
     }
     if (typeof setTimeout === "function") setTimeout(stickNow, 80);
-    const images = typeof scrollHost.querySelectorAll === "function" ? scrollHost.querySelectorAll("img.chat-file-img") : [];
-    for (const img of images) {
-      img.addEventListener("load", stickNow, { once: true });
-    }
   }
 }
