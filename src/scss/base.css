@@ -54,7 +54,7 @@ button {
 }
 
 /* iOS safe-area: paint bottom inset so rounded screens don't show black corners. */
-#app::after {
+body::after {
   content: "";
   position: fixed;
   left: 0;
