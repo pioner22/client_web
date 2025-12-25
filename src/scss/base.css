@@ -1,5 +1,6 @@
 :root {
-  --safe-bottom: clamp(0px, env(safe-area-inset-bottom), 24px);
+  --safe-bottom-raw: env(safe-area-inset-bottom);
+  --safe-bottom-pad: clamp(0px, env(safe-area-inset-bottom), 24px);
   --app-gap-bottom: 0px;
 }
 
@@ -64,7 +65,7 @@ body::after {
   left: 0;
   right: 0;
   bottom: 0;
-  height: max(var(--safe-bottom), var(--app-gap-bottom, 0px));
+  height: max(var(--safe-bottom-raw), var(--app-gap-bottom, 0px));
   background: var(--sidebar-bg);
   pointer-events: none;
   z-index: 0;

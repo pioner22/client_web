@@ -100,7 +100,8 @@ test("viewport var: installAppViewportHeightVar использует innerHeight
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "700px");
-    assert.equal(style._props.has("--safe-bottom"), false);
+    assert.equal(style._props.has("--safe-bottom-pad"), false);
+    assert.equal(style._props.has("--safe-bottom-raw"), false);
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
@@ -148,11 +149,13 @@ test("viewport var: installAppViewportHeightVar предпочитает documen
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "740px");
-    assert.equal(style._props.has("--safe-bottom"), false);
+    assert.equal(style._props.has("--safe-bottom-pad"), false);
+    assert.equal(style._props.has("--safe-bottom-raw"), false);
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
-    assert.equal(style._props.has("--safe-bottom"), false);
+    assert.equal(style._props.has("--safe-bottom-pad"), false);
+    assert.equal(style._props.has("--safe-bottom-raw"), false);
   } finally {
     await helper.cleanup();
     if (prev.window === undefined) delete globalThis.window;
@@ -203,7 +206,8 @@ test("viewport var: iOS PWA: учитывает разницу screen.height и 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "810px");
     assert.equal(style._props.get("--app-gap-bottom"), "34px");
-    assert.equal(style._props.has("--safe-bottom"), false);
+    assert.equal(style._props.has("--safe-bottom-pad"), false);
+    assert.equal(style._props.has("--safe-bottom-raw"), false);
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
@@ -339,12 +343,14 @@ test("viewport var: installAppViewportHeightVar переключается на 
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "390px");
-    assert.equal(style._props.get("--safe-bottom"), "0px");
+    assert.equal(style._props.get("--safe-bottom-pad"), "0px");
+    assert.equal(style._props.get("--safe-bottom-raw"), "0px");
     assert.equal(style._props.get("--app-vv-bottom"), "310px");
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
-    assert.equal(style._props.has("--safe-bottom"), false);
+    assert.equal(style._props.has("--safe-bottom-pad"), false);
+    assert.equal(style._props.has("--safe-bottom-raw"), false);
     assert.equal(style._props.has("--app-vv-bottom"), false);
     assert.equal(rafCb !== null, true);
   } finally {
@@ -391,7 +397,8 @@ test("viewport var: при фокусе на input/textarea переключае
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "642px");
-    assert.equal(style._props.get("--safe-bottom"), "0px");
+    assert.equal(style._props.get("--safe-bottom-pad"), "0px");
+    assert.equal(style._props.get("--safe-bottom-raw"), "0px");
     assert.equal(style._props.get("--app-vv-bottom"), "58px");
     cleanup();
   } finally {
@@ -455,13 +462,15 @@ test("viewport var: учитывает visualViewport.offsetTop, чтобы не
 
     const cleanup = helper.fn(root);
     assert.equal(style._props.get("--app-vh"), "520px");
-    assert.equal(style._props.get("--safe-bottom"), "0px");
+    assert.equal(style._props.get("--safe-bottom-pad"), "0px");
+    assert.equal(style._props.get("--safe-bottom-raw"), "0px");
     assert.equal(style._props.get("--app-vv-top"), "120px");
     assert.equal(style._props.get("--app-vv-bottom"), "204px");
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
-    assert.equal(style._props.has("--safe-bottom"), false);
+    assert.equal(style._props.has("--safe-bottom-pad"), false);
+    assert.equal(style._props.has("--safe-bottom-raw"), false);
     assert.equal(style._props.has("--app-vv-top"), false);
     assert.equal(style._props.has("--app-vv-bottom"), false);
   } finally {

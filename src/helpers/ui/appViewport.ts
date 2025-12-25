@@ -90,8 +90,13 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
     // and creates an ugly gap above the keyboard. Override it to 0 while keyboard is open.
-    if (keyboard) setVar("--safe-bottom", "0px");
-    else setVar("--safe-bottom", null);
+    if (keyboard) {
+      setVar("--safe-bottom-pad", "0px");
+      setVar("--safe-bottom-raw", "0px");
+    } else {
+      setVar("--safe-bottom-pad", null);
+      setVar("--safe-bottom-raw", null);
+    }
 
     // iOS Safari/PWA: when the keyboard opens WebKit can scroll the *visual* viewport (offsetTop > 0).
     // If we only shrink height to visualViewport.height, the app ends above the visible bottom and leaves a
@@ -168,7 +173,8 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       doc.removeEventListener("visibilitychange", onVisibility);
     }
     setVar("--app-vh", null);
-    setVar("--safe-bottom", null);
+    setVar("--safe-bottom-pad", null);
+    setVar("--safe-bottom-raw", null);
     setVar("--app-vv-top", null);
     setVar("--app-vv-bottom", null);
     setVar("--app-gap-bottom", null);
