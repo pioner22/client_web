@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.190",
+    date: "2025-12-26",
+    fixed: [
+      "iOS/Safari: если `visualViewport.height` заметно меньше `innerHeight`, используем его для `--app-vh` (меньше шансов на обрезанный низ под браузерной панелью)",
+    ],
+    improved: [
+      "Mobile: список чатов/контактов стал «жёстче» — строки теперь в grid-раскладке (аватар/текст/мета), время и unread не «прыгают»",
+      "Mobile: keyboard-only блок «Горячие клавиши» в Info дополнительно скрыт через CSS для taч-устройств",
+    ],
+  },
+  {
     version: "0.1.189",
     date: "2025-12-26",
     improved: [

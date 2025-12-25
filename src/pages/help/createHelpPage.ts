@@ -112,7 +112,7 @@ export function createHelpPage(): HelpPage {
     el("div", { class: "info-sub" }, ["После установки интерфейс работает полноэкранно (учитываем вырез/чёлку и safe‑area)."]),
   ]);
 
-  const hkTitle = mobileUi ? null : el("div", { class: "info-h" }, ["Горячие клавиши"]);
+  const hkTitle = mobileUi ? null : el("div", { class: "info-h help-hotkeys-title" }, ["Горячие клавиши"]);
   const mobileNav = mobileUi
     ? el("div", { class: "info-section" }, [
         el("div", { class: "info-h" }, ["Навигация"]),

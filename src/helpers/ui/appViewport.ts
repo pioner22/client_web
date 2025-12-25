@@ -35,6 +35,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number; gapBottom: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 32;
+    const USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX = 20;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
@@ -111,7 +112,8 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     }
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
     const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
-    const resolved = keyboard ? vvHeight : base;
+    const useVisualViewportHeight = Boolean(iosEnv && vvHeight && vvHeight > 0 && base > 0 && base - vvHeight >= USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX);
+    const resolved = keyboard ? vvHeight : useVisualViewportHeight ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
     return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom), gapBottom };
   };
