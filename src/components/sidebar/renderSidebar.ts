@@ -3,6 +3,7 @@ import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { formatTime } from "../../helpers/time";
 import { focusElement } from "../../helpers/ui/focus";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 
 function collectAttentionPeers(state: AppState): Set<string> {
@@ -232,6 +233,7 @@ export function renderSidebar(
 ) {
   const isMobile =
     typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
+  const mobileUi = isMobileLikeUi();
 
   const toggleClass = (node: HTMLElement | null | undefined, cls: string, enabled: boolean) => {
     if (!node) return;
@@ -657,11 +659,11 @@ export function renderSidebar(
     createBoardRow.setAttribute("title", "Создать новую доску");
     const createRows: HTMLElement[] = [createGroupRow, createBoardRow];
     const infoRow = roomRow("?", "Info", state.page === "help", () => onSetPage("help"), undefined, {
-      sub: "Хоткеи, версии и изменения",
+      sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
       time: null,
       hasDraft: false,
     });
-    infoRow.setAttribute("title", "Подсказки по клавишам и журнал обновлений");
+    infoRow.setAttribute("title", mobileUi ? "Справка и журнал обновлений" : "Подсказки по клавишам и журнал обновлений");
 
     const accountRows: HTMLElement[] = [];
     if (state.conn === "connected" && !state.authed) {
@@ -673,12 +675,12 @@ export function renderSidebar(
       loginRow.setAttribute("title", "Войти или зарегистрироваться");
       accountRows.push(loginRow);
     } else if (state.authed) {
-      const logoutRow = roomRow("⎋", "Выход (F10)", false, () => onAuthLogout(), undefined, {
+      const logoutRow = roomRow("⎋", mobileUi ? "Выход" : "Выход (F10)", false, () => onAuthLogout(), undefined, {
         sub: "Завершить сессию",
         time: null,
         hasDraft: false,
       });
-      logoutRow.setAttribute("title", "Выйти из аккаунта (F10)");
+      logoutRow.setAttribute("title", mobileUi ? "Выйти из аккаунта" : "Выйти из аккаунта (F10)");
       accountRows.push(logoutRow);
     }
 

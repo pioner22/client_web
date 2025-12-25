@@ -11,6 +11,7 @@ import { el } from "../helpers/dom/el";
 import { conversationKey } from "../helpers/chat/conversationKey";
 import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
 import { focusElement } from "../helpers/ui/focus";
+import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { createSearchPage, type SearchPage } from "../pages/search/createSearchPage";
 import { createProfilePage, type ProfilePage } from "../pages/profile/createProfilePage";
 import { createUserPage, type UserPage } from "../pages/user/createUserPage";
@@ -110,6 +111,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   // Контекстное меню не должно "ломать" макет и прятать composer.
   const chatInputVisible = state.page === "main" && (!state.modal || state.modal.kind === "context_menu");
   const isMobile = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
+  const mobileUi = isMobileLikeUi();
   layout.inputWrap.classList.toggle("hidden", !chatInputVisible && isMobile);
   layout.inputWrap.classList.toggle("input-wrap-no-composer", !chatInputVisible);
 
@@ -299,7 +301,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   if (inlineModal && modalNode) {
     mountChat(
       layout,
-      el("div", { class: "page modal-page" }, [modalNode, el("div", { class: "msg msg-sys" }, ["Esc — назад"])])
+      el("div", { class: "page modal-page" }, mobileUi ? [modalNode] : [modalNode, el("div", { class: "msg msg-sys" }, ["Esc — назад"])])
     );
   } else if (state.page === "main") {
     const prevSearch = layout.chatTop.querySelector("#chat-search-input") as HTMLInputElement | null;

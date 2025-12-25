@@ -7,6 +7,7 @@ import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar
 import { fileBadge } from "../../helpers/files/fileBadge";
 import { safeUrl } from "../../helpers/security/safeUrl";
 import type { Layout } from "../layout/types";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 
 function dayKey(ts: number): string {
   try {
@@ -169,7 +170,7 @@ function buildMessageMeta(m: ChatMessage): HTMLElement[] {
   return meta;
 }
 
-function getFileAttachmentInfo(state: AppState, m: ChatMessage): FileAttachmentInfo | null {
+function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileUi: boolean }): FileAttachmentInfo | null {
   const att = m.attachment;
   if (!att || att.kind !== "file") return null;
   const transfer =
@@ -182,7 +183,14 @@ function getFileAttachmentInfo(state: AppState, m: ChatMessage): FileAttachmentI
   const mime = att.mime || transfer?.mime || null;
   const base = typeof location !== "undefined" ? location.href : "http://localhost/";
   const url = transfer?.url ? safeUrl(transfer.url, { base, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
-  const statusLine = transfer ? transferStatus(transfer) : offer ? "Входящий файл (принять в «Файлы» / F7)" : "";
+  const mobileUi = opts?.mobileUi ?? false;
+  const statusLine = transfer
+    ? transferStatus(transfer)
+    : offer
+      ? mobileUi
+        ? "Входящий файл (принять в «Файлы»)"
+        : "Входящий файл (принять в «Файлы» / F7)"
+      : "";
   const isImage = isImageFile(name, mime);
   const hasProgress = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
   return {
@@ -353,7 +361,7 @@ function renderMultilineText(text: string): HTMLElement {
   return el("div", { class: "invite-text" }, nodes);
 }
 
-function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string, string>): HTMLElement {
+function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string, string>, opts?: { mobileUi: boolean }): HTMLElement {
   const actionBtn = (
     label: string,
     attrs: Record<string, string>,
@@ -507,7 +515,7 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
   } else if (isPlainView && m.kind === "out") {
     bodyChildren.push(el("div", { class: "msg-from msg-from-self" }, ["Я"]));
   }
-  const info = getFileAttachmentInfo(state, m);
+  const info = getFileAttachmentInfo(state, m, opts);
   if (info) {
     const name = info.name;
     const size = info.size;
@@ -659,6 +667,7 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
 }
 
 export function renderChat(layout: Layout, state: AppState) {
+  const mobileUi = isMobileLikeUi();
   const scrollHost = layout.chatHost;
   const hostState = scrollHost as any;
   const key = state.selected ? conversationKey(state.selected) : "";
@@ -710,14 +719,14 @@ export function renderChat(layout: Layout, state: AppState) {
       prevMsg = null;
     }
 
-    const info = getFileAttachmentInfo(state, m);
+    const info = getFileAttachmentInfo(state, m, { mobileUi });
     if (isAlbumCandidate(m, info)) {
       const group: AlbumItem[] = [{ idx: msgIdx, msg: m, info }];
       let scan = msgIdx + 1;
       while (scan < msgs.length) {
         const next = msgs[scan];
         if (dk && dayKey(next.ts) !== dk) break;
-        const nextInfo = getFileAttachmentInfo(state, next);
+        const nextInfo = getFileAttachmentInfo(state, next, { mobileUi });
         if (!isAlbumCandidate(next, nextInfo)) break;
         if (!isMessageContinuation(group[group.length - 1].msg, next, { maxGapSeconds: albumGapSeconds })) break;
         group.push({ idx: scan, msg: next, info: nextInfo });
@@ -739,7 +748,7 @@ export function renderChat(layout: Layout, state: AppState) {
       }
     }
 
-    const line = messageLine(state, m, friendLabels);
+    const line = messageLine(state, m, friendLabels, { mobileUi });
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
     line.setAttribute("data-msg-idx", String(msgIdx));
     if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");
@@ -762,18 +771,20 @@ export function renderChat(layout: Layout, state: AppState) {
     lines.unshift(el("div", { class: "chat-history-more-wrap" }, [btn]));
   }
 
-  if (!lines.length) {
-    if (!state.selected) {
-      layout.chatTop.replaceChildren(el("div", { class: "chat-title" }, ["Сообщения"]));
-      scrollHost.replaceChildren(
-        el("div", { class: "chat-empty" }, [
-          el("div", { class: "chat-empty-title" }, ["Выберите чат или контакт слева"]),
-          el("div", { class: "chat-empty-sub" }, ["F3 — поиск, F5/F6 — создать"]),
-        ])
-      );
-      layout.chatJump.classList.add("hidden");
-      return;
-    }
+	  if (!lines.length) {
+	    if (!state.selected) {
+	      layout.chatTop.replaceChildren(el("div", { class: "chat-title" }, ["Сообщения"]));
+	      scrollHost.replaceChildren(
+	        el("div", { class: "chat-empty" }, [
+	          el("div", { class: "chat-empty-title" }, [mobileUi ? "Выберите чат или контакт" : "Выберите чат или контакт слева"]),
+	          el("div", { class: "chat-empty-sub" }, [
+	            mobileUi ? "Вкладки снизу: «Контакты», «Чаты», «Доски». Поиск/создание — в «Меню»." : "F3 — поиск, F5/F6 — создать",
+	          ]),
+	        ])
+	      );
+	      layout.chatJump.classList.add("hidden");
+	      return;
+	    }
     const loaded = key ? Boolean(state.historyLoaded[key]) : true;
     if (!loaded) {
       for (let i = 0; i < 7; i += 1) {

@@ -7,8 +7,20 @@ export interface ChangelogEntry {
   notes?: string[];
 }
 
-// Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
+// Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.1.184",
+    date: "2025-12-25",
+    improved: [
+      "Mobile/Tablet: убраны подсказки про F‑клавиши и Esc, мини‑инструкция и help‑modal адаптированы под тач‑навигацию",
+      "Update modals: добавлены кнопки «Обновить»/«Позже» (на мобильных больше нет зависимостей от клавиатуры)",
+    ],
+    fixed: [
+      "Chat: статус входящего файла больше не показывает «/ F7» на мобильных",
+      "Sidebar: «Выход» больше не показывает «(F10)» на мобильных",
+    ],
+  },
   {
     version: "0.1.183",
     date: "2025-12-25",
@@ -35,7 +47,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "iPhone: safe-area низ теперь красится цветом нижней панели (`--safe-area-bg`) — меньше шансов на «тёмный подвал»",
       "iOS: нижняя панель (composer) на мобилке стала непрозрачной (без blur), чтобы не появлялась лишняя тёмная полоса",
     ],
-    added: ["Debug HUD: включение через `?debug=1` или `F12` (показывает viewport vars/visualViewport/scroll метрики)"],
+    added: ["Debug HUD: включение через `?debug=1` (показывает viewport vars/visualViewport/scroll метрики)"],
   },
   {
     version: "0.1.180",
@@ -189,7 +201,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Сайдбар: вкладки разделены по типам (Контакты — активные ЛС, Чаты — группы, Доски — доски)",
       "Компоузер: выровнен по ширине полотна чата, кнопки стали компактнее и прямоугольнее",
       "Эмодзи‑панель: компактный размер и уменьшенные вкладки",
-      "Горячая клавиша: F1 стала крупнее",
+      "Навигация: кнопка Info стала крупнее",
     ],
     fixed: [
       "Mobile long‑press: дополнительное подавление клика после открытия контекстного меню",
@@ -264,7 +276,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: "0.1.150",
     date: "2025-12-24",
-    improved: ["Hotkeys: F10 показывает «выход» или «зайти» в зависимости от статуса входа"],
+    improved: ["Меню: кнопка входа/выхода показывает «выход» или «зайти» в зависимости от статуса входа"],
   },
   {
     version: "0.1.149",
@@ -311,8 +323,8 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: "0.1.142",
     date: "2025-12-23",
-    improved: ["Меню: кнопки входа/выхода перенесены в меню, добавлен выход по F10"],
-    fixed: ["Hotkeys: F10 не конфликтует с Shift+F10 (контекстное меню)"],
+    improved: ["Меню: кнопки входа/выхода перенесены в меню"],
+    fixed: ["Hotkeys: выход не конфликтует с открытием контекстного меню с клавиатуры"],
   },
   {
     version: "0.1.141",
@@ -583,7 +595,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "0.1.110",
     date: "2025-12-23",
     improved: [
-      "Mobile: на экранах (профиль/контакт/поиск/файлы/info) кнопка в шапке теперь «Назад» (без необходимости Esc)",
+      "Mobile: на экранах (профиль/контакт/поиск/файлы/info) кнопка в шапке теперь «Назад»",
       "Mobile: профиль/контакт ближе к Telegram — крупный аватар, центрирование, кнопки в сетке, меньше визуального шума",
     ],
     added: ["Regress: `mobilePagesPolishCss.test.mjs`", "Regress: renderHeader проверяет `nav-back` на страницах"],
@@ -988,7 +1000,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: "0.1.56",
     date: "2025-12-21",
-    added: ["Info (F1) с журналом изменений и мини‑инструкцией прямо в приложении"],
+    added: ["Info с журналом изменений и мини‑инструкцией прямо в приложении"],
     improved: ["Подгрузка истории изменений порциями по 20 версий (автоподгрузка при прокрутке)"],
   },
   {

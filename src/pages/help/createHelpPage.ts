@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { renderReact } from "../../helpers/ui/reactMount";
 import { FrameworkBadge } from "../../react/FrameworkBadge";
 import type { AppState } from "../../stores/types";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 
 export interface HelpPage {
   root: HTMLElement;
@@ -59,29 +60,44 @@ function renderChangelogEntry(entry: ChangelogEntry, currentVersion: string): HT
 }
 
 export function createHelpPage(): HelpPage {
+  const mobileUi = isMobileLikeUi();
   const title = el("div", { class: "chat-title" }, ["Info"]);
   const meta = el("div", { class: "info-meta" }, [""]);
   const fwBadgeHost = el("div", { class: "fw-badge-host", "aria-hidden": "true" }, []);
   const metaRow = el("div", { class: "info-meta-row" }, [meta, fwBadgeHost]);
 
-  const rows = el(
-    "div",
-    { class: "help-grid" },
-    HELP_ROWS.map((r) =>
-      el("div", { class: "help-row" }, [
-        el("span", { class: "hk-kbd help-kbd", "aria-hidden": "true" }, [r.key]),
-        el("span", { class: "help-label" }, [r.label]),
-      ])
-    )
-  );
+  const rows = mobileUi
+    ? null
+    : el(
+        "div",
+        { class: "help-grid" },
+        HELP_ROWS.map((r) =>
+          el("div", { class: "help-row" }, [
+            el("span", { class: "hk-kbd help-kbd", "aria-hidden": "true" }, [r.key]),
+            el("span", { class: "help-label" }, [r.label]),
+          ])
+        )
+      );
 
   const quickStart = el("div", { class: "info-section" }, [
     el("div", { class: "info-h" }, ["Мини‑инструкция"]),
     el("ul", { class: "info-list" }, [
-      el("li", {}, ["Вход: нажмите «Войти» в шапке → введите ID и пароль. Пароль не сохраняем, ID запоминаем."]),
-      el("li", {}, ["Создать чат/доску: F5/F6 → заполните форму → Enter."]),
-      el("li", {}, ["Добавить участников: откройте чат/доску → меню (ПКМ) → «Добавить участников» → вставьте список ID/@handle через пробел/запятую."]),
-      el("li", {}, ["Отправка: Enter — отправить, Shift+Enter — новая строка."]),
+      el("li", {}, [
+        mobileUi
+          ? "Вход: откройте «Меню» → «Войти» → введите ID и пароль. Пароль не сохраняем, ID запоминаем."
+          : "Вход: нажмите «Войти» в шапке → введите ID и пароль. Пароль не сохраняем, ID запоминаем.",
+      ]),
+      el("li", {}, [
+        mobileUi
+          ? "Создать чат/доску: «Меню» → «Создать чат/доску» → заполните форму → «Создать»."
+          : "Создать чат/доску: F5/F6 → заполните форму → Enter.",
+      ]),
+      el("li", {}, [
+        mobileUi
+          ? "Добавить участников: откройте чат/доску → меню (долгий тап) → «Добавить участников» → вставьте список ID/@handle через пробел/запятую."
+          : "Добавить участников: откройте чат/доску → меню (ПКМ) → «Добавить участников» → вставьте список ID/@handle через пробел/запятую.",
+      ]),
+      el("li", {}, [mobileUi ? "Отправка: кнопка отправки справа внизу." : "Отправка: Enter — отправить, Shift+Enter — новая строка."]),
       el("li", {}, ["Файлы/фото: кнопка скрепки (＋) внизу."]),
     ]),
     el("div", { class: "info-sub" }, ["Пример: 123456789 → автоматически станет 123-456-789; @name — поиск по логину."]),
@@ -96,7 +112,17 @@ export function createHelpPage(): HelpPage {
     el("div", { class: "info-sub" }, ["После установки интерфейс работает полноэкранно (учитываем вырез/чёлку и safe‑area)."]),
   ]);
 
-  const hkTitle = el("div", { class: "info-h" }, ["Горячие клавиши"]);
+  const hkTitle = mobileUi ? null : el("div", { class: "info-h" }, ["Горячие клавиши"]);
+  const mobileNav = mobileUi
+    ? el("div", { class: "info-section" }, [
+        el("div", { class: "info-h" }, ["Навигация"]),
+        el("ul", { class: "info-list" }, [
+          el("li", {}, ["Вкладки снизу: «Контакты», «Чаты», «Доски»."]),
+          el("li", {}, ["«Меню» — поиск, профиль, файлы, создание, справка."]),
+          el("li", {}, ["Долгий тап по контакту/сообщению — меню действий."]),
+        ]),
+      ])
+    : null;
 
   const changelogTitle = el("div", { class: "info-h" }, ["История изменений"]);
   const changelogWrap = el("div", { class: "changelog" }, []);
@@ -159,9 +185,18 @@ export function createHelpPage(): HelpPage {
 
   const changelogSection = el("div", { class: "info-section" }, [changelogTitle, changelogWrap]);
 
-  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
+  const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
 
-  const root = el("div", { class: "page info-page" }, [title, metaRow, quickStart, install, hkTitle, rows, changelogSection, hint]);
+  const root = el("div", { class: "page info-page" }, [
+    title,
+    metaRow,
+    quickStart,
+    ...(mobileNav ? [mobileNav] : []),
+    install,
+    ...(hkTitle && rows ? [hkTitle, rows] : []),
+    changelogSection,
+    ...(hint ? [hint] : []),
+  ]);
 
   renderReact(fwBadgeHost, createElement(FrameworkBadge, { label: "React" }));
 
