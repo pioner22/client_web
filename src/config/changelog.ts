@@ -10,6 +10,22 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.170",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone PWA: высота #app не ниже 100dvh (меньше чёрной полосы снизу)",
+      "iOS клавиатура: при фокусе остаётся высота по --app-vh, без лишнего растяжения",
+    ],
+  },
+  {
+    version: "0.1.169",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone PWA: уменьшен нижний отступ, safe‑area ограничен и #app расширен по высоте",
+      "Mobile: меньше пустого места снизу в контактах и при вводе",
+    ],
+  },
+  {
     version: "0.1.168",
     date: "2025-12-25",
     fixed: [

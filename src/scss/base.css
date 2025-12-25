@@ -30,7 +30,7 @@ button {
 
 #app {
   /* Safe-area insets (can be overridden by JS when keyboard is open). */
-  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-bottom: clamp(0px, env(safe-area-inset-bottom), 24px);
 
   /* Ensure the app background covers the whole viewport (including safe-area). */
   background: var(--app-bg);
