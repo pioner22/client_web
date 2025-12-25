@@ -36,6 +36,8 @@ button {
   /* Ensure the app background covers the whole viewport (including safe-area). */
   background: var(--app-bg);
 
+  position: relative;
+  z-index: 1;
   height: 100%;
   /* Prefer dynamic viewport on modern browsers (mobile address bar / UI chrome). */
   height: 100vh;
