@@ -2,6 +2,7 @@
   "name": "yagodka-client-web",
   "private": true,
   "version": "0.1.182",
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",

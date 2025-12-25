@@ -106,3 +106,7 @@ npm run build
 ## Презентация
 
 См. `PRESENTATION.md`.
+
+## License
+
+GPL-3.0-or-later. См. `LICENSE`.
