@@ -145,8 +145,8 @@
   justify-content: center;
   min-height: var(--composer-field-min-h);
   padding-top: var(--sp-3);
-  border-top: var(--sidebar-border-width) solid var(--sidebar-border-color);
-  background: var(--sidebar-bg);
+  border-top: 0;
+  background: transparent;
 }
 
 .composer-field {

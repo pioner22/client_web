@@ -377,10 +377,10 @@
   display: grid;
   grid-template-columns: repeat(var(--sidebar-tabs-count), minmax(0, 1fr));
   gap: 0;
-  padding: 2px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
-  background: color-mix(in srgb, var(--panel2), transparent 25%);
+  padding: 0;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
   margin-bottom: var(--sp-3);
   position: relative;
   overflow: visible;
@@ -388,22 +388,8 @@
 
 .sidebar-tabs::before,
 .sidebar-tabs::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 16px;
-  height: 2px;
-  background: color-mix(in srgb, var(--line), transparent 30%);
-  border-radius: 999px;
-  transform: translateY(-50%);
-}
-
-.sidebar-tabs::before {
-  left: -18px;
-}
-
-.sidebar-tabs::after {
-  right: -18px;
+  display: none;
+  content: none;
 }
 
 .sidebar-tabs.sidebar-tabs-bottom {
