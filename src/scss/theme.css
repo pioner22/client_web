@@ -76,7 +76,7 @@
   --app-shadow: none;
   --app-overflow: hidden;
 
-  /* App grid rows: header / main / composer / footer */
+  /* App grid rows: header / main / footer (composer lives inside chat column) */
   --app-row-header: auto;
   --app-row-main: 1fr;
   --app-row-composer: auto;

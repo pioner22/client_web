@@ -8,7 +8,7 @@
   box-shadow: var(--app-shadow);
   overflow: var(--app-overflow);
   display: grid;
-  grid-template-rows: var(--app-row-header) var(--app-row-main) var(--app-row-composer) var(--app-row-footer);
+  grid-template-rows: var(--app-row-header) var(--app-row-main) var(--app-row-footer);
 }
 
 .hdr {
@@ -52,6 +52,18 @@
   display: grid;
   grid-template-columns: var(--grid-cols);
   gap: var(--grid-gap);
+  min-height: 0;
+}
+
+.chat-col {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-col > .chat {
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -106,9 +118,8 @@
 }
 
 .input-wrap {
-  display: grid;
-  grid-template-columns: var(--grid-cols);
-  column-gap: var(--grid-gap);
+  display: flex;
+  flex-direction: column;
   padding: var(--composer-pad-y) var(--chat-pad);
   padding-left: calc(var(--chat-pad) + env(safe-area-inset-left));
   padding-right: calc(var(--chat-pad) + env(safe-area-inset-right));
@@ -118,28 +129,14 @@
   background: var(--composer-bg);
 }
 
-.input-wrap > * {
-  grid-column: 2;
-}
-
-.input-wrap > .composer-row {
-  grid-column: 1 / -1;
-}
-
 .composer-row {
-  display: grid;
-  grid-template-columns: var(--grid-cols);
-  column-gap: var(--grid-gap);
+  display: flex;
   align-items: end;
   min-height: var(--composer-field-min-h);
 }
 
-.composer-row > .sidebar-bottom-dock {
-  grid-column: 1;
-}
-
 .composer-row > .composer-field {
-  grid-column: 2;
+  flex: 1 1 auto;
 }
 
 .sidebar-bottom-dock {
@@ -147,8 +144,8 @@
   align-items: center;
   justify-content: center;
   min-height: var(--composer-field-min-h);
-  padding: 0 var(--sidebar-pad);
-  border-right: var(--sidebar-border-width) solid var(--sidebar-border-color);
+  padding-top: var(--sp-3);
+  border-top: var(--sidebar-border-width) solid var(--sidebar-border-color);
   background: var(--sidebar-bg);
 }
 

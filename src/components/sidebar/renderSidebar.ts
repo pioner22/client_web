@@ -874,7 +874,9 @@ export function renderSidebar(
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     }),
   );
-  if (desktopBottom) {
+  if (useDock && sidebarDock) {
+    target.replaceChildren(body, sidebarDock);
+  } else if (desktopBottom) {
     target.replaceChildren(body, desktopBottom);
   } else {
     target.replaceChildren(body);

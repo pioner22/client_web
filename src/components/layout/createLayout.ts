@@ -11,7 +11,9 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
 
   const sidebar = el("aside", { class: "sidebar" });
   const sidebarBody = el("div", { class: "sidebar-body" });
+  const sidebarDock = el("div", { class: "sidebar-bottom-dock", "aria-hidden": "true" });
   sidebar.appendChild(sidebarBody);
+  sidebar.appendChild(sidebarDock);
   const chatTop = el("div", { class: "chat-top hidden" });
   const chatHost = el("div", { class: "chat-host" });
   const chatJump = el(
@@ -43,7 +45,6 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     "☺︎",
   ]) as HTMLButtonElement;
   const sendBtn = el("button", { class: "btn composer-send", type: "button", "aria-label": "Отправить" }, ["Отправить"]);
-  const sidebarDock = el("div", { class: "sidebar-bottom-dock", "aria-hidden": "true" });
   const editBar = el("div", { class: "composer-edit hidden", id: "composer-edit", role: "status", "aria-live": "polite" }, [
     el("div", { class: "composer-edit-body" }, [
       el("div", { class: "composer-edit-title" }, ["Редактирование"]),
@@ -65,7 +66,9 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     el("span", { class: "composer-hint", "aria-hidden": "true" }, ["Shift+Enter — новая строка"]),
     el("span", { class: "composer-count", "aria-hidden": "true" }, ["0/4000"]),
   ]);
-  const composerRow = el("div", { class: "composer-row" }, [sidebarDock, el("div", { class: "composer-field" }, [attachBtn, emojiBtn, input, sendBtn])]);
+  const composerRow = el("div", { class: "composer-row" }, [
+    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, input, sendBtn]),
+  ]);
   const inputWrap = el("div", { class: "input-wrap" }, [editBar, composerRow, composerMeta]);
 
   const footer = el("footer", { class: "footer" });
@@ -73,9 +76,10 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const navOverlay = el("div", { class: "nav-overlay hidden", "aria-hidden": "true" });
   const overlay = el("div", { class: "overlay hidden" });
 
-  const grid = el("div", { class: "grid" }, [sidebar, chat]);
+  const chatCol = el("div", { class: "chat-col" }, [chat, inputWrap]);
+  const grid = el("div", { class: "grid" }, [sidebar, chatCol]);
 
-  const app = el("div", { class: "app" }, [header, grid, inputWrap, footer, toastHost, navOverlay, overlay]);
+  const app = el("div", { class: "app" }, [header, grid, footer, toastHost, navOverlay, overlay]);
   // Keep the boot screen in DOM until the app signals it has booted.
   // This prevents a "black screen" during PWA update/restart flows.
   const boot = root.querySelector(".boot");

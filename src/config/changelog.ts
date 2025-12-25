@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.166",
+    date: "2025-12-24",
+    improved: [
+      "Сайдбар: вкладки Контакты/Доски/Чаты встроены в левую колонку и доходят до нижнего края",
+      "Чат: компоузер перенесён внутрь правой колонки, панель слева больше не обрывается над полем ввода",
+    ],
+  },
+  {
     version: "0.1.165",
     date: "2025-12-24",
     improved: [

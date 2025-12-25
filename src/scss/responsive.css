@@ -58,7 +58,7 @@
     justify-content: center;
   }
 
-  .chat {
+  .chat-col {
     grid-column: 1;
     grid-row: 1;
   }
@@ -465,22 +465,13 @@
 
   /* Composer: closer to Telegram pill + stable "bar" feel. */
   .input-wrap {
-    grid-template-columns: 1fr;
     background: color-mix(in srgb, var(--composer-bg), transparent 10%);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
   }
 
-  .input-wrap > * {
-    grid-column: 1;
-  }
-
   .composer-row {
-    grid-template-columns: 1fr;
-  }
-
-  .composer-row > .composer-field {
-    grid-column: 1;
+    width: 100%;
   }
 
   .sidebar-bottom-dock {
