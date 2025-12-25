@@ -3,18 +3,10 @@
   html #app {
     --app-outer-pad: 0px;
     position: fixed;
-    left: 0;
-    right: 0;
-    top: 0;
+    inset: 0;
     width: 100%;
-    height: 100vh;
-    height: 100svh;
-    height: 100dvh;
-    height: var(--app-vh);
-    min-height: 100vh;
-    min-height: 100svh;
-    min-height: 100dvh;
-    min-height: var(--app-vh);
+    height: auto;
+    min-height: 0;
     overscroll-behavior: none;
     padding: 0;
   }
@@ -22,7 +14,8 @@
   html.app-vv-offset #app {
     /* iOS: при открытии клавиатуры visualViewport может иметь offsetTop -> фиксируем "прыжки". */
     top: var(--app-vv-top, 0px);
-    height: var(--app-vh);
+    bottom: var(--app-vv-bottom, 0px);
+    height: auto;
     min-height: 0;
   }
 

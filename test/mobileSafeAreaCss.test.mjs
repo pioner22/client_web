@@ -8,8 +8,9 @@ test("mobile safe-area: mobile fullscreen overrides win against skins", async ()
   assert.match(css, /@media\s*\(max-width:\s*820px\)\s*\{/);
   assert.match(css, /#app\s*\{[\s\S]*?--app-outer-pad:\s*0px;/);
   assert.match(css, /#app\s*\{[\s\S]*?position:\s*fixed;/);
-  assert.match(css, /#app\s*\{[\s\S]*?top:\s*var\(--app-vv-top,\s*0px\)\s*;/);
-  assert.match(css, /#app\s*\{[\s\S]*?height:\s*var\(--app-vh\)\s*;/);
+  assert.match(css, /#app\s*\{[\s\S]*?inset:\s*0\s*;/);
+  assert.match(css, /app-vv-offset\s+#app\s*\{[\s\S]*?top:\s*var\(--app-vv-top,\s*0px\)\s*;/);
+  assert.match(css, /app-vv-offset\s+#app\s*\{[\s\S]*?bottom:\s*var\(--app-vv-bottom,\s*0px\)\s*;/);
   assert.match(css, /#app\s*>\s*\.app\s*\{[\s\S]*?--app-row-footer:\s*0px;/);
 });
 

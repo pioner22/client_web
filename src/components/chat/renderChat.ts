@@ -664,6 +664,7 @@ export function renderChat(layout: Layout, state: AppState) {
   const key = state.selected ? conversationKey(state.selected) : "";
   const prevKey = String(scrollHost.getAttribute("data-chat-key") || "");
   const keyChanged = key !== prevKey;
+  const prevScrollTop = scrollHost.scrollTop;
   if (keyChanged && hostState.__stickBottom) hostState.__stickBottom = null;
   const atBottom = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
   const sticky = hostState.__stickBottom;
@@ -887,6 +888,17 @@ export function renderChat(layout: Layout, state: AppState) {
   if (searchBar) topChildren.push(searchBar);
   layout.chatTop.replaceChildren(...topChildren);
   scrollHost.replaceChildren(el("div", { class: "chat-lines" }, lines));
+  if (!stickToBottom && !keyChanged) {
+    // Some browsers (notably iOS/WebKit) may reset scrollTop when we replace the chat DOM.
+    // Preserve the user's position in history unless we explicitly want to stick to bottom.
+    try {
+      const maxTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
+      const nextTop = Math.max(0, Math.min(maxTop, prevScrollTop));
+      if (Math.abs(scrollHost.scrollTop - nextTop) >= 1) scrollHost.scrollTop = nextTop;
+    } catch {
+      // ignore
+    }
+  }
   layout.chatJump.classList.toggle("hidden", stickToBottom);
   if (stickToBottom && key) {
     const shouldStick = () => {

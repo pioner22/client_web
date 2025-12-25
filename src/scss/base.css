@@ -28,9 +28,7 @@ html {
 /* iOS fullscreen/PWA: fix viewport "scroll" on focus (keyboard) and reduce bottom clipping/jumps. */
 html.is-ios {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  inset: 0;
 }
 
 body {

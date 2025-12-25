@@ -1215,6 +1215,37 @@ export function mountApp(root: HTMLElement) {
     { passive: true }
   );
 
+  // Keep the chat pinned to bottom on layout changes (keyboard open/close, composer autosize),
+  // but only when the user is already at the bottom.
+  let chatStickyResizeRaf: number | null = null;
+  const scheduleChatStickyResize = () => {
+    if (chatStickyResizeRaf !== null) return;
+    chatStickyResizeRaf = window.requestAnimationFrame(() => {
+      chatStickyResizeRaf = null;
+      const host = layout.chatHost;
+      const key = String(host.getAttribute("data-chat-key") || "");
+      if (!key) return;
+      const st = (host as any).__stickBottom;
+      if (!st || !st.active || st.key !== key) return;
+      host.scrollTop = host.scrollHeight;
+      scheduleChatJumpVisibility();
+    });
+  };
+
+  const chatResizeObserver =
+    typeof ResizeObserver === "function"
+      ? new ResizeObserver(() => {
+          scheduleChatStickyResize();
+        })
+      : null;
+  try {
+    chatResizeObserver?.observe(layout.chatHost);
+    chatResizeObserver?.observe(layout.chat);
+    chatResizeObserver?.observe(layout.inputWrap);
+  } catch {
+    // ignore
+  }
+
   let chatTouchStartX = 0;
   let chatTouchStartY = 0;
   let chatTouchTracking = false;

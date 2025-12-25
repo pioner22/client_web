@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.182",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone: mobile fullscreen контейнер `#app` теперь фиксируется через `inset: 0` (меньше шансов на «тёмный низ»/обрезание экрана)",
+      "iOS клавиатура: в режиме `app-vv-offset` учитываем и низ (`bottom: --app-vv-bottom`), чтобы компоузер не «висел» и не оставлял пустую полосу",
+      "Chat: при перерендере истории сохраняем `scrollTop` (iOS/WebKit меньше «прыгает»)",
+    ],
+    improved: ["Chat: pinned-bottom поддерживается при resize (клавиатура/автосайз) через `ResizeObserver`"],
+  },
+  {
     version: "0.1.181",
     date: "2025-12-25",
     fixed: [
