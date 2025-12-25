@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.189",
+    date: "2025-12-26",
+    improved: [
+      "Mobile: шапка более «telegram/tweb-like» — заголовок сверху, статус отдельной строкой (меньше визуального шума)",
+      "Mobile: нижняя панель вкладок в сайдбаре стала более «жёсткой» (фон/рамка/разделитель)",
+    ],
+  },
+  {
     version: "0.1.188",
     date: "2025-12-26",
     fixed: [
