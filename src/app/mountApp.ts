@@ -64,6 +64,7 @@ import { defaultToastTimeoutMs } from "../helpers/ui/toast";
 import { shouldAutofocusComposer } from "../helpers/ui/autofocusPolicy";
 import { armCtxClickSuppression, consumeCtxClickSuppression, type CtxClickSuppressionState } from "../helpers/ui/ctxClickSuppression";
 import { applyIosInputAssistantWorkaround, isIOS, isStandaloneDisplayMode } from "../helpers/ui/iosInputAssistant";
+import { installDebugHud } from "../helpers/ui/debugHud";
 import {
   EMOJI_RECENTS_ID,
   buildEmojiSections,
@@ -354,6 +355,7 @@ export function mountApp(root: HTMLElement) {
   applyMessageView(store.get().messageView);
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
   const layout = createLayout(root, { iosStandalone });
+  const debugHud = installDebugHud({ mount: root, chatHost: layout.chatHost, getState: () => store.get() });
   type PwaSharePayload = {
     files: File[];
     title: string;
@@ -6942,6 +6944,11 @@ export function mountApp(root: HTMLElement) {
     }
     if (key === "F7") {
       setPage("files");
+      return;
+    }
+    if (key === "F12") {
+      debugHud.toggle();
+      store.set({ status: debugHud.isEnabled() ? "Debug HUD: включён" : "Debug HUD: выключен" });
       return;
     }
   }

@@ -75,7 +75,7 @@ body::after {
   right: 0;
   bottom: 0;
   height: max(var(--safe-bottom-raw), var(--app-gap-bottom, 0px));
-  background: var(--sidebar-bg);
+  background: var(--safe-area-bg, var(--sidebar-bg));
   pointer-events: none;
   z-index: 0;
 }

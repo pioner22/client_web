@@ -474,6 +474,13 @@
     backdrop-filter: blur(10px);
   }
 
+  /* iOS: blur/transparency can create an extra "dark strip" near the bottom safe-area. Keep the bar solid. */
+  html.is-ios .input-wrap {
+    background: var(--composer-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .composer-row {
     width: 100%;
   }

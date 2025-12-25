@@ -2133,3 +2133,70 @@
     transition: none;
   }
 }
+
+/* ===== Debug HUD (opt-in via ?debug=1 or F12) ===== */
+.debug-hud {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: 8px;
+  z-index: 5000;
+  width: min(520px, calc(100vw - 16px));
+  max-height: min(52vh, calc(100vh - 16px));
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.62);
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.debug-hud-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.btn.debug-hud-close {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.btn.debug-hud-close:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.debug-hud-body {
+  margin: 0;
+  padding: 10px;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

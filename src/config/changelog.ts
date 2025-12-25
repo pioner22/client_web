@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.181",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone: safe-area низ теперь красится цветом нижней панели (`--safe-area-bg`) — меньше шансов на «тёмный подвал»",
+      "iOS: нижняя панель (composer) на мобилке стала непрозрачной (без blur), чтобы не появлялась лишняя тёмная полоса",
+    ],
+    added: ["Debug HUD: включение через `?debug=1` или `F12` (показывает viewport vars/visualViewport/scroll метрики)"],
+  },
+  {
     version: "0.1.180",
     date: "2025-12-25",
     fixed: [

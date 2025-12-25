@@ -115,6 +115,8 @@
   --chat-pad: 16px;
 
   --composer-bg: var(--panel);
+  /* Background color for iOS safe-area (home indicator zone). Should match the bottom bar. */
+  --safe-area-bg: var(--composer-bg);
   --composer-border-color: var(--line);
   --composer-border-width: var(--border-width);
   --composer-pad-y: 10px;
