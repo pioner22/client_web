@@ -1,9 +1,11 @@
 import { el } from "../../helpers/dom/el";
 import { splitBuildId } from "../../helpers/version/buildId";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState } from "../../stores/types";
 import type { Layout } from "../layout/types";
 
 export function renderHeader(layout: Layout, state: AppState) {
+  const mobileUi = isMobileLikeUi();
   const webBuild = splitBuildId(state.clientVersion);
   const verTitle = state.serverVersion ? `srv ${state.serverVersion}` : "";
   const headerId = state.selfId ?? state.authRememberedId ?? "—";
@@ -94,22 +96,26 @@ export function renderHeader(layout: Layout, state: AppState) {
   );
   layout.headerRight.textContent = state.status || "";
 
-  const f10Label = state.authed ? "выход" : "зайти";
-  layout.hotkeys.replaceChildren(
-    ...[
-      ["F1", "info"],
-      ["F2", "профиль"],
-      ["F3", "поиск"],
-      ["F5", "чат+"],
-      ["F6", "доска+"],
-      ["F7", "файлы"],
-      ["F10", f10Label],
-    ].map(([k, v]) =>
-      el(
-        "button",
-        { class: "hk-btn", type: "button", "data-key": k, title: `${k} — ${v}`, "aria-label": `${v} (${k})` },
-        [el("span", { class: "hk-kbd", "aria-hidden": "true" }, [k]), el("span", { class: "hk-label", "aria-hidden": "true" }, [v])]
+  if (mobileUi) {
+    layout.hotkeys.replaceChildren();
+  } else {
+    const f10Label = state.authed ? "выход" : "зайти";
+    layout.hotkeys.replaceChildren(
+      ...[
+        ["F1", "info"],
+        ["F2", "профиль"],
+        ["F3", "поиск"],
+        ["F5", "чат+"],
+        ["F6", "доска+"],
+        ["F7", "файлы"],
+        ["F10", f10Label],
+      ].map(([k, v]) =>
+        el(
+          "button",
+          { class: "hk-btn", type: "button", "data-key": k, title: `${k} — ${v}`, "aria-label": `${v} (${k})` },
+          [el("span", { class: "hk-kbd", "aria-hidden": "true" }, [k]), el("span", { class: "hk-label", "aria-hidden": "true" }, [v])]
+        )
       )
-    )
-  );
+    );
+  }
 }

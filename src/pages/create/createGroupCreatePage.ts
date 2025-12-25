@@ -1,5 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { focusElement } from "../../helpers/ui/focus";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState } from "../../stores/types";
 
 export interface CreateGroupPageActions {
@@ -14,6 +15,7 @@ export interface CreateGroupPage {
 }
 
 export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGroupPage {
+  const mobileUi = isMobileLikeUi();
   const title = el("div", { class: "chat-title" }, ["Создать чат"]);
 
   const nameLabel = el("label", { class: "modal-label", for: "group-name" }, ["Название"]);
@@ -88,7 +90,7 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
   const btnCancel = el("button", { class: "btn", type: "button" }, ["Отмена"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnCreate, btnCancel]);
 
-  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — создать | Esc — назад"]);
+  const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — создать | Esc — назад"]);
 
   const mainCard = el("div", { class: "page-card" }, [el("div", { class: "page-card-title" }, ["Основное"]), nameLabel, nameInput]);
   const infoCard = el("div", { class: "page-card" }, [
@@ -103,7 +105,7 @@ export function createGroupCreatePage(actions: CreateGroupPageActions): CreateGr
     membersLabel,
     membersField,
   ]);
-  const root = el("div", { class: "page page-create" }, [title, mainCard, infoCard, membersCard, warn, actionsRow, hint]);
+  const root = el("div", { class: "page page-create" }, [title, mainCard, infoCard, membersCard, warn, actionsRow, ...(hint ? [hint] : [])]);
 
   function submit() {
     actions.onCreate();

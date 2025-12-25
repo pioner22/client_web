@@ -128,7 +128,7 @@
   padding-left: calc(var(--chat-pad) + env(safe-area-inset-left));
   padding-right: calc(var(--chat-pad) + env(safe-area-inset-right));
   /* Avoid "double padding" feel on iOS: safe-area already provides spacing. */
-  padding-bottom: max(var(--composer-pad-y), var(--safe-bottom-pad));
+  padding-bottom: max(var(--composer-pad-y), var(--safe-bottom-layout-pad));
   border-top: var(--composer-border-width) solid var(--composer-border-color);
   background: var(--composer-bg);
 }
@@ -310,7 +310,7 @@
   padding: var(--footer-pad-y) var(--footer-pad-x);
   padding-left: calc(var(--footer-pad-x) + env(safe-area-inset-left));
   padding-right: calc(var(--footer-pad-x) + env(safe-area-inset-right));
-  padding-bottom: calc(var(--footer-pad-y) + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--footer-pad-y) + var(--safe-bottom-layout-pad));
   border-top: var(--footer-border-width) solid var(--footer-border-color);
   background: var(--footer-bg);
   color: var(--footer-color);

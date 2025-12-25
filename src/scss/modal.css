@@ -9,7 +9,7 @@
   padding: var(--overlay-pad);
   padding-top: calc(var(--overlay-pad) + env(safe-area-inset-top));
   padding-right: calc(var(--overlay-pad) + env(safe-area-inset-right));
-  padding-bottom: calc(var(--overlay-pad) + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--overlay-pad) + var(--safe-bottom-pad));
   padding-left: calc(var(--overlay-pad) + env(safe-area-inset-left));
   z-index: 50;
 }
@@ -169,7 +169,7 @@
   -webkit-overflow-scrolling: touch;
   border-radius: 18px 18px 0 0;
   padding: 12px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  padding-bottom: calc(12px + var(--safe-bottom-pad));
   margin-bottom: 0;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -1085,7 +1085,7 @@ input.modal-input[type="file"]::file-selector-button:active {
 .overlay.overlay-viewer .modal-actions.viewer-actions {
   margin: 0;
   padding: 12px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  padding-bottom: calc(12px + var(--safe-bottom-pad));
   padding-left: calc(12px + env(safe-area-inset-left));
   padding-right: calc(12px + env(safe-area-inset-right));
   position: sticky;

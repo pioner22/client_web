@@ -5,10 +5,10 @@ export function isMobileLikeUi(): boolean {
     return Boolean(
       window.matchMedia("(max-width: 820px)").matches ||
         window.matchMedia("(pointer: coarse)").matches ||
+        window.matchMedia("(any-pointer: coarse)").matches ||
         window.matchMedia("(hover: none)").matches
     );
   } catch {
     return false;
   }
 }
-

@@ -1143,6 +1143,8 @@ export function mountApp(root: HTMLElement) {
     hostState.__stickBottom = { key: k, active: true, at: Date.now() };
     const stickNow = () => {
       if (String(host.getAttribute("data-chat-key") || "") !== k) return;
+      const st = hostState.__stickBottom;
+      if (!st || st.key !== k || !st.active) return;
       host.scrollTop = host.scrollHeight;
     };
     queueMicrotask(stickNow);
@@ -1151,7 +1153,6 @@ export function mountApp(root: HTMLElement) {
     } else {
       stickNow();
     }
-    window.setTimeout(stickNow, 80);
     scheduleChatJumpVisibility();
   }
 

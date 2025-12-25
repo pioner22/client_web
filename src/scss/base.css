@@ -3,6 +3,8 @@
   /* iPhone safe-area bottom is typically 34px; allow up to 44px to avoid cutting off the composer. */
   --safe-bottom-pad: clamp(0px, env(safe-area-inset-bottom), 44px);
   --app-gap-bottom: 0px;
+  /* Portion of safe-area that is actually inside the layout (gap is painted separately). */
+  --safe-bottom-layout-pad: max(0px, calc(var(--safe-bottom-pad) - var(--app-gap-bottom, 0px)));
 }
 
 html,
@@ -126,6 +128,18 @@ body::after {
 
 *::-webkit-scrollbar-thumb:hover {
   background-color: var(--scrollbar-thumb-hover);
+}
+
+@media (pointer: coarse) {
+  /* Touch devices: hide persistent scrollbars (iOS "line on the right" look). */
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 }
 
 /* Fancy caret (terminal-like). */

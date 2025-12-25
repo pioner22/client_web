@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.188",
+    date: "2025-12-26",
+    fixed: [
+      "iOS PWA: безопасная зона снизу теперь рисуется как подложка (`--app-gap-bottom`) без растягивания высоты (`--app-vh`) — меньше чёрной полосы/прыжков",
+      "Chat: pinned-bottom автоскролл больше не делает поздний «snap» — меньше «прыжков» после ручной прокрутки",
+    ],
+    improved: [
+      "iOS: введён `--safe-bottom-layout-pad`, чтобы не было «двойного» safe-area padding при отдельном gap",
+      "Mobile: скрыты постоянные scrollbars на тач‑устройствах (iOS «полоска справа»)",
+      "Mobile: desktop-only подсказки (Ctrl/F) скрыты в статусах/страницах",
+    ],
+  },
+  {
     version: "0.1.187",
     date: "2025-12-25",
     fixed: ["Mobile: отключён горизонтальный скролл в списках/истории (меньше «сдвигов» и полос прокрутки)"],

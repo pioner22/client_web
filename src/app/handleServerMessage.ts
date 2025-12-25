@@ -30,6 +30,7 @@ import {
   storeSessionToken,
 } from "../helpers/auth/session";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
+import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 
 function upsertConversationByLocalId(state: any, key: string, msg: ChatMessage, localId: string): any {
   const convMap = state?.conversations && typeof state.conversations === "object" ? state.conversations : {};
@@ -2086,7 +2087,8 @@ export function handleServerMessage(
     if (!latest) return;
     if (state.updateDismissedLatest && state.updateDismissedLatest === latest) return;
     // “В тишине”: без модалки, только статус + хоткей.
-    patch({ updateLatest: latest, status: `Доступно обновление до v${latest} (Ctrl+U — применить)` });
+    const hint = isMobileLikeUi() ? "" : " (Ctrl+U — применить)";
+    patch({ updateLatest: latest, status: `Доступно обновление до v${latest}${hint}` });
     return;
   }
   if (t === "error") {

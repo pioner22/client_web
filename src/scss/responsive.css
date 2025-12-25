@@ -101,7 +101,7 @@
     z-index: 3;
     background: var(--sidebar-bg);
     padding-top: var(--sp-2);
-    padding-bottom: max(var(--sp-2), env(safe-area-inset-bottom));
+    padding-bottom: max(var(--sp-2), var(--safe-bottom-layout-pad));
     margin-top: var(--sp-2);
   }
 
@@ -155,7 +155,7 @@
 
   .page {
     padding: var(--sp-4);
-    padding-bottom: calc(var(--sp-4) + var(--safe-bottom-pad));
+    padding-bottom: calc(var(--sp-4) + var(--safe-bottom-layout-pad));
   }
 
   .member-row {
@@ -192,7 +192,7 @@
   }
 
   .toast-host {
-    bottom: calc(env(safe-area-inset-bottom) + 86px);
+    bottom: calc(var(--safe-bottom-pad) + 86px);
   }
 }
 

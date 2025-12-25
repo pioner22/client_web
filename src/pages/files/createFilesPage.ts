@@ -4,6 +4,7 @@ import { safeUrl } from "../../helpers/security/safeUrl";
 import { clearFileCache, cleanupFileCache, getCachedFileBlob, getFileCacheStats } from "../../helpers/files/fileBlobCache";
 import { fileBadge, type FileBadgeKind } from "../../helpers/files/fileBadge";
 import { CACHE_CLEAN_PRESETS, CACHE_SIZE_PRESETS, loadFileCachePrefs, saveFileCachePrefs } from "../../helpers/files/fileCachePrefs";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 
 export interface FilesPage {
   root: HTMLElement;
@@ -145,6 +146,7 @@ function groupTransfers(entries: FileTransferEntry[]): TransferGroup[] {
 }
 
 export function createFilesPage(actions: FilesPageActions): FilesPage {
+  const mobileUi = isMobileLikeUi();
   const title = el("div", { class: "chat-title" }, ["Файлы"]);
 
   const sendTitle = el("div", { class: "pane-section" }, ["Отправка"]);
@@ -188,9 +190,9 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     cacheActions,
   ]);
 
-  const hint = el("div", { class: "msg msg-sys page-hint" }, ["F7 — файлы | Esc — назад"]);
+  const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["F7 — файлы | Esc — назад"]);
 
-  const root = el("div", { class: "page page-files" }, [title, sendBlock, offersBlock, transfersBlock, cacheBlock, hint]);
+  const root = el("div", { class: "page page-files" }, [title, sendBlock, offersBlock, transfersBlock, cacheBlock, ...(hint ? [hint] : [])]);
 
   for (const opt of CACHE_SIZE_PRESETS) {
     cacheLimitSelect.append(el("option", { value: String(opt.bytes) }, [opt.label]));

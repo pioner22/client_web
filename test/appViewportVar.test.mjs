@@ -208,8 +208,8 @@ test("viewport var: iOS PWA: учитывает разницу screen.height и 
     };
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "844px");
-    assert.equal(style._props.get("--vh"), "8.44px");
+    assert.equal(style._props.get("--app-vh"), "810px");
+    assert.equal(style._props.get("--vh"), "8.1px");
     assert.equal(style._props.get("--app-gap-bottom"), "34px");
     assert.equal(style._props.has("--safe-bottom-pad"), false);
     assert.equal(style._props.has("--safe-bottom-raw"), false);
@@ -271,8 +271,8 @@ test("viewport var: iOS PWA: fallback на safe-area inset при отсутст
     };
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "844px");
-    assert.equal(style._props.get("--vh"), "8.44px");
+    assert.equal(style._props.get("--app-vh"), "810px");
+    assert.equal(style._props.get("--vh"), "8.1px");
     assert.equal(style._props.get("--app-gap-bottom"), "34px");
 
     cleanup();

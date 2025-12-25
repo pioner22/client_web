@@ -1,5 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState } from "../../stores/types";
 
 export interface UserPageActions {
@@ -14,6 +15,7 @@ export interface UserPage {
 }
 
 export function createUserPage(actions: UserPageActions): UserPage {
+  const mobileUi = isMobileLikeUi();
   const title = el("div", { class: "chat-title" }, ["Контакт"]);
 
   const profileName = el("div", { class: "profile-name" }, ["—"]);
@@ -35,9 +37,9 @@ export function createUserPage(actions: UserPageActions): UserPage {
   const btnChat = el("button", { class: "btn btn-primary", type: "button" }, ["Сообщение"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnChat]);
 
-  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
+  const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
 
-  const root = el("div", { class: "page page-profile page-user" }, [title, head, actionsRow, about, hint]);
+  const root = el("div", { class: "page page-profile page-user" }, [title, head, actionsRow, about, ...(hint ? [hint] : [])]);
 
   btnChat.addEventListener("click", () => {
     const id = String(root.getAttribute("data-user-id") || "").trim();
@@ -71,7 +73,7 @@ export function createUserPage(actions: UserPageActions): UserPage {
     root,
     update,
     focus: () => {
-      if (window.matchMedia && window.matchMedia("(max-width: 820px)").matches) return;
+      if (mobileUi) return;
       btnChat.focus();
     },
   };

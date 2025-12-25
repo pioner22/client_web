@@ -2,6 +2,7 @@ import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { applyLegacyIdMask } from "../../helpers/id/legacyIdMask";
 import { focusElement } from "../../helpers/ui/focus";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState, SearchResultEntry, TargetRef } from "../../stores/types";
 
 export interface SearchPageActions {
@@ -127,6 +128,7 @@ function resolveRoomLabel(state: AppState, kind: "group" | "board", id: string):
 }
 
 export function createSearchPage(actions: SearchPageActions): SearchPage {
+  const mobileUi = isMobileLikeUi();
   const title = el("div", { class: "chat-title" }, ["Поиск"]);
 
   const input = el("input", {
@@ -146,9 +148,9 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
   const form = el("div", { class: "page-form" }, [input, btn]);
   const results = el("div", { class: "page-results" });
-  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — искать | Esc — назад"]);
+  const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — искать | Esc — назад"]);
 
-  const root = el("div", { class: "page" }, [title, form, results, hint]);
+  const root = el("div", { class: "page" }, [title, form, results, ...(hint ? [hint] : [])]);
 
   type ContactMatch = {
     id: string;

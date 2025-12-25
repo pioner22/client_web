@@ -1108,7 +1108,7 @@
 .chat-jump {
   position: absolute;
   right: calc(var(--sp-4) + env(safe-area-inset-right));
-  bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+  bottom: calc(var(--sp-4) + var(--safe-bottom-layout-pad));
   width: 44px;
   height: 44px;
   padding: 0;
@@ -2064,7 +2064,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  bottom: calc(var(--safe-bottom-pad) + 12px);
   z-index: 45;
   display: grid;
   place-items: center;

@@ -1,5 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState, TargetKind } from "../../stores/types";
 
 export interface RoomPageActions {
@@ -54,6 +55,7 @@ function avatar(kind: TargetKind, id: string): HTMLElement {
 }
 
 export function createRoomPage(kind: TargetKind, actions: RoomPageActions): RoomPage {
+  const mobileUi = isMobileLikeUi();
   const titleText = kind === "group" ? "Чат" : "Доска";
   const title = el("div", { class: "chat-title" }, [titleText]);
 
@@ -131,9 +133,9 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
   const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnChat, btnRefresh]);
 
-  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
+  const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Esc — назад"]);
 
-  const root = el("div", { class: "page page-profile page-room" }, [title, head, about, infoCard, membersCard, manageCard, actionsRow, hint]);
+  const root = el("div", { class: "page page-profile page-room" }, [title, head, about, infoCard, membersCard, manageCard, actionsRow, ...(hint ? [hint] : [])]);
 
   let currentRoomId = "";
   let currentIsOwner = false;

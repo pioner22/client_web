@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { focusElement } from "../../helpers/ui/focus";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState, MessageViewMode, ThemeMode } from "../../stores/types";
 
 export interface ProfilePageActions {
@@ -24,6 +25,7 @@ export interface ProfilePage {
 }
 
 export function createProfilePage(actions: ProfilePageActions): ProfilePage {
+  const mobileUi = isMobileLikeUi();
   const title = el("div", { class: "chat-title" }, ["Профиль"]);
 
   const profileName = el("div", { class: "profile-name" }, ["—"]);
@@ -128,7 +130,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnSave, btnRefresh]);
 
-  const hint = el("div", { class: "msg msg-sys page-hint" }, ["Enter — сохранить · Esc — назад"]);
+  const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — сохранить · Esc — назад"]);
 
   const account = el("div", { class: "profile-card" }, [
     el("div", { class: "profile-card-title" }, ["Аккаунт"]),
@@ -167,7 +169,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     account,
     ui,
     actionsRow,
-    hint,
+    ...(hint ? [hint] : []),
   ]);
 
   function draft() {

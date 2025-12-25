@@ -54,7 +54,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       }
     })();
     // iOS PWA: sometimes innerHeight/clientHeight are missing the bottom safe-area, leaving a visible "black strip".
-    // Track the gap so CSS can paint it without forcing a taller layout.
+    // Track the gap so CSS can paint it. Do NOT inflate layout height: it causes scrollbars and layout jumps.
     let gapBottom = 0;
     let screenGap = 0;
     let screenMax = 0;
@@ -66,7 +66,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       const outer = Math.round(Number((window as any).outerHeight) || 0);
       if (iosEnv && outer > 0) screenMax = Math.max(screenMax, outer);
       // Only treat screen.height deltas as a "gap" in standalone mode.
-      // In Safari, the difference often includes browser chrome and should NOT affect layout height.
+      // In Safari, the difference often includes browser chrome and should NOT be treated as safe-area.
       if (iosStandalone && base > 0 && screenMax > base) {
         const diff = screenMax - base;
         screenGap = diff;
@@ -75,11 +75,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     } catch {
       // ignore
     }
-    if (iosEnv && safeBottomRaw > 0 && safeBottomRaw <= USE_SCREEN_HEIGHT_SLACK_PX) {
-      if (!gapBottom || gapBottom < safeBottomRaw - 2 || screenGap <= 0) {
-        gapBottom = safeBottomRaw;
-      }
-    }
+    // Fallback: if screen.height is not available (tests/odd environments), reuse safe-area inset as the "gap".
+    // On real iOS devices screen.height exists; we avoid treating safe-area as gap when there is no evidence.
+    if (iosStandalone && !screenMax && !gapBottom && safeBottomRaw > 0 && safeBottomRaw <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = safeBottomRaw;
     const vv = window.visualViewport;
     const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
     const vvTopRaw = (() => {
@@ -113,8 +111,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     }
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
     const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
-    // In iOS standalone mode (PWA), include the safe-area gap in fullscreen height so the composer can sit flush to the bottom.
-    const resolved = keyboard ? vvHeight : base + (iosStandalone ? gapBottom : 0);
+    const resolved = keyboard ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
     return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom), gapBottom };
   };
