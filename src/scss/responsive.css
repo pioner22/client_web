@@ -2,17 +2,16 @@
   /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
   html #app {
     --app-outer-pad: 0px;
-    position: fixed;
-    inset: 0;
     width: 100%;
-    height: auto;
-    min-height: 0;
     overscroll-behavior: none;
     padding: 0;
   }
 
   html.app-vv-offset #app {
     /* iOS: при открытии клавиатуры visualViewport может иметь offsetTop -> фиксируем "прыжки". */
+    position: fixed;
+    left: 0;
+    right: 0;
     top: var(--app-vv-top, 0px);
     bottom: var(--app-vv-bottom, 0px);
     height: auto;

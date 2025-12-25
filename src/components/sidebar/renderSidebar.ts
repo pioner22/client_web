@@ -675,7 +675,8 @@ export function renderSidebar(
       loginRow.setAttribute("title", "Войти или зарегистрироваться");
       accountRows.push(loginRow);
     } else if (state.authed) {
-      const logoutRow = roomRow("⎋", mobileUi ? "Выход" : "Выход (F10)", false, () => onAuthLogout(), undefined, {
+      const logoutIcon = mobileUi ? "⏻" : "⎋";
+      const logoutRow = roomRow(logoutIcon, mobileUi ? "Выход" : "Выход (F10)", false, () => onAuthLogout(), undefined, {
         sub: "Завершить сессию",
         time: null,
         hasDraft: false,

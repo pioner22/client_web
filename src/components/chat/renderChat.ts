@@ -817,7 +817,7 @@ export function renderChat(layout: Layout, state: AppState) {
           class: state.chatSearchOpen ? "btn chat-search-toggle btn-active" : "btn chat-search-toggle",
           type: "button",
           "data-action": state.chatSearchOpen ? "chat-search-close" : "chat-search-open",
-          title: "Поиск в чате (Ctrl+F)",
+          title: mobileUi ? "Поиск в чате" : "Поиск в чате (Ctrl+F)",
           "aria-label": "Поиск в чате",
         },
         [state.chatSearchOpen ? "Закрыть поиск" : "Поиск"]

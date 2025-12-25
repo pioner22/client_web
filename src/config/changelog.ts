@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.185",
+    date: "2025-12-25",
+    fixed: [
+      "iOS Safari: убрали always-fixed `#app` на мобилке (меньше шансов, что низ UI окажется под Safari-панелью); offset/fixed включается только при `visualViewport.offsetTop` во время клавиатуры",
+    ],
+    improved: [
+      "Mobile UI: «Выход» больше не использует символ Esc (⎋)",
+      "Mobile UI: кнопка поиска в чате больше не показывает «Ctrl+F»",
+    ],
+  },
+  {
     version: "0.1.184",
     date: "2025-12-25",
     improved: [
