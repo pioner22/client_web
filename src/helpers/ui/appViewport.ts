@@ -30,9 +30,21 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
     // "Full app" height when keyboard is closed.
     const base = layout;
+    const iosEnv = isIos || iosStandalone;
+    const safeBottomRaw = (() => {
+      if (!docEl || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return 0;
+      try {
+        const raw = window.getComputedStyle(docEl).getPropertyValue("--safe-bottom-raw");
+        const parsed = Number.parseFloat(raw);
+        return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+      } catch {
+        return 0;
+      }
+    })();
     // iOS PWA: sometimes innerHeight/clientHeight are missing the bottom safe-area, leaving a visible "black strip".
     // Track the gap so CSS can paint it without forcing a taller layout.
     let gapBottom = 0;
+    let screenGap = 0;
     try {
       let screenMax = 0;
       const sh = Math.round(Number((window as any).screen?.height) || 0);
@@ -40,13 +52,19 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       const avail = Math.round(Number((window as any).screen?.availHeight) || 0);
       if (avail > 0) screenMax = Math.max(screenMax, avail);
       const outer = Math.round(Number((window as any).outerHeight) || 0);
-      if ((isIos || iosStandalone) && outer > 0) screenMax = Math.max(screenMax, outer);
-      if (iosStandalone && base > 0 && screenMax > base) {
+      if (iosEnv && outer > 0) screenMax = Math.max(screenMax, outer);
+      if (iosEnv && base > 0 && screenMax > base) {
         const diff = screenMax - base;
+        screenGap = diff;
         if (diff >= 6 && diff <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = diff;
       }
     } catch {
       // ignore
+    }
+    if (iosEnv && safeBottomRaw > 0 && safeBottomRaw <= USE_SCREEN_HEIGHT_SLACK_PX) {
+      if (!gapBottom || gapBottom < safeBottomRaw - 2 || screenGap <= 0) {
+        gapBottom = safeBottomRaw;
+      }
     }
     const vv = window.visualViewport;
     const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;

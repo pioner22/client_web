@@ -223,6 +223,65 @@ test("viewport var: iOS PWA: учитывает разницу screen.height и 
   }
 });
 
+test("viewport var: iOS PWA: fallback на safe-area inset при отсутствии screen gap", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    Object.defineProperty(globalThis, "navigator", {
+      value: { userAgent: "iPhone", maxTouchPoints: 0, standalone: true },
+      configurable: true,
+      writable: true,
+    });
+    globalThis.document = { documentElement: { clientHeight: 810 } };
+    globalThis.window = {
+      innerHeight: 810,
+      screen: { height: 0 },
+      visualViewport: { height: 808.2, addEventListener() {}, removeEventListener() {} },
+      getComputedStyle() {
+        return { getPropertyValue: () => "34px" };
+      },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "844px");
+    assert.equal(style._props.get("--app-gap-bottom"), "34px");
+
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
+    assert.equal(style._props.has("--app-gap-bottom"), false);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+    if (prev.navigator) Object.defineProperty(globalThis, "navigator", prev.navigator);
+    else delete globalThis.navigator;
+  }
+});
+
 test("viewport var: installAppViewportHeightVar игнорирует screen.height на не-iOS", async () => {
   const helper = await loadInstall();
   const prev = {
