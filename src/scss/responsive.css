@@ -107,7 +107,7 @@
   .sidebar-mobile-bottom {
     display: block;
     z-index: 3;
-    background: transparent;
+    background: var(--sidebar-bg);
     padding-top: var(--sp-2);
     padding-bottom: max(var(--sp-2), env(safe-area-inset-bottom));
     margin-top: var(--sp-2);

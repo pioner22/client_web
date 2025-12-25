@@ -1,3 +1,8 @@
+:root {
+  --safe-bottom: clamp(0px, env(safe-area-inset-bottom), 24px);
+  --app-gap-bottom: 0px;
+}
+
 html,
 body {
   height: 100%;
@@ -30,9 +35,6 @@ button {
 }
 
 #app {
-  /* Safe-area insets (can be overridden by JS when keyboard is open). */
-  --safe-bottom: clamp(0px, env(safe-area-inset-bottom), 24px);
-
   /* Ensure the app background covers the whole viewport (including safe-area). */
   background: var(--app-bg);
 
@@ -62,8 +64,8 @@ body::after {
   left: 0;
   right: 0;
   bottom: 0;
-  height: env(safe-area-inset-bottom);
-  background: var(--app-bg);
+  height: max(var(--safe-bottom), var(--app-gap-bottom, 0px));
+  background: var(--sidebar-bg);
   pointer-events: none;
   z-index: 0;
 }

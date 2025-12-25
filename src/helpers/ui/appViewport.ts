@@ -18,7 +18,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     docStyle?.setProperty(name, value);
   };
 
-  const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number } => {
+  const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number; gapBottom: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 32;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
@@ -28,27 +28,23 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // "Layout viewport" height (used for vvTop/vvBottom math). Keep this independent from any screen.height hacks.
     const layout = Math.max(inner, client);
 
-    // "Full app" height when keyboard is closed. In iOS PWA (standalone) innerHeight/clientHeight may miss bottom safe-area.
-    let base = layout;
+    // "Full app" height when keyboard is closed.
+    const base = layout;
     // iOS PWA: sometimes innerHeight/clientHeight are missing the bottom safe-area, leaving a visible "black strip".
-    // Use screen/outer heights only when they're close to the layout viewport to avoid breaking Safari with browser chrome.
+    // Track the gap so CSS can paint it without forcing a taller layout.
+    let gapBottom = 0;
     try {
-      const candidates: number[] = [base];
+      let screenMax = 0;
       const sh = Math.round(Number((window as any).screen?.height) || 0);
-      if (sh > 0) {
-        if (iosStandalone && base > 0) candidates.push(sh);
-        else if (isIos && base > 0 && sh >= base && sh - base <= USE_SCREEN_HEIGHT_SLACK_PX) candidates.push(sh);
-      }
+      if (sh > 0) screenMax = Math.max(screenMax, sh);
       const avail = Math.round(Number((window as any).screen?.availHeight) || 0);
-      if (avail > 0) {
-        if (iosStandalone && base > 0) candidates.push(avail);
-        else if (isIos && base > 0 && avail >= base && avail - base <= USE_SCREEN_HEIGHT_SLACK_PX) candidates.push(avail);
-      }
+      if (avail > 0) screenMax = Math.max(screenMax, avail);
       const outer = Math.round(Number((window as any).outerHeight) || 0);
-      if ((isIos || iosStandalone) && outer > 0 && base > 0 && outer >= base && outer - base <= USE_SCREEN_HEIGHT_SLACK_PX) {
-        candidates.push(outer);
+      if ((isIos || iosStandalone) && outer > 0) screenMax = Math.max(screenMax, outer);
+      if (iosStandalone && base > 0 && screenMax > base) {
+        const diff = screenMax - base;
+        if (diff >= 6 && diff <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = diff;
       }
-      base = Math.max(...candidates);
     } catch {
       // ignore
     }
@@ -81,12 +77,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
     const resolved = keyboard ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
-    return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom) };
+    return { height: height > 0 ? height : 0, keyboard, vvTop, vvBottom: Math.round(coveredBottom), gapBottom };
   };
 
   const apply = () => {
     rafId = null;
-    const { height, keyboard, vvTop, vvBottom } = read();
+    const { height, keyboard, vvTop, vvBottom, gapBottom } = read();
     if (!height) {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
       return;
@@ -114,6 +110,10 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // instead of relying solely on `height: ...` (more stable on iOS).
     if (keyboard && vvBottom >= 1) setVar("--app-vv-bottom", `${vvBottom}px`);
     else setVar("--app-vv-bottom", null);
+
+    const gap = keyboard ? 0 : gapBottom;
+    if (gap >= 1) setVar("--app-gap-bottom", `${gap}px`);
+    else setVar("--app-gap-bottom", null);
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;
@@ -171,6 +171,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     setVar("--safe-bottom", null);
     setVar("--app-vv-top", null);
     setVar("--app-vv-bottom", null);
+    setVar("--app-gap-bottom", null);
     if (docEl?.classList) docEl.classList.remove("app-vv-offset");
   };
 }

@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info (F1) and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.175",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone PWA: нижний gap безопасной зоны рисуется отдельно (без исчезновения меню/ввода)",
+      "Mobile: фон нижних табов совпадает с панелью (без тёмной полосы снизу)",
+    ],
+    improved: ["Viewport: вместо растягивания лейаута до screen.height считаем gap и красим его подложкой"],
+  },
+  {
+    version: "0.1.174",
+    date: "2025-12-25",
+    fixed: [
+      "iPhone PWA: фон safe‑area на мобилке совпадает с панелью (без тёмной полосы снизу)",
+      "Mobile: background html/body синхронизирован с sidebar",
+    ],
+  },
+  {
     version: "0.1.173",
     date: "2025-12-25",
     fixed: [

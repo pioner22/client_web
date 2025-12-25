@@ -162,7 +162,7 @@ test("viewport var: installAppViewportHeightVar предпочитает documen
   }
 });
 
-test("viewport var: installAppViewportHeightVar может подхватить screen.height, если он близок к base (iOS PWA safe-area)", async () => {
+test("viewport var: iOS PWA: учитывает разницу screen.height и base через --app-gap-bottom", async () => {
   const helper = await loadInstall();
   const prev = {
     window: globalThis.window,
@@ -182,7 +182,7 @@ test("viewport var: installAppViewportHeightVar может подхватить 
     const root = { style };
 
     Object.defineProperty(globalThis, "navigator", {
-      value: { userAgent: "iPhone", maxTouchPoints: 0 },
+      value: { userAgent: "iPhone", maxTouchPoints: 0, standalone: true },
       configurable: true,
       writable: true,
     });
@@ -201,11 +201,13 @@ test("viewport var: installAppViewportHeightVar может подхватить 
     };
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "844px");
+    assert.equal(style._props.get("--app-vh"), "810px");
+    assert.equal(style._props.get("--app-gap-bottom"), "34px");
     assert.equal(style._props.has("--safe-bottom"), false);
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
+    assert.equal(style._props.has("--app-gap-bottom"), false);
   } finally {
     await helper.cleanup();
     if (prev.window === undefined) delete globalThis.window;
