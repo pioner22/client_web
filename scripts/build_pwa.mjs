@@ -468,7 +468,7 @@ self.addEventListener("notificationclick", (event) => {
           if (room) qs.set("push_room", room);
           if (from) qs.set("push_from", from);
           const q = qs.toString();
-          return q ? `./?${q}` : "./";
+          return q ? "./?" + q : "./";
         } catch {
           return "./";
         }
