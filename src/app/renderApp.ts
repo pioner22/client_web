@@ -12,6 +12,7 @@ import { conversationKey } from "../helpers/chat/conversationKey";
 import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
 import { focusElement } from "../helpers/ui/focus";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
+import { maxBoardScheduleDelayMs } from "../helpers/boards/boardSchedule";
 import { createSearchPage, type SearchPage } from "../pages/search/createSearchPage";
 import { createProfilePage, type ProfilePage } from "../pages/profile/createProfilePage";
 import { createUserPage, type UserPage } from "../pages/user/createUserPage";
@@ -31,6 +32,32 @@ let helpPage: HelpPage | null = null;
 let groupCreatePage: CreateGroupPage | null = null;
 let boardCreatePage: CreateBoardPage | null = null;
 let lastPage: PageKind | null = null;
+
+function formatDatetimeLocal(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const y = d.getFullYear();
+  const m = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const h = pad(d.getHours());
+  const min = pad(d.getMinutes());
+  return `${y}-${m}-${day}T${h}:${min}`;
+}
+
+function parseDatetimeLocal(value: string): number | null {
+  const v = String(value || "").trim();
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mon = Number(m[2]);
+  const day = Number(m[3]);
+  const h = Number(m[4]);
+  const min = Number(m[5]);
+  if (!Number.isFinite(y) || !Number.isFinite(mon) || !Number.isFinite(day) || !Number.isFinite(h) || !Number.isFinite(min)) return null;
+  const d = new Date(y, mon - 1, day, h, min, 0, 0);
+  const ts = d.getTime();
+  return Number.isFinite(ts) ? ts : null;
+}
 
 function mountChat(layout: Layout, node: HTMLElement) {
   if (layout.chatHost.childNodes.length === 1 && layout.chatHost.firstChild === node) return;
@@ -162,8 +189,57 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   else if (isBoardReadOnly) composerDisabledReason = "На доске пишет только владелец";
 
   const composerEnabled = chatInputVisible && composerDisabledReason === null;
+  const boardEditorAvailable = composerEnabled && Boolean(sel && sel.kind === "board") && !isBoardReadOnly && !editing;
+  const boardEditorOpen = Boolean(boardEditorAvailable && state.boardComposerOpen);
+  layout.boardEditorBtn.classList.toggle("hidden", !boardEditorAvailable);
+  layout.boardEditorBtn.classList.toggle("btn-active", boardEditorOpen);
+  layout.boardEditorBtn.disabled = !boardEditorAvailable;
+  layout.boardEditorWrap.classList.toggle("hidden", !boardEditorOpen);
+  layout.inputWrap.classList.toggle("board-editor-open", boardEditorOpen);
+
+  if (boardEditorOpen && sel?.kind === "board") {
+    const now = Date.now();
+    const maxAt = now + maxBoardScheduleDelayMs();
+    layout.boardScheduleInput.min = formatDatetimeLocal(now);
+    layout.boardScheduleInput.max = formatDatetimeLocal(maxAt);
+
+    const scheduleTs = parseDatetimeLocal(layout.boardScheduleInput.value);
+    const scheduleOk = scheduleTs !== null && scheduleTs >= now && scheduleTs <= maxAt;
+    const scheduleCanSendNow = composerEnabled && Boolean(sel);
+    const scheduleText = sendText.trim();
+    layout.boardScheduleBtn.disabled = !scheduleCanSendNow || !scheduleText || tooLong || !scheduleOk;
+    layout.boardScheduleClearBtn.disabled = !layout.boardScheduleInput.value;
+
+    const scheduled = (state.boardScheduledPosts || []).filter((x) => x.boardId === sel.id).sort((a, b) => a.scheduleAt - b.scheduleAt);
+    if (!scheduled.length) {
+      layout.boardScheduleList.replaceChildren(el("div", { class: "board-editor-preview-empty" }, ["Нет запланированных публикаций."]));
+    } else {
+      const list = scheduled.slice(0, 12).map((it) => {
+        const when = (() => {
+          try {
+            return new Date(it.scheduleAt).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+          } catch {
+            return String(it.scheduleAt);
+          }
+        })();
+        const firstLine = String(it.text || "").trim().split("\n")[0] || "—";
+        const label = firstLine.length > 72 ? `${firstLine.slice(0, 69)}…` : firstLine;
+        return el("div", { class: "board-sched-item" }, [
+          el("div", { class: "board-sched-meta" }, [el("div", { class: "board-sched-time" }, [when]), el("div", { class: "board-sched-text" }, [label])]),
+          el("button", { class: "btn board-sched-cancel", type: "button", "data-action": "board-schedule-cancel", "data-sched-id": it.id, "aria-label": "Отменить" }, ["×"]),
+        ]);
+      });
+      layout.boardScheduleList.replaceChildren(...list);
+    }
+  } else {
+    layout.boardScheduleBtn.disabled = true;
+    layout.boardScheduleClearBtn.disabled = true;
+    layout.boardScheduleList.replaceChildren(el("div", { class: "board-editor-preview-empty" }, [""]));
+  }
+
   layout.input.disabled = !composerEnabled;
-  layout.input.placeholder = composerDisabledReason || (editing ? "Изменить сообщение" : "Сообщение");
+  layout.input.placeholder = composerDisabledReason || (editing ? "Изменить сообщение" : boardEditorOpen ? "Текст объявления…" : "Сообщение");
+  layout.input.setAttribute("enterkeyhint", boardEditorOpen ? "enter" : "send");
 
   const canSendNow = composerEnabled && Boolean(sel);
   const composerText = sendText.trim();
@@ -171,7 +247,10 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   layout.attachBtn.disabled = !canSendNow || !sel || isBoardReadOnly || Boolean(editing);
   layout.emojiBtn.disabled = !canSendNow || !sel || isBoardReadOnly;
   layout.inputWrap.classList.toggle("composer-editing", Boolean(editing));
-  layout.sendBtn.setAttribute("aria-label", editing ? "Сохранить" : "Отправить");
+  layout.sendBtn.setAttribute("aria-label", editing ? "Сохранить" : boardEditorOpen ? "Опубликовать" : "Отправить");
+  layout.sendBtn.textContent = editing ? "Сохранить" : boardEditorOpen ? "Опубликовать" : "Отправить";
+  const hint = layout.inputWrap.querySelector(".composer-hint") as HTMLElement | null;
+  if (hint) hint.textContent = boardEditorOpen ? (mobileUi ? "Кнопка «Опубликовать» — справа" : "Ctrl+Enter — опубликовать") : "Shift+Enter — новая строка";
 
   const editBar = layout.inputWrap.querySelector("#composer-edit") as HTMLElement | null;
   const editText = layout.inputWrap.querySelector("#composer-edit-text") as HTMLElement | null;

@@ -185,7 +185,7 @@
 }
 
 /* Telegram-like: подсказки/счётчик показываем только когда это реально нужно. */
-.input-wrap:not(.composer-too-long):not(.composer-near-limit) .composer-meta {
+.input-wrap:not(.composer-too-long):not(.composer-near-limit):not(.board-editor-open) .composer-meta {
   display: none;
 }
 
@@ -211,6 +211,180 @@
 
 @media (pointer: coarse) {
   .composer-hint {
+    display: none;
+  }
+}
+
+/* ===== Boards: inline news editor ===== */
+.input-wrap.board-editor-open {
+  --composer-field-min-h: 96px;
+  --composer-field-max-h: min(44vh, 420px);
+}
+
+.board-editor {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 22%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel), transparent 12%);
+}
+
+.board-editor-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.board-editor-toolbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.btn.board-editor-tool {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+
+.board-editor-sep {
+  width: 1px;
+  height: 18px;
+  background: color-mix(in srgb, var(--line), transparent 25%);
+  flex: 0 0 auto;
+  margin: 0 4px;
+}
+
+.board-editor-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.board-editor-preview-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.board-editor-preview-body {
+  border: 1px solid color-mix(in srgb, var(--line), transparent 25%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
+  padding: 12px;
+  max-height: min(28vh, 280px);
+  overflow: auto;
+}
+
+.board-editor-preview-empty {
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.board-editor-schedule {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.board-editor-schedule-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.board-editor-datetime {
+  width: 100%;
+  min-width: 140px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--composer-field-bg);
+  border: var(--composer-field-border-width) solid var(--composer-field-border-color);
+  color: var(--composer-field-text);
+  padding: 0 10px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.board-editor-schedule-btn,
+.board-editor-schedule-clear {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.board-editor-schedule-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  opacity: 0.9;
+}
+
+.board-editor-schedule-list {
+  display: grid;
+  gap: 6px;
+}
+
+.board-sched-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 25%);
+  background: color-mix(in srgb, var(--panel2), transparent 8%);
+}
+
+.board-sched-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.board-sched-time {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-sched-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn.board-sched-cancel {
+  height: 30px;
+  width: 30px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 16px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 520px) {
+  .board-editor-schedule {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .board-editor-schedule-label {
     display: none;
   }
 }

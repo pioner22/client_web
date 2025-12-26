@@ -44,6 +44,17 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const emojiBtn = el("button", { class: "btn composer-emoji", type: "button", title: "Эмодзи", "aria-label": "Открыть эмодзи" }, [
     "☺︎",
   ]) as HTMLButtonElement;
+  const boardEditorBtn = el(
+    "button",
+    {
+      class: "btn composer-board-editor hidden",
+      type: "button",
+      title: "Редактор новости",
+      "aria-label": "Редактор новости",
+      "data-action": "board-editor-toggle",
+    },
+    ["✎"]
+  ) as HTMLButtonElement;
   const sendBtn = el("button", { class: "btn composer-send", type: "button", "aria-label": "Отправить" }, ["Отправить"]);
   const editBar = el("div", { class: "composer-edit hidden", id: "composer-edit", role: "status", "aria-live": "polite" }, [
     el("div", { class: "composer-edit-body" }, [
@@ -66,10 +77,62 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     el("span", { class: "composer-hint", "aria-hidden": "true" }, ["Shift+Enter — новая строка"]),
     el("span", { class: "composer-count", "aria-hidden": "true" }, ["0/4000"]),
   ]);
-  const composerRow = el("div", { class: "composer-row" }, [
-    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, input, sendBtn]),
+
+  const boardEditorToolbar = el("div", { class: "board-editor-toolbar", role: "toolbar", "aria-label": "Форматирование новости" }, [
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-heading", title: "Заголовок (#)" }, ["H"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-list", title: "Список (•)" }, ["•"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-quote", title: "Цитата (>)" }, ["❝"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-divider", title: "Разделитель (—)" }, ["—"]),
+    el("span", { class: "board-editor-sep", "aria-hidden": "true" }, [""]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-added", title: "Блок «Добавлено»" }, ["+ Добавлено"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-improved", title: "Блок «Улучшено»" }, ["↑ Улучшено"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-fixed", title: "Блок «Исправлено»" }, ["🛠 Исправлено"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-notes", title: "Блок «Примечания»" }, ["ℹ Примечания"]),
   ]);
-  const inputWrap = el("div", { class: "input-wrap" }, [editBar, composerRow, composerMeta]);
+
+  const boardEditorPreviewBody = el("div", { class: "board-editor-preview-body" }, [""]);
+  const boardEditorPreview = el("div", { class: "board-editor-preview" }, [
+    el("div", { class: "board-editor-preview-title" }, ["Предпросмотр"]),
+    boardEditorPreviewBody,
+  ]);
+
+  const boardScheduleInput = el("input", {
+    class: "board-editor-datetime",
+    id: "board-editor-schedule-at",
+    type: "datetime-local",
+    "data-ios-assistant": "strict",
+    autocomplete: "off",
+  }) as HTMLInputElement;
+  const boardScheduleBtn = el(
+    "button",
+    { class: "btn board-editor-schedule-btn", type: "button", "data-action": "board-schedule-add" },
+    ["Запланировать"]
+  ) as HTMLButtonElement;
+  const boardScheduleClearBtn = el(
+    "button",
+    { class: "btn board-editor-schedule-clear", type: "button", "data-action": "board-schedule-clear" },
+    ["Сброс"]
+  ) as HTMLButtonElement;
+  const boardScheduleRow = el("div", { class: "board-editor-schedule" }, [
+    el("div", { class: "board-editor-schedule-label" }, ["Публикация"]),
+    boardScheduleInput,
+    boardScheduleBtn,
+    boardScheduleClearBtn,
+  ]);
+  const boardScheduleHint = el("div", { class: "board-editor-schedule-hint" }, ["Можно запланировать на ближайшие 7 дней (работает пока приложение открыто)."]);
+  const boardScheduleList = el("div", { class: "board-editor-schedule-list" }, [""]);
+
+  const boardEditorWrap = el("div", { class: "board-editor hidden", id: "board-editor" }, [
+    boardEditorToolbar,
+    boardScheduleRow,
+    boardScheduleHint,
+    boardScheduleList,
+    boardEditorPreview,
+  ]);
+  const composerRow = el("div", { class: "composer-row" }, [
+    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, boardEditorBtn, input, sendBtn]),
+  ]);
+  const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorWrap, composerRow, composerMeta]);
 
   const footer = el("footer", { class: "footer" });
   const toastHost = el("div", { class: "toast-host hidden", "aria-live": "polite", "aria-atomic": "true" });
@@ -102,6 +165,15 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     input,
     attachBtn,
     emojiBtn,
+    boardEditorBtn,
+    boardEditorWrap,
+    boardEditorToolbar,
+    boardEditorPreview,
+    boardEditorPreviewBody,
+    boardScheduleInput,
+    boardScheduleBtn,
+    boardScheduleClearBtn,
+    boardScheduleList,
     sendBtn,
     footer,
     navOverlay,

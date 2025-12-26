@@ -6,6 +6,8 @@ import type { AppState, ChatMessage, FileOfferIn, FileTransferEntry } from "../.
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { fileBadge } from "../../helpers/files/fileBadge";
 import { safeUrl } from "../../helpers/security/safeUrl";
+import { renderRichText } from "../../helpers/chat/richText";
+import { renderBoardPost } from "../../helpers/boards/boardPost";
 import type { Layout } from "../layout/types";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 
@@ -269,50 +271,6 @@ function skeletonMsg(kind: "in" | "out", seed: number): HTMLElement {
   return el("div", { class: `msg msg-${kind} msg-skel`, "aria-hidden": "true" }, children);
 }
 
-function splitUrlToken(raw: string): { href: string; label: string; trailing: string } {
-  let token = raw;
-  let trailing = "";
-  // Strip trailing punctuation, keep it outside the link.
-  while (token.length && /[)\].,!?:;]+$/.test(token)) {
-    trailing = token.slice(-1) + trailing;
-    token = token.slice(0, -1);
-  }
-  const href = token;
-  return { href, label: token, trailing };
-}
-
-function renderRichText(text: string): Array<HTMLElement | string> {
-  const s = String(text ?? "");
-  if (!s) return [""];
-  // Note: keep it conservative; avoid any HTML injection.
-  const re = /(https?:\/\/[^\s<]+|@[a-z0-9_]{3,16})/gi;
-  const out: Array<HTMLElement | string> = [];
-  let last = 0;
-  for (;;) {
-    const m = re.exec(s);
-    if (!m) break;
-    const idx = m.index;
-    if (idx > last) out.push(s.slice(last, idx));
-    const token = m[0] || "";
-    if (token.startsWith("@")) {
-      out.push(el("span", { class: "msg-mention" }, [token]));
-    } else {
-      const { href, label, trailing } = splitUrlToken(token);
-      const base = typeof location !== "undefined" ? location.href : "http://localhost/";
-      const safeHref = safeUrl(href, { base, allowedProtocols: ["http:", "https:"] });
-      if (safeHref) {
-        out.push(el("a", { class: "msg-link", href: safeHref, target: "_blank", rel: "noopener noreferrer" }, [label]));
-      } else {
-        out.push(label);
-      }
-      if (trailing) out.push(trailing);
-    }
-    last = idx + token.length;
-  }
-  if (last < s.length) out.push(s.slice(last));
-  return out.length ? out : [s];
-}
-
 const EMOJI_SEGMENT_RE = /\p{Extended_Pictographic}/u;
 
 function isEmojiOnlyText(text: string): boolean {
@@ -359,110 +317,6 @@ function renderMultilineText(text: string): HTMLElement {
   const lines = cleaned.split("\n");
   const nodes = lines.map((line) => el("div", { class: "invite-line" }, renderRichText(line)));
   return el("div", { class: "invite-text" }, nodes);
-}
-
-function renderBoardPost(text: string): HTMLElement {
-  const cleaned = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const lines = cleaned.split("\n").map((l) => String(l ?? "").trimEnd());
-  const out: HTMLElement[] = [];
-
-  const flushParagraph = (buf: string[]) => {
-    const parts = buf.map((x) => String(x ?? "").trimEnd()).filter((x) => x !== "");
-    if (!parts.length) return;
-    const nodes: Array<HTMLElement | string> = [];
-    for (let i = 0; i < parts.length; i += 1) {
-      if (i) nodes.push(el("br"));
-      nodes.push(...renderRichText(parts[i]));
-    }
-    out.push(el("div", { class: "board-p" }, nodes));
-  };
-
-  const isDivider = (raw: string) => {
-    const t = String(raw ?? "").trim();
-    return t === "—" || t === "---";
-  };
-
-  const isHeading = (raw: string) => /^#{1,6}\s+/.test(String(raw ?? "").trimStart());
-  const headingInfo = (raw: string): { level: number; text: string } | null => {
-    const m = String(raw ?? "").trimStart().match(/^(#{1,6})\s+(.+)$/);
-    if (!m) return null;
-    const level = Math.max(1, Math.min(6, m[1]?.length || 1));
-    const text = String(m[2] ?? "").trimEnd();
-    return text ? { level, text } : null;
-  };
-
-  const isList = (raw: string) => /^(?:•|-)\s+/.test(String(raw ?? "").trimStart());
-  const listText = (raw: string) => String(raw ?? "").trimStart().replace(/^(?:•|-)\s+/, "").trimEnd();
-
-  const isQuote = (raw: string) => /^>\s+/.test(String(raw ?? "").trimStart());
-  const quoteText = (raw: string) => String(raw ?? "").trimStart().replace(/^>\s+/, "").trimEnd();
-
-  let paragraph: string[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const raw = lines[i] ?? "";
-    const trimmed = String(raw ?? "");
-    const t = trimmed.trim();
-    if (!t) {
-      flushParagraph(paragraph);
-      paragraph = [];
-      i += 1;
-      continue;
-    }
-    if (isDivider(trimmed)) {
-      flushParagraph(paragraph);
-      paragraph = [];
-      out.push(el("hr", { class: "board-hr", "aria-hidden": "true" }));
-      i += 1;
-      continue;
-    }
-    if (isHeading(trimmed)) {
-      flushParagraph(paragraph);
-      paragraph = [];
-      const info = headingInfo(trimmed);
-      if (info) {
-        out.push(el("div", { class: `board-h board-h${info.level}` }, renderRichText(info.text)));
-      } else {
-        paragraph.push(trimmed);
-      }
-      i += 1;
-      continue;
-    }
-    if (isList(trimmed)) {
-      flushParagraph(paragraph);
-      paragraph = [];
-      const items: HTMLElement[] = [];
-      while (i < lines.length) {
-        const liRaw = lines[i] ?? "";
-        if (!isList(liRaw)) break;
-        const txt = listText(liRaw);
-        items.push(el("li", { class: "board-li" }, txt ? renderRichText(txt) : [""]));
-        i += 1;
-      }
-      out.push(el("ul", { class: "board-list" }, items));
-      continue;
-    }
-    if (isQuote(trimmed)) {
-      flushParagraph(paragraph);
-      paragraph = [];
-      const qLines: HTMLElement[] = [];
-      while (i < lines.length) {
-        const qRaw = lines[i] ?? "";
-        if (!isQuote(qRaw)) break;
-        const txt = quoteText(qRaw);
-        qLines.push(el("div", { class: "board-quote-line" }, txt ? renderRichText(txt) : [""]));
-        i += 1;
-      }
-      out.push(el("blockquote", { class: "board-quote" }, qLines));
-      continue;
-    }
-
-    paragraph.push(trimmed);
-    i += 1;
-  }
-  flushParagraph(paragraph);
-
-  return el("div", { class: "board-post" }, out.length ? out : [el("div", { class: "board-p" }, renderRichText(cleaned))]);
 }
 
 function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string, string>, opts?: { mobileUi: boolean; boardUi?: boolean }): HTMLElement {

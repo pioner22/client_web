@@ -226,6 +226,14 @@ export interface OutboxEntry {
   lastAttemptAt?: number;
 }
 
+export interface BoardScheduledPost {
+  id: string;
+  boardId: string;
+  text: string;
+  scheduleAt: number; // ms timestamp
+  createdAt: number; // ms timestamp
+}
+
 export interface EditingMessageState {
   key: string;
   id: number;
@@ -355,6 +363,8 @@ export interface AppState {
   drafts: Record<string, string>;
   input: string;
   editing: EditingMessageState | null;
+  boardComposerOpen: boolean;
+  boardScheduledPosts: BoardScheduledPost[];
 
   chatSearchOpen: boolean;
   chatSearchQuery: string;

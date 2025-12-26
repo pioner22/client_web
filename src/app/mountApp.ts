@@ -77,6 +77,8 @@ import {
 import { createRafScrollLock } from "../helpers/ui/rafScrollLock";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
+import { renderBoardPost } from "../helpers/boards/boardPost";
+import { loadBoardScheduleForUser, maxBoardScheduleDelayMs, saveBoardScheduleForUser } from "../helpers/boards/boardSchedule";
 
 const ROOM_INFO_MAX = 2000;
 const IOS_ACTIVE_CONV_LIMIT = 320;
@@ -105,6 +107,7 @@ let fileTransfersSaveTimer: number | null = null;
 let fileTransfersLoadedForUser: string | null = null;
 let outboxSaveTimer: number | null = null;
 let outboxLoadedForUser: string | null = null;
+let boardScheduleLoadedForUser: string | null = null;
 
 function scheduleSaveDrafts(store: Store<AppState>) {
   if (draftsSaveTimer !== null) {
@@ -1421,7 +1424,11 @@ export function mountApp(root: HTMLElement) {
       const sel = st.selected;
       if (!sel || sel.kind !== "board") return;
       e.preventDefault();
-      openBoardPostModal(sel.id);
+      store.set((prev) => ({ ...prev, boardComposerOpen: true }));
+      queueMicrotask(() => {
+        scheduleBoardEditorPreview();
+        scheduleFocusComposer();
+      });
       return;
     }
 
@@ -2771,6 +2778,7 @@ export function mountApp(root: HTMLElement) {
         drafts: nextDrafts,
         input: nextText,
         editing: leavingEdit ? null : p.editing,
+        boardComposerOpen: t.kind === "board" ? p.boardComposerOpen : false,
         chatSearchOpen: false,
         chatSearchQuery: "",
         chatSearchHits: [],
@@ -2781,6 +2789,7 @@ export function mountApp(root: HTMLElement) {
     try {
       if (layout.input.value !== nextText) layout.input.value = nextText;
       autosizeInput(layout.input);
+      scheduleBoardEditorPreview();
     } catch {
       // ignore
     }
@@ -5382,6 +5391,8 @@ export function mountApp(root: HTMLElement) {
       drafts: {},
       input: "",
       editing: null,
+      boardComposerOpen: false,
+      boardScheduledPosts: [],
       chatSearchOpen: false,
       chatSearchQuery: "",
       chatSearchHits: [],
@@ -5401,6 +5412,8 @@ export function mountApp(root: HTMLElement) {
     pinnedMessagesLoadedForUser = null;
     fileTransfersLoadedForUser = null;
     outboxLoadedForUser = null;
+    boardScheduleLoadedForUser = null;
+    clearBoardScheduleTimer();
     try {
       layout.input.value = "";
       autosizeInput(layout.input);
@@ -5771,6 +5784,132 @@ export function mountApp(root: HTMLElement) {
     scheduleSaveOutbox(store);
   }
 
+  let boardScheduleTimer: number | null = null;
+  let boardScheduleNextAt = 0;
+
+  function clearBoardScheduleTimer() {
+    if (boardScheduleTimer !== null) {
+      window.clearTimeout(boardScheduleTimer);
+      boardScheduleTimer = null;
+    }
+    boardScheduleNextAt = 0;
+  }
+
+  function armBoardScheduleTimer() {
+    const st = store.get();
+    if (!st.authed || !st.selfId) {
+      clearBoardScheduleTimer();
+      return;
+    }
+    const list = Array.isArray(st.boardScheduledPosts) ? st.boardScheduledPosts : [];
+    if (!list.length) {
+      clearBoardScheduleTimer();
+      return;
+    }
+    const nextAt = list.reduce((min, it) => (it.scheduleAt && it.scheduleAt < min ? it.scheduleAt : min), Number.POSITIVE_INFINITY);
+    if (!Number.isFinite(nextAt) || nextAt <= 0) {
+      clearBoardScheduleTimer();
+      return;
+    }
+    if (boardScheduleTimer !== null && boardScheduleNextAt === nextAt) return;
+    clearBoardScheduleTimer();
+    boardScheduleNextAt = nextAt;
+    const now = Date.now();
+    const delay = Math.max(0, nextAt - now);
+    boardScheduleTimer = window.setTimeout(() => {
+      boardScheduleTimer = null;
+      boardScheduleNextAt = 0;
+      drainBoardSchedule();
+    }, delay);
+  }
+
+  function sendScheduledBoardPost(boardId: string, text: string) {
+    const st = store.get();
+    if (!st.authed || !st.selfId) return;
+    const bid = String(boardId || "").trim();
+    const body = String(text || "").trimEnd();
+    if (!bid || !body.trim()) return;
+
+    const b = (st.boards || []).find((x) => x.id === bid);
+    if (!b) {
+      showToast(`Запланированный пост: доска не найдена (${bid})`, { kind: "warn" });
+      return;
+    }
+    const owner = String(b.owner_id || "").trim();
+    const me = String(st.selfId || "").trim();
+    if (owner && me && owner !== me) {
+      showToast("Запланированный пост: писать может только владелец", { kind: "warn" });
+      return;
+    }
+
+    const target: TargetRef = { kind: "board", id: bid };
+    const convKey = conversationKey(target);
+    const localId = makeOutboxLocalId();
+    const ts = nowTs();
+    const nowMs = Date.now();
+    const payload = { type: "send" as const, room: bid, text: body };
+    const sent = st.conn === "connected" ? gateway.send(payload) : false;
+    const initialStatus = sent ? ("sending" as const) : ("queued" as const);
+
+    const localMsg = {
+      kind: "out" as const,
+      from: st.selfId || "",
+      room: bid,
+      text: body,
+      ts,
+      localId,
+      id: null,
+      status: initialStatus,
+    };
+
+    store.set((prev) => {
+      const next = upsertConversation(prev, convKey, localMsg);
+      const outbox = addOutboxEntry(next.outbox, convKey, {
+        localId,
+        ts,
+        text: body,
+        room: bid,
+        status: sent ? "sending" : "queued",
+        attempts: sent ? 1 : 0,
+        lastAttemptAt: sent ? nowMs : 0,
+      });
+      return { ...next, outbox };
+    });
+    scheduleSaveOutbox(store);
+  }
+
+  function drainBoardSchedule() {
+    const st = store.get();
+    if (!st.authed || !st.selfId) {
+      clearBoardScheduleTimer();
+      return;
+    }
+    const list = Array.isArray(st.boardScheduledPosts) ? st.boardScheduledPosts : [];
+    if (!list.length) {
+      clearBoardScheduleTimer();
+      return;
+    }
+    const now = Date.now();
+    const due = list.filter((x) => x.scheduleAt <= now + 1200);
+    if (!due.length) {
+      armBoardScheduleTimer();
+      return;
+    }
+    const dueIds = new Set(due.map((x) => x.id));
+    const remaining = list.filter((x) => !dueIds.has(x.id));
+
+    for (const it of due.sort((a, b) => a.scheduleAt - b.scheduleAt)) {
+      sendScheduledBoardPost(it.boardId, it.text);
+    }
+
+    store.set((prev) => ({ ...prev, boardScheduledPosts: remaining }));
+    saveBoardScheduleForUser(st.selfId, remaining);
+    if (due.length === 1) showToast("Опубликован запланированный пост", { kind: "success" });
+    else showToast(`Опубликовано запланированных постов: ${due.length}`, { kind: "success" });
+
+    armBoardScheduleTimer();
+  }
+
   const EMOJI_RECENTS_KEY = "yagodka:emoji_recents:v1";
   const EMOJI_RECENTS_MAX = 24;
   let emojiOpen = false;
@@ -6118,10 +6257,29 @@ export function mountApp(root: HTMLElement) {
     scheduleSaveDrafts(store);
   };
 
+  let boardPreviewRaf: number | null = null;
+  function scheduleBoardEditorPreview() {
+    if (boardPreviewRaf !== null) return;
+    boardPreviewRaf = window.requestAnimationFrame(() => {
+      boardPreviewRaf = null;
+      const st = store.get();
+      if (!st.boardComposerOpen) return;
+      if (st.selected?.kind !== "board") return;
+      const raw = String(layout.input.value || "");
+      const trimmed = raw.trimEnd();
+      if (!trimmed) {
+        layout.boardEditorPreviewBody.replaceChildren(el("div", { class: "board-editor-preview-empty" }, ["Пусто — напишите новость выше"]));
+        return;
+      }
+      layout.boardEditorPreviewBody.replaceChildren(renderBoardPost(trimmed));
+    });
+  }
+
   layout.input.addEventListener("input", () => {
     lastUserInputAt = Date.now();
     pendingInputValue = layout.input.value || "";
     scheduleAutosize();
+    scheduleBoardEditorPreview();
     const now = Date.now();
     if (now - lastCommitAt >= INPUT_COMMIT_MS) {
       lastCommitAt = now;
@@ -6140,6 +6298,9 @@ export function mountApp(root: HTMLElement) {
     scheduleAutosize();
     commitInputUpdate();
   });
+
+  layout.boardScheduleInput.addEventListener("input", () => store.set((prev) => prev));
+  layout.boardScheduleInput.addEventListener("change", () => store.set((prev) => prev));
 
   const vv = window.visualViewport;
   const onViewportResize = () => {
@@ -6177,26 +6338,262 @@ export function mountApp(root: HTMLElement) {
       closeEmojiPopover();
       return;
     }
+    const st = store.get();
+    const boardEditorOpen = Boolean(st.boardComposerOpen && st.selected?.kind === "board");
+
     if (e.key === "Enter" && !e.shiftKey) {
+      if (boardEditorOpen) {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          sendChat();
+        }
+        return;
+      }
       e.preventDefault();
       sendChat();
+      return;
     }
+
     if (e.key === "Escape") {
-      const st = store.get();
       if (st.editing) {
         e.preventDefault();
         e.stopPropagation();
         cancelEditing();
+        return;
+      }
+      if (boardEditorOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        store.set((prev) => (prev.boardComposerOpen ? { ...prev, boardComposerOpen: false } : prev));
+        return;
       }
     }
   });
 
   layout.sendBtn.addEventListener("click", () => sendChat());
   layout.inputWrap.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement | null)?.closest("button[data-action='composer-edit-cancel']") as HTMLButtonElement | null;
-    if (!btn) return;
+    const target = e.target as HTMLElement | null;
+
+    const btn = target?.closest("button[data-action='composer-edit-cancel']") as HTMLButtonElement | null;
+    if (btn) {
+      e.preventDefault();
+      cancelEditing();
+      return;
+    }
+
+    const boardToggle = target?.closest("button[data-action='board-editor-toggle']") as HTMLButtonElement | null;
+    if (boardToggle) {
+      const st = store.get();
+      if (!st.selected || st.selected.kind !== "board") return;
+      e.preventDefault();
+      const b = (st.boards || []).find((x) => x.id === st.selected?.id);
+      const owner = String(b?.owner_id || "").trim();
+      const me = String(st.selfId || "").trim();
+      if (!st.authed) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      if (owner && me && owner !== me) {
+        store.set({ status: "На доске писать может только владелец" });
+        return;
+      }
+      store.set((prev) => ({ ...prev, boardComposerOpen: !prev.boardComposerOpen }));
+      queueMicrotask(() => {
+        scheduleBoardEditorPreview();
+        scheduleFocusComposer();
+      });
+      return;
+    }
+
+    const scheduleAddBtn = target?.closest("button[data-action='board-schedule-add']") as HTMLButtonElement | null;
+    if (scheduleAddBtn) {
+      e.preventDefault();
+      const st = store.get();
+      const sel = st.selected;
+      if (!sel || sel.kind !== "board") return;
+      if (!st.authed || !st.selfId) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      const b = (st.boards || []).find((x) => x.id === sel.id);
+      const owner = String(b?.owner_id || "").trim();
+      const me = String(st.selfId || "").trim();
+      if (owner && me && owner !== me) {
+        store.set({ status: "На доске писать может только владелец" });
+        return;
+      }
+
+      const rawText = String(layout.input.value || "").trimEnd();
+      const body = rawText.trim();
+      if (!body) return;
+      if (body.length > APP_MSG_MAX_LEN) {
+        store.set({ status: `Слишком длинный пост (${body.length}/${APP_MSG_MAX_LEN})` });
+        return;
+      }
+
+      const rawWhen = String(layout.boardScheduleInput.value || "").trim();
+      const m = rawWhen.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      if (!m) {
+        store.set({ status: "Выберите дату/время" });
+        return;
+      }
+      const y = Number(m[1]);
+      const mon = Number(m[2]);
+      const day = Number(m[3]);
+      const h = Number(m[4]);
+      const min = Number(m[5]);
+      const when = new Date(y, mon - 1, day, h, min, 0, 0).getTime();
+      if (!Number.isFinite(when)) {
+        store.set({ status: "Некорректная дата" });
+        return;
+      }
+      const now = Date.now();
+      const maxAt = now + maxBoardScheduleDelayMs();
+      if (when < now) {
+        store.set({ status: "Время уже прошло — выберите будущее" });
+        return;
+      }
+      if (when > maxAt) {
+        store.set({ status: "Максимум — 7 дней вперёд" });
+        return;
+      }
+
+      const id = `sched-${now}-${Math.random().toString(16).slice(2, 10)}`;
+      const item = { id, boardId: sel.id, text: rawText, scheduleAt: Math.trunc(when), createdAt: now };
+      const nextList = [...(Array.isArray(st.boardScheduledPosts) ? st.boardScheduledPosts : []), item].sort((a, b) => a.scheduleAt - b.scheduleAt);
+      store.set((prev) => ({ ...prev, boardScheduledPosts: nextList }));
+      saveBoardScheduleForUser(st.selfId, nextList);
+      armBoardScheduleTimer();
+
+      layout.boardScheduleInput.value = "";
+      store.set((prev) => prev);
+
+      const convKey = conversationKey(sel);
+      store.set((prev) => ({ ...prev, input: "", drafts: convKey ? updateDraftMap(prev.drafts, convKey, "") : prev.drafts }));
+      scheduleSaveDrafts(store);
+      try {
+        layout.input.value = "";
+        autosizeInput(layout.input);
+        layout.input.focus();
+      } catch {
+        // ignore
+      }
+      showToast("Пост запланирован", { kind: "success" });
+      return;
+    }
+
+    const scheduleClearBtn = target?.closest("button[data-action='board-schedule-clear']") as HTMLButtonElement | null;
+    if (scheduleClearBtn) {
+      e.preventDefault();
+      layout.boardScheduleInput.value = "";
+      store.set((prev) => prev);
+      return;
+    }
+
+    const scheduleCancelBtn = target?.closest("button[data-action='board-schedule-cancel']") as HTMLButtonElement | null;
+    if (scheduleCancelBtn) {
+      e.preventDefault();
+      const id = String(scheduleCancelBtn.getAttribute("data-sched-id") || "").trim();
+      const st = store.get();
+      if (!id) return;
+      const next = (st.boardScheduledPosts || []).filter((x) => x.id !== id);
+      if (next.length === (st.boardScheduledPosts || []).length) return;
+      store.set((prev) => ({ ...prev, boardScheduledPosts: next }));
+      if (st.selfId) saveBoardScheduleForUser(st.selfId, next);
+      armBoardScheduleTimer();
+      showToast("Запланированная публикация отменена", { kind: "info" });
+      return;
+    }
+
+    const toolBtn = target?.closest("button[data-action^='board-tool-']") as HTMLButtonElement | null;
+    if (!toolBtn) return;
+    const action = String(toolBtn.getAttribute("data-action") || "").trim();
+    if (!action) return;
     e.preventDefault();
-    cancelEditing();
+
+    const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+    const lineStartIndex = (value: string, pos: number) => {
+      const i = value.lastIndexOf("\n", Math.max(0, pos - 1));
+      return i === -1 ? 0 : i + 1;
+    };
+    const lineEndIndex = (value: string, pos: number) => {
+      const i = value.indexOf("\n", Math.max(0, pos));
+      return i === -1 ? value.length : i;
+    };
+    const prefixCurrentLine = (value: string, caret: number, prefix: string) => {
+      const start = lineStartIndex(value, caret);
+      const next = value.slice(0, start) + prefix + value.slice(start);
+      return { value: next, caret: caret + prefix.length };
+    };
+    const prefixSelectedLines = (value: string, selStart: number, selEnd: number, prefix: string) => {
+      const a = Math.min(selStart, selEnd);
+      const b = Math.max(selStart, selEnd);
+      const start = lineStartIndex(value, a);
+      const end = lineEndIndex(value, b);
+      const region = value.slice(start, end);
+      const lines = region.split("\n");
+      const nextRegion = lines.map((line) => (line ? prefix + line : prefix.trimEnd() ? prefix.trimEnd() : prefix)).join("\n");
+      const next = value.slice(0, start) + nextRegion + value.slice(end);
+      const added = prefix.length * lines.length;
+      return { value: next, caret: b + added };
+    };
+
+    const applyValue = (next: { value: string; caret: number }) => {
+      layout.input.value = next.value;
+      try {
+        const caret = clamp(next.caret, 0, next.value.length);
+        layout.input.selectionStart = caret;
+        layout.input.selectionEnd = caret;
+      } catch {
+        // ignore
+      }
+      layout.input.dispatchEvent(new Event("input", { bubbles: true }));
+      try {
+        layout.input.focus();
+      } catch {
+        // ignore
+      }
+    };
+
+    const value = String(layout.input.value || "");
+    const start = typeof layout.input.selectionStart === "number" ? layout.input.selectionStart : value.length;
+    const end = typeof layout.input.selectionEnd === "number" ? layout.input.selectionEnd : start;
+
+    if (action === "board-tool-heading") {
+      applyValue(prefixCurrentLine(value, start, "# "));
+      return;
+    }
+    if (action === "board-tool-list") {
+      applyValue(prefixSelectedLines(value, start, end, "• "));
+      return;
+    }
+    if (action === "board-tool-quote") {
+      applyValue(prefixSelectedLines(value, start, end, "> "));
+      return;
+    }
+    if (action === "board-tool-divider") {
+      const insertText = "\n—\n";
+      applyValue(insertTextAtSelection({ value, selectionStart: start, selectionEnd: end, insertText }));
+      return;
+    }
+
+    const ensureBlockPrefix = (base: string, pos: number) => {
+      const before = base.slice(0, Math.max(0, pos));
+      if (!before) return "";
+      if (before.endsWith("\n\n")) return "";
+      if (before.endsWith("\n")) return "\n";
+      return "\n\n";
+    };
+    const insertChangelogBlock = (title: string) => {
+      const prefix = ensureBlockPrefix(value, Math.min(start, end));
+      const insertText = `${prefix}## ${title}\n- `;
+      applyValue(insertTextAtSelection({ value, selectionStart: start, selectionEnd: end, insertText }));
+    };
+
+    if (action === "board-tool-added") return insertChangelogBlock("Добавлено");
+    if (action === "board-tool-improved") return insertChangelogBlock("Улучшено");
+    if (action === "board-tool-fixed") return insertChangelogBlock("Исправлено");
+    if (action === "board-tool-notes") return insertChangelogBlock("Примечания");
   });
 
   // Telegram-like UX: paste/drop files прямо в поле ввода.
@@ -8498,18 +8895,21 @@ export function mountApp(root: HTMLElement) {
 	        pinsLoadedForUser !== st.selfId ||
 	        pinnedMessagesLoadedForUser !== st.selfId ||
 	        fileTransfersLoadedForUser !== st.selfId ||
-	        outboxLoadedForUser !== st.selfId)
+	        outboxLoadedForUser !== st.selfId ||
+          boardScheduleLoadedForUser !== st.selfId)
 	    ) {
 	      const needDrafts = draftsLoadedForUser !== st.selfId;
 	      const needPins = pinsLoadedForUser !== st.selfId;
 	      const needPinnedMessages = pinnedMessagesLoadedForUser !== st.selfId;
 	      const needFileTransfers = fileTransfersLoadedForUser !== st.selfId;
 	      const needOutbox = outboxLoadedForUser !== st.selfId;
+          const needBoardSchedule = boardScheduleLoadedForUser !== st.selfId;
 	      if (needDrafts) draftsLoadedForUser = st.selfId;
 	      if (needPins) pinsLoadedForUser = st.selfId;
 	      if (needPinnedMessages) pinnedMessagesLoadedForUser = st.selfId;
 	      if (needFileTransfers) fileTransfersLoadedForUser = st.selfId;
 	      if (needOutbox) outboxLoadedForUser = st.selfId;
+          if (needBoardSchedule) boardScheduleLoadedForUser = st.selfId;
 
       const storedDrafts = needDrafts ? loadDraftsForUser(st.selfId) : {};
       const mergedDrafts = needDrafts ? { ...storedDrafts, ...st.drafts } : st.drafts;
@@ -8550,7 +8950,7 @@ export function mountApp(root: HTMLElement) {
 	        return out;
 	      })();
 
-	      const mergedOutbox = (() => {
+      const mergedOutbox = (() => {
 	        if (!needOutbox) return st.outbox;
 	        const out: typeof st.outbox = { ...storedOutbox };
 	        for (const [k, list] of Object.entries(st.outbox || {})) {
@@ -8602,6 +9002,22 @@ export function mountApp(root: HTMLElement) {
       const shouldRestoreInput = Boolean(selectedKey && !st.input.trim() && mergedDrafts[selectedKey]);
       const restoredInput = shouldRestoreInput ? (mergedDrafts[selectedKey] ?? "") : null;
 
+      const storedBoardSchedule = needBoardSchedule ? loadBoardScheduleForUser(st.selfId) : [];
+      const mergedBoardSchedule = (() => {
+        if (!needBoardSchedule) return st.boardScheduledPosts;
+        const base = Array.isArray(storedBoardSchedule) ? storedBoardSchedule : [];
+        const cur = Array.isArray(st.boardScheduledPosts) ? st.boardScheduledPosts : [];
+        if (!cur.length) return base;
+        const seen = new Set(base.map((x) => String(x.id || "").trim()).filter(Boolean));
+        const extras = cur.filter((x) => {
+          const id = String(x?.id || "").trim();
+          return Boolean(id) && !seen.has(id);
+        });
+        const merged = extras.length ? [...base, ...extras] : base;
+        merged.sort((a, b) => a.scheduleAt - b.scheduleAt);
+        return merged;
+      })();
+
 	      store.set((prev) => ({
 	        ...prev,
 	        drafts: mergedDrafts,
@@ -8610,6 +9026,7 @@ export function mountApp(root: HTMLElement) {
 	        fileTransfers: mergedFileTransfers,
 	        outbox: mergedOutbox,
 	        conversations: mergedConversations,
+          boardScheduledPosts: mergedBoardSchedule,
 	        ...(restoredInput !== null ? { input: restoredInput } : {}),
 	      }));
 
@@ -8622,6 +9039,7 @@ export function mountApp(root: HTMLElement) {
 	        }
 	      }
 	      scheduleSaveOutbox(store);
+        armBoardScheduleTimer();
 	      return;
 	    }
 
