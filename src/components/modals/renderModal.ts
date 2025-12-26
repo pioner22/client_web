@@ -11,6 +11,7 @@ import { renderFileViewerModal } from "./renderFileViewerModal";
 import { renderInviteUserModal } from "./renderInviteUserModal";
 import { renderActionModal } from "./renderActionModal";
 import { renderContextMenu } from "./renderContextMenu";
+import { renderBoardPostModal } from "./renderBoardPostModal";
 
 export interface ModalActions {
   onAuthLogin: () => void;
@@ -18,6 +19,7 @@ export interface ModalActions {
   onAuthModeChange: (mode: "register" | "login") => void;
   onClose: () => void;
   onConfirm: () => void;
+  onBoardPostPublish: (text: string) => void;
   onDismissUpdate: () => void;
   onReloadUpdate: () => void;
   onApplyPwaUpdate: () => void;
@@ -64,6 +66,15 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     return renderPwaUpdateModal(state.clientVersion, {
       onDismiss: actions.onClose,
       onApply: actions.onApplyPwaUpdate,
+    });
+  }
+  if (kind === "board_post") {
+    const bid = String(modal.boardId || "").trim();
+    const b = bid ? (state.boards || []).find((x) => x.id === bid) : null;
+    const label = String(b?.name || bid || "—");
+    return renderBoardPostModal(label, {
+      onPublish: actions.onBoardPostPublish,
+      onCancel: actions.onClose,
     });
   }
   if (kind === "members_add") {

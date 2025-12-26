@@ -18,6 +18,8 @@ body {
   font-size: var(--font-size);
   line-height: var(--line-height);
   font-weight: var(--font-weight);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
 
 html {

@@ -52,6 +52,53 @@
   box-shadow: var(--modal-shadow);
 }
 
+.modal-sub {
+  margin-top: -2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modal.modal-board-post {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.board-post-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 45%);
+  background: color-mix(in srgb, var(--panel2), transparent 14%);
+}
+
+.btn.board-post-tool {
+  min-width: 44px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 750;
+}
+
+.board-post-input {
+  min-height: 220px;
+  resize: vertical;
+}
+
+.board-post-counter {
+  margin-top: -6px;
+  font-size: 12px;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-post-too-long .board-post-counter {
+  color: var(--bad);
+  font-weight: 700;
+}
+
 .modal-file-send {
   display: grid;
   gap: var(--sp-4);

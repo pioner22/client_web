@@ -361,7 +361,111 @@ function renderMultilineText(text: string): HTMLElement {
   return el("div", { class: "invite-text" }, nodes);
 }
 
-function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string, string>, opts?: { mobileUi: boolean }): HTMLElement {
+function renderBoardPost(text: string): HTMLElement {
+  const cleaned = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = cleaned.split("\n").map((l) => String(l ?? "").trimEnd());
+  const out: HTMLElement[] = [];
+
+  const flushParagraph = (buf: string[]) => {
+    const parts = buf.map((x) => String(x ?? "").trimEnd()).filter((x) => x !== "");
+    if (!parts.length) return;
+    const nodes: Array<HTMLElement | string> = [];
+    for (let i = 0; i < parts.length; i += 1) {
+      if (i) nodes.push(el("br"));
+      nodes.push(...renderRichText(parts[i]));
+    }
+    out.push(el("div", { class: "board-p" }, nodes));
+  };
+
+  const isDivider = (raw: string) => {
+    const t = String(raw ?? "").trim();
+    return t === "—" || t === "---";
+  };
+
+  const isHeading = (raw: string) => /^#{1,6}\s+/.test(String(raw ?? "").trimStart());
+  const headingInfo = (raw: string): { level: number; text: string } | null => {
+    const m = String(raw ?? "").trimStart().match(/^(#{1,6})\s+(.+)$/);
+    if (!m) return null;
+    const level = Math.max(1, Math.min(6, m[1]?.length || 1));
+    const text = String(m[2] ?? "").trimEnd();
+    return text ? { level, text } : null;
+  };
+
+  const isList = (raw: string) => /^(?:•|-)\s+/.test(String(raw ?? "").trimStart());
+  const listText = (raw: string) => String(raw ?? "").trimStart().replace(/^(?:•|-)\s+/, "").trimEnd();
+
+  const isQuote = (raw: string) => /^>\s+/.test(String(raw ?? "").trimStart());
+  const quoteText = (raw: string) => String(raw ?? "").trimStart().replace(/^>\s+/, "").trimEnd();
+
+  let paragraph: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const raw = lines[i] ?? "";
+    const trimmed = String(raw ?? "");
+    const t = trimmed.trim();
+    if (!t) {
+      flushParagraph(paragraph);
+      paragraph = [];
+      i += 1;
+      continue;
+    }
+    if (isDivider(trimmed)) {
+      flushParagraph(paragraph);
+      paragraph = [];
+      out.push(el("hr", { class: "board-hr", "aria-hidden": "true" }));
+      i += 1;
+      continue;
+    }
+    if (isHeading(trimmed)) {
+      flushParagraph(paragraph);
+      paragraph = [];
+      const info = headingInfo(trimmed);
+      if (info) {
+        out.push(el("div", { class: `board-h board-h${info.level}` }, renderRichText(info.text)));
+      } else {
+        paragraph.push(trimmed);
+      }
+      i += 1;
+      continue;
+    }
+    if (isList(trimmed)) {
+      flushParagraph(paragraph);
+      paragraph = [];
+      const items: HTMLElement[] = [];
+      while (i < lines.length) {
+        const liRaw = lines[i] ?? "";
+        if (!isList(liRaw)) break;
+        const txt = listText(liRaw);
+        items.push(el("li", { class: "board-li" }, txt ? renderRichText(txt) : [""]));
+        i += 1;
+      }
+      out.push(el("ul", { class: "board-list" }, items));
+      continue;
+    }
+    if (isQuote(trimmed)) {
+      flushParagraph(paragraph);
+      paragraph = [];
+      const qLines: HTMLElement[] = [];
+      while (i < lines.length) {
+        const qRaw = lines[i] ?? "";
+        if (!isQuote(qRaw)) break;
+        const txt = quoteText(qRaw);
+        qLines.push(el("div", { class: "board-quote-line" }, txt ? renderRichText(txt) : [""]));
+        i += 1;
+      }
+      out.push(el("blockquote", { class: "board-quote" }, qLines));
+      continue;
+    }
+
+    paragraph.push(trimmed);
+    i += 1;
+  }
+  flushParagraph(paragraph);
+
+  return el("div", { class: "board-post" }, out.length ? out : [el("div", { class: "board-p" }, renderRichText(cleaned))]);
+}
+
+function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string, string>, opts?: { mobileUi: boolean; boardUi?: boolean }): HTMLElement {
   const actionBtn = (
     label: string,
     attrs: Record<string, string>,
@@ -583,7 +687,12 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
     }
   } else {
     const emojiOnly = isEmojiOnlyText(m.text || "");
-    bodyChildren.push(el("div", { class: `msg-text${emojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(m.text)));
+    const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
+    if (boardUi && !emojiOnly) {
+      bodyChildren.push(el("div", { class: "msg-text msg-text-board" }, [renderBoardPost(m.text)]));
+    } else {
+      bodyChildren.push(el("div", { class: `msg-text${emojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(m.text)));
+    }
   }
   bodyChildren.push(el("div", { class: "msg-meta" }, meta));
   const lineChildren: HTMLElement[] = [];
@@ -668,9 +777,11 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
 
 export function renderChat(layout: Layout, state: AppState) {
   const mobileUi = isMobileLikeUi();
+  const boardUi = Boolean(state.selected && state.selected.kind === "board");
   const scrollHost = layout.chatHost;
   const hostState = scrollHost as any;
   const key = state.selected ? conversationKey(state.selected) : "";
+  layout.chat.classList.toggle("chat-board", Boolean(state.selected && state.selected.kind === "board"));
   const prevKey = String(scrollHost.getAttribute("data-chat-key") || "");
   const keyChanged = key !== prevKey;
   const prevScrollTop = scrollHost.scrollTop;
@@ -760,7 +871,7 @@ export function renderChat(layout: Layout, state: AppState) {
       }
     }
 
-    const line = messageLine(state, m, friendLabels, { mobileUi });
+    const line = messageLine(state, m, friendLabels, { mobileUi, boardUi });
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
     line.setAttribute("data-msg-idx", String(msgIdx));
     if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");
@@ -809,6 +920,27 @@ export function renderChat(layout: Layout, state: AppState) {
         ["ℹ︎"]
       )
     );
+    if (state.selected.kind === "board") {
+      const b = (state.boards || []).find((x) => x.id === state.selected?.id);
+      const owner = String(b?.owner_id || "").trim();
+      const me = String(state.selfId || "").trim();
+      const canPost = Boolean(owner && me && owner === me);
+      if (canPost) {
+        titleChildren.push(
+          el(
+            "button",
+            {
+              class: "btn chat-post-btn",
+              type: "button",
+              "data-action": "board-post-open",
+              title: "Новый пост",
+              "aria-label": "Новый пост",
+            },
+            ["✎"]
+          )
+        );
+      }
+    }
     titleChildren.push(
       el(
         "button",

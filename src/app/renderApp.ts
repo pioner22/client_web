@@ -93,6 +93,7 @@ export interface RenderActions {
   onClearCompletedFiles: () => void;
   onSearchQueryChange: (query: string) => void;
   onSearchSubmit: (query: string) => void;
+  onBoardPostPublish: (text: string) => void;
   onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onProfileRefresh: () => void;
@@ -228,6 +229,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const prevAuthSkinSelect = state.modal?.kind === "auth" ? (document.getElementById("auth-skin") as HTMLSelectElement | null) : null;
   const prevFileSendCaptionInput =
     state.modal?.kind === "file_send" ? (document.getElementById("file-send-caption") as HTMLTextAreaElement | null) : null;
+  const prevBoardPostInput =
+    state.modal?.kind === "board_post" ? (document.getElementById("board-post-text") as HTMLTextAreaElement | null) : null;
   const prevMembersAddInput = state.modal?.kind === "members_add" ? (document.getElementById("members-add-input") as HTMLInputElement | null) : null;
   const prevMembersAddEntryInput = state.modal?.kind === "members_add" ? (document.getElementById("members-add-entry") as HTMLInputElement | null) : null;
   const prevMembersRemoveInput =
@@ -235,12 +238,14 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const prevRenameInput = state.modal?.kind === "rename" ? (document.getElementById("rename-name") as HTMLInputElement | null) : null;
   const hadAuthModal = Boolean(prevAuthIdInput || prevAuthPwInput || prevAuthPw1Input || prevAuthPw2Input || prevAuthSkinSelect);
   const hadFileSendModal = Boolean(prevFileSendCaptionInput);
+  const hadBoardPostModal = Boolean(prevBoardPostInput);
   const prevAuthId = prevAuthIdInput?.value ?? "";
   const prevAuthPw = prevAuthPwInput?.value ?? "";
   const prevAuthPw1 = prevAuthPw1Input?.value ?? "";
   const prevAuthPw2 = prevAuthPw2Input?.value ?? "";
   const prevActiveId = (document.activeElement as HTMLElement | null)?.id ?? "";
   const prevFileSendCaption = prevFileSendCaptionInput?.value ?? "";
+  const prevBoardPostText = prevBoardPostInput?.value ?? "";
   const prevMembersAdd = prevMembersAddInput?.value ?? "";
   const prevMembersAddEntry = prevMembersAddEntryInput?.value ?? "";
   const prevMembersRemove = prevMembersRemoveInput?.value ?? "";
@@ -253,6 +258,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onAuthModeChange: actions.onAuthModeChange,
         onClose: actions.onCloseModal,
         onConfirm: actions.onConfirmModal,
+        onBoardPostPublish: actions.onBoardPostPublish,
         onDismissUpdate: actions.onDismissUpdate,
         onReloadUpdate: actions.onReloadUpdate,
         onApplyPwaUpdate: actions.onApplyPwaUpdate,
@@ -540,6 +546,26 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       if (prevActiveId === "file-send-caption") {
         focusElement(input);
       } else if (!hadFileSendModal && !input.disabled) {
+        focusElement(input);
+      }
+    });
+  }
+
+  if (state.modal?.kind === "board_post") {
+    const input = document.getElementById("board-post-text") as HTMLTextAreaElement | null;
+    if (input && input.value !== prevBoardPostText) {
+      input.value = prevBoardPostText;
+      try {
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      } catch {
+        // ignore
+      }
+    }
+    queueMicrotask(() => {
+      if (!input) return;
+      if (prevActiveId === "board-post-text") {
+        focusElement(input);
+      } else if (!hadBoardPostModal) {
         focusElement(input);
       }
     });

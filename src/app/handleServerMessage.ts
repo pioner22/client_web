@@ -31,6 +31,7 @@ import {
 } from "../helpers/auth/session";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
+import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
 
 function upsertConversationByLocalId(state: any, key: string, msg: ChatMessage, localId: string): any {
   const convMap = state?.conversations && typeof state.conversations === "object" ? state.conversations : {};
@@ -1507,6 +1508,11 @@ export function handleServerMessage(
   }
   if (t === "search_result") {
     const q = String(msg?.query ?? "").trim();
+    const expected = deriveServerSearchQuery(state.searchQuery)?.query ?? null;
+    if (!expected || q !== expected) {
+      // Ignore stale/out-of-order search results (keeps UI consistent with current input).
+      return;
+    }
     const raw = Array.isArray(msg?.results) ? msg.results : [];
     const results: SearchResultEntry[] = raw
       .map((r: any) => ({
@@ -1517,7 +1523,7 @@ export function handleServerMessage(
         board: r?.board === undefined ? undefined : Boolean(r.board),
       }))
       .filter((r: SearchResultEntry) => r.id);
-    patch({ searchQuery: q, searchResults: results, status: results.length ? `Найдено: ${results.length}` : "Ничего не найдено" });
+    patch({ searchResults: results, status: results.length ? `Найдено: ${results.length}` : "Ничего не найдено" });
     return;
   }
   if (t === "profile") {

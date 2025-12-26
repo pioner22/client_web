@@ -3,6 +3,8 @@ import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar
 import { applyLegacyIdMask } from "../../helpers/id/legacyIdMask";
 import { focusElement } from "../../helpers/ui/focus";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
+import { mapKeyboardLayout } from "../../helpers/search/keyboardLayout";
+import { deriveServerSearchQuery } from "../../helpers/search/serverSearchQuery";
 import type { AppState, SearchResultEntry, TargetRef } from "../../stores/types";
 
 export interface SearchPageActions {
@@ -189,8 +191,15 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
   function computeLocalMatches(state: AppState, rawQuery: string) {
     const q = rawQuery.trim();
+    const qAltEn = mapKeyboardLayout(q, "ruToEn");
+    const qAltRu = mapKeyboardLayout(q, "enToRu");
     const tokens = tokenizeSearchQuery(q);
+    const tokensAltEn = qAltEn !== q ? tokenizeSearchQuery(qAltEn) : [];
+    const tokensAltRu = qAltRu !== q ? tokenizeSearchQuery(qAltRu) : [];
+    const tokenSets = [tokens, tokensAltEn, tokensAltRu].filter((set) => set.length > 0);
     const qNorm = normalizeSearchText(q);
+    const qNormAltEn = qAltEn !== q ? normalizeSearchText(qAltEn) : "";
+    const qNormAltRu = qAltRu !== q ? normalizeSearchText(qAltRu) : "";
     const qDigits = q.replace(/\D/g, "");
     if (!q) {
       cachedQuery = q;
@@ -221,11 +230,22 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       const handleRaw = String(friend.handle || profile?.handle || "").trim();
       const idDigits = id.replace(/\D/g, "");
       const haystack = buildHaystack([displayName, handleRaw, formatHandle(handleRaw), id, idDigits]);
-      if (!matchesTokens(haystack, tokens) && !(qDigits && idDigits.includes(qDigits))) continue;
+      const tokenHit = tokenSets.some((set) => matchesTokens(haystack, set));
+      if (!tokenHit && !(qDigits && idDigits.includes(qDigits))) continue;
       const { title, sub, online } = resolveContactLabel(state, id);
+      const bestDisplay = Math.max(
+        scoreStringMatch(normalizeSearchText(displayName), qNorm),
+        qNormAltEn ? scoreStringMatch(normalizeSearchText(displayName), qNormAltEn) : 0,
+        qNormAltRu ? scoreStringMatch(normalizeSearchText(displayName), qNormAltRu) : 0
+      );
+      const bestHandle = Math.max(
+        scoreStringMatch(normalizeSearchText(handleRaw), qNorm),
+        qNormAltEn ? scoreStringMatch(normalizeSearchText(handleRaw), qNormAltEn) : 0,
+        qNormAltRu ? scoreStringMatch(normalizeSearchText(handleRaw), qNormAltRu) : 0
+      );
       const score =
-        scoreStringMatch(normalizeSearchText(displayName), qNorm) +
-        scoreStringMatch(normalizeSearchText(handleRaw), qNorm) +
+        bestDisplay +
+        bestHandle +
         (qDigits && idDigits.startsWith(qDigits) ? 70 : qDigits && idDigits.includes(qDigits) ? 30 : 0) +
         (tokens.length > 1 ? 10 : 0);
       contactMatches.push({ id, title, sub, online, score });
@@ -240,11 +260,22 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       const handleRaw = String(g.handle || "").trim();
       const idDigits = id.replace(/\D/g, "");
       const haystack = buildHaystack([name, handleRaw, formatHandle(handleRaw), id, idDigits]);
-      if (!matchesTokens(haystack, tokens) && !(qDigits && idDigits.includes(qDigits))) continue;
+      const tokenHit = tokenSets.some((set) => matchesTokens(haystack, set));
+      if (!tokenHit && !(qDigits && idDigits.includes(qDigits))) continue;
       const { title, sub } = resolveRoomLabel(state, "group", id);
+      const bestName = Math.max(
+        scoreStringMatch(normalizeSearchText(name), qNorm),
+        qNormAltEn ? scoreStringMatch(normalizeSearchText(name), qNormAltEn) : 0,
+        qNormAltRu ? scoreStringMatch(normalizeSearchText(name), qNormAltRu) : 0
+      );
+      const bestHandle = Math.max(
+        scoreStringMatch(normalizeSearchText(handleRaw), qNorm),
+        qNormAltEn ? scoreStringMatch(normalizeSearchText(handleRaw), qNormAltEn) : 0,
+        qNormAltRu ? scoreStringMatch(normalizeSearchText(handleRaw), qNormAltRu) : 0
+      );
       const score =
-        scoreStringMatch(normalizeSearchText(name), qNorm) +
-        scoreStringMatch(normalizeSearchText(handleRaw), qNorm) +
+        bestName +
+        bestHandle +
         (qDigits && idDigits.startsWith(qDigits) ? 70 : qDigits && idDigits.includes(qDigits) ? 30 : 0) +
         (tokens.length > 1 ? 10 : 0);
       roomMatches.push({ id, kind: "group", title, sub, score });
@@ -256,11 +287,22 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       const handleRaw = String(b.handle || "").trim();
       const idDigits = id.replace(/\D/g, "");
       const haystack = buildHaystack([name, handleRaw, formatHandle(handleRaw), id, idDigits]);
-      if (!matchesTokens(haystack, tokens) && !(qDigits && idDigits.includes(qDigits))) continue;
+      const tokenHit = tokenSets.some((set) => matchesTokens(haystack, set));
+      if (!tokenHit && !(qDigits && idDigits.includes(qDigits))) continue;
       const { title, sub } = resolveRoomLabel(state, "board", id);
+      const bestName = Math.max(
+        scoreStringMatch(normalizeSearchText(name), qNorm),
+        qNormAltEn ? scoreStringMatch(normalizeSearchText(name), qNormAltEn) : 0,
+        qNormAltRu ? scoreStringMatch(normalizeSearchText(name), qNormAltRu) : 0
+      );
+      const bestHandle = Math.max(
+        scoreStringMatch(normalizeSearchText(handleRaw), qNorm),
+        qNormAltEn ? scoreStringMatch(normalizeSearchText(handleRaw), qNormAltEn) : 0,
+        qNormAltRu ? scoreStringMatch(normalizeSearchText(handleRaw), qNormAltRu) : 0
+      );
       const score =
-        scoreStringMatch(normalizeSearchText(name), qNorm) +
-        scoreStringMatch(normalizeSearchText(handleRaw), qNorm) +
+        bestName +
+        bestHandle +
         (qDigits && idDigits.startsWith(qDigits) ? 70 : qDigits && idDigits.includes(qDigits) ? 30 : 0) +
         (tokens.length > 1 ? 10 : 0);
       roomMatches.push({ id, kind: "board", title, sub, score });
@@ -291,7 +333,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           const text = String(msg?.text || "");
           const attachmentName = msg?.attachment?.kind === "file" ? String(msg.attachment.name || "") : "";
           const haystack = buildHaystack([text, attachmentName]);
-          if (!matchesTokens(haystack, tokens)) continue;
+          const tokenHit = tokenSets.some((set) => matchesTokens(haystack, set));
+          if (!tokenHit) continue;
           const fromLabel = msg?.from ? resolveContactLabel(state, String(msg.from)).title : "";
           const snippet = truncateText(text || attachmentName, SNIPPET_MAX);
           const subParts: string[] = [];
@@ -344,14 +387,13 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
     const qRaw = String(state.searchQuery || "");
     const q = qRaw.trim();
-    const digits = q.replace(/\D/g, "");
-    const canSearchNow = q.startsWith("@") ? q.length >= 4 : digits ? digits.length >= 3 : q.length >= 3;
+    const canSearchNow = Boolean(deriveServerSearchQuery(qRaw));
 
     if (!q) {
       results.replaceChildren(
         el("div", { class: "page-empty" }, [
           el("div", { class: "page-empty-title" }, ["Введите имя, @логин или ID"]),
-          el("div", { class: "page-empty-sub" }, ["По контактам и истории поиск работает сразу, по серверу — от 3 цифр ID или 4 символов @логина"]),
+          el("div", { class: "page-empty-sub" }, ["По контактам и истории поиск работает сразу, по серверу — от 3 цифр ID или 3+ символов логина (@ необязателен)"]),
         ])
       );
       return;
@@ -503,7 +545,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     if (!blocks.length) {
       const message = canSearchNow
         ? "Проверьте запрос или попробуйте другие первые цифры/буквы"
-        : "Локально ничего не найдено. Для поиска по серверу нужно минимум 3 цифры ID или 4 символа @логина";
+        : "Локально ничего не найдено. Для поиска по серверу нужно минимум 3 цифры ID или 3+ символа логина (@ необязателен)";
       results.replaceChildren(
         el("div", { class: "page-empty" }, [el("div", { class: "page-empty-title" }, ["Ничего не найдено"]), el("div", { class: "page-empty-sub" }, [message])])
       );
@@ -511,7 +553,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     if (!list.length && !canSearchNow) {
-      blocks.push(el("div", { class: "result-meta" }, ["Поиск по серверу доступен от 3 цифр ID или 4 символов @логина"]));
+      blocks.push(el("div", { class: "result-meta" }, ["Поиск по серверу доступен от 3 цифр ID или 3+ символов логина (@ необязателен)"]));
     }
 
     results.replaceChildren(...blocks);

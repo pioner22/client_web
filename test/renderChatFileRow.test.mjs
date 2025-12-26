@@ -211,16 +211,18 @@ test("renderChat: file-attachment рендерит preview первым, ико�
   const helper = await loadRenderChat();
   try {
     withDomStubs(() => {
+      const chat = document.createElement("div");
       const chatTop = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      chat.className = "chat";
       chatTop.className = "chat-top";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
       chatHost.clientHeight = 120;
       chatHost.scrollHeight = 2000;
 
-      const layout = { chatTop, chatHost, chatJump };
+      const layout = { chat, chatTop, chatHost, chatJump };
       const state = {
         selected: { kind: "dm", id: "123-456-789" },
         conversations: {
@@ -274,16 +276,18 @@ test("renderChat: sys action message рендерит кнопки действ�
   const helper = await loadRenderChat();
   try {
     withDomStubs(() => {
+      const chat = document.createElement("div");
       const chatTop = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      chat.className = "chat";
       chatTop.className = "chat-top";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
       chatHost.clientHeight = 120;
       chatHost.scrollHeight = 2000;
 
-      const layout = { chatTop, chatHost, chatJump };
+      const layout = { chat, chatTop, chatHost, chatJump };
       const state = {
         selected: { kind: "dm", id: "111-111-111" },
         conversations: {

@@ -1532,6 +1532,119 @@
   position: relative;
 }
 
+.btn.chat-post-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* ===== Boards (news feed) ===== */
+.chat.chat-board .msg {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.chat.chat-board .msg-avatar {
+  display: none;
+}
+
+.chat.chat-board .msg-body {
+  width: 100%;
+  max-width: min(720px, 100%);
+}
+
+.chat.chat-board .msg-in .msg-body,
+.chat.chat-board .msg-out .msg-body,
+.chat.chat-board .msg-sys .msg-body {
+  background: color-mix(in srgb, var(--panel), transparent 4%);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 22%);
+  border-radius: 18px;
+  padding: 14px 14px;
+}
+
+.chat.chat-board .msg-meta {
+  justify-content: flex-end;
+}
+
+.chat.chat-board .msg-from {
+  font-weight: 750;
+  color: color-mix(in srgb, var(--muted), transparent 8%);
+}
+
+.chat.chat-board .msg-text-board {
+  white-space: normal;
+}
+
+.chat.chat-board .board-post {
+  display: grid;
+  gap: 10px;
+}
+
+.chat.chat-board .board-h {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.chat.chat-board .board-h1 {
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.chat.chat-board .board-h2 {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.chat.chat-board .board-h3 {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.chat.chat-board .board-p {
+  line-height: 1.55;
+}
+
+.chat.chat-board .board-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.chat.chat-board .board-li {
+  line-height: 1.5;
+}
+
+.chat.chat-board .board-quote {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid color-mix(in srgb, var(--focus), transparent 35%);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel2), transparent 18%);
+}
+
+.chat.chat-board .board-quote-line + .board-quote-line {
+  margin-top: 6px;
+}
+
+.chat.chat-board .board-hr {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--line), transparent 35%);
+  margin: 2px 0;
+}
+
+.chat.chat-board .chat-file-preview {
+  width: 100%;
+  max-width: 100%;
+}
+
+.chat.chat-board .chat-album-grid {
+  max-width: 100%;
+}
+
 .chat-file-preview-empty {
   min-height: 140px;
   display: grid;

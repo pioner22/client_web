@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.196",
+    date: "2025-12-26",
+    added: ["Доски: владелец может публиковать посты через кнопку ✎ (редактор с базовым форматированием)"],
+    improved: [
+      "Поиск: устойчивый поиск по @логину (нормализация, защита от устаревших результатов, поддержка «не той раскладки» для @)",
+      "Dev: локальный Vite без make подключается к WS gateway на текущем host:8787 (удобнее для проверки с телефона по LAN)",
+      "Доски: отображение сообщений оформлено как news‑feed (карточки, ширина, вложения во всю карточку)",
+    ],
+    fixed: ["Типографика: цифры приведены к tabular/lining (меньше «прыжков» ширины времени/ID)"],
+  },
+  {
     version: "0.1.195",
     date: "2025-12-26",
     improved: [

@@ -143,6 +143,7 @@ export type ModalState =
   | { kind: "auth"; message?: string }
   | { kind: "update" }
   | { kind: "pwa_update" }
+  | { kind: "board_post"; boardId: string }
   | { kind: "members_add"; targetKind: "group" | "board"; targetId: string; title: string; message?: string }
   | { kind: "members_remove"; targetKind: "group" | "board"; targetId: string; title: string; message?: string }
   | { kind: "rename"; targetKind: "group" | "board"; targetId: string; title: string; currentName: string | null; message?: string }

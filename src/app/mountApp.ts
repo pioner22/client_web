@@ -74,6 +74,7 @@ import {
 } from "../helpers/ui/emoji";
 import { createRafScrollLock } from "../helpers/ui/rafScrollLock";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
+import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
 
 const ROOM_INFO_MAX = 2000;
 const IOS_ACTIVE_CONV_LIMIT = 320;
@@ -1334,6 +1335,16 @@ export function mountApp(root: HTMLElement) {
       if (st.selected.kind === "dm") openUserPage(st.selected.id);
       else if (st.selected.kind === "group") openGroupPage(st.selected.id);
       else if (st.selected.kind === "board") openBoardPage(st.selected.id);
+      return;
+    }
+
+    const boardPostBtn = target?.closest("button[data-action='board-post-open']") as HTMLButtonElement | null;
+    if (boardPostBtn) {
+      const st = store.get();
+      const sel = st.selected;
+      if (!sel || sel.kind !== "board") return;
+      e.preventDefault();
+      openBoardPostModal(sel.id);
       return;
     }
 
@@ -5451,6 +5462,108 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
+  function openBoardPostModal(boardId: string) {
+    const bid = String(boardId || "").trim();
+    if (!bid) return;
+    const st = store.get();
+    if (st.modal && st.modal.kind !== "context_menu") return;
+    lastUserInputAt = Date.now();
+    if (st.conn !== "connected") {
+      store.set({ status: "Нет соединения" });
+      return;
+    }
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    const b = (st.boards || []).find((x) => x.id === bid);
+    if (!b) {
+      store.set({ status: `Доска не найдена: ${bid}` });
+      return;
+    }
+    const owner = String(b.owner_id || "").trim();
+    const me = String(st.selfId || "").trim();
+    if (owner && me && owner !== me) {
+      store.set({ status: "На доске писать может только владелец" });
+      return;
+    }
+    store.set({ modal: { kind: "board_post", boardId: bid } });
+  }
+
+  function publishBoardPost(text: string) {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "board_post") return;
+    const boardId = String(modal.boardId || "").trim();
+    const body = String(text ?? "").trimEnd();
+    lastUserInputAt = Date.now();
+    if (!boardId) {
+      store.set({ status: "Некорректная доска" });
+      return;
+    }
+    if (!body) return;
+    if (body.length > APP_MSG_MAX_LEN) {
+      store.set({ status: `Слишком длинный пост (${body.length}/${APP_MSG_MAX_LEN})` });
+      return;
+    }
+    if (!st.authed || !st.selfId) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    if (st.conn !== "connected") {
+      store.set({ status: "Нет соединения: пост в очереди" });
+    }
+    const b = (st.boards || []).find((x) => x.id === boardId);
+    if (!b) {
+      store.set({ status: `Доска не найдена: ${boardId}` });
+      return;
+    }
+    const owner = String(b.owner_id || "").trim();
+    const me = String(st.selfId || "").trim();
+    if (owner && me && owner !== me) {
+      store.set({ status: "На доске писать может только владелец" });
+      return;
+    }
+
+    const target: TargetRef = { kind: "board", id: boardId };
+    const convKey = conversationKey(target);
+    if (convKey) markChatAutoScroll(convKey, false);
+    const localId = makeOutboxLocalId();
+    const ts = nowTs();
+    const nowMs = Date.now();
+    const payload = { type: "send" as const, room: boardId, text: body };
+    const sent = st.conn === "connected" ? gateway.send(payload) : false;
+    const initialStatus = sent ? ("sending" as const) : ("queued" as const);
+
+    const localMsg = {
+      kind: "out" as const,
+      from: st.selfId || "",
+      room: boardId,
+      text: body,
+      ts,
+      localId,
+      id: null,
+      status: initialStatus,
+    };
+
+    store.set((prev) => {
+      const next = upsertConversation(prev, convKey, localMsg);
+      const outbox = addOutboxEntry(next.outbox, convKey, {
+        localId,
+        ts,
+        text: body,
+        room: boardId,
+        status: sent ? "sending" : "queued",
+        attempts: sent ? 1 : 0,
+        lastAttemptAt: sent ? nowMs : 0,
+      });
+      return { ...next, outbox, modal: null };
+    });
+    scheduleSaveOutbox(store);
+
+    store.set({ status: sent ? "Пост отправляется…" : "Нет соединения: пост в очереди" });
+  }
+
   const OUTBOX_RETRY_MIN_MS = 900;
   const OUTBOX_DRAIN_MAX = 12;
 
@@ -7808,9 +7921,8 @@ export function mountApp(root: HTMLElement) {
         return;
       }
 
-      const digits = q.replace(/\D/g, "");
-      const shouldSearchNow = q.startsWith("@") ? q.length >= 4 : digits ? digits.length >= 3 : q.length >= 3;
-      if (!shouldSearchNow) {
+      const derived = deriveServerSearchQuery(q);
+      if (!derived) {
         store.set({ searchResults: [] });
         return;
       }
@@ -7821,10 +7933,12 @@ export function mountApp(root: HTMLElement) {
         if (!q2) return;
         const st2 = store.get();
         if (!st2.authed || st2.conn !== "connected" || st2.page !== "search") return;
-        if (q2 === lastSearchIssued) return;
-        lastSearchIssued = q2;
+        const d2 = deriveServerSearchQuery(q2);
+        if (!d2) return;
+        if (d2.query === lastSearchIssued) return;
+        lastSearchIssued = d2.query;
         store.set({ searchResults: [] });
-        gateway.send({ type: "search", query: q2 });
+        gateway.send({ type: "search", query: d2.query });
       }, 180);
     },
     onSearchSubmit: (query: string) => {
@@ -7832,9 +7946,12 @@ export function mountApp(root: HTMLElement) {
       lastUserInputAt = Date.now();
       store.set({ searchQuery: q, searchResults: [] });
       if (!q) return;
-      lastSearchIssued = q;
-      gateway.send({ type: "search", query: q });
+      const derived = deriveServerSearchQuery(q);
+      if (!derived) return;
+      lastSearchIssued = derived.query;
+      gateway.send({ type: "search", query: derived.query });
     },
+    onBoardPostPublish: (text: string) => publishBoardPost(text),
     onOpenHistoryHit: (target: TargetRef, query: string, msgIdx?: number) => {
       openChatFromSearch(target, query, msgIdx);
     },
