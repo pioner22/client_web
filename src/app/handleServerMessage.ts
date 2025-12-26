@@ -10,6 +10,7 @@ import type {
 	  ChatMessage,
 	  FriendEntry,
 	  GroupEntry,
+    MessageReactions,
 	  OutboxEntry,
 	  SearchResultEntry,
 	  UserProfile,
@@ -142,6 +143,23 @@ function parseAttachment(raw: any): ChatAttachment | null {
   const mimeRaw = (raw as any).mime;
   const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw) : null;
   return { kind: "file", fileId, name, size, mime };
+}
+
+function parseReactions(raw: any): MessageReactions | null {
+  if (!raw || typeof raw !== "object") return null;
+  const countsRaw = (raw as any).counts;
+  if (!countsRaw || typeof countsRaw !== "object") return null;
+  const counts: Record<string, number> = {};
+  for (const [emoji, cnt] of Object.entries(countsRaw as Record<string, unknown>)) {
+    const e = String(emoji || "").trim();
+    const n = typeof cnt === "number" && Number.isFinite(cnt) ? Math.trunc(cnt) : Math.trunc(Number(cnt) || 0);
+    if (!e || n <= 0) continue;
+    counts[e] = n;
+  }
+  const mineRaw = (raw as any).mine;
+  const mine = typeof mineRaw === "string" && mineRaw.trim() ? String(mineRaw) : null;
+  if (!Object.keys(counts).length && mine === null) return null;
+  return { counts, mine };
 }
 
 function isDocHidden(): boolean {
@@ -2062,6 +2080,78 @@ export function handleServerMessage(
     });
     return;
   }
+  if (t === "reaction_update") {
+    const rawId = msg?.id;
+    const id = typeof rawId === "number" && Number.isFinite(rawId) ? rawId : Number(rawId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    const room = msg?.room ? String(msg.room).trim() : "";
+    const peer = msg?.peer ? String(msg.peer).trim() : "";
+    const actor = String(msg?.user ?? "").trim();
+    const rawEmoji = (msg as any)?.emoji;
+    const emoji = typeof rawEmoji === "string" && rawEmoji.trim() ? String(rawEmoji) : null;
+
+    const countsRaw = (msg as any)?.counts;
+    if (!countsRaw || typeof countsRaw !== "object") return;
+    const counts: Record<string, number> = {};
+    for (const [k, v] of Object.entries(countsRaw as Record<string, unknown>)) {
+      const e = String(k || "").trim();
+      const n = typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : Math.trunc(Number(v) || 0);
+      if (!e || n <= 0) continue;
+      counts[e] = n;
+    }
+
+    patch((prev) => {
+      const conversations = (prev as any).conversations || {};
+      const candidates: string[] = [];
+      if (room) candidates.push(roomKey(room));
+      if (peer) candidates.push(dmKey(peer));
+      const selected = (prev as any).selected;
+      const selectedKey = selected ? (selected.kind === "dm" ? dmKey(String(selected.id || "")) : roomKey(String(selected.id || ""))) : "";
+      if (selectedKey && !candidates.includes(selectedKey)) candidates.push(selectedKey);
+
+      const applyToKey = (key: string): AppState | null => {
+        const k = String(key || "").trim();
+        if (!k) return null;
+        const conv = conversations[k];
+        if (!Array.isArray(conv) || !conv.length) return null;
+        const idx = conv.findIndex((m) => typeof m?.id === "number" && m.id === id);
+        if (idx < 0) return null;
+        const next = [...conv];
+        const cur = next[idx] as any;
+        const prevReacts = (cur as any).reactions && typeof (cur as any).reactions === "object" ? (cur as any).reactions : null;
+        const prevMine = prevReacts && typeof prevReacts.mine === "string" ? String(prevReacts.mine) : null;
+        const selfId = String((prev as any).selfId ?? "").trim();
+        const mine = selfId && actor && actor === selfId ? emoji : prevMine;
+        const nextReacts = Object.keys(counts).length || mine !== null ? ({ counts, mine } as any) : null;
+        next[idx] = { ...cur, reactions: nextReacts };
+        return { ...(prev as any), conversations: { ...conversations, [k]: next } } as AppState;
+      };
+
+      for (const k of candidates) {
+        const next = applyToKey(k);
+        if (next) return next;
+      }
+
+      // Fallback: msg_id глобально уникален — найдём по всем чатам.
+      for (const [k, conv] of Object.entries(conversations)) {
+        if (!Array.isArray(conv) || !conv.length) continue;
+        const idx = (conv as any[]).findIndex((m) => typeof m?.id === "number" && m.id === id);
+        if (idx < 0) continue;
+        const nextConv = [...(conv as any[])];
+        const cur = nextConv[idx];
+        const prevReacts = (cur as any).reactions && typeof (cur as any).reactions === "object" ? (cur as any).reactions : null;
+        const prevMine = prevReacts && typeof prevReacts.mine === "string" ? String(prevReacts.mine) : null;
+        const selfId = String((prev as any).selfId ?? "").trim();
+        const mine = selfId && actor && actor === selfId ? emoji : prevMine;
+        const nextReacts = Object.keys(counts).length || mine !== null ? ({ counts, mine } as any) : null;
+        nextConv[idx] = { ...(cur as any), reactions: nextReacts };
+        return { ...(prev as any), conversations: { ...conversations, [k]: nextConv } } as AppState;
+      }
+
+      return prev;
+    });
+    return;
+  }
   if (t === "history_result") {
     const resultRoom = msg?.room ? String(msg.room) : undefined;
     const resultPeer = msg?.peer ? String(msg.peer) : undefined;
@@ -2091,6 +2181,7 @@ export function handleServerMessage(
       const status: ChatMessage["status"] | undefined =
         !room && kind === "out" && hasId ? (read ? "read" : delivered ? "delivered" : "queued") : undefined;
       const attachment = parseAttachment(r?.attachment);
+      const reactions = parseReactions((r as any)?.reactions);
       incoming.push({
         kind,
         from,
@@ -2100,6 +2191,7 @@ export function handleServerMessage(
         ts,
         id,
         attachment,
+        ...(reactions ? { reactions } : {}),
         ...(status ? { status } : {}),
         ...(edited ? { edited: true } : {}),
         ...(edited && edited_ts ? { edited_ts } : {}),

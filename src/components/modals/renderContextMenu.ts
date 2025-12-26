@@ -66,6 +66,29 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
 
   const title = el("div", { class: "ctx-title" }, [payload.title]);
 
+  const reactionBar =
+    payload.reactionBar && Array.isArray(payload.reactionBar.emojis) && payload.reactionBar.emojis.length
+      ? el(
+          "div",
+          { class: "ctx-reacts", role: "group", "aria-label": "Реакции" },
+          payload.reactionBar.emojis.map((emoji) => {
+            const active = payload.reactionBar?.active === emoji;
+            const btn = el(
+              "button",
+              {
+                class: active ? "ctx-react is-active" : "ctx-react",
+                type: "button",
+                "aria-pressed": active ? "true" : "false",
+                title: active ? `Убрать реакцию ${emoji}` : `Реакция ${emoji}`,
+              },
+              [emoji]
+            ) as HTMLButtonElement;
+            btn.addEventListener("click", () => actions.onSelect(`react:${emoji}`));
+            return btn;
+          })
+        )
+      : null;
+
   const nodes = payload.items.map((it) => {
     if (it.separator) {
       return el("div", { class: "ctx-sep", role: "separator", "aria-hidden": "true" });
@@ -85,7 +108,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     return btn;
   });
 
-  root.append(title, ...nodes);
+  root.append(title, ...(reactionBar ? [reactionBar] : []), ...nodes);
 
   root.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {

@@ -1397,6 +1397,33 @@ export function mountApp(root: HTMLElement) {
       }
     }
 
+    const reactBtn = target?.closest("button[data-action='msg-react'][data-emoji]") as HTMLButtonElement | null;
+    if (reactBtn) {
+      const st = store.get();
+      if (st.conn !== "connected") {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      if (!st.authed) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      const emoji = String(reactBtn.getAttribute("data-emoji") || "").trim();
+      if (!emoji) return;
+      const row = target?.closest("[data-msg-idx]") as HTMLElement | null;
+      const idx = row ? Math.trunc(Number(row.getAttribute("data-msg-idx") || "")) : -1;
+      const key = st.selected ? conversationKey(st.selected) : "";
+      const conv = key ? st.conversations[key] : null;
+      const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+      const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
+      if (!msg || msgId === null || msgId <= 0) return;
+      const mine = typeof msg.reactions?.mine === "string" ? msg.reactions.mine : null;
+      const nextEmoji = mine === emoji ? null : emoji;
+      e.preventDefault();
+      gateway.send({ type: "reaction_set", id: msgId, emoji: nextEmoji });
+      return;
+    }
+
     const userBtn = target?.closest("[data-action='user-open']") as HTMLElement | null;
     if (userBtn) {
       const uid = String(userBtn.getAttribute("data-user-id") || "").trim();
@@ -6758,6 +6785,7 @@ export function mountApp(root: HTMLElement) {
 
     const canAct = st.conn === "connected" && st.authed;
     const items: ContextMenuItem[] = [];
+    let reactionBar: { emojis: string[]; active?: string | null } | undefined;
     let title = "";
     const ak = avatarKindForTarget(target.kind);
     const hasAvatar = ak ? Boolean(getStoredAvatar(ak, target.id)) : false;
@@ -6918,6 +6946,8 @@ export function mountApp(root: HTMLElement) {
       const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
       const canPin = Boolean(selKey && msgId !== null && msgId > 0);
       const isPinned = Boolean(canPin && msgId !== null && isPinnedMessage(st.pinnedMessages, selKey, msgId));
+      const mine = typeof msg?.reactions?.mine === "string" ? msg.reactions.mine : null;
+      reactionBar = { emojis: ["👍", "❤️", "😂", "😮", "😢", "🔥"], active: mine };
 
       const preview =
         msg?.attachment?.kind === "file"
@@ -6968,6 +6998,7 @@ export function mountApp(root: HTMLElement) {
           title,
           target,
           items,
+          ...(reactionBar ? { reactionBar } : {}),
         },
       },
     });
@@ -6980,6 +7011,41 @@ export function mountApp(root: HTMLElement) {
     const t = modal.payload.target;
 
     const close = () => store.set({ modal: null });
+
+    if (itemId.startsWith("react:")) {
+      if (t.kind !== "message") {
+        close();
+        return;
+      }
+      const emoji = String(itemId.slice("react:".length) || "").trim();
+      if (!emoji) {
+        close();
+        return;
+      }
+      if (st.conn !== "connected") {
+        store.set({ status: "Нет соединения" });
+        close();
+        return;
+      }
+      if (!st.authed) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      const selKey = st.selected ? conversationKey(st.selected) : "";
+      const idx = Number.isFinite(Number(t.id)) ? Math.trunc(Number(t.id)) : -1;
+      const conv = selKey ? st.conversations[selKey] : null;
+      const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+      const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
+      if (!msg || msgId === null || msgId <= 0) {
+        close();
+        return;
+      }
+      const mine = typeof msg.reactions?.mine === "string" ? msg.reactions.mine : null;
+      const nextEmoji = mine === emoji ? null : emoji;
+      gateway.send({ type: "reaction_set", id: msgId, emoji: nextEmoji });
+      close();
+      return;
+    }
 
     if (itemId === "pin_toggle") {
       if (t.kind !== "dm" && t.kind !== "group" && t.kind !== "board") {

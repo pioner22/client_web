@@ -251,6 +251,40 @@
   -webkit-touch-callout: none;
 }
 
+.ctx-reacts {
+  display: flex;
+  gap: 6px;
+  padding: 2px 6px 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.ctx-reacts::-webkit-scrollbar {
+  display: none;
+}
+
+.ctx-react {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 55%);
+  background: color-mix(in srgb, var(--modal-bg), transparent 10%);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.ctx-react.is-active {
+  background: color-mix(in srgb, var(--accent), transparent 78%);
+  border-color: color-mix(in srgb, var(--accent), transparent 35%);
+}
+
 .ctx-item {
   width: 100%;
   text-align: left;

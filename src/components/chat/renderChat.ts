@@ -172,6 +172,52 @@ function buildMessageMeta(m: ChatMessage): HTMLElement[] {
   return meta;
 }
 
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+function renderReactions(m: ChatMessage): HTMLElement | null {
+  const raw = m.reactions;
+  if (!raw || typeof raw !== "object") return null;
+  const countsRaw = (raw as any).counts;
+  if (!countsRaw || typeof countsRaw !== "object") return null;
+  const entries: Array<{ emoji: string; count: number }> = [];
+  for (const [emoji, cnt] of Object.entries(countsRaw as Record<string, unknown>)) {
+    const e = String(emoji || "").trim();
+    const n = typeof cnt === "number" && Number.isFinite(cnt) ? Math.trunc(cnt) : Math.trunc(Number(cnt) || 0);
+    if (!e || n <= 0) continue;
+    entries.push({ emoji: e, count: n });
+  }
+  if (!entries.length) return null;
+
+  entries.sort((a, b) => {
+    const ai = QUICK_REACTIONS.indexOf(a.emoji);
+    const bi = QUICK_REACTIONS.indexOf(b.emoji);
+    if (ai >= 0 || bi >= 0) return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    if (a.count !== b.count) return b.count - a.count;
+    return a.emoji.localeCompare(b.emoji);
+  });
+
+  const mine = typeof (raw as any).mine === "string" ? String((raw as any).mine) : null;
+  const nodes = entries.slice(0, 12).map(({ emoji, count }) => {
+    const active = mine === emoji;
+    const label = `${emoji} ${count}`;
+    const btn = el(
+      "button",
+      {
+        class: active ? "msg-react is-active" : "msg-react",
+        type: "button",
+        "data-action": "msg-react",
+        "data-emoji": emoji,
+        "aria-pressed": active ? "true" : "false",
+        title: active ? `Убрать реакцию ${emoji}` : `Реакция ${emoji}`,
+      },
+      [el("span", { class: "msg-react-emoji", "aria-hidden": "true" }, [emoji]), el("span", { class: "msg-react-count" }, [String(count)])]
+    ) as HTMLButtonElement;
+    btn.setAttribute("aria-label", label);
+    return btn;
+  });
+  return el("div", { class: "msg-reacts" }, nodes);
+}
+
 function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileUi: boolean }): FileAttachmentInfo | null {
   const att = m.attachment;
   if (!att || att.kind !== "file") return null;
@@ -549,6 +595,8 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
     }
   }
   bodyChildren.push(el("div", { class: "msg-meta" }, meta));
+  const reacts = renderReactions(m);
+  if (reacts) bodyChildren.push(reacts);
   const lineChildren: HTMLElement[] = [];
   if (m.kind === "in" && fromId) {
     const avatarNode = avatar("dm", fromId);
@@ -607,6 +655,8 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
   }
   bodyChildren.push(el("div", { class: "chat-album-grid", "data-count": String(items.length) }, gridItems));
   bodyChildren.push(el("div", { class: "msg-meta" }, buildMessageMeta(last.msg)));
+  const reacts = renderReactions(last.msg);
+  if (reacts) bodyChildren.push(reacts);
 
   const lineChildren: HTMLElement[] = [];
   if (first.msg.kind === "in" && fromId) {

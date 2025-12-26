@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.206",
+    date: "2025-12-26",
+    added: ["Реакции: одна реакция на сообщение/пост (счётчики + подсветка вашей реакции) — как в Telegram"],
+    improved: ["Реакции: тонкая панель эмодзи в контекст‑меню сообщения (ПКМ / долгий тап)"],
+    fixed: ["История: реакции сохраняются и отображаются после перезагрузки/синхронизации"],
+    notes: ["Можно нажимать на реакцию под сообщением: повторный тап снимает реакцию."],
+  },
+  {
     version: "0.1.205",
     date: "2025-12-26",
     improved: [

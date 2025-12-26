@@ -1002,6 +1002,51 @@
   color: var(--msg-time-color);
 }
 
+.msg-reacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.msg-out .msg-reacts {
+  justify-content: flex-end;
+}
+
+.msg-react {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--msg-time-color), transparent 65%);
+  background: color-mix(in srgb, var(--panel), transparent 60%);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  font-size: 13px;
+  line-height: 1.2;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.msg-react:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
+.msg-react-count {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.msg-react.is-active {
+  border-color: color-mix(in srgb, var(--focus), transparent 35%);
+  background: color-mix(in srgb, var(--focus), transparent 86%);
+}
+
 .msg-time {
   color: var(--msg-time-color);
 }

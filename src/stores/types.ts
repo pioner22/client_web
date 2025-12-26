@@ -92,6 +92,7 @@ export interface ContextMenuPayload {
   title: string;
   target: ContextMenuTarget;
   items: ContextMenuItem[];
+  reactionBar?: { emojis: string[]; active?: string | null };
 }
 
 export type ConfirmAction =
@@ -200,6 +201,11 @@ export type ChatAttachment =
       payload: ActionModalPayload;
     };
 
+export interface MessageReactions {
+  counts: Record<string, number>;
+  mine?: string | null;
+}
+
 export interface ChatMessage {
   ts: number;
   from: string;
@@ -213,6 +219,7 @@ export interface ChatMessage {
   edited_ts?: number;
   kind: "in" | "out" | "sys";
   attachment?: ChatAttachment | null;
+  reactions?: MessageReactions | null;
 }
 
 export interface OutboxEntry {
