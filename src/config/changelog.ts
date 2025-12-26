@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.192",
+    date: "2025-12-26",
+    fixed: [
+      "Mobile: список в сайдбаре меньше «скачет» при перерендере/переключении вкладок — сохраняем позицию прокрутки по «якорю» строки",
+      "iOS клавиатура: fallback-детект по разнице `innerHeight` vs last stable (если `visualViewport` не даёт надёжной дельты) — меньше пустого отступа над клавиатурой",
+    ],
+    improved: ["Touch UI: подсказка про Shift+Enter скрыта на тач‑устройствах (мобилки/планшеты)"],
+  },
+  {
     version: "0.1.191",
     date: "2025-12-26",
     fixed: [

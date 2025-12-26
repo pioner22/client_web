@@ -113,9 +113,11 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
     const keyboardByViewport = Boolean(vvHeight && layout && coveredBottom >= USE_VISUAL_VIEWPORT_DIFF_PX);
     const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
-    const keyboardVisible = Boolean(keyboard || (iosEnv && keyboardByViewport));
+    const innerDiff = lastStableLayout && inner ? Math.max(0, lastStableLayout - inner) : 0;
+    const keyboardByInner = Boolean(iosEnv && innerDiff >= USE_VISUAL_VIEWPORT_DIFF_PX);
+    const keyboardVisible = Boolean(keyboard || (iosEnv && (keyboardByViewport || keyboardByInner)));
     const useVisualViewportHeight = Boolean(iosEnv && vvHeight && vvHeight > 0 && base > 0 && base - vvHeight >= USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX);
-    const resolved = keyboardVisible ? vvHeight : useVisualViewportHeight ? vvHeight : base;
+    const resolved = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : useVisualViewportHeight ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
     return { height: height > 0 ? height : 0, keyboard: keyboardVisible, vvTop, vvBottom: Math.round(coveredBottom), gapBottom };
   };

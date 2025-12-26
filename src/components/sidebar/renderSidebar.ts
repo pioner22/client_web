@@ -321,6 +321,30 @@ export function renderSidebar(
     const rawTab = state.mobileSidebarTab;
     const activeTab: MobileSidebarTab =
       rawTab === "contacts" || rawTab === "menu" || rawTab === "boards" ? rawTab : "chats";
+    type SidebarScrollAnchor = { kind: string; id: string; offset: number };
+    type SidebarScrollSnapshot = { scrollTop: number; anchor: SidebarScrollAnchor | null };
+    const scrollMemory: Record<string, SidebarScrollSnapshot | undefined> = ((target as any)._mobileSidebarScrollMemory ||= {});
+    const prevTab = String((target as any)._mobileSidebarPrevTab || "").trim();
+    const isSameTab = Boolean(prevTab && prevTab === activeTab);
+    if (prevTab && prevTab !== activeTab) {
+      try {
+        const hostRect = body.getBoundingClientRect();
+        const rows = Array.from(body.querySelectorAll<HTMLElement>('.row[data-ctx-kind][data-ctx-id]'));
+        const anchorRow = rows.find((row) => {
+          const r = row.getBoundingClientRect();
+          return r.bottom > hostRect.top + 1;
+        });
+        const anchorKind = anchorRow?.getAttribute("data-ctx-kind") || "";
+        const anchorId = anchorRow?.getAttribute("data-ctx-id") || "";
+        const anchor =
+          anchorRow && anchorKind && anchorId
+            ? ({ kind: anchorKind, id: anchorId, offset: anchorRow.getBoundingClientRect().top - hostRect.top } satisfies SidebarScrollAnchor)
+            : null;
+        scrollMemory[prevTab] = { scrollTop: body.scrollTop || 0, anchor };
+      } catch {
+        scrollMemory[prevTab] = { scrollTop: body.scrollTop || 0, anchor: null };
+      }
+    }
     if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
     const topTitle =
       activeTab === "contacts" ? "Контакты" : activeTab === "boards" ? "Доски" : activeTab === "menu" ? "Меню" : "Чаты";
@@ -433,9 +457,56 @@ export function renderSidebar(
 
     const sticky = el("div", { class: "sidebar-mobile-sticky" }, [top, ...(searchBar ? [searchBar] : [])]);
     const bottom = el("div", { class: "sidebar-mobile-bottom" }, [tabs]);
+    const takeScrollSnapshot = (): SidebarScrollSnapshot => {
+      const scrollTop = body.scrollTop || 0;
+      try {
+        const hostRect = body.getBoundingClientRect();
+        const rows = Array.from(body.querySelectorAll<HTMLElement>('.row[data-ctx-kind][data-ctx-id]'));
+        const anchorRow = rows.find((row) => {
+          const r = row.getBoundingClientRect();
+          return r.bottom > hostRect.top + 1;
+        });
+        const anchorKind = anchorRow?.getAttribute("data-ctx-kind") || "";
+        const anchorId = anchorRow?.getAttribute("data-ctx-id") || "";
+        const anchor =
+          anchorRow && anchorKind && anchorId
+            ? ({ kind: anchorKind, id: anchorId, offset: anchorRow.getBoundingClientRect().top - hostRect.top } satisfies SidebarScrollAnchor)
+            : null;
+        return { scrollTop, anchor };
+      } catch {
+        return { scrollTop, anchor: null };
+      }
+    };
+    const restoreScrollSnapshot = (snap: SidebarScrollSnapshot): void => {
+      try {
+        if (!snap.anchor) {
+          body.scrollTop = snap.scrollTop || 0;
+          return;
+        }
+        const selector = `.row[data-ctx-kind="${snap.anchor.kind}"][data-ctx-id="${snap.anchor.id}"]`;
+        const row = body.querySelector(selector) as HTMLElement | null;
+        if (!row) {
+          body.scrollTop = snap.scrollTop || 0;
+          return;
+        }
+        const next = Math.max(0, Math.round(row.offsetTop - snap.anchor.offset));
+        body.scrollTop = next;
+      } catch {
+        body.scrollTop = snap.scrollTop || 0;
+      }
+    };
+    const initialSnap = isSameTab ? takeScrollSnapshot() : scrollMemory[activeTab] || { scrollTop: 0, anchor: null };
     const mountMobile = (children: HTMLElement[]) => {
+      const snap = isSameTab ? takeScrollSnapshot() : initialSnap;
       body.replaceChildren(...children);
       target.replaceChildren(sticky, body, bottom);
+      restoreScrollSnapshot(snap);
+      try {
+        window.requestAnimationFrame(() => restoreScrollSnapshot(snap));
+      } catch {
+        // ignore
+      }
+      (target as any)._mobileSidebarPrevTab = activeTab;
     };
 
     const pinnedChatRows: HTMLElement[] = [];

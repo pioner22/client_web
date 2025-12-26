@@ -208,6 +208,12 @@
   }
 }
 
+@media (pointer: coarse) {
+  .composer-hint {
+    display: none;
+  }
+}
+
 .btn.composer-send {
   min-width: 40px;
   width: 40px;
