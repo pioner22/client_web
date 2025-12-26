@@ -372,6 +372,11 @@
   line-height: 1;
 }
 
+.sidebar-close-spacer {
+  pointer-events: none;
+  opacity: 0;
+}
+
 .sidebar-tabs {
   --sidebar-tabs-count: 3;
   display: grid;
@@ -956,7 +961,6 @@
 .msg-text {
   white-space: pre-wrap;
   word-break: break-word;
-  font-variant-emoji: emoji;
 }
 
 .msg-text.msg-emoji-only {
@@ -1710,7 +1714,6 @@
   text-rendering: geometricPrecision;
   overflow-y: hidden;
   scrollbar-width: none;
-  font-variant-emoji: emoji;
 }
 
 .composer-field .input::-webkit-scrollbar {

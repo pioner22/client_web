@@ -364,6 +364,26 @@ export function mountApp(root: HTMLElement) {
     url: string;
   };
   const pendingShareQueue: PwaSharePayload[] = [];
+  const pendingPushDeepLink = (() => {
+    try {
+      const loc = globalThis.location;
+      const search = typeof loc?.search === "string" ? loc.search : "";
+      const params = new URLSearchParams(search || "");
+      const room = String(params.get("push_room") || "").trim();
+      const from = String(params.get("push_from") || "").trim();
+      if (!room && !from) return null;
+      params.delete("push_room");
+      params.delete("push_from");
+      const next = params.toString();
+      const pathname = typeof loc?.pathname === "string" ? loc.pathname : "/";
+      const hash = typeof loc?.hash === "string" ? loc.hash : "";
+      const url = next ? `${pathname}?${next}${hash}` : `${pathname}${hash}`;
+      globalThis.history?.replaceState?.(null, "", url);
+      return { room, from };
+    } catch {
+      return null;
+    }
+  })();
 
   function maybeApplyIosInputAssistant(target: EventTarget | null) {
     if (!iosStandalone) return;
@@ -549,6 +569,21 @@ export function mountApp(root: HTMLElement) {
     }
     if (from) selectTarget({ kind: "dm", id: from });
   });
+
+  if (pendingPushDeepLink) {
+    queueMicrotask(() => {
+      const room = String(pendingPushDeepLink.room || "").trim();
+      const from = String(pendingPushDeepLink.from || "").trim();
+      if (!room && !from) return;
+      setPage("main");
+      if (room) {
+        if (room.startsWith("b-")) selectTarget({ kind: "board", id: room });
+        else selectTarget({ kind: "group", id: room });
+        return;
+      }
+      if (from) selectTarget({ kind: "dm", id: from });
+    });
+  }
 
   const pushSentByUser = new Map<string, string>();
   let pushAutoAttemptUser: string | null = null;
@@ -1006,6 +1041,9 @@ export function mountApp(root: HTMLElement) {
   const hoverMq = window.matchMedia("(hover: hover)");
   let mobileSidebarOpen = false;
   let mobileSidebarAutoOpened = false;
+  let mobileSidebarChatKey: string | null = null;
+  let mobileSidebarChatWasAtBottom = false;
+  let suppressMobileSidebarCloseStickBottom = false;
   let searchDebounceTimer: number | null = null;
   let lastSearchIssued = "";
   const membersAddStatus = new Map<string, MembersAddUiStatus>();
@@ -1941,8 +1979,42 @@ export function mountApp(root: HTMLElement) {
     bumpAvatars(`Аватар удалён: ${targetId}`);
   }
 
+  function isChatAtBottom(key: string): boolean {
+    const k = String(key || "").trim();
+    if (!k) return true;
+    const host = layout.chatHost;
+    const currentKey = String(host.getAttribute("data-chat-key") || "").trim();
+    if (!currentKey || currentKey !== k) return true;
+    return host.scrollTop + host.clientHeight >= host.scrollHeight - 24;
+  }
+
   function setMobileSidebarOpen(open: boolean) {
-    const shouldOpen = Boolean(open && mobileSidebarMq.matches);
+    const st = store.get();
+    const forcedOpen = Boolean(mobileSidebarMq.matches && st.page === "main" && !st.selected && !st.modal);
+    const shouldOpen = Boolean((open || forcedOpen) && mobileSidebarMq.matches);
+    if (mobileSidebarOpen === shouldOpen) return;
+
+    const prevOpen = mobileSidebarOpen;
+    const selKey = st.page === "main" && st.selected ? conversationKey(st.selected) : "";
+    const restoreKey =
+      !shouldOpen &&
+      prevOpen &&
+      !suppressMobileSidebarCloseStickBottom &&
+      mobileSidebarChatWasAtBottom &&
+      mobileSidebarChatKey &&
+      selKey &&
+      selKey === mobileSidebarChatKey
+        ? selKey
+        : "";
+
+    if (shouldOpen) {
+      mobileSidebarChatKey = selKey || null;
+      mobileSidebarChatWasAtBottom = Boolean(selKey && isChatAtBottom(selKey));
+    } else {
+      mobileSidebarChatKey = null;
+      mobileSidebarChatWasAtBottom = false;
+    }
+
     mobileSidebarOpen = shouldOpen;
     layout.sidebar.classList.toggle("sidebar-mobile-open", shouldOpen);
     layout.navOverlay.classList.toggle("hidden", !shouldOpen);
@@ -1952,6 +2024,8 @@ export function mountApp(root: HTMLElement) {
         const closeBtn = layout.sidebar.querySelector("button[data-action='sidebar-close']") as HTMLButtonElement | null;
         closeBtn?.focus();
       });
+    } else if (restoreKey) {
+      scrollChatToBottom(restoreKey);
     }
   }
 
@@ -2391,7 +2465,14 @@ export function mountApp(root: HTMLElement) {
     if (prevPage === "group_create" && page !== "group_create") resetCreateMembers("group_create");
     if (prevPage === "board_create" && page !== "board_create") resetCreateMembers("board_create");
     if (page !== "main") closeEmojiPopover();
-    closeMobileSidebar();
+    // Mobile: не допускаем "пустой экран" (main без выбранного чата) — в этом случае
+    // возвращаем пользователя в список (sidebar) вместо закрытия drawer.
+    const keepSidebar = Boolean(mobileSidebarMq.matches && page === "main" && !store.get().selected && !store.get().modal);
+    if (page !== "main" || !keepSidebar) {
+      closeMobileSidebar();
+    } else {
+      setMobileSidebarOpen(true);
+    }
     store.set((prev) => ({
       ...prev,
       page,
@@ -2603,7 +2684,12 @@ export function mountApp(root: HTMLElement) {
   function selectTarget(t: TargetRef) {
     closeEmojiPopover();
     const composerHadFocus = document.activeElement === layout.input;
-    closeMobileSidebar();
+    suppressMobileSidebarCloseStickBottom = true;
+    try {
+      closeMobileSidebar();
+    } finally {
+      suppressMobileSidebarCloseStickBottom = false;
+    }
     const prev = store.get();
     if (prev.page === "main" && prev.selected && prev.selected.kind === t.kind && prev.selected.id === t.id) {
       if (
@@ -5217,6 +5303,7 @@ export function mountApp(root: HTMLElement) {
       }
     }
 
+    const showAuthOnLogout = Boolean(mobileSidebarMq.matches);
     store.set((prev) => ({
       ...prev,
       authed: false,
@@ -5256,10 +5343,10 @@ export function mountApp(root: HTMLElement) {
       profileDraftHandle: "",
       toast: null,
       page: "main",
-      modal: null,
+      modal: showAuthOnLogout ? { kind: "auth" } : null,
       authMode: rememberedId ? "login" : "register",
       authRememberedId: rememberedId,
-      status: "Вы вышли. Нажмите «Войти», чтобы войти снова.",
+      status: showAuthOnLogout ? "Вы вышли. Войдите снова." : "Вы вышли. Нажмите «Войти», чтобы войти снова.",
     }));
     draftsLoadedForUser = null;
     pinsLoadedForUser = null;
@@ -8252,17 +8339,8 @@ export function mountApp(root: HTMLElement) {
     if (st.modal && st.modal.kind !== "context_menu") {
       closeMobileSidebar();
     }
-    // Mobile UX: при первом входе (и если чат не выбран) показываем список чатов как основной экран.
-    if (
-      mobileSidebarMq.matches &&
-      !mobileSidebarOpen &&
-      !mobileSidebarAutoOpened &&
-      st.conn === "connected" &&
-      st.authed &&
-      st.page === "main" &&
-      !st.modal &&
-      !st.selected
-    ) {
+    // Mobile UX: если чат не выбран — основной экран это список (никаких "пустых" экранов).
+    if (mobileSidebarMq.matches && !mobileSidebarOpen && st.page === "main" && !st.modal && !st.selected) {
       mobileSidebarAutoOpened = true;
       setMobileSidebarOpen(true);
     }

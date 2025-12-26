@@ -330,6 +330,20 @@ self.addEventListener("notificationclick", (event) => {
   event.notification?.close?.();
   event.waitUntil(
     (async () => {
+      const room = data && typeof data === "object" && (data.room || data.room === 0) ? String(data.room || "").trim() : "";
+      const from = data && typeof data === "object" && (data.from || data.from === 0) ? String(data.from || "").trim() : "";
+      const openUrl = (() => {
+        if (!room && !from) return "./";
+        try {
+          const qs = new URLSearchParams();
+          if (room) qs.set("push_room", room);
+          if (from) qs.set("push_from", from);
+          const q = qs.toString();
+          return q ? `./?${q}` : "./";
+        } catch {
+          return "./";
+        }
+      })();
       const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       if (clients && clients.length) {
         for (const c of clients) {
@@ -343,7 +357,7 @@ self.addEventListener("notificationclick", (event) => {
         } catch {}
       }
       if (self.clients.openWindow) {
-        await self.clients.openWindow("./");
+        await self.clients.openWindow(openUrl);
       }
     })()
   );

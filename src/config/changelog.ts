@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.198",
+    date: "2025-12-26",
+    fixed: [
+      "Mobile: убран «пустой экран» — если чат не выбран, основной экран это список (4 вкладки)",
+      "Mobile: после «Выхода» сразу открывается окно входа/регистрации",
+      "Chat: при закрытии списка сохраняем pinned-bottom (если пользователь был у конца истории)",
+      "Windows: цифры/текст больше не рендерятся как emoji в сообщениях/поле ввода",
+      "PWA: клик по push‑уведомлению открывает нужный чат даже при закрытом приложении (deep-link)",
+    ],
+  },
+  {
     version: "0.1.197",
     date: "2025-12-26",
     fixed: ["Аккаунт: после «Выхода» больше не нужен ручной refresh — соединение переподключается автоматически, можно сразу нажать «Войти»"],
