@@ -191,9 +191,12 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const composerEnabled = chatInputVisible && composerDisabledReason === null;
   const boardEditorAvailable = composerEnabled && Boolean(sel && sel.kind === "board") && !isBoardReadOnly && !editing;
   const boardEditorOpen = Boolean(boardEditorAvailable && state.boardComposerOpen);
-  layout.boardEditorBtn.classList.toggle("hidden", !boardEditorAvailable);
+  layout.boardEditorBtn.classList.toggle("hidden", !boardEditorAvailable || mobileUi);
   layout.boardEditorBtn.classList.toggle("btn-active", boardEditorOpen);
   layout.boardEditorBtn.disabled = !boardEditorAvailable;
+  layout.boardEditorMobileBtn.classList.toggle("hidden", !boardEditorAvailable || !mobileUi);
+  layout.boardEditorMobileBtn.classList.toggle("btn-active", boardEditorOpen);
+  layout.boardEditorMobileBtn.disabled = !boardEditorAvailable;
   layout.boardEditorWrap.classList.toggle("hidden", !boardEditorOpen);
   layout.inputWrap.classList.toggle("board-editor-open", boardEditorOpen);
 
@@ -253,14 +256,12 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
 
   const canSendNow = composerEnabled && Boolean(sel);
   const composerText = sendText.trim();
-  layout.sendBtn.disabled = !canSendNow || !composerText || tooLong;
+  layout.boardPublishBtn.disabled = !boardEditorOpen || !canSendNow || !composerText || tooLong;
   layout.attachBtn.disabled = !canSendNow || !sel || isBoardReadOnly || Boolean(editing);
   layout.emojiBtn.disabled = !canSendNow || !sel || isBoardReadOnly;
   layout.inputWrap.classList.toggle("composer-editing", Boolean(editing));
-  layout.sendBtn.setAttribute("aria-label", editing ? "Сохранить" : boardEditorOpen ? "Опубликовать" : "Отправить");
-  layout.sendBtn.textContent = editing ? "Сохранить" : boardEditorOpen ? "Опубликовать" : "Отправить";
   const hint = layout.inputWrap.querySelector(".composer-hint") as HTMLElement | null;
-  if (hint) hint.textContent = boardEditorOpen ? (mobileUi ? "Кнопка «Опубликовать» — справа" : "Ctrl+Enter — опубликовать") : "Shift+Enter — новая строка";
+  if (hint) hint.textContent = editing ? "Enter — сохранить, Shift+Enter — новая строка" : boardEditorOpen ? (mobileUi ? "«Опубликовать» — в редакторе" : "Ctrl+Enter — опубликовать") : "Shift+Enter — новая строка";
 
   const editBar = layout.inputWrap.querySelector("#composer-edit") as HTMLElement | null;
   const editText = layout.inputWrap.querySelector("#composer-edit-text") as HTMLElement | null;

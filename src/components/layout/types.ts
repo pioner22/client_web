@@ -15,6 +15,7 @@ export interface Layout {
   attachBtn: HTMLButtonElement;
   emojiBtn: HTMLButtonElement;
   boardEditorBtn: HTMLButtonElement;
+  boardEditorMobileBtn: HTMLButtonElement;
   boardEditorWrap: HTMLElement;
   boardEditorToolbar: HTMLElement;
   boardEditorPreview: HTMLElement;
@@ -23,7 +24,7 @@ export interface Layout {
   boardScheduleBtn: HTMLButtonElement;
   boardScheduleClearBtn: HTMLButtonElement;
   boardScheduleList: HTMLElement;
-  sendBtn: HTMLButtonElement;
+  boardPublishBtn: HTMLButtonElement;
   footer: HTMLElement;
   navOverlay: HTMLElement;
   overlay: HTMLElement;

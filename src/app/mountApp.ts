@@ -6384,7 +6384,7 @@ export function mountApp(root: HTMLElement) {
     }
   });
 
-  layout.sendBtn.addEventListener("click", () => sendChat());
+  layout.boardPublishBtn.addEventListener("click", () => sendChat());
   layout.inputWrap.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
 

@@ -55,7 +55,17 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     },
     ["✎"]
   ) as HTMLButtonElement;
-  const sendBtn = el("button", { class: "btn composer-send", type: "button", "aria-label": "Отправить" }, ["Отправить"]);
+  const boardEditorMobileBtn = el(
+    "button",
+    {
+      class: "btn board-editor-toggle-mobile hidden",
+      type: "button",
+      title: "Редактор новости",
+      "aria-label": "Редактор новости",
+      "data-action": "board-editor-toggle",
+    },
+    ["✎"]
+  ) as HTMLButtonElement;
   const editBar = el("div", { class: "composer-edit hidden", id: "composer-edit", role: "status", "aria-live": "polite" }, [
     el("div", { class: "composer-edit-body" }, [
       el("div", { class: "composer-edit-title" }, ["Редактирование"]),
@@ -164,17 +174,23 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   ]);
   const boardScheduleList = el("div", { class: "board-editor-schedule-list" }, [""]);
 
+  const boardPublishBtn = el("button", { class: "btn board-editor-publish", type: "button", "data-action": "board-publish" }, [
+    "Опубликовать",
+  ]) as HTMLButtonElement;
+  const boardActionsRow = el("div", { class: "board-editor-actions" }, [boardPublishBtn]);
+
   const boardEditorWrap = el("div", { class: "board-editor hidden", id: "board-editor" }, [
     boardEditorToolbar,
     boardScheduleRow,
     boardScheduleHint,
     boardScheduleList,
     boardEditorPreview,
+    boardActionsRow,
   ]);
   const composerRow = el("div", { class: "composer-row" }, [
-    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, boardEditorBtn, input, sendBtn]),
+    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, boardEditorBtn, input]),
   ]);
-  const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorWrap, composerRow, composerMeta]);
+  const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorMobileBtn, boardEditorWrap, composerRow, composerMeta]);
 
   const footer = el("footer", { class: "footer" });
   const toastHost = el("div", { class: "toast-host hidden", "aria-live": "polite", "aria-atomic": "true" });
@@ -208,6 +224,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     attachBtn,
     emojiBtn,
     boardEditorBtn,
+    boardEditorMobileBtn,
     boardEditorWrap,
     boardEditorToolbar,
     boardEditorPreview,
@@ -216,7 +233,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     boardScheduleBtn,
     boardScheduleClearBtn,
     boardScheduleList,
-    sendBtn,
+    boardPublishBtn,
     footer,
     navOverlay,
     overlay,

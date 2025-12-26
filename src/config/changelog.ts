@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.208",
+    date: "2025-12-26",
+    improved: [
+      "Композер: убрана кнопка «Отправить» — отправка в чатах по Enter (как на телефоне)",
+      "Доски: публикация теперь через кнопку «Опубликовать» внутри редактора (Ctrl+Enter тоже работает)",
+      "Mobile: в строке ввода осталась только кнопка «Файл»; редактор Досок открывается отдельной кнопкой над полем",
+      "Доски: карточки объявлений получили стиль «прибито гвоздями» по бокам",
+    ],
+  },
+  {
     version: "0.1.207",
     date: "2025-12-26",
     improved: [
