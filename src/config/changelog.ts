@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.207",
+    date: "2025-12-26",
+    improved: [
+      "Desktop: сайдбар больше не «перемешивает» Контакты/Доски/Чаты — вкладки теперь переключают отдельные списки",
+      "PWA (desktop): вкладка «Меню» скрыта (на desktop навигация уже есть в шапке/футере)",
+      "Сайдбар: вкладки оформлены как сегментированный переключатель (чётче и аккуратнее)",
+    ],
+  },
+  {
     version: "0.1.206",
     date: "2025-12-26",
     added: ["Реакции: одна реакция на сообщение/пост (счётчики + подсветка вашей реакции) — как в Telegram"],

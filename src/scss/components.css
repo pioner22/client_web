@@ -409,7 +409,10 @@
 .sidebar-tabs.sidebar-tabs-desktop {
   --sidebar-tabs-count: 3;
   margin: 0;
-  border-radius: 14px;
+  border-radius: 16px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 35%);
+  background: color-mix(in srgb, var(--panel2), transparent 25%);
 }
 
 .sidebar-tabs.sidebar-tabs-pwa {
