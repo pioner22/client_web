@@ -309,3 +309,91 @@ test("mobile sidebar: поиск фильтрует список и вызыва
     await helper.cleanup();
   }
 });
+
+test("mobile sidebar: Чаты = активные ЛС + группы (не весь список контактов)", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    withDomStubs(
+      () => {
+        const target = document.createElement("div");
+        const state = {
+          friends: [
+            { id: "111-111-111", online: true, unread: 0 },
+            { id: "222-222-222", online: false, unread: 0 },
+          ],
+          groups: [{ id: "g-1", name: "Группа 1" }],
+          boards: [],
+          pinned: [],
+          pendingIn: [],
+          pendingOut: [],
+          pendingGroupInvites: [],
+          pendingGroupJoinRequests: [],
+          pendingBoardInvites: [],
+          fileOffersIn: [],
+          selected: null,
+          page: "main",
+          mobileSidebarTab: "chats",
+          sidebarQuery: "",
+          conversations: {
+            "dm:111-111-111": [{ ts: 10, from: "111-111-111", text: "hi", kind: "in" }],
+            "dm:222-222-222": [],
+            "room:g-1": [],
+          },
+          drafts: {},
+        };
+
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+
+        assert.equal(hasText(target, "111-111-111"), true);
+        assert.equal(hasText(target, "Группа 1"), true);
+        assert.equal(hasText(target, "222-222-222"), false);
+      },
+      { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("mobile sidebar: Контакты показывают всех пользователей (не только активные ЛС)", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    withDomStubs(
+      () => {
+        const target = document.createElement("div");
+        const state = {
+          friends: [
+            { id: "111-111-111", online: true, unread: 0 },
+            { id: "222-222-222", online: false, unread: 0 },
+          ],
+          groups: [],
+          boards: [],
+          pinned: [],
+          pendingIn: [],
+          pendingOut: [],
+          pendingGroupInvites: [],
+          pendingGroupJoinRequests: [],
+          pendingBoardInvites: [],
+          fileOffersIn: [],
+          selected: null,
+          page: "main",
+          mobileSidebarTab: "contacts",
+          sidebarQuery: "",
+          conversations: {
+            "dm:111-111-111": [{ ts: 10, from: "111-111-111", text: "hi", kind: "in" }],
+            "dm:222-222-222": [],
+          },
+          drafts: {},
+        };
+
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+
+        assert.equal(hasText(target, "111-111-111"), true);
+        assert.equal(hasText(target, "222-222-222"), true);
+      },
+      { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});

@@ -266,6 +266,36 @@ test("renderChat: закреп/поиск рендерятся в chatTop (не 
   }
 });
 
+test("renderChat: без выбранного чата область чата пустая, composer/placeholder не рендерим", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chatTop = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      chatTop.className = "chat-top";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump";
+
+      chatTop.replaceChildren({ nodeType: 3, textContent: "seed-top" });
+      chatHost.replaceChildren({ nodeType: 3, textContent: "seed-host" });
+
+      helper.renderChat(
+        { chatTop, chatHost, chatJump },
+        {
+          selected: null,
+        }
+      );
+
+      assert.equal(chatTop._children.length, 0);
+      assert.equal(chatHost._children.length, 0);
+      assert.equal(chatJump.classList.contains("hidden"), true);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("renderChat: сохраняет scrollTop если replaceChildren сбрасывает его (iOS/WebKit)", async () => {
   const helper = await loadRenderChat();
   try {

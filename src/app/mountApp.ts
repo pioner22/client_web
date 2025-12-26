@@ -6156,6 +6156,7 @@ export function mountApp(root: HTMLElement) {
       const isBlocked = st.blocked.includes(target.id);
       addGroup([
         makeItem("open", "Открыть", "💬"),
+        makeItem("profile", "Профиль", "👤"),
         makeItem("pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌"),
       ]);
       addGroup([
@@ -6366,6 +6367,16 @@ export function mountApp(root: HTMLElement) {
       const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
       const fromId = msg?.from ? String(msg.from).trim() : "";
       if (fromId) openUserPage(fromId);
+      close();
+      return;
+    }
+
+    if (itemId === "profile") {
+      if (t.kind !== "dm") {
+        close();
+        return;
+      }
+      openUserPage(t.id);
       close();
       return;
     }
@@ -8118,7 +8129,7 @@ export function mountApp(root: HTMLElement) {
       renderMembersAddChips();
       membersAddDrainLookups();
     }
-    if (st.modal) {
+    if (st.modal && st.modal.kind !== "context_menu") {
       closeMobileSidebar();
     }
     // Mobile UX: при первом входе (и если чат не выбран) показываем список чатов как основной экран.

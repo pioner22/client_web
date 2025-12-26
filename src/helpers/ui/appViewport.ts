@@ -35,7 +35,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number; gapBottom: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 32;
-    const USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX = 20;
+    // On iOS/Safari even a small (few px) mismatch between layout viewport and visual viewport
+    // can clip fixed bottom bars under browser chrome. Prefer visualViewport when it is smaller.
+    const USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX = 2;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;

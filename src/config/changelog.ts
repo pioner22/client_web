@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.195",
+    date: "2025-12-26",
+    improved: [
+      "Контекст-меню контакта: добавлен пункт «Профиль»",
+      "Mobile: вкладка «Чаты» теперь показывает активные ЛС + группы; «Контакты» — полный список пользователей",
+      "Main: composer скрыт, пока не выбран чат/контакт/доска (без пустого «окна чата» при входе)",
+    ],
+    fixed: [
+      "Mobile: открытие контекст-меню (ПКМ/долгий тап) больше не закрывает sidebar и не «прыгает» в пустой чат",
+      "iOS/Safari: `--app-vh` чаще берём по `visualViewport.height` (>=2px разницы) — меньше шанс обрезанного низа под браузерной панелью",
+    ],
+  },
+  {
     version: "0.1.194",
     date: "2025-12-26",
     fixed: [

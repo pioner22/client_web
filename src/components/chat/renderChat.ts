@@ -695,6 +695,14 @@ export function renderChat(layout: Layout, state: AppState) {
     }
   }
 
+  // No selected chat: keep the main area empty (mobile starts from the sidebar tabs).
+  if (!key) {
+    layout.chatTop.replaceChildren();
+    scrollHost.replaceChildren();
+    layout.chatJump.classList.add("hidden");
+    return;
+  }
+
   const friendLabels = new Map<string, string>();
   for (const f of state.friends || []) {
     friendLabels.set(String(f.id), formatUserLabel(f.display_name || "", f.handle || "", String(f.id || "")));
@@ -775,20 +783,7 @@ export function renderChat(layout: Layout, state: AppState) {
     lines.unshift(el("div", { class: "chat-history-more-wrap" }, [btn]));
   }
 
-	  if (!lines.length) {
-	    if (!state.selected) {
-	      layout.chatTop.replaceChildren(el("div", { class: "chat-title" }, ["Сообщения"]));
-	      scrollHost.replaceChildren(
-	        el("div", { class: "chat-empty" }, [
-	          el("div", { class: "chat-empty-title" }, [mobileUi ? "Выберите чат или контакт" : "Выберите чат или контакт слева"]),
-	          el("div", { class: "chat-empty-sub" }, [
-	            mobileUi ? "Вкладки снизу: «Контакты», «Чаты», «Доски». Поиск/создание — в «Меню»." : "F3 — поиск, F5/F6 — создать",
-	          ]),
-	        ])
-	      );
-	      layout.chatJump.classList.add("hidden");
-	      return;
-	    }
+  if (!lines.length) {
     const loaded = key ? Boolean(state.historyLoaded[key]) : true;
     if (!loaded) {
       for (let i = 0; i < 7; i += 1) {

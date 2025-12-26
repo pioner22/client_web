@@ -109,10 +109,10 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   lastPage = state.page;
 
   // Контекстное меню не должно "ломать" макет и прятать composer.
-  const chatInputVisible = state.page === "main" && (!state.modal || state.modal.kind === "context_menu");
-  const isMobile = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
+  // Composer показываем только когда выбран чат/контакт/доска (как в tweb).
+  const chatInputVisible = state.page === "main" && Boolean(state.selected) && (!state.modal || state.modal.kind === "context_menu");
   const mobileUi = isMobileLikeUi();
-  layout.inputWrap.classList.toggle("hidden", !chatInputVisible && isMobile);
+  layout.inputWrap.classList.toggle("hidden", !chatInputVisible);
   layout.inputWrap.classList.toggle("input-wrap-no-composer", !chatInputVisible);
 
   const rawInput = (layout.input.value || state.input || "").toString();
@@ -283,7 +283,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   // - file_viewer: поверх (overlay) как fullscreen viewer (Telegram‑паттерн)
   const inlineModal = Boolean(state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer");
   layout.chat.classList.toggle("chat-page", state.page !== "main" || inlineModal);
-  const showChatTop = state.page === "main" && !inlineModal;
+  const showChatTop = state.page === "main" && !inlineModal && Boolean(state.selected);
   layout.chatTop.classList.toggle("hidden", !showChatTop);
   if (!showChatTop) {
     // When switching to pages/modals, clear chat header state so returning to chat is treated as "fresh".

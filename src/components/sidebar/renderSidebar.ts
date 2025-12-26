@@ -520,7 +520,7 @@ export function renderSidebar(
         if (!matchesFriend(f)) continue;
         const k = dmKey(f.id);
         const meta = previewForConversation(state, k, "dm", drafts[k]);
-        const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser);
+        const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
         pinnedContactRows.push(row);
         continue;
       }
@@ -573,13 +573,31 @@ export function renderSidebar(
     };
 
     if (activeTab === "chats") {
-      const dialogItems: Array<{ sortTs: number; row: HTMLElement }> = [];
+      const dialogItems: Array<{ sortTs: number; label: string; row: HTMLElement }> = [];
+
+      // Активные диалоги (ЛС): показываем только тех, у кого есть история/черновик/unread/attention.
+      for (const f of state.friends || []) {
+        const id = String(f?.id || "").trim();
+        if (!id) continue;
+        const k = dmKey(id);
+        if (pinnedSet.has(k)) continue;
+        if (!hasActiveDialogForFriend(f)) continue;
+        if (!matchesFriend(f)) continue;
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        dialogItems.push({
+          sortTs: lastTsForKey(k),
+          label: displayNameForFriend(state, f),
+          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attnSet.has(id)),
+        });
+      }
+
       for (const g of restGroups) {
         if (!matchesRoom(g)) continue;
         const k = roomKey(g.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
         dialogItems.push({
           sortTs: lastTsForKey(k),
+          label: String(g.name || g.id),
           row: roomRow(
             null,
             String(g.name || g.id),
@@ -591,11 +609,12 @@ export function renderSidebar(
         });
       }
 
-      dialogItems.sort((a, b) => b.sortTs - a.sortTs);
+      dialogItems.sort((a, b) => b.sortTs - a.sortTs || a.label.localeCompare(b.label, "ru", { sensitivity: "base" }));
       const dialogRows = dialogItems.map((x) => x.row);
+      const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
       mountMobile([
-        ...(pinnedChatRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedChatRows] : []),
+        ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
         ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])])
       ]);
@@ -635,7 +654,6 @@ export function renderSidebar(
       .map((f) => {
         const k = dmKey(f.id);
         if (pinnedSet.has(k)) return null;
-        if (!hasActiveDialogForFriend(f)) return null;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
       })
@@ -644,7 +662,6 @@ export function renderSidebar(
       .map((f) => {
         const k = dmKey(f.id);
         if (pinnedSet.has(k)) return null;
-        if (!hasActiveDialogForFriend(f)) return null;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
       })
@@ -760,7 +777,7 @@ export function renderSidebar(
       el("summary", { class: "sidebar-tips-summary", title: "Короткие подсказки", "aria-label": "Подсказки" }, ["Подсказки"]),
       el("div", { class: "sidebar-tips-body" }, [
         el("div", { class: "sidebar-tip" }, ["ПКМ/долгий тап по контакту — меню действий."]),
-        el("div", { class: "sidebar-tip" }, ["«Контакты» — активные ЛС, «Чаты» — группы."]),
+        el("div", { class: "sidebar-tip" }, ["«Чаты» — активные диалоги и группы, «Контакты» — список пользователей."]),
         el("div", { class: "sidebar-tip" }, ["Новые контакты удобнее добавлять через «Поиск»."]),
       ]),
     ]);
