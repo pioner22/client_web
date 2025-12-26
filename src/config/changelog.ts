@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.202",
+    date: "2025-12-26",
+    improved: ["Mobile sidebar: свайп стал плавным — при перетаскивании список «тянется», затем безшовно анимируется в следующую вкладку"],
+    notes: ["Если включено «уменьшение движения» (prefers-reduced-motion), анимация отключается."],
+  },
+  {
     version: "0.1.201",
     date: "2025-12-26",
     improved: ["Mobile sidebar: свайп влево/вправо по списку переключает вкладки (Контакты/Доски/Чаты/Меню) — как в Telegram"],

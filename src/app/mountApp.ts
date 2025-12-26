@@ -7628,6 +7628,8 @@ export function mountApp(root: HTMLElement) {
   let sidebarSwipeLastX = 0;
   let sidebarSwipeLastY = 0;
   let sidebarSwipeHorizontal = false;
+  let sidebarSwipeLockUntil = 0;
+  let sidebarSwipeScrollWasHidden = false;
 
   const resetSidebarSwipe = () => {
     sidebarSwipePointerId = null;
@@ -7639,11 +7641,38 @@ export function mountApp(root: HTMLElement) {
     sidebarSwipeHorizontal = false;
   };
 
+  const clearSidebarSwipeFx = () => {
+    const sidebar = layout.sidebar;
+    if (sidebarSwipeScrollWasHidden) {
+      sidebarSwipeScrollWasHidden = false;
+      layout.sidebarBody.style.overflowY = "";
+    }
+    delete sidebar.dataset.swipeActive;
+    delete sidebar.dataset.swipeAnim;
+    sidebar.style.removeProperty("--sidebar-swipe-x");
+    sidebar.style.removeProperty("--sidebar-swipe-scale");
+    sidebar.style.removeProperty("--sidebar-swipe-opacity");
+  };
+
+  const setSidebarSwipeFx = (xPx: number, opts?: { anim?: boolean; scale?: number; opacity?: number }) => {
+    const anim = Boolean(opts?.anim);
+    const scale = Number.isFinite(opts?.scale) ? Number(opts?.scale) : 1;
+    const opacity = Number.isFinite(opts?.opacity) ? Number(opts?.opacity) : 1;
+    const sidebar = layout.sidebar;
+    sidebar.dataset.swipeActive = "1";
+    if (anim) sidebar.dataset.swipeAnim = "1";
+    else delete sidebar.dataset.swipeAnim;
+    sidebar.style.setProperty("--sidebar-swipe-x", `${Math.round(xPx)}px`);
+    sidebar.style.setProperty("--sidebar-swipe-scale", String(Math.max(0.9, Math.min(1, scale))));
+    sidebar.style.setProperty("--sidebar-swipe-opacity", String(Math.max(0.3, Math.min(1, opacity))));
+  };
+
   const canUseSidebarTabSwipe = (ev: PointerEvent, target: HTMLElement | null): boolean => {
     const st = store.get();
     if (st.modal) return false;
     if (!mobileSidebarMq.matches) return false;
     if (!mobileSidebarOpen) return false;
+    if (Date.now() < sidebarSwipeLockUntil) return false;
     if (ev.pointerType === "mouse") return false;
     if (ev.button !== 0) return false;
     if (!target) return false;
@@ -7661,7 +7690,7 @@ export function mountApp(root: HTMLElement) {
   const sidebarSwipeThresholdPx = (): number => {
     const vw = Math.max(0, document.documentElement.clientWidth || window.innerWidth || 0);
     if (!vw) return 64;
-    return Math.round(Math.min(120, Math.max(56, vw * 0.18)));
+    return Math.round(Math.min(110, Math.max(50, vw * 0.14)));
   };
 
   const stepMobileSidebarTab = (dir: -1 | 1) => {
@@ -7673,10 +7702,98 @@ export function mountApp(root: HTMLElement) {
     setMobileSidebarTab(MOBILE_SIDEBAR_TAB_ORDER[nextIdx]);
   };
 
+  const nextMobileSidebarTab = (dir: -1 | 1): MobileSidebarTab | null => {
+    const cur = store.get().mobileSidebarTab;
+    const idx = MOBILE_SIDEBAR_TAB_ORDER.indexOf(cur);
+    const safeIdx = idx >= 0 ? idx : MOBILE_SIDEBAR_TAB_ORDER.indexOf("chats");
+    const nextIdx = safeIdx + dir;
+    if (nextIdx < 0 || nextIdx >= MOBILE_SIDEBAR_TAB_ORDER.length) return null;
+    return MOBILE_SIDEBAR_TAB_ORDER[nextIdx] || null;
+  };
+
+  const sidebarSwipeWidth = (): number => {
+    const rect = layout.sidebar.getBoundingClientRect();
+    const w = Math.round(rect.width || 0);
+    return w > 0 ? w : Math.max(0, document.documentElement.clientWidth || window.innerWidth || 0);
+  };
+
+  const applySwipeResistance = (dx: number): number => {
+    const w = sidebarSwipeWidth() || 1;
+    const softMax = Math.max(72, Math.round(w * 0.28));
+    const adx = Math.abs(dx);
+    if (adx <= softMax) return dx;
+    const extra = adx - softMax;
+    return Math.sign(dx) * (softMax + extra * 0.22);
+  };
+
+  const applySidebarSwipeDragFx = (dx: number) => {
+    const w = sidebarSwipeWidth() || 1;
+    const x = applySwipeResistance(dx);
+    const progress = Math.min(1, Math.abs(dx) / w);
+    const scale = 1 - 0.025 * progress;
+    const opacity = 1 - 0.1 * progress;
+    setSidebarSwipeFx(x, { anim: false, scale, opacity });
+  };
+
+  const afterSidebarSwipeTransition = (cb: () => void, timeoutMs = 260) => {
+    let done = false;
+    let timer = 0;
+    const body = layout.sidebarBody;
+    const sticky = layout.sidebar.querySelector(".sidebar-mobile-sticky") as HTMLElement | null;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      body.removeEventListener("transitionend", onEnd);
+      sticky?.removeEventListener("transitionend", onEnd);
+      window.clearTimeout(timer);
+      cb();
+    };
+    const onEnd = (e: TransitionEvent) => {
+      if (e.propertyName !== "transform") return;
+      finish();
+    };
+    body.addEventListener("transitionend", onEnd);
+    sticky?.addEventListener("transitionend", onEnd);
+    timer = window.setTimeout(finish, timeoutMs);
+  };
+
+  const snapSidebarSwipeBack = () => {
+    setSidebarSwipeFx(0, { anim: true, scale: 1, opacity: 1 });
+    afterSidebarSwipeTransition(() => clearSidebarSwipeFx());
+  };
+
+  const runSidebarSwipeCommit = (dir: -1 | 1) => {
+    const nextTab = nextMobileSidebarTab(dir);
+    if (!nextTab) {
+      snapSidebarSwipeBack();
+      return;
+    }
+
+    const w = sidebarSwipeWidth();
+    const outX = dir === 1 ? -w : w;
+    sidebarSwipeLockUntil = Date.now() + 650;
+    armSidebarClickSuppression(650);
+
+    setSidebarSwipeFx(outX, { anim: true, scale: 0.98, opacity: 0.6 });
+    afterSidebarSwipeTransition(() => {
+      // Put the next tab offscreen without animation, then render it.
+      setSidebarSwipeFx(-outX, { anim: false, scale: 0.98, opacity: 0.6 });
+      store.set({ mobileSidebarTab: nextTab });
+      // Animate the new tab into place.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          setSidebarSwipeFx(0, { anim: true, scale: 1, opacity: 1 });
+          afterSidebarSwipeTransition(() => clearSidebarSwipeFx(), 320);
+        });
+      });
+    }, 320);
+  };
+
   layout.sidebarBody.addEventListener("pointerdown", (e) => {
     const ev = e as PointerEvent;
     const target = ev.target as HTMLElement | null;
     if (!canUseSidebarTabSwipe(ev, target)) return;
+    clearSidebarSwipeFx();
     resetSidebarSwipe();
     sidebarSwipePointerId = ev.pointerId;
     sidebarSwipeStartX = ev.clientX;
@@ -7701,6 +7818,7 @@ export function mountApp(root: HTMLElement) {
     if (!sidebarSwipeHorizontal) {
       // If the user scrolls vertically, stop tracking this gesture as a tab swipe.
       if (ady > 14 && ady > adx + 6) {
+        clearSidebarSwipeFx();
         resetSidebarSwipe();
         return;
       }
@@ -7708,12 +7826,21 @@ export function mountApp(root: HTMLElement) {
       if (adx > 14 && adx > ady + 6) {
         sidebarSwipeHorizontal = true;
         clearLongPress();
+        if (!sidebarSwipeScrollWasHidden) {
+          sidebarSwipeScrollWasHidden = true;
+          layout.sidebarBody.style.overflowY = "hidden";
+        }
       }
       return;
     }
 
+    applySidebarSwipeDragFx(dx);
+
     // Too diagonal/vertical movement -> cancel to avoid accidental tab switch.
-    if (ady > 140) resetSidebarSwipe();
+    if (ady > 140) {
+      snapSidebarSwipeBack();
+      resetSidebarSwipe();
+    }
   });
 
   const consumeSidebarSwipe = (ev: PointerEvent): boolean => {
@@ -7727,20 +7854,30 @@ export function mountApp(root: HTMLElement) {
     const adx = Math.abs(dx);
     const ady = Math.abs(dy);
     const threshold = sidebarSwipeThresholdPx();
-    if (dt > 900) return false;
-    if (adx < threshold) return false;
-    if (adx < ady * 1.5) return false;
+    if (dt > 900) {
+      snapSidebarSwipeBack();
+      return false;
+    }
 
-    // Prevent the swipe from also triggering a row click (activate chat/contact/etc).
-    armSidebarClickSuppression(650);
+    const vel = adx / Math.max(1, dt); // px/ms
+    const fast = vel > 0.9 && adx > 34;
+    const strongHorizontal = adx >= ady * 1.5;
+    const shouldCommit = strongHorizontal && (adx >= threshold || fast);
+    if (!shouldCommit) {
+      snapSidebarSwipeBack();
+      return false;
+    }
 
     // Telegram-like: swipe left -> next tab (to the right), swipe right -> prev tab.
-    stepMobileSidebarTab(dx < 0 ? 1 : -1);
+    runSidebarSwipeCommit(dx < 0 ? 1 : -1);
     return true;
   };
 
   layout.sidebarBody.addEventListener("pointerup", (e) => void consumeSidebarSwipe(e as PointerEvent));
-  layout.sidebarBody.addEventListener("pointercancel", () => resetSidebarSwipe());
+  layout.sidebarBody.addEventListener("pointercancel", () => {
+    clearSidebarSwipeFx();
+    resetSidebarSwipe();
+  });
 
   layout.sidebar.addEventListener("pointerdown", (e) => {
     const st = store.get();
@@ -7793,6 +7930,7 @@ export function mountApp(root: HTMLElement) {
   layout.sidebarBody.addEventListener(
     "scroll",
     () => {
+      clearSidebarSwipeFx();
       resetSidebarSwipe();
       clearLongPress();
     },
