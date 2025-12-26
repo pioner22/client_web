@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.194",
+    date: "2025-12-26",
+    fixed: [
+      "Linux PWA: загрузка аватара больше не отваливается при неверном mime (например, `application/octet-stream`) — принимаем по расширению файла",
+      "Аватары: удаление/очистка теперь работает корректно при `avatar_mime=null` (rev может быть >0) — старый кэш очищается сразу, без лишних `avatar_get`",
+      "PWA: авто‑обновление больше не выглядит как «перезагрузка по ПКМ» — любые клики/контекстное меню считаются активностью пользователя",
+    ],
+  },
+  {
     version: "0.1.193",
     date: "2025-12-26",
     fixed: ["Аватары: кэш больше не ломается при ошибках localStorage (quota/private mode) — используем in‑memory fallback вместо падения"],

@@ -966,6 +966,15 @@ export function mountApp(root: HTMLElement) {
   let pwaAutoApplyTimer: number | null = null;
   let pwaForceInFlight = false;
   let lastUserInputAt = Date.now();
+  const markUserActivity = () => {
+    lastUserInputAt = Date.now();
+  };
+  // PWA auto-update: treat any pointer interaction as “activity” so we don’t reload while the user clicks/opens menus.
+  window.addEventListener("pointerdown", markUserActivity, { capture: true, passive: true });
+  window.addEventListener("mousedown", markUserActivity, { capture: true, passive: true });
+  window.addEventListener("contextmenu", markUserActivity, { capture: true });
+  window.addEventListener("wheel", markUserActivity, { capture: true, passive: true });
+  window.addEventListener("touchstart", markUserActivity, { capture: true, passive: true });
   let previewFriendsRef = store.get().friends;
   let previewGroupsRef = store.get().groups;
   let previewBoardsRef = store.get().boards;
@@ -6106,6 +6115,7 @@ export function mountApp(root: HTMLElement) {
   function openContextMenu(target: { kind: ContextMenuTargetKind; id: string }, x: number, y: number) {
     const st = store.get();
     if (st.modal) return;
+    markUserActivity();
 
     const canAct = st.conn === "connected" && st.authed;
     const items: ContextMenuItem[] = [];

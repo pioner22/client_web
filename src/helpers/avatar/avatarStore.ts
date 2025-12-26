@@ -149,9 +149,9 @@ export async function imageFileToAvatarDataUrl(file: File, size = 128): Promise<
   if (!file) throw new Error("no_file");
   const mime = String(file.type ?? "").trim().toLowerCase();
   const name = String((file as any).name ?? "").trim();
-  const isNameImage = Boolean(name && /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/i.test(name));
-  if (mime && !mime.startsWith("image/")) throw new Error("not_image");
-  if (!mime && !isNameImage) throw new Error("not_image");
+  const isNameImage = Boolean(name && /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif|jfif|avif)$/i.test(name));
+  const isMimeImage = Boolean(mime && mime.startsWith("image/"));
+  if (!isMimeImage && !isNameImage) throw new Error("not_image");
   if (file.size > 6 * 1024 * 1024) throw new Error("file_too_large");
 
   const srcUrl = URL.createObjectURL(file);

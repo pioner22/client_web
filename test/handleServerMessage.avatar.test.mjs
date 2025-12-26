@@ -82,3 +82,124 @@ test("handleServerMessage: avatar сохраняет кэш и обновляе�
   }
 });
 
+test("handleServerMessage: roster очищает аватар при avatar_mime=null (rev может быть >0)", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = mkStorage();
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+    localStorage.setItem("yagodka_avatar:dm:222-222-222", "data:image/png;base64,AA==");
+    localStorage.setItem("yagodka_avatar_rev:dm:222-222-222", "4");
+
+    const sent = [];
+    const gateway = { send: (m) => sent.push(m) };
+    const { getState, patch } = createPatchHarness({
+      selfId: "111-111-111",
+      friends: [],
+      pendingIn: [],
+      pendingOut: [],
+      profiles: {},
+      avatarsRev: 0,
+    });
+
+    handleServerMessage(
+      {
+        type: "roster",
+        friends: [{ id: "222-222-222", avatar_rev: 5, avatar_mime: null }],
+        online: [],
+        pending_in: [],
+        pending_out: [],
+      },
+      getState(),
+      gateway,
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.avatarsRev, 1);
+    assert.equal(localStorage.getItem("yagodka_avatar:dm:222-222-222"), null);
+    assert.equal(localStorage.getItem("yagodka_avatar_rev:dm:222-222-222"), "5");
+    assert.deepEqual(sent, []);
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: profile_updated очищает аватар при avatar_mime=null без avatar_get", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = mkStorage();
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+    localStorage.setItem("yagodka_avatar:dm:222-222-222", "data:image/png;base64,AA==");
+    localStorage.setItem("yagodka_avatar_rev:dm:222-222-222", "10");
+
+    const sent = [];
+    const gateway = { send: (m) => sent.push(m) };
+    const { getState, patch } = createPatchHarness({
+      selfId: "111-111-111",
+      friends: [{ id: "222-222-222", online: false, unread: 0, last_seen_at: null }],
+      profiles: { "222-222-222": { id: "222-222-222", avatar_rev: 10, avatar_mime: "image/png" } },
+      avatarsRev: 0,
+    });
+
+    handleServerMessage(
+      { type: "profile_updated", id: "222-222-222", avatar_rev: 11, avatar_mime: null },
+      getState(),
+      gateway,
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.avatarsRev, 1);
+    assert.equal(localStorage.getItem("yagodka_avatar:dm:222-222-222"), null);
+    assert.equal(localStorage.getItem("yagodka_avatar_rev:dm:222-222-222"), "11");
+    assert.deepEqual(sent, []);
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: roster запрашивает avatar_get если avatar_mime есть, а кэша нет", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = mkStorage();
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+
+    const sent = [];
+    const gateway = { send: (m) => sent.push(m) };
+    const { getState, patch } = createPatchHarness({
+      selfId: "111-111-111",
+      friends: [],
+      pendingIn: [],
+      pendingOut: [],
+      profiles: {},
+      avatarsRev: 0,
+    });
+
+    handleServerMessage(
+      {
+        type: "roster",
+        friends: [{ id: "333-333-333", avatar_rev: 7, avatar_mime: "image/png" }],
+        online: [],
+        pending_in: [],
+        pending_out: [],
+      },
+      getState(),
+      gateway,
+      patch
+    );
+
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0], { type: "avatar_get", id: "333-333-333" });
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
+    await cleanup();
+  }
+});

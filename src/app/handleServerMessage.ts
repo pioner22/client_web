@@ -300,18 +300,22 @@ export function handleServerMessage(
       const id = String(f?.id ?? "").trim();
       if (!id) continue;
       const rev = typeof (f as any).avatar_rev === "number" ? Math.max(0, Math.trunc((f as any).avatar_rev)) : 0;
-      if (rev <= 0) {
-        const had = Boolean(getStoredAvatar("dm", id));
-        const storedRev = getStoredAvatarRev("dm", id);
-        if (had || storedRev) {
+      const mimeRaw = (f as any).avatar_mime;
+      const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw).trim() : null;
+      const storedUrl = getStoredAvatar("dm", id);
+      const storedRev = getStoredAvatarRev("dm", id);
+      const hasAvatar = Boolean(mime);
+
+      if (!hasAvatar) {
+        if (storedUrl) {
           clearStoredAvatar("dm", id);
-          storeAvatarRev("dm", id, 0);
+          storeAvatarRev("dm", id, rev);
           avatarChanged = true;
+        } else if (storedRev !== rev) {
+          storeAvatarRev("dm", id, rev);
         }
         continue;
       }
-      const storedRev = getStoredAvatarRev("dm", id);
-      const storedUrl = getStoredAvatar("dm", id);
       if (storedRev !== rev || !storedUrl) {
         gateway.send({ type: "avatar_get", id });
       }
@@ -1520,6 +1524,8 @@ export function handleServerMessage(
     const id = String(msg?.id ?? "");
     if (!id) return;
     const avatarRev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
+    const avatarMimeRaw = msg?.avatar_mime;
+    const avatarMime = typeof avatarMimeRaw === "string" && avatarMimeRaw.trim() ? String(avatarMimeRaw).trim() : null;
     const prof: UserProfile = {
       id,
       display_name: (msg?.display_name ?? null) as any,
@@ -1527,19 +1533,22 @@ export function handleServerMessage(
       bio: (msg?.bio ?? null) as any,
       status: (msg?.status ?? null) as any,
       avatar_rev: avatarRev,
-      avatar_mime: (msg?.avatar_mime ?? null) as any,
+      avatar_mime: (avatarMime ?? null) as any,
       client_version: (msg?.client_version ?? null) as any,
       client_web_version: (msg?.client_web_version ?? null) as any,
     };
     const isFriend = Boolean(state.selfId && id === state.selfId) || state.friends.some((f) => f.id === id);
     if (isFriend) {
-      if (avatarRev <= 0) {
-        const had = Boolean(getStoredAvatar("dm", id));
+      const hasAvatar = Boolean(avatarMime);
+      if (!hasAvatar) {
+        const storedUrl = getStoredAvatar("dm", id);
         const storedRev = getStoredAvatarRev("dm", id);
-        if (had || storedRev) {
+        if (storedUrl) {
           clearStoredAvatar("dm", id);
-          storeAvatarRev("dm", id, 0);
+          storeAvatarRev("dm", id, avatarRev);
           patch((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1 }));
+        } else if (storedRev !== avatarRev) {
+          storeAvatarRev("dm", id, avatarRev);
         }
       } else {
         const storedRev = getStoredAvatarRev("dm", id);
@@ -1568,17 +1577,23 @@ export function handleServerMessage(
     if (!id) return;
     const hasAvatarRev = msg?.avatar_rev !== undefined;
     const avatarRev = hasAvatarRev ? Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0)) : null;
+    const hasAvatarMime = msg?.avatar_mime !== undefined;
+    const avatarMimeRaw = msg?.avatar_mime;
+    const avatarMime = typeof avatarMimeRaw === "string" && avatarMimeRaw.trim() ? String(avatarMimeRaw).trim() : null;
     const isFriend = Boolean(state.selfId && id === state.selfId) || state.friends.some((f) => f.id === id);
     if (isFriend && hasAvatarRev) {
-      if ((avatarRev || 0) <= 0) {
-        const had = Boolean(getStoredAvatar("dm", id));
+      const hasAvatar = Boolean(avatarMime);
+      if (hasAvatarMime && !hasAvatar) {
+        const storedUrl = getStoredAvatar("dm", id);
         const storedRev = getStoredAvatarRev("dm", id);
-        if (had || storedRev) {
+        if (storedUrl) {
           clearStoredAvatar("dm", id);
-          storeAvatarRev("dm", id, 0);
+          storeAvatarRev("dm", id, avatarRev || 0);
           patch((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1 }));
+        } else if (storedRev !== (avatarRev || 0)) {
+          storeAvatarRev("dm", id, avatarRev || 0);
         }
-      } else {
+      } else if (hasAvatar) {
         const storedRev = getStoredAvatarRev("dm", id);
         const storedUrl = getStoredAvatar("dm", id);
         if (storedRev !== avatarRev || !storedUrl) gateway.send({ type: "avatar_get", id });
@@ -1594,7 +1609,7 @@ export function handleServerMessage(
         ...(msg?.bio === undefined ? {} : { bio: (msg?.bio ?? null) as any }),
         ...(msg?.status === undefined ? {} : { status: (msg?.status ?? null) as any }),
         ...(msg?.avatar_rev === undefined ? {} : { avatar_rev: (avatarRev ?? 0) as any }),
-        ...(msg?.avatar_mime === undefined ? {} : { avatar_mime: (msg?.avatar_mime ?? null) as any }),
+        ...(msg?.avatar_mime === undefined ? {} : { avatar_mime: (avatarMime ?? null) as any }),
       };
       return { ...prev, profiles: { ...prev.profiles, [id]: nextProfile } };
     });
