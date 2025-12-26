@@ -5275,6 +5275,9 @@ export function mountApp(root: HTMLElement) {
 
     // Сбрасываем серверную авторизацию через переподключение.
     gateway.close();
+    // Важно: после manual-close шлюз не делает авто-reconnect, поэтому сразу подключаемся заново.
+    // Иначе пользователю приходится делать ручной refresh, чтобы снова войти.
+    gateway.connect();
   }
 
   function authLogin() {

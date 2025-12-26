@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.197",
+    date: "2025-12-26",
+    fixed: ["Аккаунт: после «Выхода» больше не нужен ручной refresh — соединение переподключается автоматически, можно сразу нажать «Войти»"],
+  },
+  {
     version: "0.1.196",
     date: "2025-12-26",
     added: ["Доски: владелец может публиковать посты через кнопку ✎ (редактор с базовым форматированием)"],
