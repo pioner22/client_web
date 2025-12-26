@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.201",
+    date: "2025-12-26",
+    improved: ["Mobile sidebar: свайп влево/вправо по списку переключает вкладки (Контакты/Доски/Чаты/Меню) — как в Telegram"],
+    notes: ["На iOS/Safari системный свайп «назад» от края экрана не переопределяется."],
+  },
+  {
     version: "0.1.200",
     date: "2025-12-26",
     added: ["Профиль: тумблеры уведомлений — «в приложении» и «звук» (сохраняются в браузере)"],

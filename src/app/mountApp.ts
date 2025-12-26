@@ -7619,6 +7619,129 @@ export function mountApp(root: HTMLElement) {
     }
   };
 
+  // Mobile: swipe left/right on the sidebar list switches tabs (Telegram-like).
+  const MOBILE_SIDEBAR_TAB_ORDER: MobileSidebarTab[] = ["contacts", "boards", "chats", "menu"];
+  let sidebarSwipePointerId: number | null = null;
+  let sidebarSwipeStartX = 0;
+  let sidebarSwipeStartY = 0;
+  let sidebarSwipeStartAt = 0;
+  let sidebarSwipeLastX = 0;
+  let sidebarSwipeLastY = 0;
+  let sidebarSwipeHorizontal = false;
+
+  const resetSidebarSwipe = () => {
+    sidebarSwipePointerId = null;
+    sidebarSwipeStartX = 0;
+    sidebarSwipeStartY = 0;
+    sidebarSwipeStartAt = 0;
+    sidebarSwipeLastX = 0;
+    sidebarSwipeLastY = 0;
+    sidebarSwipeHorizontal = false;
+  };
+
+  const canUseSidebarTabSwipe = (ev: PointerEvent, target: HTMLElement | null): boolean => {
+    const st = store.get();
+    if (st.modal) return false;
+    if (!mobileSidebarMq.matches) return false;
+    if (!mobileSidebarOpen) return false;
+    if (ev.pointerType === "mouse") return false;
+    if (ev.button !== 0) return false;
+    if (!target) return false;
+    if ((target as HTMLElement).isContentEditable) return false;
+    if (target.closest(".sidebar-searchbar")) return false;
+    if (target.closest(".sidebar-tabs")) return false;
+    if (target.closest("button[data-action='sidebar-close']")) return false;
+
+    const vw = Math.max(0, document.documentElement.clientWidth || window.innerWidth || 0);
+    const edge = Math.min(28, Math.max(18, Math.round(vw * 0.06)));
+    if (vw > 0 && (ev.clientX <= edge || ev.clientX >= vw - edge)) return false;
+    return true;
+  };
+
+  const sidebarSwipeThresholdPx = (): number => {
+    const vw = Math.max(0, document.documentElement.clientWidth || window.innerWidth || 0);
+    if (!vw) return 64;
+    return Math.round(Math.min(120, Math.max(56, vw * 0.18)));
+  };
+
+  const stepMobileSidebarTab = (dir: -1 | 1) => {
+    const cur = store.get().mobileSidebarTab;
+    const idx = MOBILE_SIDEBAR_TAB_ORDER.indexOf(cur);
+    const safeIdx = idx >= 0 ? idx : MOBILE_SIDEBAR_TAB_ORDER.indexOf("chats");
+    const nextIdx = safeIdx + dir;
+    if (nextIdx < 0 || nextIdx >= MOBILE_SIDEBAR_TAB_ORDER.length) return;
+    setMobileSidebarTab(MOBILE_SIDEBAR_TAB_ORDER[nextIdx]);
+  };
+
+  layout.sidebarBody.addEventListener("pointerdown", (e) => {
+    const ev = e as PointerEvent;
+    const target = ev.target as HTMLElement | null;
+    if (!canUseSidebarTabSwipe(ev, target)) return;
+    resetSidebarSwipe();
+    sidebarSwipePointerId = ev.pointerId;
+    sidebarSwipeStartX = ev.clientX;
+    sidebarSwipeStartY = ev.clientY;
+    sidebarSwipeStartAt = Date.now();
+    sidebarSwipeLastX = ev.clientX;
+    sidebarSwipeLastY = ev.clientY;
+  });
+
+  layout.sidebarBody.addEventListener("pointermove", (e) => {
+    if (sidebarSwipePointerId === null) return;
+    const ev = e as PointerEvent;
+    if (ev.pointerId !== sidebarSwipePointerId) return;
+    sidebarSwipeLastX = ev.clientX;
+    sidebarSwipeLastY = ev.clientY;
+
+    const dx = ev.clientX - sidebarSwipeStartX;
+    const dy = ev.clientY - sidebarSwipeStartY;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+
+    if (!sidebarSwipeHorizontal) {
+      // If the user scrolls vertically, stop tracking this gesture as a tab swipe.
+      if (ady > 14 && ady > adx + 6) {
+        resetSidebarSwipe();
+        return;
+      }
+      // If the movement is clearly horizontal, treat it as a swipe gesture.
+      if (adx > 14 && adx > ady + 6) {
+        sidebarSwipeHorizontal = true;
+        clearLongPress();
+      }
+      return;
+    }
+
+    // Too diagonal/vertical movement -> cancel to avoid accidental tab switch.
+    if (ady > 140) resetSidebarSwipe();
+  });
+
+  const consumeSidebarSwipe = (ev: PointerEvent): boolean => {
+    if (sidebarSwipePointerId === null) return false;
+    if (ev.pointerId !== sidebarSwipePointerId) return false;
+    const dx = sidebarSwipeLastX - sidebarSwipeStartX;
+    const dy = sidebarSwipeLastY - sidebarSwipeStartY;
+    const dt = Date.now() - sidebarSwipeStartAt;
+    resetSidebarSwipe();
+
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    const threshold = sidebarSwipeThresholdPx();
+    if (dt > 900) return false;
+    if (adx < threshold) return false;
+    if (adx < ady * 1.5) return false;
+
+    // Prevent the swipe from also triggering a row click (activate chat/contact/etc).
+    armSidebarClickSuppression(650);
+
+    // Telegram-like: swipe left -> next tab (to the right), swipe right -> prev tab.
+    stepMobileSidebarTab(dx < 0 ? 1 : -1);
+    return true;
+  };
+
+  layout.sidebarBody.addEventListener("pointerup", (e) => void consumeSidebarSwipe(e as PointerEvent));
+  layout.sidebarBody.addEventListener("pointercancel", () => resetSidebarSwipe());
+
   layout.sidebar.addEventListener("pointerdown", (e) => {
     const st = store.get();
     if (st.modal) return;
@@ -7667,7 +7790,14 @@ export function mountApp(root: HTMLElement) {
 
   layout.sidebar.addEventListener("pointerup", () => clearLongPress());
   layout.sidebar.addEventListener("pointercancel", () => clearLongPress());
-  layout.sidebarBody.addEventListener("scroll", () => clearLongPress(), { passive: true });
+  layout.sidebarBody.addEventListener(
+    "scroll",
+    () => {
+      resetSidebarSwipe();
+      clearLongPress();
+    },
+    { passive: true }
+  );
 
   // If long-press opened the menu, suppress the click that would otherwise activate the row.
   layout.sidebar.addEventListener(

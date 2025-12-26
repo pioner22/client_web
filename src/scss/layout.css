@@ -92,6 +92,7 @@
   -webkit-overflow-scrolling: touch;
   /* Prevent browser scroll anchoring from jumping the list during re-renders/context menus. */
   overflow-anchor: none;
+  touch-action: pan-y;
 }
 
 .chat {
