@@ -58,3 +58,19 @@ test("boardPost: оставляет обычные заголовки как hea
   }
 });
 
+test("boardPost: поддерживает маркеры вида ##+ / ##^ / ##! / ##? с произвольным заголовком", async () => {
+  const { parseBoardPost, cleanup } = await loadBoardPost();
+  try {
+    const text = `##+ Релиз 1.2\n- пункт\n\n##^ Оптимизация\n• быстрее`;
+    const nodes = parseBoardPost(text);
+    assert.equal(nodes[0]?.kind, "changelog");
+    assert.equal(nodes[0]?.changelogKind, "added");
+    assert.equal(nodes[0]?.title, "Релиз 1.2");
+
+    assert.equal(nodes[1]?.kind, "changelog");
+    assert.equal(nodes[1]?.changelogKind, "improved");
+    assert.equal(nodes[1]?.title, "Оптимизация");
+  } finally {
+    await cleanup();
+  }
+});

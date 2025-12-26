@@ -412,6 +412,10 @@
   border-radius: 14px;
 }
 
+.sidebar-tabs.sidebar-tabs-pwa {
+  --sidebar-tabs-count: 4;
+}
+
 .sidebar-mobile-bottom {
   display: none;
 }
@@ -1286,9 +1290,34 @@
 }
 
 .msg-attach .msg-body {
-  background: transparent;
+  overflow: hidden;
+}
+
+.msg-attach.msg-in .msg-body {
+  background: var(--msg-in-bg);
+  border: 1px solid color-mix(in srgb, var(--msg-in-border-color), transparent 25%);
+  border-radius: var(--msg-in-radius);
+  padding: 1px;
+}
+
+.msg-attach.msg-out .msg-body {
+  background: var(--msg-out-bg);
+  border: 1px solid color-mix(in srgb, var(--msg-out-border-color), transparent 25%);
+  border-radius: var(--msg-out-radius);
+  padding: 1px;
+}
+
+.msg-attach .file-row-chat {
   border: 0;
-  padding: 0;
+  background: transparent;
+}
+
+.msg-attach .msg-text.msg-caption {
+  padding: 0 12px 10px;
+}
+
+.msg-attach .msg-meta {
+  padding: 0 12px 10px;
 }
 
 /* Skeletons (loading) */

@@ -215,12 +215,12 @@
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 18px 18px 0 0;
-  padding: 12px;
-  padding-bottom: calc(12px + var(--safe-bottom-pad));
+  padding: 8px;
+  padding-bottom: calc(8px + var(--safe-bottom-pad));
   margin-bottom: 0;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  gap: 6px;
+  gap: 4px;
 }
 
 .ctx-handle {
@@ -228,11 +228,11 @@
   height: 4px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--modal-border-color), transparent 45%);
-  margin: 4px auto 10px;
+  margin: 4px auto 8px;
 }
 
 .ctx-menu.ctx-menu-sheet .ctx-item {
-  padding: 12px 14px;
+  padding: 7px 10px;
   font-size: 16px;
   border-radius: var(--r-lg);
 }

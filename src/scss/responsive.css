@@ -705,6 +705,30 @@
   }
 }
 
+/* ===== Mobile vs PWA composer controls ===== */
+@media (pointer: coarse) and (max-width: 820px) {
+  /* Mobile browser: emoji picker and extra send button are redundant (send via Enter on keyboard). */
+  .btn.composer-emoji {
+    display: none;
+  }
+
+  /* Keep send button for board editor mode (publish) only. */
+  .input-wrap:not(.board-editor-open) .btn.composer-send {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 820px) and (display-mode: standalone), (pointer: coarse) and (max-width: 820px) and (display-mode: fullscreen) {
+  /* PWA: keep emoji and send button (desktop/mobile installs). */
+  .btn.composer-emoji {
+    display: grid;
+  }
+
+  .input-wrap:not(.board-editor-open) .btn.composer-send {
+    display: grid;
+  }
+}
+
 @media (max-width: 820px) and (prefers-reduced-motion: reduce) {
   .sidebar {
     transition: none;
@@ -719,5 +743,28 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
+  }
+
+  /* PWA: calmer send button (small rectangle, no icon). */
+  .btn.composer-send {
+    min-width: 34px;
+    width: 34px;
+    height: 30px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--btn-bg), transparent 10%);
+    border-color: color-mix(in srgb, var(--btn-border-color), transparent 10%);
+    color: transparent;
+    font-size: 0;
+  }
+
+  .btn.composer-send::before,
+  .btn.composer-send::after {
+    content: none;
+  }
+
+  .btn.composer-send:not(:disabled) {
+    background: color-mix(in srgb, var(--focus), transparent 82%);
+    border-color: color-mix(in srgb, var(--focus), transparent 72%);
+    box-shadow: 0 10px 20px color-mix(in srgb, var(--focus), transparent 88%);
   }
 }

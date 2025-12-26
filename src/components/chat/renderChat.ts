@@ -774,27 +774,6 @@ export function renderChat(layout: Layout, state: AppState) {
         ["ℹ︎"]
       )
     );
-    if (state.selected.kind === "board") {
-      const b = (state.boards || []).find((x) => x.id === state.selected?.id);
-      const owner = String(b?.owner_id || "").trim();
-      const me = String(state.selfId || "").trim();
-      const canPost = Boolean(owner && me && owner === me);
-      if (canPost) {
-        titleChildren.push(
-          el(
-            "button",
-            {
-              class: "btn chat-post-btn",
-              type: "button",
-              "data-action": "board-post-open",
-              title: "Новый пост",
-              "aria-label": "Новый пост",
-            },
-            ["✎"]
-          )
-        );
-      }
-    }
     titleChildren.push(
       el(
         "button",

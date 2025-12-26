@@ -20,6 +20,13 @@ const CHANGELOG_HEADINGS: Record<string, ChangelogHeadingInfo> = {
   "примечания": { kind: "notes", title: "Примечания" },
 };
 
+const CHANGELOG_MARKERS: Record<string, ChangelogHeadingInfo> = {
+  "+": { kind: "added", title: "Добавлено" },
+  "^": { kind: "improved", title: "Улучшено" },
+  "!": { kind: "fixed", title: "Исправлено" },
+  "?": { kind: "notes", title: "Примечания" },
+};
+
 function normalizeHeadingText(raw: string): string {
   return String(raw ?? "")
     .trim()
@@ -33,15 +40,17 @@ function isDivider(raw: string): boolean {
 }
 
 function isHeading(raw: string): boolean {
-  return /^#{1,6}\s+/.test(String(raw ?? "").trimStart());
+  return /^#{1,6}(?:[+^!?])?(?:\s+|$)/.test(String(raw ?? "").trimStart());
 }
 
-function headingInfo(raw: string): { level: number; text: string } | null {
-  const m = String(raw ?? "").trimStart().match(/^(#{1,6})\s+(.+)$/);
+function headingInfo(raw: string): { level: number; marker: string | null; text: string } | null {
+  const m = String(raw ?? "").trimStart().match(/^(#{1,6})([+^!?])?(?:\s+(.*))?$/);
   if (!m) return null;
   const level = Math.max(1, Math.min(6, m[1]?.length || 1));
-  const text = String(m[2] ?? "").trimEnd();
-  return text ? { level, text } : null;
+  const marker = m[2] ? String(m[2]) : null;
+  const text = String(m[3] ?? "").trimEnd();
+  if (!marker && !text) return null;
+  return { level, marker, text };
 }
 
 function isList(raw: string): boolean {
@@ -102,8 +111,9 @@ export function parseBoardPost(text: string): BoardPostNode[] {
         continue;
       }
 
-      const norm = normalizeHeadingText(info.text);
-      const block = CHANGELOG_HEADINGS[norm];
+      const markerInfo = info.level === 2 && info.marker ? CHANGELOG_MARKERS[info.marker] : null;
+      const norm = markerInfo ? "" : normalizeHeadingText(info.text);
+      const block = markerInfo || (norm ? CHANGELOG_HEADINGS[norm] : null);
       if (!block) {
         out.push({ kind: "heading", level: info.level, text: info.text });
         i += 1;
@@ -138,7 +148,7 @@ export function parseBoardPost(text: string): BoardPostNode[] {
       out.push({
         kind: "changelog",
         changelogKind: block.kind,
-        title: block.title,
+        title: info.text.trim() || block.title,
         items,
       });
       continue;
@@ -248,4 +258,3 @@ export function renderBoardPost(text: string): HTMLElement {
   }
   return el("div", { class: "board-post" }, out.length ? out : [renderParagraph([String(text ?? "")])]);
 }
-

@@ -84,10 +84,50 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-quote", title: "Цитата (>)" }, ["❝"]),
     el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-divider", title: "Разделитель (—)" }, ["—"]),
     el("span", { class: "board-editor-sep", "aria-hidden": "true" }, [""]),
-    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-added", title: "Блок «Добавлено»" }, ["+ Добавлено"]),
-    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-improved", title: "Блок «Улучшено»" }, ["↑ Улучшено"]),
-    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-fixed", title: "Блок «Исправлено»" }, ["🛠 Исправлено"]),
-    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-notes", title: "Блок «Примечания»" }, ["ℹ Примечания"]),
+    el(
+      "button",
+      {
+        class: "btn board-editor-tool board-editor-kind kind-added",
+        type: "button",
+        "data-action": "board-tool-kind-added",
+        title: "Секция (зелёный)",
+        "aria-label": "Секция (зелёный)",
+      },
+      ["##"]
+    ),
+    el(
+      "button",
+      {
+        class: "btn board-editor-tool board-editor-kind kind-improved",
+        type: "button",
+        "data-action": "board-tool-kind-improved",
+        title: "Секция (синий)",
+        "aria-label": "Секция (синий)",
+      },
+      ["##"]
+    ),
+    el(
+      "button",
+      {
+        class: "btn board-editor-tool board-editor-kind kind-fixed",
+        type: "button",
+        "data-action": "board-tool-kind-fixed",
+        title: "Секция (жёлтый)",
+        "aria-label": "Секция (жёлтый)",
+      },
+      ["##"]
+    ),
+    el(
+      "button",
+      {
+        class: "btn board-editor-tool board-editor-kind kind-notes",
+        type: "button",
+        "data-action": "board-tool-kind-notes",
+        title: "Секция (нейтр.)",
+        "aria-label": "Секция (нейтр.)",
+      },
+      ["##"]
+    ),
   ]);
 
   const boardEditorPreviewBody = el("div", { class: "board-editor-preview-body" }, [""]);

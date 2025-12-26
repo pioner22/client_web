@@ -254,6 +254,27 @@
   white-space: nowrap;
 }
 
+.btn.board-editor-kind {
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.btn.board-editor-kind.kind-added {
+  color: var(--good);
+}
+
+.btn.board-editor-kind.kind-improved {
+  color: var(--focus);
+}
+
+.btn.board-editor-kind.kind-fixed {
+  color: var(--warn);
+}
+
+.btn.board-editor-kind.kind-notes {
+  color: var(--muted);
+}
+
 .board-editor-sep {
   width: 1px;
   height: 18px;
@@ -306,13 +327,13 @@
 .board-editor-datetime {
   width: 100%;
   min-width: 140px;
-  height: 34px;
-  border-radius: 12px;
+  height: 30px;
+  border-radius: 10px;
   background: var(--composer-field-bg);
   border: var(--composer-field-border-width) solid var(--composer-field-border-color);
   color: var(--composer-field-text);
   padding: 0 10px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
 }
 
@@ -323,9 +344,9 @@
 
 .board-editor-schedule-btn,
 .board-editor-schedule-clear {
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 12px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 750;
   white-space: nowrap;

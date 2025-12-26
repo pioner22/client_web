@@ -3,6 +3,7 @@ import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { formatTime } from "../../helpers/time";
 import { focusElement } from "../../helpers/ui/focus";
+import { isStandaloneDisplayMode } from "../../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 
@@ -799,6 +800,412 @@ export function renderSidebar(
   }
 
   if ("dataset" in target) delete (target as HTMLElement).dataset.sidebarTab;
+
+  // PWA (standalone/fullscreen): tabs should behave like mobile (separate views),
+  // not just as "scroll-to" shortcuts.
+  if (isStandaloneDisplayMode()) {
+    const rawTab = state.mobileSidebarTab;
+    const activeTab: MobileSidebarTab =
+      rawTab === "contacts" || rawTab === "menu" || rawTab === "boards" ? rawTab : "chats";
+
+    const tabContacts = el(
+      "button",
+      {
+        class: activeTab === "contacts" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "contacts"),
+        title: "Контакты",
+      },
+      ["Контакты"]
+    ) as HTMLButtonElement;
+    const tabBoards = el(
+      "button",
+      {
+        class: activeTab === "boards" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "boards"),
+        title: "Доски",
+      },
+      ["Доски"]
+    ) as HTMLButtonElement;
+    const tabChats = el(
+      "button",
+      {
+        class: activeTab === "chats" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "chats"),
+        title: "Чаты",
+      },
+      ["Чаты"]
+    ) as HTMLButtonElement;
+    const tabMenu = el(
+      "button",
+      {
+        class: activeTab === "menu" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === "menu"),
+        title: "Меню",
+      },
+      ["Меню"]
+    ) as HTMLButtonElement;
+
+    tabChats.addEventListener("click", () => onSetMobileSidebarTab("chats"));
+    tabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
+    tabBoards.addEventListener("click", () => onSetMobileSidebarTab("boards"));
+    tabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
+
+    const tabs = el("div", { class: "sidebar-tabs sidebar-tabs-desktop sidebar-tabs-pwa", role: "tablist", "aria-label": "Раздел" }, [
+      tabContacts,
+      tabBoards,
+      tabChats,
+      tabMenu,
+    ]);
+    const tabsList = [tabContacts, tabBoards, tabChats, tabMenu];
+    tabs.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      const dir = e.key === "ArrowRight" ? 1 : -1;
+      const idx = tabsList.findIndex((b) => b === document.activeElement);
+      const next = idx < 0 ? 0 : (idx + dir + tabsList.length) % tabsList.length;
+      e.preventDefault();
+      tabsList[next]?.focus();
+    });
+
+    const useDock = Boolean(sidebarDock);
+    if (useDock && sidebarDock) sidebarDock.replaceChildren(tabs);
+    const desktopBottom = useDock ? null : el("div", { class: "sidebar-desktop-bottom" }, [tabs]);
+
+    const searchBar =
+      activeTab === "menu"
+        ? null
+        : (() => {
+            const input = el("input", {
+              class: "sidebar-search-input",
+              type: "search",
+              placeholder: activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск",
+              "aria-label": "Поиск",
+              "data-ios-assistant": "off",
+              autocomplete: "off",
+              autocorrect: "off",
+              autocapitalize: "off",
+              spellcheck: "false",
+              enterkeyhint: "search",
+            }) as HTMLInputElement;
+            input.value = sidebarQueryRaw;
+            input.addEventListener("input", () => onSetSidebarQuery(input.value));
+            input.addEventListener("keydown", (e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onSetSidebarQuery("");
+              }
+            });
+            const clearBtn = el(
+              "button",
+              {
+                class: sidebarQueryRaw ? "btn sidebar-search-clear" : "btn sidebar-search-clear hidden",
+                type: "button",
+                title: "Очистить",
+                "aria-label": "Очистить",
+              },
+              ["×"]
+            ) as HTMLButtonElement;
+            clearBtn.addEventListener("click", (e) => {
+              e.preventDefault();
+              onSetSidebarQuery("");
+              focusElement(input);
+            });
+            return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
+          })();
+
+    const pinnedChatRows: HTMLElement[] = [];
+    const pinnedBoardRows: HTMLElement[] = [];
+    const pinnedContactRows: HTMLElement[] = [];
+    for (const key of pinnedKeys) {
+      if (key.startsWith("dm:")) {
+        const id = key.slice(3);
+        const f = state.friends.find((x) => x.id === id);
+        if (!f) continue;
+        if (!matchesFriend(f)) continue;
+        const k = dmKey(f.id);
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        pinnedContactRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id)));
+        continue;
+      }
+      if (key.startsWith("room:")) {
+        const id = key.slice(5);
+        const g = groups.find((x) => x.id === id);
+        if (g) {
+          if (!matchesRoom(g)) continue;
+          const k = roomKey(g.id);
+          const meta = previewForConversation(state, k, "room", drafts[k]);
+          pinnedChatRows.push(
+            roomRow(
+              null,
+              String(g.name || g.id),
+              Boolean(sel && sel.kind === "group" && sel.id === g.id),
+              () => onSelect({ kind: "group", id: g.id }),
+              { kind: "group", id: g.id },
+              meta
+            )
+          );
+          continue;
+        }
+        const b = boards.find((x) => x.id === id);
+        if (b) {
+          if (!matchesRoom(b)) continue;
+          const k = roomKey(b.id);
+          const meta = previewForConversation(state, k, "room", drafts[k]);
+          pinnedBoardRows.push(
+            roomRow(
+              null,
+              String(b.name || b.id),
+              Boolean(sel && sel.kind === "board" && sel.id === b.id),
+              () => onSelect({ kind: "board", id: b.id }),
+              { kind: "board", id: b.id },
+              meta
+            )
+          );
+        }
+      }
+    }
+
+    const lastTsForKey = (key: string): number => {
+      const conv = state.conversations[key] || [];
+      const last = conv.length ? conv[conv.length - 1] : null;
+      const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
+      return Math.max(0, ts);
+    };
+
+    const mountPwa = (children: HTMLElement[]) => {
+      body.replaceChildren(...children);
+      if (useDock && sidebarDock) target.replaceChildren(body, sidebarDock);
+      else if (desktopBottom) target.replaceChildren(body, desktopBottom);
+      else target.replaceChildren(body);
+    };
+
+    if (activeTab === "chats") {
+      const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
+      const dialogItems: Array<{ sortTs: number; label: string; row: HTMLElement }> = [];
+
+      for (const f of state.friends || []) {
+        const id = String(f?.id || "").trim();
+        if (!id) continue;
+        const k = dmKey(id);
+        if (pinnedSet.has(k)) continue;
+        if (!hasActiveDialogForFriend(f)) continue;
+        if (!matchesFriend(f)) continue;
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        dialogItems.push({
+          sortTs: lastTsForKey(k),
+          label: displayNameForFriend(state, f),
+          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attnSet.has(id)),
+        });
+      }
+
+      for (const g of restGroups) {
+        if (!matchesRoom(g)) continue;
+        const k = roomKey(g.id);
+        const meta = previewForConversation(state, k, "room", drafts[k]);
+        dialogItems.push({
+          sortTs: lastTsForKey(k),
+          label: String(g.name || g.id),
+          row: roomRow(
+            null,
+            String(g.name || g.id),
+            Boolean(sel && sel.kind === "group" && sel.id === g.id),
+            () => onSelect({ kind: "group", id: g.id }),
+            { kind: "group", id: g.id },
+            meta
+          ),
+        });
+      }
+
+      dialogItems.sort((a, b) => b.sortTs - a.sortTs || a.label.localeCompare(b.label, "ru", { sensitivity: "base" }));
+      const dialogRows = dialogItems.map((x) => x.row);
+      const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
+
+      mountPwa([
+        ...(searchBar ? [searchBar] : []),
+        ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
+        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
+        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
+      ]);
+      return;
+    }
+
+    if (activeTab === "boards") {
+      const restBoards = boards.filter((b) => !pinnedSet.has(roomKey(b.id)));
+      const boardItems: Array<{ sortTs: number; row: HTMLElement }> = [];
+      for (const b of restBoards) {
+        if (!matchesRoom(b)) continue;
+        const k = roomKey(b.id);
+        const meta = previewForConversation(state, k, "room", drafts[k]);
+        boardItems.push({
+          sortTs: lastTsForKey(k),
+          row: roomRow(
+            null,
+            String(b.name || b.id),
+            Boolean(sel && sel.kind === "board" && sel.id === b.id),
+            () => onSelect({ kind: "board", id: b.id }),
+            { kind: "board", id: b.id },
+            meta
+          ),
+        });
+      }
+      boardItems.sort((a, b) => b.sortTs - a.sortTs);
+      const boardRows = boardItems.map((x) => x.row);
+
+      mountPwa([
+        ...(searchBar ? [searchBar] : []),
+        ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
+        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
+        ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])]),
+      ]);
+      return;
+    }
+
+    if (activeTab === "contacts") {
+      const onlineAll = (state.friends || []).filter((f) => f.online).filter((f) => !pinnedSet.has(dmKey(f.id)));
+      const offlineAll = (state.friends || []).filter((f) => !f.online).filter((f) => !pinnedSet.has(dmKey(f.id)));
+
+      if (hasSidebarQuery) {
+        const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
+        allFriends.sort((a, b) => {
+          if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
+          const an = displayNameForFriend(state, a);
+          const bn = displayNameForFriend(state, b);
+          return an.localeCompare(bn, "ru", { sensitivity: "base" });
+        });
+        const rows = allFriends.map((f) => {
+          const k = dmKey(f.id);
+          const meta = previewForConversation(state, k, "dm", drafts[k]);
+          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+        });
+        const unknownAttnRows = unknownAttnPeers
+          .filter((id) => matchesQuery(id))
+          .map((id) => {
+            const k = dmKey(id);
+            const meta = previewForConversation(state, k, "dm", drafts[k]);
+            const hint = attentionHintForPeer(state, id);
+            const meta2 = meta.sub ? meta : { ...meta, sub: hint };
+            const pseudo: FriendEntry = { id, online: false, unread: 0 };
+            return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
+          });
+        const allRows = [...unknownAttnRows, ...rows];
+        mountPwa([
+          ...(searchBar ? [searchBar] : []),
+          ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
+          ...(allRows.length
+            ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
+            : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]),
+        ]);
+        return;
+      }
+
+      const onlineRows = onlineAll
+        .filter((f) => matchesFriend(f))
+        .map((f) => {
+          const k = dmKey(f.id);
+          const meta = previewForConversation(state, k, "dm", drafts[k]);
+          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+        });
+      const offlineRows = offlineAll
+        .filter((f) => matchesFriend(f))
+        .map((f) => {
+          const k = dmKey(f.id);
+          const meta = previewForConversation(state, k, "dm", drafts[k]);
+          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+        });
+      const unknownAttnRows = unknownAttnPeers
+        .map((id) => {
+          const k = dmKey(id);
+          const meta = previewForConversation(state, k, "dm", drafts[k]);
+          const hint = attentionHintForPeer(state, id);
+          const meta2 = meta.sub ? meta : { ...meta, sub: hint };
+          const pseudo: FriendEntry = { id, online: false, unread: 0 };
+          return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
+        })
+        .filter(Boolean) as HTMLElement[];
+
+      mountPwa([
+        ...(searchBar ? [searchBar] : []),
+        ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
+        ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
+        el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
+        ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
+        el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
+        ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
+      ]);
+      return;
+    }
+
+    // Menu tab (PWA): actions/navigation.
+    const searchRow = roomRow("⌕", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
+      sub: "Найти по ID или @handle",
+      time: null,
+      hasDraft: false,
+    });
+    searchRow.setAttribute("title", "Поиск пользователей по ID или @handle");
+    const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
+      sub: "Имя, @handle, аватар",
+      time: null,
+      hasDraft: false,
+    });
+    profileRow.setAttribute("title", "Настройки профиля и интерфейса");
+    const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
+      sub: "История и загрузки",
+      time: null,
+      hasDraft: false,
+    });
+    filesRow.setAttribute("title", "Передача файлов и история");
+    const navRows: HTMLElement[] = [searchRow, profileRow, filesRow];
+
+    const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
+      sub: "Групповой чат и приглашения",
+      time: null,
+      hasDraft: false,
+    });
+    createGroupRow.setAttribute("title", "Создать новый чат");
+    const createBoardRow = roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard(), undefined, {
+      sub: "Лента объявлений и новости",
+      time: null,
+      hasDraft: false,
+    });
+    createBoardRow.setAttribute("title", "Создать новую доску");
+
+    const accountRows: HTMLElement[] = [];
+    if (state.conn === "connected" && !state.authed) {
+      const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
+        sub: "Вход или регистрация",
+        time: null,
+        hasDraft: false,
+      });
+      loginRow.setAttribute("title", "Войти или зарегистрироваться");
+      accountRows.push(loginRow);
+    } else if (state.authed) {
+      const logoutRow = roomRow("⏻", "Выход", false, () => onAuthLogout(), undefined, {
+        sub: "Завершить сессию",
+        time: null,
+        hasDraft: false,
+      });
+      logoutRow.setAttribute("title", "Выйти из аккаунта");
+      accountRows.push(logoutRow);
+    }
+
+    mountPwa([
+      ...(searchBar ? [searchBar] : []),
+      el("div", { class: "pane-section" }, ["Навигация"]),
+      ...navRows,
+      ...(accountRows.length ? [el("div", { class: "pane-section" }, ["Аккаунт"]), ...accountRows] : []),
+      el("div", { class: "pane-section" }, ["Создание"]),
+      createGroupRow,
+      createBoardRow,
+    ]);
+    return;
+  }
 
   const pinnedRows: HTMLElement[] = [];
   for (const key of pinnedKeys) {

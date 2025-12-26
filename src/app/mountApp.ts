@@ -1418,20 +1418,6 @@ export function mountApp(root: HTMLElement) {
       return;
     }
 
-    const boardPostBtn = target?.closest("button[data-action='board-post-open']") as HTMLButtonElement | null;
-    if (boardPostBtn) {
-      const st = store.get();
-      const sel = st.selected;
-      if (!sel || sel.kind !== "board") return;
-      e.preventDefault();
-      store.set((prev) => ({ ...prev, boardComposerOpen: true }));
-      queueMicrotask(() => {
-        scheduleBoardEditorPreview();
-        scheduleFocusComposer();
-      });
-      return;
-    }
-
     const historyMoreBtn = target?.closest("button[data-action='chat-history-more']") as HTMLButtonElement | null;
     if (historyMoreBtn) {
       e.preventDefault();
@@ -6586,16 +6572,19 @@ export function mountApp(root: HTMLElement) {
       if (before.endsWith("\n")) return "\n";
       return "\n\n";
     };
-    const insertChangelogBlock = (title: string) => {
+    const insertChangelogBlock = (marker: string) => {
       const prefix = ensureBlockPrefix(value, Math.min(start, end));
-      const insertText = `${prefix}## ${title}\n- `;
-      applyValue(insertTextAtSelection({ value, selectionStart: start, selectionEnd: end, insertText }));
+      const basePos = Math.min(start, end);
+      const insertText = `${prefix}##${marker} \n- `;
+      const out = insertTextAtSelection({ value, selectionStart: start, selectionEnd: end, insertText });
+      const caret = basePos + prefix.length + 2 + marker.length + 1;
+      applyValue({ value: out.value, caret });
     };
 
-    if (action === "board-tool-added") return insertChangelogBlock("Добавлено");
-    if (action === "board-tool-improved") return insertChangelogBlock("Улучшено");
-    if (action === "board-tool-fixed") return insertChangelogBlock("Исправлено");
-    if (action === "board-tool-notes") return insertChangelogBlock("Примечания");
+    if (action === "board-tool-kind-added") return insertChangelogBlock("+");
+    if (action === "board-tool-kind-improved") return insertChangelogBlock("^");
+    if (action === "board-tool-kind-fixed") return insertChangelogBlock("!");
+    if (action === "board-tool-kind-notes") return insertChangelogBlock("?");
   });
 
   // Telegram-like UX: paste/drop files прямо в поле ввода.
