@@ -205,6 +205,10 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
 
     const scheduleTs = parseDatetimeLocal(layout.boardScheduleInput.value);
     const scheduleOk = scheduleTs !== null && scheduleTs >= now && scheduleTs <= maxAt;
+    const scheduleHasValue = Boolean(layout.boardScheduleInput.value);
+    layout.boardScheduleInput.classList.toggle("is-invalid", scheduleHasValue && !scheduleOk);
+    if (scheduleHasValue && !scheduleOk) layout.boardScheduleInput.setAttribute("aria-invalid", "true");
+    else layout.boardScheduleInput.removeAttribute("aria-invalid");
     const scheduleCanSendNow = composerEnabled && Boolean(sel);
     const scheduleText = sendText.trim();
     layout.boardScheduleBtn.disabled = !scheduleCanSendNow || !scheduleText || tooLong || !scheduleOk;
@@ -214,7 +218,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     if (!scheduled.length) {
       layout.boardScheduleList.replaceChildren(el("div", { class: "board-editor-preview-empty" }, ["Нет запланированных публикаций."]));
     } else {
-      const list = scheduled.slice(0, 12).map((it) => {
+      const visible = scheduled.slice(0, 12);
+      const list = visible.map((it) => {
         const when = (() => {
           try {
             return new Date(it.scheduleAt).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -229,11 +234,16 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
           el("button", { class: "btn board-sched-cancel", type: "button", "data-action": "board-schedule-cancel", "data-sched-id": it.id, "aria-label": "Отменить" }, ["×"]),
         ]);
       });
+      if (scheduled.length > visible.length) {
+        list.push(el("div", { class: "board-sched-more" }, [`И ещё ${scheduled.length - visible.length}…`]));
+      }
       layout.boardScheduleList.replaceChildren(...list);
     }
   } else {
     layout.boardScheduleBtn.disabled = true;
     layout.boardScheduleClearBtn.disabled = true;
+    layout.boardScheduleInput.classList.remove("is-invalid");
+    layout.boardScheduleInput.removeAttribute("aria-invalid");
     layout.boardScheduleList.replaceChildren(el("div", { class: "board-editor-preview-empty" }, [""]));
   }
 

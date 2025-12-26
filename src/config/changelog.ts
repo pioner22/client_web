@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.204",
+    date: "2025-12-26",
+    improved: [
+      "Доски: планирование — подсветка некорректной даты/времени + индикатор «ещё N» в списке запланированных",
+      "Доски: подсказка планировщика уточняет локальное время и best‑effort поведение",
+    ],
+    fixed: ["Доски: предпросмотр в редакторе обновляется сразу после публикации/планирования и после завершения редактирования сообщения"],
+  },
+  {
     version: "0.1.203",
     date: "2025-12-26",
     added: [

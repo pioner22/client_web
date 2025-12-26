@@ -5602,6 +5602,7 @@ export function mountApp(root: HTMLElement) {
     layout.input.value = "";
     autosizeInput(layout.input);
     layout.input.focus();
+    scheduleBoardEditorPreview();
     store.set((prev) => {
       const drafts = updateDraftMap(prev.drafts, convKey, "");
       return { ...prev, input: "", drafts };
@@ -6475,6 +6476,7 @@ export function mountApp(root: HTMLElement) {
         layout.input.value = "";
         autosizeInput(layout.input);
         layout.input.focus();
+        scheduleBoardEditorPreview();
       } catch {
         // ignore
       }
@@ -8881,6 +8883,7 @@ export function mountApp(root: HTMLElement) {
       const next = st.input || "";
       if (layout.input.value !== next) layout.input.value = next;
       autosizeInput(layout.input);
+      scheduleBoardEditorPreview();
     } catch {
       // ignore
     }

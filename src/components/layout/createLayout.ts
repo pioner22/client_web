@@ -119,7 +119,9 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     boardScheduleBtn,
     boardScheduleClearBtn,
   ]);
-  const boardScheduleHint = el("div", { class: "board-editor-schedule-hint" }, ["Можно запланировать на ближайшие 7 дней (работает пока приложение открыто)."]);
+  const boardScheduleHint = el("div", { class: "board-editor-schedule-hint" }, [
+    "Можно запланировать на ближайшие 7 дней (по вашему времени). Best‑effort: отправка произойдёт, пока приложение открыто (или при следующем запуске, если время уже наступило).",
+  ]);
   const boardScheduleList = el("div", { class: "board-editor-schedule-list" }, [""]);
 
   const boardEditorWrap = el("div", { class: "board-editor hidden", id: "board-editor" }, [

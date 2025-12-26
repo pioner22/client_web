@@ -316,6 +316,11 @@
   line-height: 1;
 }
 
+.board-editor-datetime.is-invalid {
+  border-color: color-mix(in srgb, var(--bad), transparent 10%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bad), transparent 75%);
+}
+
 .board-editor-schedule-btn,
 .board-editor-schedule-clear {
   height: 34px;
@@ -377,6 +382,13 @@
   line-height: 1;
   display: grid;
   place-items: center;
+}
+
+.board-sched-more {
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 0.9;
+  padding: 2px 10px 0;
 }
 
 @media (max-width: 520px) {
