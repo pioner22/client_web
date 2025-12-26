@@ -93,3 +93,39 @@ test("avatarHue: стабильный диапазон 0..359", async () => {
     await cleanup();
   }
 });
+
+test("avatarStore: не падает при ошибках localStorage (quota/disabled)", async () => {
+  const { mod, cleanup } = await loadModule("src/helpers/avatar/avatarStore.ts");
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = {
+      getItem() {
+        return null;
+      },
+      setItem() {
+        const err = new Error("QuotaExceededError");
+        err.name = "QuotaExceededError";
+        throw err;
+      },
+      removeItem() {},
+    };
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+
+    const { storeAvatar, getStoredAvatar, storeAvatarRev, getStoredAvatarRev, clearStoredAvatar } = mod;
+    const dataUrl = "data:image/png;base64,AA==";
+
+    assert.doesNotThrow(() => storeAvatar("dm", "222-222-222", dataUrl));
+    assert.equal(getStoredAvatar("dm", "222-222-222"), dataUrl);
+
+    assert.doesNotThrow(() => storeAvatarRev("dm", "222-222-222", 7));
+    assert.equal(getStoredAvatarRev("dm", "222-222-222"), 7);
+
+    clearStoredAvatar("dm", "222-222-222");
+    assert.equal(getStoredAvatar("dm", "222-222-222"), null);
+    assert.equal(getStoredAvatarRev("dm", "222-222-222"), 0);
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
+    await cleanup();
+  }
+});

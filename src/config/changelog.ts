@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.193",
+    date: "2025-12-26",
+    fixed: ["Аватары: кэш больше не ломается при ошибках localStorage (quota/private mode) — используем in‑memory fallback вместо падения"],
+    improved: ["Загрузка аватара: добавлен decode fallback через `createImageBitmap` (лучше работает с HEIC/нестандартными форматами)"],
+  },
+  {
     version: "0.1.192",
     date: "2025-12-26",
     fixed: [
