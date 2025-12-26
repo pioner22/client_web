@@ -12,6 +12,34 @@ const shareQueue = new Map();
 const STREAM_PATH_RE = /^\/__yagodka_stream__\/files\/([^/?#]+)$/i;
 const STREAM_TTL_MS = 2 * 60 * 1000;
 const streams = new Map();
+const PREFS_CACHE = `${CACHE_PREFIX}prefs-v1`;
+const PREFS_URL = "./__prefs__/notify.json";
+let notifyPrefs = null;
+
+async function loadNotifyPrefs() {
+  if (notifyPrefs) return notifyPrefs;
+  try {
+    const cache = await caches.open(PREFS_CACHE);
+    const res = await cache.match(PREFS_URL);
+    if (res) {
+      const obj = await res.json();
+      if (obj && typeof obj === "object") {
+        notifyPrefs = { silent: Boolean(obj.silent) };
+        return notifyPrefs;
+      }
+    }
+  } catch {}
+  notifyPrefs = { silent: false };
+  return notifyPrefs;
+}
+
+async function saveNotifyPrefs(prefs) {
+  notifyPrefs = { silent: Boolean(prefs && prefs.silent) };
+  try {
+    const cache = await caches.open(PREFS_CACHE);
+    await cache.put(PREFS_URL, new Response(JSON.stringify(notifyPrefs), { headers: { "content-type": "application/json" } }));
+  } catch {}
+}
 
 function isStaticAssetUrl(url) {
   const path = url.pathname || "/";
@@ -178,7 +206,11 @@ self.addEventListener("activate", (event) => {
     (async () => {
       try {
         const keys = await caches.keys();
-        await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE && k !== RUNTIME_CACHE).map((k) => caches.delete(k)));
+        await Promise.all(
+          keys
+            .filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE && k !== RUNTIME_CACHE && k !== PREFS_CACHE)
+            .map((k) => caches.delete(k))
+        );
       } catch {}
       await self.clients.claim();
     })()
@@ -189,6 +221,9 @@ self.addEventListener("message", (event) => {
   const data = event && event.data ? event.data : null;
   if (!data || typeof data !== "object") return;
   if (data.type === "SKIP_WAITING") self.skipWaiting();
+  if (data.type === "PWA_NOTIFY_PREFS") {
+    event.waitUntil(saveNotifyPrefs(data.prefs));
+  }
   if (data.type === "PWA_STREAM_CHUNK") {
     const streamId = String(data.streamId || "").trim();
     if (!streamId) return;
@@ -318,6 +353,10 @@ self.addEventListener("push", (event) => {
         icon: "./icons/icon-192.png",
         badge: "./icons/icon-192.png",
       };
+      try {
+        const prefs = await loadNotifyPrefs();
+        if (prefs && prefs.silent) options.silent = true;
+      } catch {}
       try {
         await self.registration.showNotification(title, options);
       } catch {}

@@ -387,5 +387,8 @@ export interface AppState {
   pwaPushStatus: string | null;
   pwaPushOptOut: boolean;
 
+  notifyInAppEnabled: boolean;
+  notifySoundEnabled: boolean;
+
   avatarsRev: number;
 }

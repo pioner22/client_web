@@ -4,6 +4,7 @@ import { getStoredSkinId } from "../helpers/skin/skin";
 import { resolveInitialTheme } from "../helpers/theme/theme";
 import { getStoredAuthId, getStoredSessionToken, isSessionAutoAuthBlocked } from "../helpers/auth/session";
 import { getPushOptOut } from "../helpers/pwa/pushPrefs";
+import { getNotifyInAppEnabled, getNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { getStoredMessageView } from "../helpers/ui/messageView";
 
 export function createInitialState(): AppState {
@@ -39,6 +40,8 @@ export function createInitialState(): AppState {
     }
   })();
   const pushOptOut = getPushOptOut();
+  const notifyInAppEnabled = getNotifyInAppEnabled();
+  const notifySoundEnabled = getNotifySoundEnabled();
   return {
     conn: "connecting",
     authed: false,
@@ -109,6 +112,8 @@ export function createInitialState(): AppState {
     pwaPushPublicKey: null,
     pwaPushStatus: null,
     pwaPushOptOut: pushOptOut,
+    notifyInAppEnabled,
+    notifySoundEnabled,
 
     avatarsRev: 0,
   };

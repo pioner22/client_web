@@ -40,6 +40,8 @@ import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
 import { activatePwaUpdate } from "../helpers/pwa/registerServiceWorker";
 import { setPushOptOut } from "../helpers/pwa/pushPrefs";
+import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
+import { installNotificationSoundUnlock } from "../helpers/notify/notifySound";
 import { shouldReloadForBuild } from "../helpers/pwa/shouldReloadForBuild";
 import {
   clearPwaInstallDismissed,
@@ -357,6 +359,7 @@ export function mountApp(root: HTMLElement) {
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
   const layout = createLayout(root, { iosStandalone });
   const debugHud = installDebugHud({ mount: root, chatHost: layout.chatHost, getState: () => store.get() });
+  installNotificationSoundUnlock();
   type PwaSharePayload = {
     files: File[];
     title: string;
@@ -584,6 +587,42 @@ export function mountApp(root: HTMLElement) {
       if (from) selectTarget({ kind: "dm", id: from });
     });
   }
+
+  function syncNotifyPrefsToServiceWorker(): void {
+    try {
+      if (!("serviceWorker" in navigator)) return;
+    } catch {
+      return;
+    }
+    const st = store.get();
+    const prefs = { silent: !Boolean(st.notifySoundEnabled) };
+    const msg = { type: "PWA_NOTIFY_PREFS", prefs };
+    try {
+      const controller = navigator.serviceWorker.controller;
+      if (controller) {
+        controller.postMessage(msg);
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      navigator.serviceWorker.ready
+        .then((reg) => {
+          try {
+            reg.active?.postMessage?.(msg);
+          } catch {
+            // ignore
+          }
+        })
+        .catch(() => {});
+    } catch {
+      // ignore
+    }
+  }
+
+  // Best-effort: keep SW notification prefs in sync (used for `silent` option).
+  syncNotifyPrefsToServiceWorker();
 
   const pushSentByUser = new Map<string, string>();
   let pushAutoAttemptUser: string | null = null;
@@ -2036,7 +2075,16 @@ export function mountApp(root: HTMLElement) {
 
   function setMobileSidebarTab(tab: MobileSidebarTab) {
     const next: MobileSidebarTab = tab === "contacts" || tab === "menu" || tab === "boards" ? tab : "chats";
-    if (store.get().mobileSidebarTab === next) return;
+    // Telegram-like: tap on the active tab scrolls the list to top.
+    if (store.get().mobileSidebarTab === next) {
+      try {
+        layout.sidebarBody.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+      } catch {
+        layout.sidebarBody.scrollTop = 0;
+        layout.sidebarBody.scrollLeft = 0;
+      }
+      return;
+    }
     store.set({ mobileSidebarTab: next });
   }
 
@@ -8097,6 +8145,24 @@ export function mountApp(root: HTMLElement) {
     },
     onPushDisable: () => {
       void disablePush();
+    },
+    onNotifyInAppEnable: () => {
+      setNotifyInAppEnabled(true);
+      store.set({ notifyInAppEnabled: true, status: "Уведомления в приложении: включены" });
+    },
+    onNotifyInAppDisable: () => {
+      setNotifyInAppEnabled(false);
+      store.set({ notifyInAppEnabled: false, status: "Уведомления в приложении: выключены" });
+    },
+    onNotifySoundEnable: () => {
+      setNotifySoundEnabled(true);
+      store.set({ notifySoundEnabled: true, status: "Звук уведомлений: включен" });
+      syncNotifyPrefsToServiceWorker();
+    },
+    onNotifySoundDisable: () => {
+      setNotifySoundEnabled(false);
+      store.set({ notifySoundEnabled: false, status: "Звук уведомлений: выключен" });
+      syncNotifyPrefsToServiceWorker();
     },
     onForcePwaUpdate: () => {
       void forcePwaUpdate();

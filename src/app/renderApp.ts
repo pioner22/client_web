@@ -101,6 +101,10 @@ export interface RenderActions {
   onProfileAvatarClear: () => void;
   onPushEnable: () => void;
   onPushDisable: () => void;
+  onNotifyInAppEnable: () => void;
+  onNotifyInAppDisable: () => void;
+  onNotifySoundEnable: () => void;
+  onNotifySoundDisable: () => void;
   onForcePwaUpdate: () => void;
   onContextMenuAction: (itemId: string) => void;
 }
@@ -385,6 +389,10 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onAvatarClear: actions.onProfileAvatarClear,
         onPushEnable: actions.onPushEnable,
         onPushDisable: actions.onPushDisable,
+        onNotifyInAppEnable: actions.onNotifyInAppEnable,
+        onNotifyInAppDisable: actions.onNotifyInAppDisable,
+        onNotifySoundEnable: actions.onNotifySoundEnable,
+        onNotifySoundDisable: actions.onNotifySoundDisable,
         onForcePwaUpdate: actions.onForcePwaUpdate,
       });
     }

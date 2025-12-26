@@ -32,6 +32,7 @@ import {
 import { removeOutboxEntry } from "../helpers/chat/outbox";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
+import { playNotificationSound } from "../helpers/notify/notifySound";
 
 function upsertConversationByLocalId(state: any, key: string, msg: ChatMessage, localId: string): any {
   const convMap = state?.conversations && typeof state.conversations === "object" ? state.conversations : {};
@@ -141,6 +142,39 @@ function parseAttachment(raw: any): ChatAttachment | null {
   const mimeRaw = (raw as any).mime;
   const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw) : null;
   return { kind: "file", fileId, name, size, mime };
+}
+
+function isDocHidden(): boolean {
+  try {
+    return typeof document !== "undefined" && document.visibilityState !== "visible";
+  } catch {
+    return false;
+  }
+}
+
+function notifyPermission(): "default" | "granted" | "denied" {
+  try {
+    return (Notification?.permission ?? "default") as "default" | "granted" | "denied";
+  } catch {
+    return "default";
+  }
+}
+
+function showInAppNotification(state: AppState, title: string, body: string, tag: string): void {
+  if (!state.notifyInAppEnabled) return;
+  if (!isDocHidden()) return;
+  if (notifyPermission() !== "granted") return;
+  try {
+    new Notification(title, { body, tag });
+  } catch {
+    // ignore
+  }
+}
+
+function maybePlaySound(state: AppState, kind: Parameters<typeof playNotificationSound>[0], shouldPlay: boolean): void {
+  if (!shouldPlay) return;
+  if (!state.notifySoundEnabled) return;
+  void playNotificationSound(kind).catch(() => {});
 }
 
 export function handleServerMessage(
@@ -518,6 +552,18 @@ export function handleServerMessage(
   if (t === "authz_request") {
     const from = String(msg?.from ?? "").trim();
     if (!from) return;
+    const hidden = isDocHidden();
+    const viewingSame = Boolean(state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from);
+    const fromLabel = (() => {
+      const p = state.profiles?.[from];
+      const dn = p?.display_name ? String(p.display_name).trim() : "";
+      const h = p?.handle ? String(p.handle).trim() : "";
+      const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
+      return dn || handle || from;
+    })();
+    const note = String(msg?.note ?? "").trim();
+    showInAppNotification(state, "Запрос авторизации", note ? `${fromLabel}: ${note}` : `От: ${fromLabel}`, from);
+    maybePlaySound(state, "auth", hidden || !viewingSame);
     patch((prev) => {
       const prevPending = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
       const nextPending = prevPending.includes(from) ? prevPending : [...prevPending, from];
@@ -1346,6 +1392,18 @@ export function handleServerMessage(
     const groupId = String(msg?.group_id ?? group?.id ?? "");
     const from = String(msg?.from ?? "");
     if (!groupId || !from) return;
+    const hidden = isDocHidden();
+    const viewingSame = Boolean(state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from);
+    const label = String(msg?.name ?? group?.name ?? msg?.handle ?? group?.handle ?? groupId).trim() || groupId;
+    const fromLabel = (() => {
+      const p = state.profiles?.[from];
+      const dn = p?.display_name ? String(p.display_name).trim() : "";
+      const h = p?.handle ? String(p.handle).trim() : "";
+      const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
+      return dn || handle || from;
+    })();
+    showInAppNotification(state, `Приглашение в чат: ${label}`, `От: ${fromLabel}`, from);
+    maybePlaySound(state, "invite", hidden || !viewingSame);
     const entry: ActionModalGroupInvite = {
       kind: "group_invite",
       groupId,
@@ -1385,6 +1443,18 @@ export function handleServerMessage(
     const groupId = String(msg?.group_id ?? "");
     const from = String(msg?.from ?? "");
     if (!groupId || !from) return;
+    const hidden = isDocHidden();
+    const viewingSame = Boolean(state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from);
+    const label = String(msg?.name ?? msg?.handle ?? groupId).trim() || groupId;
+    const fromLabel = (() => {
+      const p = state.profiles?.[from];
+      const dn = p?.display_name ? String(p.display_name).trim() : "";
+      const h = p?.handle ? String(p.handle).trim() : "";
+      const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
+      return dn || handle || from;
+    })();
+    showInAppNotification(state, `Запрос на вступление: ${label}`, `От: ${fromLabel}`, from);
+    maybePlaySound(state, "auth", hidden || !viewingSame);
     const entry: ActionModalGroupJoinRequest = {
       kind: "group_join_request",
       groupId,
@@ -1439,6 +1509,18 @@ export function handleServerMessage(
     const boardId = String(msg?.board_id ?? board?.id ?? "");
     const from = String(msg?.from ?? "");
     if (!boardId || !from) return;
+    const hidden = isDocHidden();
+    const viewingSame = Boolean(state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from);
+    const label = String(msg?.name ?? board?.name ?? msg?.handle ?? board?.handle ?? boardId).trim() || boardId;
+    const fromLabel = (() => {
+      const p = state.profiles?.[from];
+      const dn = p?.display_name ? String(p.display_name).trim() : "";
+      const h = p?.handle ? String(p.handle).trim() : "";
+      const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
+      return dn || handle || from;
+    })();
+    showInAppNotification(state, `Приглашение в доску: ${label}`, `От: ${fromLabel}`, from);
+    maybePlaySound(state, "invite", hidden || !viewingSame);
     const entry: ActionModalBoardInvite = {
       kind: "board_invite",
       boardId,
@@ -1735,34 +1817,31 @@ export function handleServerMessage(
     const kind = from === state.selfId ? "out" : "in";
     const attachment = parseAttachment(msg?.attachment);
     if (kind === "in") {
-      try {
-        const hidden = typeof document !== "undefined" && document.visibilityState !== "visible";
-        const perm = (Notification?.permission ?? "default") as "default" | "granted" | "denied";
-        if (hidden && perm === "granted") {
-          const profile = state.profiles?.[from];
-          let fromLabel = String(profile?.display_name || "").trim();
-          if (!fromLabel) {
-            const handle = String(profile?.handle || "").trim();
-            fromLabel = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : from;
-          }
-          let title = fromLabel || "Новое сообщение";
-          let body = String(text || "").trim();
-          if (!body) {
-            if (attachment?.kind === "file") body = `Файл: ${attachment.name || "файл"}`;
-            else body = "Новое сообщение";
-          }
-          if (room) {
-            const group = (state.groups || []).find((g) => g.id === room);
-            const board = !group ? (state.boards || []).find((b) => b.id === room) : null;
-            const roomLabel = group ? String(group.name || group.id) : board ? String(board.name || board.id) : room;
-            title = group ? `Чат: ${roomLabel}` : board ? `Доска: ${roomLabel}` : `Чат: ${roomLabel}`;
-            if (fromLabel) body = `${fromLabel}: ${body}`;
-          }
-          new Notification(title, { body, tag: room || from });
-        }
-      } catch {
-        // ignore
+      const hidden = isDocHidden();
+      const viewingSame =
+        Boolean(state.page === "main" && !state.modal && room && state.selected && state.selected.id === room) ||
+        Boolean(state.page === "main" && !state.modal && !room && state.selected?.kind === "dm" && state.selected.id === from);
+      const profile = state.profiles?.[from];
+      let fromLabel = String(profile?.display_name || "").trim();
+      if (!fromLabel) {
+        const handle = String(profile?.handle || "").trim();
+        fromLabel = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : from;
       }
+      let title = `Сообщение от ${fromLabel || from}`;
+      let body = String(text || "").trim();
+      if (!body) {
+        if (attachment?.kind === "file") body = `Файл: ${attachment.name || "файл"}`;
+        else body = "Новое сообщение";
+      }
+      if (room) {
+        const group = (state.groups || []).find((g) => g.id === room);
+        const board = !group ? (state.boards || []).find((b) => b.id === room) : null;
+        const roomLabel = group ? String(group.name || group.id) : board ? String(board.name || board.id) : room;
+        title = group ? `Чат: ${roomLabel}` : board ? `Доска: ${roomLabel}` : `Чат: ${roomLabel}`;
+        if (fromLabel) body = `${fromLabel}: ${body}`;
+      }
+      showInAppNotification(state, title, body, room || from);
+      maybePlaySound(state, "message", hidden || !viewingSame);
     }
     patch((prev) =>
       upsertConversation(prev, key, {

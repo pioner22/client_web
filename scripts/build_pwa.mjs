@@ -105,6 +105,34 @@ const shareQueue = new Map();
 const STREAM_PATH_RE = /^\\/__yagodka_stream__\\/files\\/([^/?#]+)$/i;
 const STREAM_TTL_MS = 2 * 60 * 1000;
 const streams = new Map();
+const PREFS_CACHE = CACHE_PREFIX + "prefs";
+const PREFS_URL = "./__prefs__/notify.json";
+let notifyPrefs = null;
+
+async function loadNotifyPrefs() {
+  if (notifyPrefs) return notifyPrefs;
+  try {
+    const cache = await caches.open(PREFS_CACHE);
+    const res = await cache.match(PREFS_URL);
+    if (res) {
+      const obj = await res.json();
+      if (obj && typeof obj === "object") {
+        notifyPrefs = { silent: Boolean(obj.silent) };
+        return notifyPrefs;
+      }
+    }
+  } catch {}
+  notifyPrefs = { silent: false };
+  return notifyPrefs;
+}
+
+async function saveNotifyPrefs(prefs) {
+  notifyPrefs = { silent: Boolean(prefs && prefs.silent) };
+  try {
+    const cache = await caches.open(PREFS_CACHE);
+    await cache.put(PREFS_URL, new Response(JSON.stringify(notifyPrefs), { headers: { "content-type": "application/json" } }));
+  } catch {}
+}
 
 function isNavigationRequest(req) {
   return req.mode === "navigate" || req.destination === "document";
@@ -275,7 +303,7 @@ self.addEventListener("activate", (event) => {
         const keys = await caches.keys();
         await Promise.all(
           keys
-            .filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE)
+            .filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE && k !== PREFS_CACHE)
             .map((k) => caches.delete(k))
         );
       } catch {}
@@ -290,6 +318,9 @@ self.addEventListener("message", (event) => {
   if (data.type === "SKIP_WAITING") {
     self.skipWaiting();
     return;
+  }
+  if (data.type === "PWA_NOTIFY_PREFS") {
+    event.waitUntil(saveNotifyPrefs(data.prefs));
   }
   if (data.type === "GET_BUILD_ID") {
     const payload = { type: "BUILD_ID", buildId: BUILD_ID };
@@ -447,6 +478,10 @@ self.addEventListener("push", (event) => {
         icon: "./icons/icon-192.png",
         badge: "./icons/icon-192.png",
       };
+      try {
+        const prefs = await loadNotifyPrefs();
+        if (prefs && prefs.silent) options.silent = true;
+      } catch {}
       try {
         await self.registration.showNotification(title, options);
       } catch {}

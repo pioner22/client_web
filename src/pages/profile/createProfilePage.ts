@@ -15,6 +15,10 @@ export interface ProfilePageActions {
   onAvatarClear: () => void;
   onPushEnable: () => void;
   onPushDisable: () => void;
+  onNotifyInAppEnable: () => void;
+  onNotifyInAppDisable: () => void;
+  onNotifySoundEnable: () => void;
+  onNotifySoundDisable: () => void;
   onForcePwaUpdate: () => void;
 }
 
@@ -121,6 +125,18 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const btnPushDisable = el("button", { class: "btn", type: "button" }, ["Выключить"]);
   const pushActions = el("div", { class: "profile-actions" }, [btnPushEnable, btnPushDisable]);
 
+  const notifyInAppLabel = el("div", { class: "modal-label" }, ["Уведомления в приложении"]);
+  const notifyInAppHint = el("div", { class: "profile-hint" }, ["Показывать уведомления, когда вкладка скрыта (без Push)"]);
+  const btnNotifyInAppOn = el("button", { class: "btn", type: "button" }, ["Вкл"]);
+  const btnNotifyInAppOff = el("button", { class: "btn", type: "button" }, ["Выкл"]);
+  const notifyInAppActions = el("div", { class: "profile-actions" }, [btnNotifyInAppOn, btnNotifyInAppOff]);
+
+  const notifySoundLabel = el("div", { class: "modal-label" }, ["Звук уведомлений"]);
+  const notifySoundHint = el("div", { class: "profile-hint" }, ["Звук работает, когда приложение открыто (Push‑звук зависит от ОС)"]);
+  const btnNotifySoundOn = el("button", { class: "btn", type: "button" }, ["Вкл"]);
+  const btnNotifySoundOff = el("button", { class: "btn", type: "button" }, ["Выкл"]);
+  const notifySoundActions = el("div", { class: "profile-actions" }, [btnNotifySoundOn, btnNotifySoundOff]);
+
   const pwaUpdateLabel = el("div", { class: "modal-label" }, ["Обновление PWA"]);
   const pwaUpdateHint = el("div", { class: "profile-hint" }, ["—"]);
   const btnPwaUpdate = el("button", { class: "btn btn-primary", type: "button" }, ["Принудительно обновить PWA"]);
@@ -155,6 +171,12 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     pushLabel,
     pushActions,
     pushStatus,
+    notifyInAppLabel,
+    notifyInAppActions,
+    notifyInAppHint,
+    notifySoundLabel,
+    notifySoundActions,
+    notifySoundHint,
     pwaUpdateLabel,
     pwaUpdateActions,
     pwaUpdateHint,
@@ -187,6 +209,10 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   btnDark.addEventListener("click", () => actions.onThemeChange("dark"));
   btnPushEnable.addEventListener("click", () => actions.onPushEnable());
   btnPushDisable.addEventListener("click", () => actions.onPushDisable());
+  btnNotifyInAppOn.addEventListener("click", () => actions.onNotifyInAppEnable());
+  btnNotifyInAppOff.addEventListener("click", () => actions.onNotifyInAppDisable());
+  btnNotifySoundOn.addEventListener("click", () => actions.onNotifySoundEnable());
+  btnNotifySoundOff.addEventListener("click", () => actions.onNotifySoundDisable());
   btnPwaUpdate.addEventListener("click", () => actions.onForcePwaUpdate());
   msgViewSelect.addEventListener("change", () => actions.onMessageViewChange(msgViewSelect.value as MessageViewMode));
 
@@ -296,6 +322,15 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     pushStatus.textContent = pushText;
     btnPushEnable.disabled = !pushSupported || !serverKey || subscribed;
     btnPushDisable.disabled = !pushSupported || !subscribed;
+
+    const notifyApiSupported = typeof Notification !== "undefined" && typeof Notification.requestPermission === "function";
+    btnNotifyInAppOn.disabled = !notifyApiSupported;
+    btnNotifyInAppOff.disabled = !notifyApiSupported;
+    btnNotifyInAppOn.classList.toggle("btn-active", Boolean(state.notifyInAppEnabled));
+    btnNotifyInAppOff.classList.toggle("btn-active", !Boolean(state.notifyInAppEnabled));
+
+    btnNotifySoundOn.classList.toggle("btn-active", Boolean(state.notifySoundEnabled));
+    btnNotifySoundOff.classList.toggle("btn-active", !Boolean(state.notifySoundEnabled));
 
     const swSupported = typeof navigator !== "undefined" && "serviceWorker" in navigator;
     let updateText = "Принудительно проверяет обновления и перезапускает PWA";

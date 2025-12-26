@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.200",
+    date: "2025-12-26",
+    added: ["Профиль: тумблеры уведомлений — «в приложении» и «звук» (сохраняются в браузере)"],
+    improved: [
+      "Уведомления: заголовки/текст стали понятнее (кто/где) — ближе к Telegram‑логике",
+      "Mobile sidebar: повторный тап по активной вкладке прокручивает список вверх (Telegram‑паттерн)",
+    ],
+    fixed: ["PWA: Service Worker best‑effort уважает режим «без звука» через `silent` (если поддерживается браузером)"],
+  },
+  {
     version: "0.1.199",
     date: "2025-12-26",
     fixed: ["PWA: исправлена сборка Service Worker (deep-link из уведомления теперь работает в production)"],
