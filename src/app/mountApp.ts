@@ -6866,7 +6866,7 @@ export function mountApp(root: HTMLElement) {
       ]);
       if (isOwner) {
         addGroup([
-          makeItem("group_rename", "Переименовать…", "✏️", { disabled: !canAct }),
+          makeItem("group_rename", "Переименовать…", "🏷️", { disabled: !canAct }),
           makeItem("group_add_members", "Добавить участников…", "➕", { disabled: !canAct }),
           makeItem("group_remove_members", "Удалить участников…", "➖", { danger: true, disabled: !canAct }),
         ]);
@@ -6977,7 +6977,9 @@ export function mountApp(root: HTMLElement) {
       ];
       if (canEdit) {
         editGroup.push(
-          makeItem("msg_edit", msg?.attachment ? "Изменить подпись…" : "Изменить…", "✏️", { disabled: !canAct })
+          makeItem("msg_edit", msg?.attachment ? "Изменить подпись…" : "Изменить…", st.selected?.kind === "board" ? "✏️" : "🛠️", {
+            disabled: !canAct,
+          })
         );
       }
       addGroup(editGroup);

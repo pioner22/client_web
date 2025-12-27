@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.209",
+    date: "2025-12-27",
+    fixed: ["Контекст-меню: убран значок ✏️ в чатах (DM/группы); оставлен только на Досках"],
+  },
+  {
     version: "0.1.208",
     date: "2025-12-26",
     improved: [
