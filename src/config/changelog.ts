@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.221",
+    date: "2025-12-27",
+    fixed: ["Mobile: при повторном выборе текущего чата pinned-bottom восстанавливается корректнее (в т.ч. когда последнее сообщение — медиа/файл)"],
+  },
+  {
     version: "0.1.220",
     date: "2025-12-27",
     improved: ["Доски: подписи к фото/видео/файлам рендерятся как пост (форматирование/стиль новостей)"],

@@ -2085,6 +2085,8 @@ export function mountApp(root: HTMLElement) {
     const host = layout.chatHost;
     const currentKey = String(host.getAttribute("data-chat-key") || "").trim();
     if (!currentKey || currentKey !== k) return true;
+    const sticky = (host as any).__stickBottom;
+    if (sticky && sticky.active && sticky.key === k) return true;
     return host.scrollTop + host.clientHeight >= host.scrollHeight - 24;
   }
 
@@ -2793,14 +2795,11 @@ export function mountApp(root: HTMLElement) {
   function selectTarget(t: TargetRef) {
     closeEmojiPopover();
     const composerHadFocus = document.activeElement === layout.input;
-    suppressMobileSidebarCloseStickBottom = true;
-    try {
-      closeMobileSidebar();
-    } finally {
-      suppressMobileSidebarCloseStickBottom = false;
-    }
     const prev = store.get();
     if (prev.page === "main" && prev.selected && prev.selected.kind === t.kind && prev.selected.id === t.id) {
+      // When tapping the already-selected chat in the mobile sidebar,
+      // allow the sidebar-close logic to restore "pinned to bottom" if it was at bottom.
+      closeMobileSidebar();
       if (
         shouldAutofocusComposer({
           coarsePointer: coarsePointerMq.matches,
@@ -2812,6 +2811,12 @@ export function mountApp(root: HTMLElement) {
         scheduleFocusComposer();
       }
       return;
+    }
+    suppressMobileSidebarCloseStickBottom = true;
+    try {
+      closeMobileSidebar();
+    } finally {
+      suppressMobileSidebarCloseStickBottom = false;
     }
     const prevKey = prev.selected ? conversationKey(prev.selected) : "";
     const nextKey = conversationKey(t);
