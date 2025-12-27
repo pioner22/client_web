@@ -188,7 +188,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     boardActionsRow,
   ]);
   const composerRow = el("div", { class: "composer-row" }, [
-    el("div", { class: "composer-field" }, [attachBtn, boardEditorMobileBtn, emojiBtn, boardEditorBtn, input]),
+    el("div", { class: "composer-field" }, [attachBtn, boardEditorMobileBtn, boardEditorBtn, emojiBtn, input]),
   ]);
   const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorWrap, composerRow, composerMeta]);
 
