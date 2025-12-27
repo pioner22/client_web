@@ -201,6 +201,16 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   layout.inputWrap.classList.toggle("board-editor-open", boardEditorOpen);
 
   if (boardEditorOpen && sel?.kind === "board") {
+    const kbdOpen = (() => {
+      if (typeof document === "undefined") return false;
+      const de = document.documentElement;
+      return Boolean(de && (de as any).classList?.contains?.("kbd-open"));
+    })();
+    // iOS/Safari: the keyboard accessory bar (prev/next/✓) appears when multiple form fields exist.
+    // While the keyboard is open we hide scheduling UI; disabling the datetime input also helps reduce
+    // the accessory bar to a minimal “Done” control.
+    layout.boardScheduleInput.disabled = kbdOpen;
+
     const now = Date.now();
     const maxAt = now + maxBoardScheduleDelayMs();
     layout.boardScheduleInput.min = formatDatetimeLocal(now);
