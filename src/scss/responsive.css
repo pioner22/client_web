@@ -703,6 +703,20 @@
   .page-hint {
     display: none;
   }
+
+  /* iOS/Safari: long-press on message text shows native “Copy/Translate” callout.
+     We use our own message context menu, so suppress text callout/selection on touch. */
+  .msg-text,
+  .msg-from,
+  .msg-meta,
+  .msg-time,
+  .msg-edited,
+  .msg-mention,
+  .msg-link {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
 }
 
 /* ===== Mobile composer controls ===== */
