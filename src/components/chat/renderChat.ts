@@ -607,7 +607,11 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
         )
       );
     } else if (url) {
-      actions.push(el("a", { class: "btn file-action file-action-download", href: url, download: name }, ["Скачать"]));
+      actions.push(
+        el("a", { class: "btn file-action file-action-download", href: url, download: name, title: `Скачать: ${name}`, "aria-label": `Скачать: ${name}` }, [
+          "Скачать",
+        ])
+      );
     } else if (info.fileId) {
       actions.push(
         el(

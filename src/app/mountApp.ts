@@ -4366,9 +4366,10 @@ export function mountApp(root: HTMLElement) {
     if (!prefs || prefs.maxBytes <= 0) return false;
     const bytes = Number(size ?? 0) || 0;
     if (bytes <= 0) return false;
-    if (!isImageLikeFile(name, mime)) return false;
-    // Keep it small and safe for iOS storage limits; we cache previews only.
-    return bytes <= 6 * 1024 * 1024;
+    if (!isMediaLikeFile(name, mime)) return false;
+    // Keep it small and safe for iOS storage limits; prefetch only small media.
+    const cap = Math.min(6 * 1024 * 1024, prefs.maxBytes > 0 ? prefs.maxBytes : 6 * 1024 * 1024);
+    return bytes <= cap;
   }
 
   function isMediaLikeFile(name: string, mime: string | null | undefined): boolean {
@@ -4664,7 +4665,7 @@ export function mountApp(root: HTMLElement) {
             const uid = latest.selfId;
             if (!uid) continue;
             if (latest.conn !== "connected") continue;
-            // Only prefetch small images to avoid wasting traffic/storage.
+            // Only prefetch small media to avoid wasting traffic/storage.
             if (t.size > PREFETCH_MAX_BYTES) continue;
             const k = `${uid}:${t.fileId}`;
             if (previewPrefetchAttempted.has(k)) continue;

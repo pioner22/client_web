@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.225",
+    date: "2025-12-28",
+    improved: ["Файлы: автопрефетч кэша для истории теперь включает video/audio (до 6MB) — меньше плейсхолдеров в ленте сообщений"],
+    fixed: ["Медиа: кнопка «Скачать» на фото/видео на touch стала компактнее (иконка вместо текста), добавлен aria-label для ссылки"],
+  },
+  {
     version: "0.1.224",
     date: "2025-12-28",
     fixed: ["Чат: pinned-bottom на resize/media-load и кнопка «Вниз» используют maxScrollTop (scrollHeight - clientHeight) — меньше «не в самом низу»"],
