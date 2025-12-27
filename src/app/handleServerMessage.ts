@@ -183,7 +183,9 @@ function showInAppNotification(state: AppState, title: string, body: string, tag
   if (!isDocHidden()) return;
   if (notifyPermission() !== "granted") return;
   try {
-    new Notification(title, { body, tag });
+    // We control notification sound ourselves (see notifySound toggle). Ask the OS to keep it silent
+    // to avoid double sounds / inconsistent platform behavior.
+    new Notification(title, { body, tag, silent: true });
   } catch {
     // ignore
   }
@@ -580,7 +582,7 @@ export function handleServerMessage(
       return dn || handle || from;
     })();
     const note = String(msg?.note ?? "").trim();
-    showInAppNotification(state, "Запрос авторизации", note ? `${fromLabel}: ${note}` : `От: ${fromLabel}`, from);
+    showInAppNotification(state, "Запрос авторизации", note ? `${fromLabel}: ${note}` : `От: ${fromLabel}`, `yagodka:authz_request:${from}`);
     maybePlaySound(state, "auth", hidden || !viewingSame);
     patch((prev) => {
       const prevPending = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
@@ -1420,7 +1422,7 @@ export function handleServerMessage(
       const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
       return dn || handle || from;
     })();
-    showInAppNotification(state, `Приглашение в чат: ${label}`, `От: ${fromLabel}`, from);
+    showInAppNotification(state, `Приглашение в чат: ${label}`, `От: ${fromLabel}`, `yagodka:group_invite:${groupId}:${from}`);
     maybePlaySound(state, "invite", hidden || !viewingSame);
     const entry: ActionModalGroupInvite = {
       kind: "group_invite",
@@ -1471,7 +1473,7 @@ export function handleServerMessage(
       const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
       return dn || handle || from;
     })();
-    showInAppNotification(state, `Запрос на вступление: ${label}`, `От: ${fromLabel}`, from);
+    showInAppNotification(state, `Запрос на вступление: ${label}`, `От: ${fromLabel}`, `yagodka:group_join_request:${groupId}:${from}`);
     maybePlaySound(state, "auth", hidden || !viewingSame);
     const entry: ActionModalGroupJoinRequest = {
       kind: "group_join_request",
@@ -1537,7 +1539,7 @@ export function handleServerMessage(
       const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
       return dn || handle || from;
     })();
-    showInAppNotification(state, `Приглашение в доску: ${label}`, `От: ${fromLabel}`, from);
+    showInAppNotification(state, `Приглашение в доску: ${label}`, `От: ${fromLabel}`, `yagodka:board_invite:${boardId}:${from}`);
     maybePlaySound(state, "invite", hidden || !viewingSame);
     const entry: ActionModalBoardInvite = {
       kind: "board_invite",
@@ -1858,7 +1860,7 @@ export function handleServerMessage(
         title = group ? `Чат: ${roomLabel}` : board ? `Доска: ${roomLabel}` : `Чат: ${roomLabel}`;
         if (fromLabel) body = `${fromLabel}: ${body}`;
       }
-      showInAppNotification(state, title, body, room || from);
+      showInAppNotification(state, title, body, room ? `yagodka:room:${room}` : `yagodka:dm:${from}`);
       maybePlaySound(state, "message", hidden || !viewingSame);
     }
     patch((prev) =>

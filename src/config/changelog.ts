@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.213",
+    date: "2025-12-27",
+    improved: ["Уведомления: стабильные `tag` для in-app Notification (группировка как в Telegram) + silent=true (звук управляется тумблером)"],
+  },
+  {
     version: "0.1.212",
     date: "2025-12-27",
     improved: ["iOS: при открытой клавиатуре планирование (datetime) отключается — меньше шансов на панель prev/next/✓"],
