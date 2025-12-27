@@ -188,9 +188,9 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     boardActionsRow,
   ]);
   const composerRow = el("div", { class: "composer-row" }, [
-    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, boardEditorBtn, input]),
+    el("div", { class: "composer-field" }, [attachBtn, boardEditorMobileBtn, emojiBtn, boardEditorBtn, input]),
   ]);
-  const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorMobileBtn, boardEditorWrap, composerRow, composerMeta]);
+  const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorWrap, composerRow, composerMeta]);
 
   const footer = el("footer", { class: "footer" });
   const toastHost = el("div", { class: "toast-host hidden", "aria-live": "polite", "aria-atomic": "true" });
