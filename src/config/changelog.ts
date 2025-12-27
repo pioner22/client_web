@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.224",
+    date: "2025-12-28",
+    fixed: ["Чат: pinned-bottom на resize/media-load и кнопка «Вниз» используют maxScrollTop (scrollHeight - clientHeight) — меньше «не в самом низу»"],
+  },
+  {
     version: "0.1.223",
     date: "2025-12-27",
     fixed: [

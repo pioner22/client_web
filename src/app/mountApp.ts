@@ -1314,7 +1314,7 @@ export function mountApp(root: HTMLElement) {
       if (!key) return;
       const st = (host as any).__stickBottom;
       if (!st || !st.active || st.key !== key) return;
-      host.scrollTop = host.scrollHeight;
+      host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
       scheduleChatJumpVisibility();
     });
   };
@@ -1585,7 +1585,7 @@ export function mountApp(root: HTMLElement) {
     const jumpBtn = target?.closest("button[data-action='chat-jump-bottom']") as HTMLButtonElement | null;
     if (jumpBtn) {
       e.preventDefault();
-      layout.chatHost.scrollTop = layout.chatHost.scrollHeight;
+      layout.chatHost.scrollTop = Math.max(0, layout.chatHost.scrollHeight - layout.chatHost.clientHeight);
       const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
       if (key) (layout.chatHost as any).__stickBottom = { key, active: true, at: Date.now() };
       scheduleChatJumpVisibility();
