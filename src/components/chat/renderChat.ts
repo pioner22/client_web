@@ -83,7 +83,7 @@ function isVideoFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("video/")) return true;
   const n = String(name || "").toLowerCase();
-  return /\.(mp4|m4v|mov|webm|ogv|mkv)$/.test(n);
+  return /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n);
 }
 
 function isAudioFile(name: string, mime?: string | null): boolean {
@@ -997,13 +997,13 @@ export function renderChat(layout: Layout, state: AppState) {
             const curKey = String(scrollHost.getAttribute("data-chat-key") || "");
             if (!curKey) return;
             const st = hostState.__stickBottom;
-            if (!st || !st.active || st.key !== curKey) return;
-            scrollHost.scrollTop = scrollHost.scrollHeight;
-          };
-          if (w && typeof w.requestAnimationFrame === "function") {
-            hostState.__chatLinesObserverRaf = w.requestAnimationFrame(run);
-          } else {
-            hostState.__chatLinesObserverRaf = 1;
+          if (!st || !st.active || st.key !== curKey) return;
+          scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
+        };
+        if (w && typeof w.requestAnimationFrame === "function") {
+          hostState.__chatLinesObserverRaf = w.requestAnimationFrame(run);
+        } else {
+          hostState.__chatLinesObserverRaf = 1;
             run();
           }
         });
@@ -1038,7 +1038,7 @@ export function renderChat(layout: Layout, state: AppState) {
       const st = hostState.__stickBottom;
       if (!curKey || curKey !== key) return;
       if (!st || !st.active || st.key !== key) return;
-      scrollHost.scrollTop = scrollHost.scrollHeight;
+      scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
     };
     queueMicrotask(stickNow);
   }

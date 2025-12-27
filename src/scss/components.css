@@ -1850,6 +1850,25 @@
   white-space: normal;
 }
 
+.chat.chat-board .msg-attach .file-row-chat.file-row-image {
+  width: 100%;
+  max-width: 100%;
+}
+
+.chat.chat-board .msg-attach .file-row-chat.file-row-image .file-actions {
+  right: 12px;
+  bottom: 12px;
+}
+
+.chat.chat-board .msg-attach .msg-text.msg-caption {
+  padding: 12px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--line), transparent 55%);
+}
+
+.chat.chat-board .msg-attach .msg-meta {
+  padding: 8px 0 0;
+}
+
 .chat.chat-board .chat-file-preview {
   width: 100%;
   max-width: 100%;

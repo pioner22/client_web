@@ -1235,7 +1235,7 @@ export function mountApp(root: HTMLElement) {
       if (String(host.getAttribute("data-chat-key") || "") !== k) return;
       const st = hostState.__stickBottom;
       if (!st || st.key !== k || !st.active) return;
-      host.scrollTop = host.scrollHeight;
+      host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
     };
     queueMicrotask(stickNow);
     if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
@@ -6399,7 +6399,8 @@ export function mountApp(root: HTMLElement) {
       const trimmed = raw.trimEnd();
       const preview = layout.boardEditorPreviewBody;
       const prevTop = preview.scrollTop;
-      const wasAtBottom = preview.scrollTop + preview.clientHeight >= preview.scrollHeight - 12;
+      const bottomSlack = 48;
+      const wasAtBottom = preview.scrollTop + preview.clientHeight >= preview.scrollHeight - bottomSlack;
       if (!trimmed) {
         preview.replaceChildren(el("div", { class: "board-editor-preview-empty" }, ["Пусто — напишите новость выше"]));
         preview.scrollTop = 0;
@@ -6408,7 +6409,7 @@ export function mountApp(root: HTMLElement) {
       preview.replaceChildren(renderBoardPost(trimmed));
       try {
         if (wasAtBottom) {
-          preview.scrollTop = preview.scrollHeight;
+          preview.scrollTop = Math.max(0, preview.scrollHeight - preview.clientHeight);
         } else {
           const maxTop = Math.max(0, preview.scrollHeight - preview.clientHeight);
           preview.scrollTop = Math.max(0, Math.min(maxTop, prevTop));
