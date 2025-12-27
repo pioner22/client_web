@@ -354,6 +354,9 @@
   padding: 12px;
   max-height: min(28vh, 280px);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
 }
 
 .board-editor-preview-empty {

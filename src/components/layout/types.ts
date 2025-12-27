@@ -15,7 +15,6 @@ export interface Layout {
   attachBtn: HTMLButtonElement;
   emojiBtn: HTMLButtonElement;
   boardEditorBtn: HTMLButtonElement;
-  boardEditorMobileBtn: HTMLButtonElement;
   boardEditorWrap: HTMLElement;
   boardEditorToolbar: HTMLElement;
   boardEditorPreview: HTMLElement;

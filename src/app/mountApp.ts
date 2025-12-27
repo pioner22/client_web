@@ -1333,6 +1333,27 @@ export function mountApp(root: HTMLElement) {
     // ignore
   }
 
+  // Some mobile browsers can miss ResizeObserver updates for async media loads.
+  // Keep pinned-to-bottom stable when images/videos load, but only if the user is already pinned.
+  layout.chatHost.addEventListener(
+    "load",
+    (e) => {
+      const target = e.target as unknown;
+      if (!(target instanceof HTMLImageElement)) return;
+      scheduleChatStickyResize();
+    },
+    true
+  );
+  layout.chatHost.addEventListener(
+    "loadedmetadata",
+    (e) => {
+      const target = e.target as unknown;
+      if (!(target instanceof HTMLVideoElement)) return;
+      scheduleChatStickyResize();
+    },
+    true
+  );
+
   let chatTouchStartX = 0;
   let chatTouchStartY = 0;
   let chatTouchTracking = false;
@@ -6371,11 +6392,25 @@ export function mountApp(root: HTMLElement) {
       if (st.selected?.kind !== "board") return;
       const raw = String(layout.input.value || "");
       const trimmed = raw.trimEnd();
+      const preview = layout.boardEditorPreviewBody;
+      const prevTop = preview.scrollTop;
+      const wasAtBottom = preview.scrollTop + preview.clientHeight >= preview.scrollHeight - 12;
       if (!trimmed) {
-        layout.boardEditorPreviewBody.replaceChildren(el("div", { class: "board-editor-preview-empty" }, ["Пусто — напишите новость выше"]));
+        preview.replaceChildren(el("div", { class: "board-editor-preview-empty" }, ["Пусто — напишите новость выше"]));
+        preview.scrollTop = 0;
         return;
       }
-      layout.boardEditorPreviewBody.replaceChildren(renderBoardPost(trimmed));
+      preview.replaceChildren(renderBoardPost(trimmed));
+      try {
+        if (wasAtBottom) {
+          preview.scrollTop = preview.scrollHeight;
+        } else {
+          const maxTop = Math.max(0, preview.scrollHeight - preview.clientHeight);
+          preview.scrollTop = Math.max(0, Math.min(maxTop, prevTop));
+        }
+      } catch {
+        // ignore
+      }
     });
   }
 

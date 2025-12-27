@@ -63,7 +63,7 @@ export function renderHeader(layout: Layout, state: AppState) {
           title: "Поиск в чате",
           "aria-label": state.chatSearchOpen ? "Закрыть поиск в чате" : "Поиск в чате",
         },
-        [state.chatSearchOpen ? "×" : "⌕"]
+        []
       )
     : null;
 

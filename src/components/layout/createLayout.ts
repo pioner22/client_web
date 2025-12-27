@@ -55,17 +55,6 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     },
     ["✎"]
   ) as HTMLButtonElement;
-  const boardEditorMobileBtn = el(
-    "button",
-    {
-      class: "btn board-editor-toggle-mobile hidden",
-      type: "button",
-      title: "Редактор новости",
-      "aria-label": "Редактор новости",
-      "data-action": "board-editor-toggle",
-    },
-    ["✎"]
-  ) as HTMLButtonElement;
   const editBar = el("div", { class: "composer-edit hidden", id: "composer-edit", role: "status", "aria-live": "polite" }, [
     el("div", { class: "composer-edit-body" }, [
       el("div", { class: "composer-edit-title" }, ["Редактирование"]),
@@ -188,7 +177,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     boardActionsRow,
   ]);
   const composerRow = el("div", { class: "composer-row" }, [
-    el("div", { class: "composer-field" }, [attachBtn, boardEditorMobileBtn, boardEditorBtn, emojiBtn, input]),
+    el("div", { class: "composer-field" }, [attachBtn, boardEditorBtn, emojiBtn, input]),
   ]);
   const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorWrap, composerRow, composerMeta]);
 
@@ -224,7 +213,6 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     attachBtn,
     emojiBtn,
     boardEditorBtn,
-    boardEditorMobileBtn,
     boardEditorWrap,
     boardEditorToolbar,
     boardEditorPreview,

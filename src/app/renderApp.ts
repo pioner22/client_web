@@ -192,12 +192,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const composerEnabled = chatInputVisible && composerDisabledReason === null;
   const boardEditorAvailable = composerEnabled && Boolean(sel && sel.kind === "board") && !isBoardReadOnly && !editing;
   const boardEditorOpen = Boolean(boardEditorAvailable && state.boardComposerOpen);
-  layout.boardEditorBtn.classList.toggle("hidden", !boardEditorAvailable || mobileUi);
+  layout.boardEditorBtn.classList.toggle("hidden", !boardEditorAvailable);
   layout.boardEditorBtn.classList.toggle("btn-active", boardEditorOpen);
   layout.boardEditorBtn.disabled = !boardEditorAvailable;
-  layout.boardEditorMobileBtn.classList.toggle("hidden", !boardEditorAvailable || !mobileUi);
-  layout.boardEditorMobileBtn.classList.toggle("btn-active", boardEditorOpen);
-  layout.boardEditorMobileBtn.disabled = !boardEditorAvailable;
   layout.boardEditorWrap.classList.toggle("hidden", !boardEditorOpen);
   layout.inputWrap.classList.toggle("board-editor-open", boardEditorOpen);
 

@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.219",
+    date: "2025-12-27",
+    improved: [
+      "Шапка: иконка поиска в чате теперь аккуратная (SVG mask), на mobile hit-area 44px",
+      "Доски: ✏️ редактора новости — одна кнопка в строке ввода рядом со скрепкой (и только в Досках)",
+      "Медиа: подпись под фото/видео отделена тонкой линией — выглядит цельнее",
+    ],
+    fixed: [
+      "Доски: предпросмотр в редакторе сохраняет позицию скролла и нормально прокручивается вниз",
+      "Чат: pinned-to-bottom устойчивее при загрузке фото/видео (доп. фиксация на load/loadedmetadata)",
+    ],
+  },
+  {
     version: "0.1.218",
     date: "2025-12-27",
     improved: ["iOS/Safari: при наборе текста отключаем лишние поля ввода (поиск/планирование), чтобы не появлялась панель prev/next/✓"],

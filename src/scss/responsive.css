@@ -342,7 +342,7 @@
     min-width: 0;
   }
 
-  .hdr-search {
+  .hk-btn.hdr-search {
     min-width: 44px;
     width: 44px;
     height: 44px;
@@ -353,7 +353,7 @@
     place-items: center;
   }
 
-  .hdr-search::before {
+  .hk-btn.hdr-search::before {
     content: "";
     width: 20px;
     height: 20px;
@@ -365,7 +365,7 @@
       no-repeat center / contain;
   }
 
-  .hdr-search.btn-active::before {
+  .hk-btn.hdr-search.btn-active::before {
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z'/%3E%3C/svg%3E")
       no-repeat center / contain;
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z'/%3E%3C/svg%3E")
@@ -722,8 +722,7 @@
 /* ===== Mobile composer controls ===== */
 @media (pointer: coarse) and (max-width: 820px) {
   /* Phones/tablets: keep the composer minimal (phone keyboards already have emoji + send). */
-  .btn.composer-emoji,
-  .btn.composer-board-editor {
+  .btn.composer-emoji {
     display: none;
   }
 }
