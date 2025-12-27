@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.220",
+    date: "2025-12-27",
+    improved: ["Доски: подписи к фото/видео/файлам рендерятся как пост (форматирование/стиль новостей)"],
+    fixed: ["Чат: pinned-bottom учитывает audio `loadedmetadata` (меньше шансов “не внизу” после догрузки)"],
+  },
+  {
     version: "0.1.219",
     date: "2025-12-27",
     improved: [

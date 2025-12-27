@@ -639,7 +639,12 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
     const caption = String(m.text || "").trim();
     if (caption && !caption.startsWith("[file]")) {
       const emojiOnlyCaption = isEmojiOnlyText(caption);
-      bodyChildren.push(el("div", { class: `msg-text msg-caption${emojiOnlyCaption ? " msg-emoji-only" : ""}` }, renderRichText(caption)));
+      const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
+      if (boardUi && !emojiOnlyCaption) {
+        bodyChildren.push(el("div", { class: "msg-text msg-caption msg-text-board" }, [renderBoardPost(caption)]));
+      } else {
+        bodyChildren.push(el("div", { class: `msg-text msg-caption${emojiOnlyCaption ? " msg-emoji-only" : ""}` }, renderRichText(caption)));
+      }
     }
   } else {
     const emojiOnly = isEmojiOnlyText(m.text || "");

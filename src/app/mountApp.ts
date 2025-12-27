@@ -1348,7 +1348,7 @@ export function mountApp(root: HTMLElement) {
     "loadedmetadata",
     (e) => {
       const target = e.target as unknown;
-      if (!(target instanceof HTMLVideoElement)) return;
+      if (!(target instanceof HTMLVideoElement || target instanceof HTMLAudioElement)) return;
       scheduleChatStickyResize();
     },
     true
