@@ -1758,9 +1758,29 @@ export function mountApp(root: HTMLElement) {
         store.set({ modal: { kind: "file_viewer", url, name, size, mime } });
         return;
       }
-      pendingFileViewer = { fileId, name, size, mime };
-      gateway.send({ type: "file_get", file_id: fileId });
-      store.set({ status: `Скачивание: ${name}` });
+      void (async () => {
+        const st = store.get();
+        const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean(t.url));
+        if (existing?.url) {
+          store.set({ modal: { kind: "file_viewer", url: existing.url, name, size: size || existing.size || 0, mime: mime || existing.mime || null } });
+          return;
+        }
+        const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime });
+        if (opened) return;
+
+        const latest = store.get();
+        if (latest.conn !== "connected") {
+          store.set({ status: "Нет соединения" });
+          return;
+        }
+        if (!latest.authed) {
+          store.set({ status: "Сначала войдите или зарегистрируйтесь" });
+          return;
+        }
+        pendingFileViewer = { fileId, name, size, mime };
+        gateway.send({ type: "file_get", file_id: fileId });
+        store.set({ status: `Скачивание: ${name}` });
+      })();
       return;
     }
   });
@@ -4325,6 +4345,14 @@ export function mountApp(root: HTMLElement) {
     return bytes <= 6 * 1024 * 1024;
   }
 
+  function isMediaLikeFile(name: string, mime: string | null | undefined): boolean {
+    const mt = String(mime || "").toLowerCase();
+    if (mt.startsWith("image/") || mt.startsWith("video/") || mt.startsWith("audio/")) return true;
+    const n = String(name || "").toLowerCase();
+    if (isImageLikeFile(n, mt)) return true;
+    return /\.(mp4|m4v|mov|webm|ogv|mkv|mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n);
+  }
+
   function shouldCacheFile(name: string, mime: string | null | undefined, size: number): boolean {
     const st = store.get();
     const prefs = getFileCachePrefsForUser(st.selfId || null);
@@ -4333,6 +4361,67 @@ export function mountApp(root: HTMLElement) {
     if (bytes <= 0) return false;
     if (bytes > prefs.maxBytes) return false;
     return Boolean(name || mime);
+  }
+
+  async function tryOpenFileViewerFromCache(
+    fileId: string,
+    meta: { name: string; size: number; mime: string | null }
+  ): Promise<boolean> {
+    const st = store.get();
+    if (!st.selfId) return false;
+    const cached = await getCachedFileBlob(st.selfId, fileId);
+    if (!cached) return false;
+    let url: string | null = null;
+    try {
+      url = URL.createObjectURL(cached.blob);
+    } catch {
+      url = null;
+    }
+    if (!url) return false;
+
+    const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+    const name = meta.name || entry?.name || "файл";
+    const size = meta.size || entry?.size || cached.size || 0;
+    const mime = meta.mime || entry?.mime || cached.mime || null;
+    const direction = entry?.direction || "in";
+    const peer = entry?.peer || "—";
+    const room = typeof entry?.room === "string" ? entry.room : null;
+
+    store.set((prev) => {
+      const existing = prev.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+      const nextTransfers = (() => {
+        if (existing) {
+          return prev.fileTransfers.map<FileTransferEntry>((t) => {
+            if (String(t.id || "").trim() !== fileId) return t;
+            if (t.url && t.url !== url) {
+              try {
+                URL.revokeObjectURL(t.url);
+              } catch {
+                // ignore
+              }
+            }
+            return { ...t, name, size, mime, status: "complete", progress: 100, url };
+          });
+        }
+        const next: FileTransferEntry = {
+          localId: `ft-cache-${fileId}`,
+          id: fileId,
+          name,
+          size,
+          mime,
+          direction,
+          peer,
+          room,
+          status: "complete",
+          progress: 100,
+          url,
+        };
+        return [next, ...prev.fileTransfers];
+      })();
+      return { ...prev, fileTransfers: nextTransfers, modal: { kind: "file_viewer", url, name, size, mime } };
+    });
+    scheduleSaveFileTransfers(store);
+    return true;
   }
 
   async function tryServeFileFromCache(
@@ -4502,6 +4591,7 @@ export function mountApp(root: HTMLElement) {
       const MAX_SCAN = 80;
       const MAX_TASKS = 12;
       const PREFETCH_MAX_BYTES = 6 * 1024 * 1024;
+      const RESTORE_MAX_BYTES = 24 * 1024 * 1024;
       const tail = msgs.slice(Math.max(0, msgs.length - MAX_SCAN));
       const tasks: Array<{
         fileId: string;
@@ -4523,7 +4613,7 @@ export function mountApp(root: HTMLElement) {
         const mime = typeof att.mime === "string" ? att.mime : null;
         const size = Number(att.size ?? 0) || 0;
         const shouldPrefetch = shouldCachePreview(name, mime, size);
-        const shouldAttemptRestore = shouldPrefetch || !mime;
+        const shouldAttemptRestore = shouldPrefetch || !mime || (isMediaLikeFile(name, mime) && size > 0 && size <= RESTORE_MAX_BYTES);
         if (!shouldAttemptRestore) continue;
         const already = st.fileTransfers.find((t) => String(t.id || "").trim() === fid && Boolean(t.url));
         if (already) continue;
@@ -6289,11 +6379,25 @@ export function mountApp(root: HTMLElement) {
     });
   }
 
+  const updateComposerTypingUi = (forceOff = false) => {
+    try {
+      if (forceOff) {
+        layout.inputWrap.classList.remove("composer-typing");
+        return;
+      }
+      const active = Boolean(document.activeElement === layout.input && String(layout.input.value || "").trim());
+      layout.inputWrap.classList.toggle("composer-typing", active);
+    } catch {
+      // ignore
+    }
+  };
+
   layout.input.addEventListener("input", () => {
     lastUserInputAt = Date.now();
     pendingInputValue = layout.input.value || "";
     scheduleAutosize();
     scheduleBoardEditorPreview();
+    updateComposerTypingUi();
     const now = Date.now();
     if (now - lastCommitAt >= INPUT_COMMIT_MS) {
       lastCommitAt = now;
@@ -6307,9 +6411,13 @@ export function mountApp(root: HTMLElement) {
       commitInputUpdate();
     }, delay);
   });
-  layout.input.addEventListener("focus", () => scheduleAutosize());
+  layout.input.addEventListener("focus", () => {
+    scheduleAutosize();
+    updateComposerTypingUi();
+  });
   layout.input.addEventListener("blur", () => {
     scheduleAutosize();
+    updateComposerTypingUi(true);
     commitInputUpdate();
   });
 

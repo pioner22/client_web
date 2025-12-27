@@ -79,6 +79,20 @@ function isImageFile(name: string, mime?: string | null): boolean {
   return /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n);
 }
 
+function isVideoFile(name: string, mime?: string | null): boolean {
+  const mt = String(mime || "").toLowerCase();
+  if (mt.startsWith("video/")) return true;
+  const n = String(name || "").toLowerCase();
+  return /\.(mp4|m4v|mov|webm|ogv|mkv)$/.test(n);
+}
+
+function isAudioFile(name: string, mime?: string | null): boolean {
+  const mt = String(mime || "").toLowerCase();
+  if (mt.startsWith("audio/")) return true;
+  const n = String(name || "").toLowerCase();
+  return /\.(mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n);
+}
+
 function transferStatus(entry: FileTransferEntry): string {
   const pct = Math.max(0, Math.min(100, Math.round(entry.progress || 0)));
   if (entry.status === "uploading") return `Загрузка (${pct}%)`;
@@ -141,6 +155,8 @@ type FileAttachmentInfo = {
   offer: FileOfferIn | null;
   statusLine: string;
   isImage: boolean;
+  isVideo: boolean;
+  isAudio: boolean;
   hasProgress: boolean;
 };
 
@@ -240,6 +256,8 @@ function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileU
         : "Входящий файл (принять в «Файлы» / F7)"
       : "";
   const isImage = isImageFile(name, mime);
+  const isVideo = isVideoFile(name, mime);
+  const isAudio = isAudioFile(name, mime);
   const hasProgress = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
   return {
     name,
@@ -251,6 +269,8 @@ function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileU
     offer,
     statusLine,
     isImage,
+    isVideo,
+    isAudio,
     hasProgress,
   };
 }
@@ -276,6 +296,30 @@ function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?:
   const child = info.url
     ? el("img", { class: "chat-file-img", src: info.url, alt: info.name, loading: "lazy", decoding: "async" })
     : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
+  return el("button", attrs, [child]);
+}
+
+function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number }): HTMLElement | null {
+  if (!info.isVideo) return null;
+  if (!info.url && !info.fileId) return null;
+  const classes = info.url ? ["chat-file-preview", "chat-file-preview-video"] : ["chat-file-preview", "chat-file-preview-video", "chat-file-preview-empty"];
+  if (opts?.className) classes.push(opts.className);
+  const attrs: Record<string, string | undefined> = {
+    class: classes.join(" "),
+    type: "button",
+    "data-action": "open-file-viewer",
+    "data-name": info.name,
+    "data-size": String(info.size || 0),
+    "aria-label": `Открыть: ${info.name}`,
+  };
+  if (info.url) attrs["data-url"] = info.url;
+  if (!info.url && info.fileId) attrs["data-file-id"] = info.fileId;
+  if (info.mime) attrs["data-mime"] = info.mime;
+  if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
+
+  const child = info.url
+    ? el("video", { class: "chat-file-video", src: info.url, preload: "metadata", playsinline: "true", muted: "true" })
+    : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Видео"]);
   return el("button", attrs, [child]);
 }
 
@@ -545,6 +589,14 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
       mainChildren.push(el("div", { class: "file-progress" }, [bar]));
     }
 
+    const isImage = info.isImage;
+    const isVideo = info.isVideo;
+    const isAudio = info.isAudio;
+
+    if (isAudio && url) {
+      mainChildren.splice(1, 0, el("audio", { class: "chat-file-audio", src: url, controls: "true", preload: "metadata" }) as HTMLAudioElement);
+    }
+
     const actions: HTMLElement[] = [];
     if (offer?.id) {
       actions.push(
@@ -571,14 +623,18 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
       el("div", { class: "file-actions" }, actions),
     ];
 
-    const isImage = info.isImage;
-    if (isImage) {
-      const preview = renderImagePreviewButton(info);
+    const isVisualMedia = isImage || isVideo;
+    if (isVisualMedia) {
+      const preview = isImage ? renderImagePreviewButton(info) : renderVideoPreviewButton(info);
       if (preview) rowChildren.unshift(preview);
     }
 
     const hasProgress = info.hasProgress;
-    const fileRowClass = isImage ? `file-row file-row-chat file-row-image${hasProgress ? " file-row-progress" : ""}` : "file-row file-row-chat";
+    const fileRowClass = isVisualMedia
+      ? `file-row file-row-chat file-row-image${isVideo ? " file-row-video" : ""}${hasProgress ? " file-row-progress" : ""}`
+      : isAudio
+        ? "file-row file-row-chat file-row-audio"
+        : "file-row file-row-chat";
     bodyChildren.push(el("div", { class: fileRowClass }, rowChildren));
     const caption = String(m.text || "").trim();
     if (caption && !caption.startsWith("[file]")) {

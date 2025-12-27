@@ -167,6 +167,58 @@
   padding: 0 var(--composer-field-pad);
 }
 
+.composer-field::after {
+  content: "";
+  display: none;
+  position: absolute;
+  inset: calc(-1 * var(--composer-field-border-width));
+  padding: var(--composer-field-border-width);
+  border-radius: calc(var(--composer-field-radius) + var(--composer-field-border-width));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+@supports (-webkit-mask-composite: xor) or (mask-composite: exclude) {
+  .composer-field::after {
+    display: block;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--focus), transparent 72%),
+      transparent,
+      color-mix(in srgb, var(--accent), transparent 78%),
+      transparent
+    );
+    background-size: 220% 100%;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+
+.input-wrap.composer-typing .composer-field::after {
+  opacity: 0.7;
+  animation: composer-shimmer 1.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input-wrap.composer-typing .composer-field::after {
+    animation: none;
+  }
+}
+
+@keyframes composer-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
 .composer-meta {
   display: flex;
   align-items: center;

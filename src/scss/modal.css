@@ -1119,7 +1119,28 @@ input.modal-input[type="file"]::file-selector-button:active {
   background: var(--panel2);
 }
 
+.viewer-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: min(70vh, 560px);
+  background: #000;
+}
+
+.viewer-audio {
+  width: min(640px, 100%);
+}
+
+.viewer-media.viewer-media-audio {
+  padding: 18px 14px;
+}
+
 .overlay.overlay-viewer .viewer-img {
+  max-height: 100%;
+  background: transparent;
+}
+
+.overlay.overlay-viewer .viewer-video {
   max-height: 100%;
   background: transparent;
 }

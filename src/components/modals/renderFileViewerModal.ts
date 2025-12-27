@@ -22,7 +22,21 @@ function isImageFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("image/")) return true;
   const n = String(name || "").toLowerCase();
-  return /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/.test(n);
+  return /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n);
+}
+
+function isVideoFile(name: string, mime?: string | null): boolean {
+  const mt = String(mime || "").toLowerCase();
+  if (mt.startsWith("video/")) return true;
+  const n = String(name || "").toLowerCase();
+  return /\.(mp4|m4v|mov|webm|ogv|mkv)$/.test(n);
+}
+
+function isAudioFile(name: string, mime?: string | null): boolean {
+  const mt = String(mime || "").toLowerCase();
+  if (mt.startsWith("audio/")) return true;
+  const n = String(name || "").toLowerCase();
+  return /\.(mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n);
 }
 
 export function renderFileViewerModal(url: string, name: string, size: number, mime: string | null | undefined, actions: FileViewerModalActions): HTMLElement {
@@ -48,6 +62,12 @@ export function renderFileViewerModal(url: string, name: string, size: number, m
   } else if (isImageFile(titleText, mime)) {
     const img = el("img", { class: "viewer-img", src: safeHref, alt: titleText, decoding: "async" });
     body = el("div", { class: "viewer-media" }, [img]);
+  } else if (isVideoFile(titleText, mime)) {
+    const video = el("video", { class: "viewer-video", src: safeHref, controls: "true", playsinline: "true", preload: "metadata" }) as HTMLVideoElement;
+    body = el("div", { class: "viewer-media" }, [video]);
+  } else if (isAudioFile(titleText, mime)) {
+    const audio = el("audio", { class: "viewer-audio", src: safeHref, controls: "true", preload: "metadata" }) as HTMLAudioElement;
+    body = el("div", { class: "viewer-media viewer-media-audio" }, [audio]);
   } else {
     body = el("div", { class: "viewer-file" }, [
       el("div", { class: "viewer-file-icon", "aria-hidden": "true" }, ["FILE"]),

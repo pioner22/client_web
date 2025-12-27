@@ -1539,6 +1539,7 @@
 
 .chat-file-preview {
   display: block;
+  position: relative;
   background: transparent;
   padding: 0;
   cursor: pointer;
@@ -1577,8 +1578,59 @@
   transition: transform 200ms ease;
 }
 
+.chat-file-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(55vh, 420px);
+  object-fit: cover;
+  background: #000;
+}
+
+.chat-file-preview-video::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+}
+
+.chat-file-preview-video::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-38%, -50%);
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M8 5v14l11-7z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M8 5v14l11-7z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
 .chat-file-preview:hover .chat-file-img {
   transform: scale(1.03);
+}
+
+.chat-file-preview:hover .chat-file-video {
+  transform: scale(1.03);
+}
+
+.chat-file-audio {
+  width: min(560px, 100%);
+  margin-top: 6px;
+}
+
+.file-row-chat.file-row-audio .file-actions {
+  align-self: flex-start;
 }
 
 .chat-file-preview-album {

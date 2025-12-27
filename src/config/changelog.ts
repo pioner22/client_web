@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.215",
+    date: "2025-12-27",
+    improved: [
+      "Файлы: предпросмотр видео/аудио в истории (видео — preview, аудио — встроенный player после загрузки)",
+      "Файлы: viewer теперь открывает видео/аудио (не только изображения)",
+      "Кэш: viewer сначала берёт файл из CacheStorage (без повторного скачивания), warmup восстанавливает media-URL из кэша (с лимитом по размеру)",
+      "Композер: при наборе текста появляется тонкая «живая» переливающаяся рамка",
+    ],
+  },
+  {
     version: "0.1.214",
     date: "2025-12-27",
     fixed: ["Mobile/Boards: кнопка ✏️ (редактор новости) перенесена в строку ввода рядом со скрепкой (вместо отдельной кнопки)"],

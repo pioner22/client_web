@@ -329,3 +329,159 @@ test("renderChat: sys action message рендерит кнопки действ�
     await helper.cleanup();
   }
 });
+
+test("renderChat: video file-attachment рендерит video preview button", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chat, chatTop, chatHost, chatJump };
+      const state = {
+        selected: { kind: "dm", id: "123-456-789" },
+        conversations: {
+          "dm:123-456-789": [
+            {
+              kind: "in",
+              from: "123-456-789",
+              to: "854-432-319",
+              room: null,
+              text: "",
+              ts: 1700000000,
+              id: 1,
+              attachment: { kind: "file", name: "clip.mp4", size: 456, mime: "video/mp4", fileId: "99" },
+            },
+          ],
+        },
+        historyHasMore: {},
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [
+          {
+            localId: "ft-99",
+            id: "99",
+            name: "clip.mp4",
+            size: 456,
+            mime: "video/mp4",
+            direction: "in",
+            peer: "123-456-789",
+            room: null,
+            status: "complete",
+            progress: 100,
+            url: "blob:video",
+          },
+        ],
+        fileOffersIn: [],
+        groups: [],
+        boards: [],
+        profiles: {},
+      };
+
+      helper.renderChat(layout, state);
+
+      const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
+      assert.ok(fileRow, "должен быть file-row-chat");
+      assert.ok(hasClass(fileRow, "file-row-video"), "file-row должен быть помечен как video");
+
+      const preview = findFirst(fileRow, (n) => hasClass(n, "chat-file-preview-video"));
+      assert.ok(preview, "должен быть video preview");
+      assert.equal(preview.getAttribute("data-action"), "open-file-viewer");
+
+      const video = findFirst(preview, (n) => n && n.tagName === "VIDEO");
+      assert.ok(video, "в preview должен быть <video>");
+      assert.ok(hasClass(video, "chat-file-video"));
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderChat: audio file-attachment рендерит inline <audio> controls", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chat, chatTop, chatHost, chatJump };
+      const state = {
+        selected: { kind: "dm", id: "123-456-789" },
+        conversations: {
+          "dm:123-456-789": [
+            {
+              kind: "in",
+              from: "123-456-789",
+              to: "854-432-319",
+              room: null,
+              text: "",
+              ts: 1700000000,
+              id: 1,
+              attachment: { kind: "file", name: "note.ogg", size: 321, mime: "audio/ogg", fileId: "77" },
+            },
+          ],
+        },
+        historyHasMore: {},
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [
+          {
+            localId: "ft-77",
+            id: "77",
+            name: "note.ogg",
+            size: 321,
+            mime: "audio/ogg",
+            direction: "in",
+            peer: "123-456-789",
+            room: null,
+            status: "complete",
+            progress: 100,
+            url: "blob:audio",
+          },
+        ],
+        fileOffersIn: [],
+        groups: [],
+        boards: [],
+        profiles: {},
+      };
+
+      helper.renderChat(layout, state);
+
+      const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
+      assert.ok(fileRow, "должен быть file-row-chat");
+      assert.ok(hasClass(fileRow, "file-row-audio"), "file-row должен быть помечен как audio");
+
+      const audio = findFirst(fileRow, (n) => n && n.tagName === "AUDIO");
+      assert.ok(audio, "должен быть <audio> controls");
+      assert.ok(hasClass(audio, "chat-file-audio"));
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
