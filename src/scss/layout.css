@@ -448,6 +448,15 @@
   }
 }
 
+@media (pointer: coarse) {
+  .kbd-open .input-wrap.board-editor-open .board-editor-preview,
+  .kbd-open .input-wrap.board-editor-open .board-editor-schedule,
+  .kbd-open .input-wrap.board-editor-open .board-editor-schedule-hint,
+  .kbd-open .input-wrap.board-editor-open .board-editor-schedule-list {
+    display: none;
+  }
+}
+
 .footer {
   padding: var(--footer-pad-y) var(--footer-pad-x);
   padding-left: calc(var(--footer-pad-x) + env(safe-area-inset-left));

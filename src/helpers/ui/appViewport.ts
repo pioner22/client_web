@@ -129,8 +129,11 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const { height, keyboard, vvTop, vvBottom, gapBottom } = read();
     if (!height) {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
+      if (docEl?.classList) docEl.classList.remove("kbd-open");
       return;
     }
+
+    if (docEl?.classList) docEl.classList.toggle("kbd-open", keyboard);
 
     const vh = +((height * 0.01) as number).toFixed(2);
     setVar("--vh", `${vh}px`);
@@ -221,6 +224,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     } catch {
       // ignore
     }
+    if (docEl?.classList) docEl.classList.remove("kbd-open");
     setVar("--vh", null);
     setVar("--app-vh", null);
     setVar("--safe-bottom-pad", null);

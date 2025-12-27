@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.211",
+    date: "2025-12-27",
+    improved: ["iPhone/iOS: редактор Досок становится компактнее при открытой клавиатуре (больше места для ввода)"],
+  },
+  {
     version: "0.1.210",
     date: "2025-12-27",
     fixed: ["UI: кнопка ✏️ (редактор Досок) теперь корректно скрывается вне Досок (чат/ЛС)"],
