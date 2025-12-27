@@ -6392,6 +6392,47 @@ export function mountApp(root: HTMLElement) {
     }
   };
 
+  type IosNavDisabledField = { el: HTMLInputElement; disabled: boolean };
+  let iosNavDisabled: IosNavDisabledField[] = [];
+  const restoreIosNavDisabled = () => {
+    if (!iosNavDisabled.length) return;
+    for (const it of iosNavDisabled) {
+      try {
+        it.el.disabled = it.disabled;
+      } catch {
+        // ignore
+      }
+    }
+    iosNavDisabled = [];
+  };
+  const applyIosComposerNavLock = () => {
+    if (!isIOS()) return;
+    restoreIosNavDisabled();
+    const candidates: HTMLInputElement[] = [];
+    try {
+      const sidebarSearch = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
+      if (sidebarSearch) candidates.push(sidebarSearch);
+    } catch {
+      // ignore
+    }
+    try {
+      const chatSearch = document.getElementById("chat-search-input") as HTMLInputElement | null;
+      if (chatSearch) candidates.push(chatSearch);
+    } catch {
+      // ignore
+    }
+    candidates.push(layout.boardScheduleInput);
+    for (const el of candidates) {
+      try {
+        if (!el) continue;
+        iosNavDisabled.push({ el, disabled: el.disabled });
+        el.disabled = true;
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   layout.input.addEventListener("input", () => {
     lastUserInputAt = Date.now();
     pendingInputValue = layout.input.value || "";
@@ -6414,11 +6455,13 @@ export function mountApp(root: HTMLElement) {
   layout.input.addEventListener("focus", () => {
     scheduleAutosize();
     updateComposerTypingUi();
+    applyIosComposerNavLock();
   });
   layout.input.addEventListener("blur", () => {
     scheduleAutosize();
     updateComposerTypingUi(true);
     commitInputUpdate();
+    restoreIosNavDisabled();
   });
 
   layout.boardScheduleInput.addEventListener("input", () => store.set((prev) => prev));

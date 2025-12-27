@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.218",
+    date: "2025-12-27",
+    improved: ["iOS/Safari: при наборе текста отключаем лишние поля ввода (поиск/планирование), чтобы не появлялась панель prev/next/✓"],
+  },
+  {
     version: "0.1.217",
     date: "2025-12-27",
     improved: ["Boards/Desktop: кнопка ✏️ редактора новости теперь стоит рядом со скрепкой (до кнопки эмодзи)"],

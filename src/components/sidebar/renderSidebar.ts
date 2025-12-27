@@ -3,7 +3,7 @@ import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { formatTime } from "../../helpers/time";
 import { focusElement } from "../../helpers/ui/focus";
-import { isStandaloneDisplayMode } from "../../helpers/ui/iosInputAssistant";
+import { isIOS, isStandaloneDisplayMode } from "../../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 
@@ -235,6 +235,16 @@ export function renderSidebar(
   const isMobile =
     typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
   const mobileUi = isMobileLikeUi();
+  const disableSearchWhileTyping = (() => {
+    try {
+      if (!isIOS()) return false;
+      const ae = document.activeElement as any;
+      const mode = typeof ae?.getAttribute === "function" ? String(ae.getAttribute("data-ios-assistant") || "") : "";
+      return mode === "composer";
+    } catch {
+      return false;
+    }
+  })();
 
   const toggleClass = (node: HTMLElement | null | undefined, cls: string, enabled: boolean) => {
     if (!node) return;
@@ -434,6 +444,7 @@ export function renderSidebar(
               enterkeyhint: "search",
             }) as HTMLInputElement;
             input.value = sidebarQueryRaw;
+            input.disabled = disableSearchWhileTyping;
             input.addEventListener("input", () => onSetSidebarQuery(input.value));
             input.addEventListener("keydown", (e) => {
               if (e.key === "Escape") {
@@ -903,6 +914,7 @@ export function renderSidebar(
               enterkeyhint: "search",
             }) as HTMLInputElement;
             input.value = sidebarQueryRaw;
+            input.disabled = disableSearchWhileTyping;
             input.addEventListener("input", () => onSetSidebarQuery(input.value));
             input.addEventListener("keydown", (e) => {
               if (e.key === "Escape") {
@@ -1295,6 +1307,7 @@ export function renderSidebar(
       enterkeyhint: "search",
     }) as HTMLInputElement;
     input.value = sidebarQueryRaw;
+    input.disabled = disableSearchWhileTyping;
     input.addEventListener("input", () => onSetSidebarQuery(input.value));
     input.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {

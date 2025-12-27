@@ -11,6 +11,7 @@ import { el } from "../helpers/dom/el";
 import { conversationKey } from "../helpers/chat/conversationKey";
 import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
 import { focusElement } from "../helpers/ui/focus";
+import { isIOS } from "../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { maxBoardScheduleDelayMs } from "../helpers/boards/boardSchedule";
 import { createSearchPage, type SearchPage } from "../pages/search/createSearchPage";
@@ -253,6 +254,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       layout.boardScheduleList.replaceChildren(...list);
     }
   } else {
+    // Keep hidden scheduling field disabled when the board editor is closed.
+    // This also helps iOS reduce the keyboard accessory bar (prev/next/✓) while typing in composer.
+    layout.boardScheduleInput.disabled = true;
     layout.boardScheduleBtn.disabled = true;
     layout.boardScheduleClearBtn.disabled = true;
     layout.boardScheduleInput.classList.remove("is-invalid");
@@ -325,6 +329,17 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       }
     }
   }
+
+  const disableSidebarSearchForIosKbdNav = (() => {
+    try {
+      if (!isIOS()) return false;
+      return document.activeElement === layout.input;
+    } catch {
+      return false;
+    }
+  })();
+  const sidebarSearchNow = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
+  if (sidebarSearchNow) sidebarSearchNow.disabled = disableSidebarSearchForIosKbdNav;
 
   const prevAuthIdInput = state.modal?.kind === "auth" ? (document.getElementById("auth-id") as HTMLInputElement | null) : null;
   const prevAuthPwInput = state.modal?.kind === "auth" ? (document.getElementById("auth-pw") as HTMLInputElement | null) : null;
