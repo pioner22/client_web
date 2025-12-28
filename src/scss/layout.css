@@ -295,7 +295,8 @@
 /* ===== Boards: inline news editor ===== */
 .input-wrap.board-editor-open {
   --composer-field-min-h: 96px;
-  --composer-field-max-h: min(44vh, 420px);
+  /* Use app viewport var so iOS keyboard/URL bar doesn't clip the bottom controls. */
+  --composer-field-max-h: min(calc(var(--app-vh, 100vh) * 0.44), 420px);
 }
 
 .board-editor {
@@ -377,7 +378,8 @@
   border-radius: 16px;
   background: color-mix(in srgb, var(--panel2), transparent 10%);
   padding: 12px;
-  max-height: min(28vh, 280px);
+  /* Use app viewport var so iOS keyboard/URL bar doesn't clip scrollable preview. */
+  max-height: min(calc(var(--app-vh, 100vh) * 0.28), 280px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -530,6 +532,15 @@
 }
 
 @media (pointer: coarse) {
+  /* Mobile: keep the news composer compact so ✏️/скрепка stay reachable, and allow internal scroll. */
+  .input-wrap.board-editor-open {
+    --composer-field-max-h: min(calc(var(--app-vh, 100vh) * 0.34), 320px);
+  }
+
+  .kbd-open .input-wrap.board-editor-open {
+    --composer-field-max-h: min(calc(var(--app-vh, 100vh) * 0.26), 220px);
+  }
+
   .kbd-open .input-wrap.board-editor-open .board-editor-schedule,
   .kbd-open .input-wrap.board-editor-open .board-editor-schedule-hint,
   .kbd-open .input-wrap.board-editor-open .board-editor-schedule-list {
@@ -537,7 +548,7 @@
   }
 
   .kbd-open .input-wrap.board-editor-open .board-editor-preview-body {
-    max-height: min(22vh, 220px);
+    max-height: min(calc(var(--app-vh, 100vh) * 0.22), 220px);
   }
 }
 

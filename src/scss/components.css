@@ -1979,6 +1979,9 @@
 
 .composer-field .input.input-maxed {
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .btn.composer-attach {

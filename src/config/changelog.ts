@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.232",
+    date: "2025-12-28",
+    fixed: ["Доски (mobile): длинный текст в редакторе больше не уводит скрепку/✏️ за пределы экрана — композер компактнее, а прокрутка текста работает пальцем"],
+    improved: ["Доски (mobile): max-height композера/предпросмотра привязан к `--app-vh` — меньше шанс клипа под iOS клавиатурой/браузерной панелью"],
+  },
+  {
     version: "0.1.231",
     date: "2025-12-28",
     fixed: ["Чат: после отправки файла история прокручивается к последнему сообщению (пин к низу как при обычной отправке)"],
