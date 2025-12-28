@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.227",
+    date: "2025-12-28",
+    improved: ["Шапка (mobile): поиск в чате теперь выглядит аккуратнее (круглая кнопка без тяжёлого фона, иконка чуть крупнее)"],
+    fixed: [
+      "Чат: автоскролл до низа включается сразу при открытии чата (без ожидания historyLoaded) — последнее медиа/файл больше не «съедает» низ на iOS/WebKit",
+      "Доски: медиа-посты (фото/видео + подпись) выглядят цельнее — медиа edge-to-edge, подпись+мета как нижняя секция карточки",
+    ],
+  },
+  {
     version: "0.1.226",
     date: "2025-12-28",
     improved: ["Навигация: при входе автоматически открывается последний активный чат/доска (как в Telegram) — меньше «пустоты»"],

@@ -1869,6 +1869,14 @@
 .chat.chat-board .msg-attach .file-row-chat.file-row-image {
   width: 100%;
   max-width: 100%;
+  /* Telegram-like: media spans the card edge-to-edge inside the post bubble. */
+  margin: -14px -14px 0;
+  border-radius: 18px 18px 0 0;
+  overflow: hidden;
+}
+
+.chat.chat-board .msg-attach .file-row-chat.file-row-image > .chat-file-preview {
+  border-radius: 18px 18px 0 0;
 }
 
 .chat.chat-board .msg-attach .file-row-chat.file-row-image .file-actions {
@@ -1877,12 +1885,18 @@
 }
 
 .chat.chat-board .msg-attach .msg-text.msg-caption {
-  padding: 12px 0 0;
+  /* Caption becomes the “footer” of the post card (same background as meta). */
+  margin: 0 -14px 0;
+  padding: 12px 14px 0;
   border-top: 1px solid color-mix(in srgb, var(--line), transparent 55%);
+  background: color-mix(in srgb, var(--panel2), transparent 14%);
 }
 
 .chat.chat-board .msg-attach .msg-meta {
-  padding: 8px 0 0;
+  margin: 0 -14px -14px;
+  padding: 8px 14px 14px;
+  background: color-mix(in srgb, var(--panel2), transparent 14%);
+  border-radius: 0 0 18px 18px;
 }
 
 .chat.chat-board .chat-file-preview {

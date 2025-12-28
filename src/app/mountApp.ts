@@ -2644,22 +2644,24 @@ export function mountApp(root: HTMLElement) {
     }
   });
 
-  function requestHistory(t: TargetRef, opts?: { force?: boolean; deltaLimit?: number }) {
-    const st = store.get();
-    if (!st.authed) return;
-    if (st.conn !== "connected") return;
-    const key = conversationKey(t);
-    if (!key) return;
-    if (historyRequested.has(key)) return;
+	  function requestHistory(t: TargetRef, opts?: { force?: boolean; deltaLimit?: number }) {
+	    const st = store.get();
+	    if (!st.authed) return;
+	    if (st.conn !== "connected") return;
+	    const key = conversationKey(t);
+	    if (!key) return;
+	    if (historyRequested.has(key)) return;
 
-    // 1) Первый заход в чат: забираем "хвост" (последние сообщения), чтобы быстро заполнить экран.
-    if (!st.historyLoaded[key]) {
-      markChatAutoScroll(key, true);
-      historyRequested.add(key);
-      store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
-      if (t.kind === "dm") {
-        gateway.send({ type: "history", peer: t.id, before_id: 0, limit: 200 });
-      } else {
+	    // 1) Первый заход в чат: забираем "хвост" (последние сообщения), чтобы быстро заполнить экран.
+	    if (!st.historyLoaded[key]) {
+	      // UX: не ждём флага historyLoaded, чтобы сразу активировать pinned-bottom (особенно важно для медиа,
+	      // которое догружает высоту позже на iOS/WebKit).
+	      markChatAutoScroll(key, false);
+	      historyRequested.add(key);
+	      store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+	      if (t.kind === "dm") {
+	        gateway.send({ type: "history", peer: t.id, before_id: 0, limit: 200 });
+	      } else {
         gateway.send({ type: "history", room: t.id, before_id: 0, limit: 200 });
       }
       return;
@@ -2812,19 +2814,20 @@ export function mountApp(root: HTMLElement) {
         scheduleFocusComposer();
       }
       return;
-    }
-    suppressMobileSidebarCloseStickBottom = true;
-    try {
-      closeMobileSidebar();
-    } finally {
-      suppressMobileSidebarCloseStickBottom = false;
-    }
-    const prevKey = prev.selected ? conversationKey(prev.selected) : "";
-    const nextKey = conversationKey(t);
-    if (nextKey) {
-      const waitForHistory = !Boolean(prev.historyLoaded && prev.historyLoaded[nextKey]);
-      markChatAutoScroll(nextKey, waitForHistory);
-    }
+	    }
+	    suppressMobileSidebarCloseStickBottom = true;
+	    try {
+	      closeMobileSidebar();
+	    } finally {
+	      suppressMobileSidebarCloseStickBottom = false;
+	    }
+	    const prevKey = prev.selected ? conversationKey(prev.selected) : "";
+	    const nextKey = conversationKey(t);
+	    if (nextKey) {
+	      // UX: открываем чат сразу "внизу" (Telegram-like), не завязываясь на historyLoaded,
+	      // чтобы даже медиа-последнее сообщение не "съедало" автоскролл.
+	      markChatAutoScroll(nextKey, false);
+	    }
     const leavingEdit = Boolean(prev.editing && prevKey && prev.editing.key === prevKey && prevKey !== nextKey);
     const prevText = leavingEdit ? prev.editing?.prevDraft || "" : layout.input.value || "";
     const nextDrafts = prevKey ? updateDraftMap(prev.drafts, prevKey, prevText) : prev.drafts;
