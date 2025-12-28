@@ -6431,6 +6431,17 @@ export function mountApp(root: HTMLElement) {
       const prevTop = preview.scrollTop;
       const bottomSlack = 48;
       const wasAtBottom = preview.scrollTop + preview.clientHeight >= preview.scrollHeight - bottomSlack;
+      const caretAtEnd = (() => {
+        try {
+          const el = layout.input;
+          const len = el.value.length;
+          const s = typeof el.selectionStart === "number" ? el.selectionStart : len;
+          const e = typeof el.selectionEnd === "number" ? el.selectionEnd : len;
+          return s === len && e === len;
+        } catch {
+          return true;
+        }
+      })();
       if (!trimmed) {
         preview.replaceChildren(el("div", { class: "board-editor-preview-empty" }, ["Пусто — напишите новость выше"]));
         preview.scrollTop = 0;
@@ -6440,7 +6451,9 @@ export function mountApp(root: HTMLElement) {
       const applyScroll = () => {
         try {
           const maxTop = Math.max(0, preview.scrollHeight - preview.clientHeight);
-          if (wasAtBottom) preview.scrollTop = maxTop;
+          // Editor UX: if user types at the end — follow the bottom (like a live preview).
+          // Otherwise preserve manual scroll position.
+          if (wasAtBottom || caretAtEnd) preview.scrollTop = maxTop;
           else preview.scrollTop = Math.max(0, Math.min(maxTop, prevTop));
         } catch {
           // ignore

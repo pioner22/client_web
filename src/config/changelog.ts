@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.230",
+    date: "2025-12-28",
+    improved: [
+      "Доски: ✏️ редактора новости теперь рядом со скрепкой (и на desktop тоже) — меньше хаоса в композере",
+      "Доски: кнопка «Скачать» на медиа‑посте перенесена в верхний угол (не перекрывает подпись)",
+    ],
+    fixed: ["Доски: предпросмотр в редакторе держится у низа при наборе текста (когда курсор в конце) — проще дописывать длинные новости"],
+  },
+  {
     version: "0.1.229",
     date: "2025-12-28",
     improved: [

@@ -1880,7 +1880,8 @@
 
 .chat.chat-board .msg-attach .file-row-chat.file-row-image .file-actions {
   right: 12px;
-  bottom: 12px;
+  top: 12px;
+  bottom: auto;
 }
 
 .chat.chat-board .msg-attach .msg-text.msg-caption {

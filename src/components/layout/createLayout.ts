@@ -177,8 +177,8 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     boardActionsRow,
   ]);
   const composerRow = el("div", { class: "composer-row" }, [
-    // Desktop: Файл → Смайлы → Редактор (только Доски). Mobile: смайлы скрыты — Файл → Редактор.
-    el("div", { class: "composer-field" }, [attachBtn, emojiBtn, boardEditorBtn, input]),
+    // Telegram-like: ✏️ стоит рядом со скрепкой (особенно важно на mobile, где смайлы скрыты).
+    el("div", { class: "composer-field" }, [attachBtn, boardEditorBtn, emojiBtn, input]),
   ]);
   const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorWrap, composerRow, composerMeta]);
 
