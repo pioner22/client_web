@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.226",
+    date: "2025-12-28",
+    improved: ["Навигация: при входе автоматически открывается последний активный чат/доска (как в Telegram) — меньше «пустоты»"],
+  },
+  {
     version: "0.1.225",
     date: "2025-12-28",
     improved: ["Файлы: автопрефетч кэша для истории теперь включает video/audio (до 6MB) — меньше плейсхолдеров в ленте сообщений"],

@@ -53,6 +53,7 @@ import {
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
 import { applyMessageView, normalizeMessageView, storeMessageView } from "../helpers/ui/messageView";
+import { loadLastActiveTarget, saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
 import { nowTs } from "../helpers/time";
 import { applyLegacyIdMask } from "../helpers/id/legacyIdMask";
@@ -2845,6 +2846,10 @@ export function mountApp(root: HTMLElement) {
         ...(trimmed ? { conversations: trimmed.conversations, historyCursor: trimmed.historyCursor } : {}),
       };
     });
+    if (prev.authed) {
+      const userId = prev.selfId || prev.authRememberedId || "";
+      if (userId) saveLastActiveTarget(userId, t);
+    }
     try {
       if (layout.input.value !== nextText) layout.input.value = nextText;
       autosizeInput(layout.input);
@@ -9118,6 +9123,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   let prevAuthed = store.get().authed;
+  let lastAutoOpenedForUser: string | null = null;
   let prevEditing: { key: string; id: number } | null = (() => {
     const e = store.get().editing;
     return e ? { key: e.key, id: e.id } : null;
@@ -9353,6 +9359,26 @@ export function mountApp(root: HTMLElement) {
       scheduleAutoApplyPwaUpdate();
     }
     if (st.authed && !prevAuthed) {
+      if (st.page === "main" && !st.modal && !st.selected && st.selfId && lastAutoOpenedForUser !== st.selfId) {
+        lastAutoOpenedForUser = st.selfId;
+        const remembered = loadLastActiveTarget(st.selfId);
+        if (remembered) {
+          const schedule = (fn: () => void) => {
+            try {
+              if (typeof queueMicrotask === "function") queueMicrotask(fn);
+              else Promise.resolve().then(fn);
+            } catch {
+              window.setTimeout(fn, 0);
+            }
+          };
+          schedule(() => {
+            const cur = store.get();
+            if (!cur.authed || cur.selfId !== st.selfId) return;
+            if (cur.page !== "main" || cur.modal || cur.selected) return;
+            selectTarget(remembered);
+          });
+        }
+      }
       if (st.selected) {
         requestHistory(st.selected, { force: true, deltaLimit: 2000 });
         if (st.selected.kind === "dm") {
