@@ -299,6 +299,18 @@
   --composer-field-max-h: min(calc(var(--app-vh, 100vh) * 0.44), 420px);
 }
 
+.input-wrap.board-editor-open .composer-field {
+  /* iPhone: when the draft grows (many newlines) keep controls reachable. */
+  align-items: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.input-wrap.board-editor-open .composer-field .input {
+  padding-top: 6px;
+  padding-bottom: 0;
+}
+
 .board-editor {
   display: grid;
   gap: 10px;
