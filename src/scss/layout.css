@@ -219,6 +219,31 @@
   }
 }
 
+/* Fallback shimmer for browsers without mask-composite (notably some iOS/WebKit builds). */
+@supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+  .input-wrap.composer-typing .composer-field {
+    animation: composer-border-pulse 1.9s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .input-wrap.composer-typing .composer-field {
+      animation: none;
+    }
+  }
+}
+
+@keyframes composer-border-pulse {
+  0%,
+  100% {
+    border-color: color-mix(in srgb, var(--composer-field-border-color), var(--focus) 35%);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--focus), transparent 88%);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--composer-field-border-color), var(--accent) 35%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 88%);
+  }
+}
+
 .composer-meta {
   display: flex;
   align-items: center;

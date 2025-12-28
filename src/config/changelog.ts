@@ -10,6 +10,18 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.228",
+    date: "2025-12-28",
+    improved: [
+      "Файлы: кнопка «Скачать» в истории теперь всегда использует внутреннюю логику (кэш → stream → file_get) — медиа чаще доступно из кэша",
+      "Компоузер: при наборе текста добавлена «оживляющая» подсветка рамки даже на WebKit без mask-composite (fallback анимация)",
+    ],
+    fixed: [
+      "Чат: при скачивании сначала пробуем CacheStorage, даже если уже есть URL — повторные открытия/скачивания стабильнее",
+      "Доски: подпись+мета у медиа-поста больше не выглядят как отдельная панель — все на одной поверхности пузыря (Telegram-like)",
+    ],
+  },
+  {
     version: "0.1.227",
     date: "2025-12-28",
     improved: ["Шапка (mobile): поиск в чате теперь выглядит аккуратнее (круглая кнопка без тяжёлого фона, иконка чуть крупнее)"],

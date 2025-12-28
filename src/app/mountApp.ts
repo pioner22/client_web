@@ -1746,13 +1746,13 @@ export function mountApp(root: HTMLElement) {
       void (async () => {
         const meta = resolveFileMeta(fileId);
         const st = store.get();
+        const fromCache = await tryServeFileFromCache(fileId, meta);
+        if (fromCache) return;
         const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
         if (entry?.url) {
           triggerBrowserDownload(entry.url, meta.name || entry.name || "файл");
           return;
         }
-        const fromCache = await tryServeFileFromCache(fileId, meta);
-        if (fromCache) return;
         const canStream = Number(meta.size || 0) >= STREAM_MIN_BYTES && startStreamDownload(fileId, meta);
         if (canStream) {
           store.set({ status: `Скачивание: ${meta.name || "файл"}` });

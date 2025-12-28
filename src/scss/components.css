@@ -1885,17 +1885,15 @@
 }
 
 .chat.chat-board .msg-attach .msg-text.msg-caption {
-  /* Caption becomes the “footer” of the post card (same background as meta). */
+  /* Telegram-like: caption stays inside the same bubble surface (no extra panel). */
   margin: 0 -14px 0;
   padding: 12px 14px 0;
   border-top: 1px solid color-mix(in srgb, var(--line), transparent 55%);
-  background: color-mix(in srgb, var(--panel2), transparent 14%);
 }
 
 .chat.chat-board .msg-attach .msg-meta {
   margin: 0 -14px -14px;
   padding: 8px 14px 14px;
-  background: color-mix(in srgb, var(--panel2), transparent 14%);
   border-radius: 0 0 18px 18px;
 }
 
