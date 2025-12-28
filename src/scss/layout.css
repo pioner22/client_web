@@ -530,11 +530,14 @@
 }
 
 @media (pointer: coarse) {
-  .kbd-open .input-wrap.board-editor-open .board-editor-preview,
   .kbd-open .input-wrap.board-editor-open .board-editor-schedule,
   .kbd-open .input-wrap.board-editor-open .board-editor-schedule-hint,
   .kbd-open .input-wrap.board-editor-open .board-editor-schedule-list {
     display: none;
+  }
+
+  .kbd-open .input-wrap.board-editor-open .board-editor-preview-body {
+    max-height: min(22vh, 220px);
   }
 }
 

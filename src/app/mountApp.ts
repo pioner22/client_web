@@ -1196,6 +1196,7 @@ export function mountApp(root: HTMLElement) {
 
   let chatJumpRaf: number | null = null;
   let lastChatScrollTop = 0;
+  let lastChatUserScrollAt = 0;
   let historyAutoBlockUntil = 0;
   let lastHistoryAutoAt = 0;
   let lastHistoryAutoKey = "";
@@ -1294,7 +1295,17 @@ export function mountApp(root: HTMLElement) {
         if (!stick || stick.key !== key) {
           hostState.__stickBottom = { key, active: atBottom, at: Date.now() };
         } else {
-          stick.active = atBottom;
+          const now = Date.now();
+          const userScrollRecent = now - lastChatUserScrollAt < 2000;
+          // Keep pinned-to-bottom stable during async layout shifts (media load, keyboard, viewport changes).
+          // Only mark it "not active" when a real user scroll gesture happened recently.
+          if (atBottom) {
+            stick.active = true;
+            stick.at = now;
+          } else if (userScrollRecent) {
+            stick.active = false;
+            stick.at = now;
+          }
         }
       }
       scheduleChatJumpVisibility();
@@ -1302,6 +1313,15 @@ export function mountApp(root: HTMLElement) {
     },
     { passive: true }
   );
+
+  // Detect user-driven scroll gestures (wheel/touch/drag) to distinguish from async layout shifts.
+  const markUserChatScroll = () => {
+    lastChatUserScrollAt = Date.now();
+  };
+  layout.chatHost.addEventListener("wheel", markUserChatScroll, { passive: true });
+  layout.chatHost.addEventListener("touchstart", markUserChatScroll, { passive: true });
+  layout.chatHost.addEventListener("touchmove", markUserChatScroll, { passive: true });
+  layout.chatHost.addEventListener("pointerdown", markUserChatScroll, { passive: true });
 
   // Keep the chat pinned to bottom on layout changes (keyboard open/close, composer autosize),
   // but only when the user is already at the bottom.
@@ -1315,6 +1335,7 @@ export function mountApp(root: HTMLElement) {
       if (!key) return;
       const st = (host as any).__stickBottom;
       if (!st || !st.active || st.key !== key) return;
+      st.at = Date.now();
       host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
       scheduleChatJumpVisibility();
     });
@@ -6416,16 +6437,18 @@ export function mountApp(root: HTMLElement) {
         return;
       }
       preview.replaceChildren(renderBoardPost(trimmed));
-      try {
-        if (wasAtBottom) {
-          preview.scrollTop = Math.max(0, preview.scrollHeight - preview.clientHeight);
-        } else {
+      const applyScroll = () => {
+        try {
           const maxTop = Math.max(0, preview.scrollHeight - preview.clientHeight);
-          preview.scrollTop = Math.max(0, Math.min(maxTop, prevTop));
+          if (wasAtBottom) preview.scrollTop = maxTop;
+          else preview.scrollTop = Math.max(0, Math.min(maxTop, prevTop));
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
-      }
+      };
+      // Some WebKit builds update scrollHeight lazily; apply twice to keep bottom stable.
+      applyScroll();
+      window.requestAnimationFrame(applyScroll);
     });
   }
 
@@ -6442,7 +6465,7 @@ export function mountApp(root: HTMLElement) {
     }
   };
 
-  type IosNavDisabledField = { el: HTMLInputElement; disabled: boolean };
+  type IosNavDisabledField = { el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement; disabled: boolean };
   let iosNavDisabled: IosNavDisabledField[] = [];
   const restoreIosNavDisabled = () => {
     if (!iosNavDisabled.length) return;
@@ -6458,25 +6481,21 @@ export function mountApp(root: HTMLElement) {
   const applyIosComposerNavLock = () => {
     if (!isIOS()) return;
     restoreIosNavDisabled();
-    const candidates: HTMLInputElement[] = [];
+    const keep = new Set<Element>([layout.input]);
+    const candidates: Array<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> = [];
     try {
-      const sidebarSearch = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
-      if (sidebarSearch) candidates.push(sidebarSearch);
+      const nodes = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+      for (const node of Array.from(nodes)) {
+        if (!node || keep.has(node)) continue;
+        candidates.push(node);
+      }
     } catch {
       // ignore
     }
-    try {
-      const chatSearch = document.getElementById("chat-search-input") as HTMLInputElement | null;
-      if (chatSearch) candidates.push(chatSearch);
-    } catch {
-      // ignore
-    }
-    candidates.push(layout.boardScheduleInput);
-    for (const el of candidates) {
+    for (const node of candidates) {
       try {
-        if (!el) continue;
-        iosNavDisabled.push({ el, disabled: el.disabled });
-        el.disabled = true;
+        iosNavDisabled.push({ el: node, disabled: node.disabled });
+        node.disabled = true;
       } catch {
         // ignore
       }

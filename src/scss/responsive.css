@@ -728,6 +728,44 @@
   .btn.composer-emoji {
     display: none;
   }
+
+  /* Chat header: icon-only search toggle (cleaner on mobile). */
+  .btn.chat-search-toggle {
+    min-width: 40px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 12px;
+    border-color: transparent;
+    background: transparent;
+    font-size: 0;
+    line-height: 1;
+    display: grid;
+    place-items: center;
+  }
+
+  .btn.chat-search-toggle::before {
+    content: "";
+    width: 20px;
+    height: 20px;
+    background: currentColor;
+    opacity: 0.9;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M10.5 3a7.5 7.5 0 1 1 4.6 13.4l3.15 3.15a1 1 0 0 1-1.42 1.42l-3.15-3.15A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'/%3E%3C/svg%3E")
+      no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M10.5 3a7.5 7.5 0 1 1 4.6 13.4l3.15 3.15a1 1 0 0 1-1.42 1.42l-3.15-3.15A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'/%3E%3C/svg%3E")
+      no-repeat center / contain;
+  }
+
+  .btn.chat-search-toggle.btn-active {
+    background: color-mix(in srgb, var(--btn-bg-hover), transparent 25%);
+  }
+
+  .btn.chat-search-toggle.btn-active::before {
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M18.3 5.71a1 1 0 0 1 0 1.41L13.41 12l4.89 4.88a1 1 0 1 1-1.41 1.42L12 13.41 7.12 18.3a1 1 0 0 1-1.42-1.41L10.59 12 5.7 7.12A1 1 0 0 1 7.12 5.7L12 10.59l4.88-4.89a1 1 0 0 1 1.42 0Z'/%3E%3C/svg%3E")
+      no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M18.3 5.71a1 1 0 0 1 0 1.41L13.41 12l4.89 4.88a1 1 0 1 1-1.41 1.42L12 13.41 7.12 18.3a1 1 0 0 1-1.42-1.41L10.59 12 5.7 7.12A1 1 0 0 1 7.12 5.7L12 10.59l4.88-4.89a1 1 0 0 1 1.42 0Z'/%3E%3C/svg%3E")
+      no-repeat center / contain;
+  }
 }
 
 @media (max-width: 820px) and (prefers-reduced-motion: reduce) {
