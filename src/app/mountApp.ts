@@ -5044,6 +5044,10 @@ export function mountApp(root: HTMLElement) {
     }
     if (url) entry.url = url;
 
+    // UX: при отправке файла ожидаем, что история останется “у дна” и покажет только что добавленное сообщение.
+    // Это важно для медиа (высота может меняться после загрузки), поэтому используем ту же логику pinned-bottom.
+    if (key) markChatAutoScroll(key, false);
+
     store.set((prev) => {
       const withMsg = upsertConversation(prev, key, outMsg);
       return { ...withMsg, fileTransfers: [entry, ...withMsg.fileTransfers], status: `Файл предложен: ${entry.name}` };

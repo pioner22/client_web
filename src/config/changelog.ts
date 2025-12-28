@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.231",
+    date: "2025-12-28",
+    fixed: ["Чат: после отправки файла история прокручивается к последнему сообщению (пин к низу как при обычной отправке)"],
+  },
+  {
     version: "0.1.230",
     date: "2025-12-28",
     improved: [
