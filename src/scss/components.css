@@ -1375,14 +1375,14 @@
   background: var(--msg-in-bg);
   border: var(--msg-in-border-width) solid var(--msg-in-border-color);
   border-radius: var(--msg-in-radius);
-  padding: var(--msg-in-pad-y) var(--msg-in-pad-x);
+  padding: var(--msg-in-pad-y) var(--msg-in-pad-x) var(--msg-in-pad-bottom);
 }
 
 .msg-out .msg-body {
   background: var(--msg-out-bg);
   border: var(--msg-out-border-width) solid var(--msg-out-border-color);
   border-radius: var(--msg-out-radius);
-  padding: var(--msg-out-pad-y) var(--msg-out-pad-x);
+  padding: var(--msg-out-pad-y) var(--msg-out-pad-x) var(--msg-out-pad-bottom);
 }
 
 .msg-attach .msg-body {
