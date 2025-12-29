@@ -164,10 +164,13 @@ function friendRow(
 ): HTMLElement {
   const clsBase = selected ? "row row-sel" : "row";
   const cls = attn ? `${clsBase} row-attn` : clsBase;
+  const peerId = String(f.id || "").trim();
+  const muted = peerId ? (state.muted || []).includes(peerId) : false;
   const unread = Math.max(0, Number(f.unread || 0) || 0);
   const unreadLabel = unread > 99 ? "99+" : String(unread);
   const tailChildren: HTMLElement[] = [];
   if (meta.time) tailChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
+  if (muted) tailChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
   if (meta.hasDraft) tailChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
   if (unread > 0) {
     tailChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
@@ -216,11 +219,12 @@ function roomRow(
   onClick: () => void,
   ctx?: { kind: "group" | "board"; id: string },
   meta?: SidebarRowMeta,
-  opts?: { mention?: boolean }
+  opts?: { mention?: boolean; muted?: boolean }
 ): HTMLElement {
   const cls = selected ? "row row-sel" : "row";
   const tailChildren: HTMLElement[] = [];
   if (meta?.time) tailChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
+  if (opts?.muted) tailChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
   if (opts?.mention) tailChildren.push(el("span", { class: "row-mention", "aria-label": "Упоминание" }, ["@"]));
   if (meta?.hasDraft) tailChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
   const tail = tailChildren.length ? el("span", { class: "row-tail" }, tailChildren) : null;
@@ -319,6 +323,8 @@ export function renderSidebar(
   const pinnedKeys = state.pinned || [];
   const pinnedSet = new Set(pinnedKeys);
   const attnSet = collectAttentionPeers(state);
+  const mutedSet = new Set((state.muted || []).map((x) => String(x || "").trim()).filter(Boolean));
+  const isMuted = (id: string): boolean => mutedSet.has(String(id || "").trim());
   const selfMentionHandles = collectSelfMentionHandles(state);
   const friendIdSet = new Set((state.friends || []).map((f) => String(f.id || "").trim()).filter(Boolean));
   const unknownAttnPeers = Array.from(attnSet).filter((id) => !friendIdSet.has(id)).sort();
@@ -632,7 +638,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k) }
+              { mention: mentionForKey(k), muted: isMuted(g.id) }
             )
           );
           continue;
@@ -649,7 +655,8 @@ export function renderSidebar(
               Boolean(sel && sel.kind === "board" && sel.id === b.id),
               () => onSelect({ kind: "board", id: b.id }),
               { kind: "board", id: b.id },
-              meta
+              meta,
+              { muted: isMuted(b.id) }
             )
           );
         }
@@ -705,7 +712,7 @@ export function renderSidebar(
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
             meta,
-            { mention: mentionForKey(k) }
+            { mention: mentionForKey(k), muted: isMuted(g.id) }
           ),
         });
       }
@@ -741,7 +748,8 @@ export function renderSidebar(
             Boolean(sel && sel.kind === "board" && sel.id === b.id),
             () => onSelect({ kind: "board", id: b.id }),
             { kind: "board", id: b.id },
-            meta
+            meta,
+            { muted: isMuted(b.id) }
           ),
         });
       }
@@ -1073,7 +1081,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k) }
+              { mention: mentionForKey(k), muted: isMuted(g.id) }
             )
           );
           continue;
@@ -1090,7 +1098,8 @@ export function renderSidebar(
               Boolean(sel && sel.kind === "board" && sel.id === b.id),
               () => onSelect({ kind: "board", id: b.id }),
               { kind: "board", id: b.id },
-              meta
+              meta,
+              { muted: isMuted(b.id) }
             )
           );
         }
@@ -1154,7 +1163,7 @@ export function renderSidebar(
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
             meta,
-            { mention: mentionForKey(k) }
+            { mention: mentionForKey(k), muted: isMuted(g.id) }
           ),
         });
       }
@@ -1191,7 +1200,8 @@ export function renderSidebar(
             Boolean(sel && sel.kind === "board" && sel.id === b.id),
             () => onSelect({ kind: "board", id: b.id }),
             { kind: "board", id: b.id },
-            meta
+            meta,
+            { muted: isMuted(b.id) }
           ),
         });
       }
@@ -1501,7 +1511,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k) }
+          { mention: mentionForKey(k), muted: isMuted(g.id) }
         )
       );
       continue;
@@ -1518,7 +1528,8 @@ export function renderSidebar(
         Boolean(sel && sel.kind === "board" && sel.id === b.id),
         () => onSelect({ kind: "board", id: b.id }),
         { kind: "board", id: b.id },
-        meta
+        meta,
+        { muted: isMuted(b.id) }
       )
     );
   }
@@ -1608,7 +1619,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k) }
+          { mention: mentionForKey(k), muted: isMuted(g.id) }
         ),
       });
     }
@@ -1645,7 +1656,8 @@ export function renderSidebar(
           Boolean(sel && sel.kind === "board" && sel.id === b.id),
           () => onSelect({ kind: "board", id: b.id }),
           { kind: "board", id: b.id },
-          meta
+          meta,
+          { muted: isMuted(b.id) }
         ),
       });
     }

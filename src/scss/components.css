@@ -246,6 +246,12 @@
   box-shadow: 0 10px 20px color-mix(in srgb, var(--row-unread-selected-text), transparent 70%);
 }
 
+.row-sel .row-muted {
+  border-color: color-mix(in srgb, var(--row-text-selected-muted), transparent 60%);
+  color: var(--row-text-selected-muted);
+  background: color-mix(in srgb, var(--row-text-selected-muted), transparent 85%);
+}
+
 .row-attn {
   position: relative;
 }
@@ -408,6 +414,24 @@
   font-family: var(--font-rounded);
   font-variant-numeric: tabular-nums;
   box-shadow: 0 10px 22px color-mix(in srgb, var(--focus), transparent 78%);
+}
+
+.row-muted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--muted), transparent 60%);
+  background: color-mix(in srgb, var(--muted), transparent 92%);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-rounded);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--muted), transparent 88%);
 }
 
 .row:focus-visible,

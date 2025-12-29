@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.254",
+    date: "2025-12-29",
+    improved: ["Чаты: индикатор mute для чатов/досок (best-effort по списку muted)"],
+  },
+  {
     version: "0.1.253",
     date: "2025-12-29",
     improved: ["Чаты: индикатор упоминаний @handle в списке (best-effort по последнему сообщению)"],
