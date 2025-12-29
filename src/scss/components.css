@@ -259,6 +259,27 @@
   background: color-mix(in srgb, var(--row-text-selected-muted), transparent 85%);
 }
 
+@media (min-width: 601px) {
+  .sidebar .row-sel[data-ctx-kind] .row-sub,
+  .sidebar .row-sel[data-ctx-kind] .row-time,
+  .sidebar .row-sel[data-ctx-kind] .row-prefix,
+  .sidebar .row-sel[data-ctx-kind] .row-id {
+    color: #fff;
+  }
+
+  .sidebar .row-sel[data-ctx-kind] .row-muted {
+    color: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .sidebar .row-sel[data-ctx-kind] .row-draft {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
+
 .row-attn {
   position: relative;
 }
