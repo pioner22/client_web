@@ -18,10 +18,12 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   sidebar.appendChild(sidebarResizeHandle);
   const chatTop = el("div", { class: "chat-top hidden" });
   const chatHost = el("div", { class: "chat-host" });
+  const chatJumpIcon = el("span", { class: "chat-jump-icon", "aria-hidden": "true" }, ["↓"]);
+  const chatJumpBadge = el("span", { class: "chat-jump-badge hidden", "aria-hidden": "true" }, [""]);
   const chatJump = el(
     "button",
     { class: "btn chat-jump hidden", type: "button", "data-action": "chat-jump-bottom", "aria-label": "Вниз" },
-    ["↓"]
+    [chatJumpIcon, chatJumpBadge]
   ) as HTMLButtonElement;
   const chat = el("main", { class: "chat" }, [chatTop, chatHost, chatJump]);
 
@@ -211,6 +213,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     chatTop,
     chatHost,
     chatJump,
+    chatJumpBadge,
     toastHost,
     inputWrap,
     input,

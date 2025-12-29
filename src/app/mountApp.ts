@@ -1269,6 +1269,19 @@ export function mountApp(root: HTMLElement) {
     const btn = layout.chatJump;
     if (!btn) return;
     const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
+    const st = store.get();
+    const badge = layout.chatJumpBadge;
+    if (badge) {
+      const unread =
+        st.selected?.kind === "dm" ? st.friends.find((f) => f.id === st.selected?.id)?.unread ?? 0 : 0;
+      if (unread > 0) {
+        badge.textContent = unread > 999 ? "999+" : String(unread);
+        badge.classList.remove("hidden");
+      } else {
+        badge.textContent = "";
+        badge.classList.add("hidden");
+      }
+    }
     if (!key) {
       btn.classList.add("hidden");
       return;

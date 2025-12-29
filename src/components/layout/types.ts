@@ -10,6 +10,7 @@ export interface Layout {
   chatTop: HTMLElement;
   chatHost: HTMLElement;
   chatJump: HTMLButtonElement;
+  chatJumpBadge: HTMLElement;
   toastHost: HTMLElement;
   inputWrap: HTMLElement;
   input: HTMLTextAreaElement;
