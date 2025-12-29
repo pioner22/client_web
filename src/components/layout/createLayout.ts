@@ -12,8 +12,10 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const sidebar = el("aside", { class: "sidebar" });
   const sidebarBody = el("div", { class: "sidebar-body" });
   const sidebarDock = el("div", { class: "sidebar-bottom-dock", "aria-hidden": "true" });
+  const sidebarResizeHandle = el("div", { class: "sidebar-resize-handle", "aria-hidden": "true" });
   sidebar.appendChild(sidebarBody);
   sidebar.appendChild(sidebarDock);
+  sidebar.appendChild(sidebarResizeHandle);
   const chatTop = el("div", { class: "chat-top hidden" });
   const chatHost = el("div", { class: "chat-host" });
   const chatJump = el(
@@ -204,6 +206,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     sidebar,
     sidebarBody,
     sidebarDock,
+    sidebarResizeHandle,
     chat,
     chatTop,
     chatHost,

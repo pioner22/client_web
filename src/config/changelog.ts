@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.236",
+    date: "2025-12-29",
+    improved: [
+      "Sidebar (desktop): ширина теперь резайзится и сохраняется (tweb‑пределы 308–420px), при сильном сжатии — компактный режим (80px)",
+    ],
+  },
+  {
     version: "0.1.235",
     date: "2025-12-29",
     fixed: [

@@ -68,6 +68,7 @@ import { shouldAutofocusComposer } from "../helpers/ui/autofocusPolicy";
 import { armCtxClickSuppression, consumeCtxClickSuppression, type CtxClickSuppressionState } from "../helpers/ui/ctxClickSuppression";
 import { applyIosInputAssistantWorkaround, isIOS, isStandaloneDisplayMode } from "../helpers/ui/iosInputAssistant";
 import { installDebugHud } from "../helpers/ui/debugHud";
+import { installSidebarLeftResize } from "../helpers/ui/sidebarLeftResize";
 import {
   EMOJI_RECENTS_ID,
   buildEmojiSections,
@@ -373,6 +374,7 @@ export function mountApp(root: HTMLElement) {
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
   const layout = createLayout(root, { iosStandalone });
   const debugHud = installDebugHud({ mount: root, chatHost: layout.chatHost, getState: () => store.get() });
+  installSidebarLeftResize(layout.sidebar, layout.sidebarResizeHandle);
   installNotificationSoundUnlock();
   type PwaSharePayload = {
     files: File[];

@@ -5,6 +5,7 @@ export interface Layout {
   sidebar: HTMLElement;
   sidebarBody: HTMLElement;
   sidebarDock: HTMLElement;
+  sidebarResizeHandle: HTMLElement;
   chat: HTMLElement;
   chatTop: HTMLElement;
   chatHost: HTMLElement;

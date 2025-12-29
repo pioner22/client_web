@@ -83,7 +83,7 @@
   --app-row-footer: auto;
 
   /* Main grid columns + gap */
-  --grid-cols: var(--sidebar-width) 1fr;
+  --grid-cols: var(--sidebar-width) minmax(0, 1fr);
   --grid-gap: 0px;
 
   --header-bg: var(--panel);
@@ -109,7 +109,10 @@
   --sidebar-border-color: var(--line);
   --sidebar-border-width: var(--border-width);
   --sidebar-pad: 10px;
-  --sidebar-width: 380px;
+  --sidebar-width-min: 308px;
+  --sidebar-width-max: 420px;
+  --sidebar-collapsed-width: 80px;
+  --sidebar-width: clamp(var(--sidebar-width-min), var(--current-sidebar-left-width, var(--sidebar-width-max)), var(--sidebar-width-max));
 
   --chat-bg: var(--bg);
   --chat-pad: 16px;
