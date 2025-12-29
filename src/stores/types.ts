@@ -247,6 +247,11 @@ export interface EditingMessageState {
   prevDraft: string;
 }
 
+export interface LastReadMarker {
+  id?: number;
+  ts?: number;
+}
+
 export interface FriendEntry {
   id: string;
   online: boolean;
@@ -365,7 +370,7 @@ export interface AppState {
   historyHasMore: Record<string, boolean>;
   historyLoading: Record<string, boolean>;
   historyVirtualStart: Record<string, number>;
-  lastReadAt: Record<string, number>;
+  lastRead: Record<string, LastReadMarker>;
 
   outbox: Record<string, OutboxEntry[]>;
 

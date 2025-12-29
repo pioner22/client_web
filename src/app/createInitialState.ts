@@ -80,7 +80,7 @@ export function createInitialState(): AppState {
     historyHasMore: {},
     historyLoading: {},
     historyVirtualStart: {},
-    lastReadAt: {},
+    lastRead: {},
     outbox: {},
     drafts: {},
     input: "",

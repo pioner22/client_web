@@ -32,7 +32,7 @@ import {
 } from "../helpers/auth/session";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
-import { loadLastReadMarkers } from "../helpers/ui/lastReadMarkers";
+import { loadLastReadMarkers, saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
 import { playNotificationSound } from "../helpers/notify/notifySound";
 
@@ -241,7 +241,7 @@ export function handleServerMessage(
   if (t === "auth_ok") {
     const selfId = String(msg?.id ?? state.selfId ?? "");
     const sess = typeof msg?.session === "string" ? msg.session : null;
-    const lastReadAt = selfId ? loadLastReadMarkers(selfId) : state.lastReadAt;
+    const lastRead = selfId ? loadLastReadMarkers(selfId) : state.lastRead;
     if (selfId) storeAuthId(selfId);
     if (sess) storeSessionToken(sess);
     else {
@@ -257,7 +257,7 @@ export function handleServerMessage(
       ...(sess ? { authMode: "auto" as const } : {}),
       modal: null,
       status: "Connected",
-      lastReadAt,
+      lastRead,
     });
     gateway.send({ type: "client_info", client: "web", version: state.clientVersion });
     gateway.send({ type: "group_list" });
@@ -544,6 +544,26 @@ export function handleServerMessage(
       // `counts` is an authoritative snapshot; absent keys mean 0 unread.
       friends: prev.friends.map((f) => ({ ...f, unread: Number((raw as any)[f.id] ?? 0) || 0 })),
     }));
+    return;
+  }
+  if (t === "room_reads") {
+    const raw = msg?.reads && typeof msg.reads === "object" ? msg.reads : {};
+    patch((prev) => {
+      const next = { ...(prev.lastRead || {}) };
+      let changed = false;
+      for (const [roomId, rawId] of Object.entries(raw as Record<string, unknown>)) {
+        const id = Number(rawId);
+        if (!Number.isFinite(id) || id <= 0) continue;
+        const key = roomKey(String(roomId));
+        const prevEntry = next[key] || {};
+        if (prevEntry.id && id <= prevEntry.id) continue;
+        next[key] = { ...prevEntry, id };
+        changed = true;
+      }
+      if (!changed) return prev;
+      if (prev.selfId) saveLastReadMarkers(prev.selfId, next);
+      return { ...prev, lastRead: next };
+    });
     return;
   }
   if (t === "authz_pending") {
@@ -2166,6 +2186,8 @@ export function handleServerMessage(
     const beforeIdRaw = msg?.before_id;
     const hasBefore = beforeIdRaw !== undefined && beforeIdRaw !== null;
     const hasMore = hasBefore ? Boolean(msg?.has_more) : undefined;
+    const readUpToRaw = msg?.read_up_to_id;
+    const readUpToId = Number(readUpToRaw);
     const rows = Array.isArray(msg?.rows) ? msg.rows : [];
     const incoming: ChatMessage[] = [];
     for (const r of rows) {
@@ -2205,6 +2227,8 @@ export function handleServerMessage(
     patch((prev) => {
       let baseConv = prev.conversations[key] ?? [];
       let outbox = (((prev as any).outbox || {}) as any) as any;
+      let nextLastRead = prev.lastRead;
+      let lastReadChanged = false;
 
       // Best-effort dedup for reconnect: if history already contains our message, bind it to a pending outbox entry
       // (so we don't resend and we don't show duplicates).
@@ -2264,14 +2288,24 @@ export function handleServerMessage(
       const prevVirtualStart = (prev as any).historyVirtualStart ? (prev as any).historyVirtualStart[key] : undefined;
       const shouldShiftVirtual = hasBefore && typeof prevVirtualStart === "number" && Number.isFinite(prevVirtualStart) && delta > 0;
       const nextVirtualStart = shouldShiftVirtual ? Math.max(0, prevVirtualStart + delta) : prevVirtualStart;
+      if (resultRoom && Number.isFinite(readUpToId) && readUpToId > 0) {
+        const prevEntry = (nextLastRead || {})[key] || {};
+        if (!prevEntry.id || readUpToId > prevEntry.id) {
+          const merged = { ...(nextLastRead || {}), [key]: { ...prevEntry, id: readUpToId } };
+          nextLastRead = merged;
+          lastReadChanged = true;
+          if (prev.selfId) saveLastReadMarkers(prev.selfId, merged);
+        }
+      }
       if (isPreview) {
-        return {
+        const base = {
           ...prev,
           conversations: { ...prev.conversations, [key]: nextConv },
           outbox,
         };
+        return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
       }
-      return {
+      const base = {
         ...prev,
         conversations: { ...prev.conversations, [key]: nextConv },
         outbox,
@@ -2281,6 +2315,7 @@ export function handleServerMessage(
         historyLoading: { ...prevLoadingMap, [key]: false },
         ...(shouldShiftVirtual ? { historyVirtualStart: { ...(prev as any).historyVirtualStart, [key]: nextVirtualStart } } : {}),
       };
+      return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
     });
     return;
   }

@@ -1078,16 +1078,30 @@ export function mountApp(root: HTMLElement) {
     const conv = st.conversations[k] || [];
     const last = conv.length ? conv[conv.length - 1] : null;
     const ts = Number(last?.ts ?? 0);
-    if (!Number.isFinite(ts) || ts <= 0) return;
-    const prev = Number(st.lastReadAt?.[k] ?? 0);
-    if (ts <= prev) return;
+    const id = Number(last?.id ?? 0);
+    const prevEntry = st.lastRead?.[k] || {};
+    const nextEntry = { ...prevEntry };
+    let changed = false;
+    if (Number.isFinite(id) && id > 0 && (!prevEntry.id || id > prevEntry.id)) {
+      nextEntry.id = id;
+      changed = true;
+    }
+    if (Number.isFinite(ts) && ts > 0 && (!prevEntry.ts || ts > prevEntry.ts)) {
+      nextEntry.ts = ts;
+      changed = true;
+    }
+    if (!changed) return;
     const now = Date.now();
     const lastSave = lastReadSavedAt.get(k) ?? 0;
     if (now - lastSave < 1200) return;
     lastReadSavedAt.set(k, now);
-    const next = { ...(st.lastReadAt || {}), [k]: ts };
-    store.set({ lastReadAt: next });
+    const next = { ...(st.lastRead || {}), [k]: nextEntry };
+    store.set({ lastRead: next });
     saveLastReadMarkers(st.selfId, next);
+    const roomId = k.slice("room:".length);
+    if (roomId && nextEntry.id) {
+      maybeSendRoomRead(roomId, nextEntry.id);
+    }
   };
   // PWA auto-update: treat any pointer interaction as “activity” so we don’t reload while the user clicks/opens menus.
   window.addEventListener("pointerdown", markUserActivity, { capture: true, passive: true });
@@ -2957,9 +2971,10 @@ export function mountApp(root: HTMLElement) {
     if (unread <= 0 && !hasUpTo) return;
 
     const now = Date.now();
-    const last = lastReadSentAt.get(peer) ?? 0;
+    const throttleKey = `dm:${peer}`;
+    const last = lastReadSentAt.get(throttleKey) ?? 0;
     if (now - last < 300) return;
-    lastReadSentAt.set(peer, now);
+    lastReadSentAt.set(throttleKey, now);
 
     gateway.send({ type: "message_read", peer, ...(hasUpTo ? { up_to_id: upToId } : {}) });
     if (unread > 0) {
@@ -2968,6 +2983,24 @@ export function mountApp(root: HTMLElement) {
         friends: prev.friends.map((f) => (f.id === peer ? { ...f, unread: 0 } : f)),
       }));
     }
+  }
+
+  function maybeSendRoomRead(roomId: string, upToId: number) {
+    const st = store.get();
+    if (st.conn !== "connected") return;
+    if (!st.authed) return;
+    const room = String(roomId || "").trim();
+    if (!room) return;
+    const hasUpTo = typeof upToId === "number" && Number.isFinite(upToId) && upToId > 0;
+    if (!hasUpTo) return;
+
+    const now = Date.now();
+    const throttleKey = `room:${room}`;
+    const last = lastReadSentAt.get(throttleKey) ?? 0;
+    if (now - last < 300) return;
+    lastReadSentAt.set(throttleKey, now);
+
+    gateway.send({ type: "message_read", room, up_to_id: upToId });
   }
 
   function selectTarget(t: TargetRef) {
