@@ -2253,10 +2253,14 @@ export function handleServerMessage(
       }
 
       const nextConv = mergeMessages(baseConv, incoming);
+      const delta = nextConv.length - baseConv.length;
       const cursor = oldestLoadedId(nextConv);
       const prevCursor = (prev as any).historyCursor || {};
       const prevHasMoreMap = (prev as any).historyHasMore || {};
       const prevLoadingMap = (prev as any).historyLoading || {};
+      const prevVirtualStart = (prev as any).historyVirtualStart ? (prev as any).historyVirtualStart[key] : undefined;
+      const shouldShiftVirtual = hasBefore && typeof prevVirtualStart === "number" && Number.isFinite(prevVirtualStart) && delta > 0;
+      const nextVirtualStart = shouldShiftVirtual ? Math.max(0, prevVirtualStart + delta) : prevVirtualStart;
       if (isPreview) {
         return {
           ...prev,
@@ -2272,6 +2276,7 @@ export function handleServerMessage(
         historyCursor: cursor !== null ? { ...prevCursor, [key]: cursor } : prevCursor,
         historyHasMore: hasBefore ? { ...prevHasMoreMap, [key]: Boolean(hasMore) } : prevHasMoreMap,
         historyLoading: { ...prevLoadingMap, [key]: false },
+        ...(shouldShiftVirtual ? { historyVirtualStart: { ...(prev as any).historyVirtualStart, [key]: nextVirtualStart } } : {}),
       };
     });
     return;

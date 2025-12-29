@@ -875,6 +875,11 @@
   margin: 0 auto;
 }
 
+.chat-virtual-spacer {
+  width: 100%;
+  pointer-events: none;
+}
+
 .msg-sep {
   display: flex;
   align-items: center;

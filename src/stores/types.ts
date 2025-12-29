@@ -364,6 +364,7 @@ export interface AppState {
   historyCursor: Record<string, number>;
   historyHasMore: Record<string, boolean>;
   historyLoading: Record<string, boolean>;
+  historyVirtualStart: Record<string, number>;
 
   outbox: Record<string, OutboxEntry[]>;
 

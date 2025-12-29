@@ -79,6 +79,7 @@ export function createInitialState(): AppState {
     historyCursor: {},
     historyHasMore: {},
     historyLoading: {},
+    historyVirtualStart: {},
     outbox: {},
     drafts: {},
     input: "",

@@ -10,6 +10,7 @@ import { renderRichText } from "../../helpers/chat/richText";
 import { renderBoardPost } from "../../helpers/boards/boardPost";
 import type { Layout } from "../layout/types";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
+import { clampVirtualAvg, getVirtualEnd, getVirtualMaxStart, getVirtualStart, shouldVirtualize } from "../../helpers/chat/virtualHistory";
 
 function dayKey(ts: number): string {
   try {
@@ -791,23 +792,41 @@ export function renderChat(layout: Layout, state: AppState) {
   const msgs = (key && state.conversations[key]) || [];
   const hasMore = Boolean(key && state.historyHasMore && state.historyHasMore[key]);
   const loadingMore = Boolean(key && state.historyLoading && state.historyLoading[key]);
-  const lines: HTMLElement[] = [];
   const searchActive = Boolean(state.chatSearchOpen && state.chatSearchQuery.trim());
   const hits = searchActive ? state.chatSearchHits || [] : [];
   const hitSet = searchActive && hits.length ? new Set(hits) : null;
   const activePos = searchActive ? Math.max(0, Math.min(hits.length ? hits.length - 1 : 0, state.chatSearchPos | 0)) : 0;
   const activeMsgIdx = searchActive && hits.length ? hits[activePos] : null;
+  const virtualEnabled = Boolean(key && shouldVirtualize(msgs.length, searchActive));
+  const virtualAvgMap: Map<string, number> = hostState.__chatVirtualAvgHeights || new Map();
+  hostState.__chatVirtualAvgHeights = virtualAvgMap;
+  const avgHeight = clampVirtualAvg(key ? virtualAvgMap.get(key) : null);
+  const maxVirtualStart = getVirtualMaxStart(msgs.length);
+  const preferredStart = virtualEnabled && shouldStick ? maxVirtualStart : state.historyVirtualStart?.[key];
+  const virtualStart = virtualEnabled ? getVirtualStart(msgs.length, preferredStart) : 0;
+  const virtualEnd = virtualEnabled ? getVirtualEnd(msgs.length, virtualStart) : msgs.length;
+  const topSpacerHeight = virtualEnabled ? Math.max(0, virtualStart) * avgHeight : 0;
+  const bottomSpacerHeight = virtualEnabled ? Math.max(0, msgs.length - virtualEnd) * avgHeight : 0;
+  const lineItems: HTMLElement[] = [];
+  const lines: HTMLElement[] = [];
   let prevDay = "";
   let prevMsg: ChatMessage | null = null;
+  if (virtualEnabled && virtualStart > 0) {
+    const prev = msgs[virtualStart - 1];
+    if (prev) {
+      prevDay = dayKey(prev.ts);
+      prevMsg = prev.kind === "sys" ? null : prev;
+    }
+  }
   const albumMin = 3;
   const albumMax = 12;
   const albumGapSeconds = 3 * 60;
-  for (let msgIdx = 0; msgIdx < msgs.length; msgIdx += 1) {
+  for (let msgIdx = virtualStart; msgIdx < virtualEnd; msgIdx += 1) {
     const m = msgs[msgIdx];
     const dk = dayKey(m.ts);
     if (dk && dk !== prevDay) {
       prevDay = dk;
-      lines.push(el("div", { class: "msg-sep", "aria-hidden": "true" }, [el("span", { class: "msg-sep-text" }, [formatDayLabel(m.ts)])]));
+      lineItems.push(el("div", { class: "msg-sep", "aria-hidden": "true" }, [el("span", { class: "msg-sep-text" }, [formatDayLabel(m.ts)])]));
       prevMsg = null;
     }
 
@@ -815,7 +834,7 @@ export function renderChat(layout: Layout, state: AppState) {
     if (isAlbumCandidate(m, info)) {
       const group: AlbumItem[] = [{ idx: msgIdx, msg: m, info }];
       let scan = msgIdx + 1;
-      while (scan < msgs.length) {
+      while (scan < virtualEnd) {
         const next = msgs[scan];
         if (dk && dayKey(next.ts) !== dk) break;
         const nextInfo = getFileAttachmentInfo(state, next, { mobileUi });
@@ -833,7 +852,7 @@ export function renderChat(layout: Layout, state: AppState) {
         line.setAttribute("data-msg-idx", String(group[group.length - 1].idx));
         if (hit) line.classList.add("msg-hit");
         if (active) line.classList.add("msg-hit-active");
-        lines.push(line);
+        lineItems.push(line);
         prevMsg = group[group.length - 1].msg.kind === "sys" ? null : group[group.length - 1].msg;
         msgIdx = group[group.length - 1].idx;
         continue;
@@ -845,7 +864,7 @@ export function renderChat(layout: Layout, state: AppState) {
     line.setAttribute("data-msg-idx", String(msgIdx));
     if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");
     if (activeMsgIdx === msgIdx) line.classList.add("msg-hit-active");
-    lines.push(line);
+    lineItems.push(line);
     prevMsg = m.kind === "sys" ? null : m;
   }
 
@@ -860,10 +879,10 @@ export function renderChat(layout: Layout, state: AppState) {
       },
       ["Загрузка…"]
     );
-    lines.unshift(el("div", { class: "chat-history-more-wrap" }, [btn]));
+    lineItems.unshift(el("div", { class: "chat-history-more-wrap" }, [btn]));
   }
 
-  if (!lines.length) {
+  if (!lineItems.length) {
     const loaded = key ? Boolean(state.historyLoaded[key]) : true;
     if (!loaded) {
       for (let i = 0; i < 7; i += 1) {
@@ -871,6 +890,18 @@ export function renderChat(layout: Layout, state: AppState) {
       }
     } else {
       lines.push(el("div", { class: "chat-empty" }, [el("div", { class: "chat-empty-title" }, ["Пока нет сообщений"])]));
+    }
+  } else {
+    if (virtualEnabled && topSpacerHeight > 0) {
+      const spacer = el("div", { class: "chat-virtual-spacer", "data-virtual-spacer": "top", "aria-hidden": "true" });
+      spacer.style.height = `${topSpacerHeight}px`;
+      lines.push(spacer);
+    }
+    lines.push(...lineItems);
+    if (virtualEnabled && bottomSpacerHeight > 0) {
+      const spacer = el("div", { class: "chat-virtual-spacer", "data-virtual-spacer": "bottom", "aria-hidden": "true" });
+      spacer.style.height = `${bottomSpacerHeight}px`;
+      lines.push(spacer);
     }
   }
   const titleChildren: Array<string | HTMLElement> = [...chatTitleNodes(state)];
@@ -986,6 +1017,38 @@ export function renderChat(layout: Layout, state: AppState) {
   if (searchBar) topChildren.push(searchBar);
   layout.chatTop.replaceChildren(...topChildren);
   scrollHost.replaceChildren(el("div", { class: "chat-lines" }, lines));
+
+  if (virtualEnabled && key) {
+    const w = typeof window !== "undefined" ? window : null;
+    if (hostState.__chatVirtualAvgRaf) {
+      // already scheduled
+    } else {
+      const schedule = () => {
+        hostState.__chatVirtualAvgRaf = null;
+        const linesEl = scrollHost.firstElementChild as HTMLElement | null;
+        if (!linesEl) return;
+        const children = Array.from(linesEl.children) as HTMLElement[];
+        let spacerHeight = 0;
+        let spacerCount = 0;
+        for (const child of children) {
+          if (child.getAttribute("data-virtual-spacer")) {
+            spacerHeight += child.offsetHeight;
+            spacerCount += 1;
+          }
+        }
+        const totalHeight = Math.max(0, linesEl.scrollHeight - spacerHeight);
+        const lineCount = Math.max(1, children.length - spacerCount);
+        const avg = clampVirtualAvg(totalHeight / lineCount);
+        virtualAvgMap.set(key, avg);
+      };
+      if (w && typeof w.requestAnimationFrame === "function") {
+        hostState.__chatVirtualAvgRaf = w.requestAnimationFrame(schedule);
+      } else {
+        hostState.__chatVirtualAvgRaf = 1;
+        schedule();
+      }
+    }
+  }
 
   // iOS/WebKit: images and media previews may change the history height after render.
   // Keep the chat pinned to bottom on content height changes, but only when pinned is active.

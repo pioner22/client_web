@@ -23,6 +23,13 @@ import type {
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { newestServerMessageId } from "../helpers/chat/historySync";
+import {
+  HISTORY_VIRTUAL_OVERSCAN,
+  clampVirtualAvg,
+  getVirtualMaxStart,
+  getVirtualStart,
+  shouldVirtualize,
+} from "../helpers/chat/virtualHistory";
 import { loadDraftsForUser, sanitizeDraftMap, saveDraftsForUser, updateDraftMap } from "../helpers/chat/drafts";
 import { clampChatSearchPos, computeChatSearchHits, stepChatSearchPos } from "../helpers/chat/chatSearch";
 import { loadPinsForUser, sanitizePins, savePinsForUser, togglePin } from "../helpers/chat/pins";
@@ -1299,6 +1306,39 @@ export function mountApp(root: HTMLElement) {
     requestMoreHistory();
   }
 
+  let lastVirtualWindowUpdateAt = 0;
+  function maybeUpdateVirtualWindow(scrollTop: number) {
+    const st = store.get();
+    if (st.page !== "main") return;
+    if (!st.selected) return;
+    if (st.chatSearchOpen && st.chatSearchQuery.trim()) return;
+    const key = conversationKey(st.selected);
+    if (!key) return;
+    const msgs = st.conversations[key] || [];
+    if (!shouldVirtualize(msgs.length, false)) return;
+
+    const hostState = layout.chatHost as any;
+    const avgMap: Map<string, number> | undefined = hostState.__chatVirtualAvgHeights;
+    const avg = clampVirtualAvg(avgMap?.get(key));
+    const maxStart = getVirtualMaxStart(msgs.length);
+    let targetStart = Math.floor(scrollTop / avg) - HISTORY_VIRTUAL_OVERSCAN;
+    targetStart = Math.max(0, Math.min(maxStart, targetStart));
+    const stick = hostState.__stickBottom;
+    if (stick && stick.active && stick.key === key) {
+      targetStart = maxStart;
+    }
+    const currentStart = getVirtualStart(msgs.length, st.historyVirtualStart?.[key]);
+    const delta = Math.abs(targetStart - currentStart);
+    if (delta < Math.max(8, Math.floor(HISTORY_VIRTUAL_OVERSCAN / 2))) return;
+    const now = Date.now();
+    if (now - lastVirtualWindowUpdateAt < 120) return;
+    lastVirtualWindowUpdateAt = now;
+    store.set((prev) => ({
+      ...prev,
+      historyVirtualStart: { ...prev.historyVirtualStart, [key]: targetStart },
+    }));
+  }
+
   layout.chatHost.addEventListener(
     "scroll",
     () => {
@@ -1328,6 +1368,7 @@ export function mountApp(root: HTMLElement) {
       }
       scheduleChatJumpVisibility();
       maybeAutoLoadMoreHistory(scrollTop, scrollingUp);
+      maybeUpdateVirtualWindow(scrollTop);
     },
     { passive: true }
   );
@@ -5640,6 +5681,7 @@ export function mountApp(root: HTMLElement) {
       historyCursor: {},
       historyHasMore: {},
       historyLoading: {},
+      historyVirtualStart: {},
       outbox: {},
       drafts: {},
       input: "",
