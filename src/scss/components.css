@@ -188,14 +188,13 @@
 .row[data-online="1"] .avatar::after {
   content: "";
   position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 12px;
-  height: 12px;
+  right: 1px;
+  bottom: 1px;
+  width: 14px;
+  height: 14px;
   border-radius: 999px;
-  background: var(--good);
+  background: var(--row-dot-online);
   border: 2px solid var(--sidebar-bg);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--good), transparent 60%);
 }
 
 .row:disabled {

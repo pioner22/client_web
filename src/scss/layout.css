@@ -68,6 +68,8 @@
 }
 
 .sidebar {
+  --avatar-size: 54px;
+  --avatar-font-size: 20px;
   background: var(--sidebar-bg);
   border-right: var(--sidebar-border-width) solid var(--sidebar-border-color);
   padding: var(--sidebar-pad);
@@ -81,6 +83,8 @@
 }
 
 .sidebar.sidebar-collapsed {
+  --avatar-size: 32px;
+  --avatar-font-size: 12px;
   padding-left: var(--sp-2);
   padding-right: var(--sp-2);
 }

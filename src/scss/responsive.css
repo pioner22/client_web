@@ -384,8 +384,8 @@
   }
 
   .sidebar .row-unread {
-    min-width: 20px;
-    height: 20px;
+    min-width: 22px;
+    height: 22px;
     padding: 0 7px;
     font-size: 11px;
   }
@@ -586,6 +586,16 @@
   }
 
   /* Telegram-like list rows in sidebar. */
+  .sidebar {
+    --row-bg-hover: color-mix(in srgb, var(--panel), transparent 25%);
+    --row-bg-selected: color-mix(in srgb, var(--focus), var(--panel) 92%);
+    --row-bg-selected-hover: var(--row-bg-selected);
+    --row-text-selected: var(--text);
+    --row-text-selected-hover: var(--text);
+    --row-text-selected-muted: color-mix(in srgb, var(--text), var(--muted) 40%);
+    --row-text-selected-muted-hover: var(--row-text-selected-muted);
+  }
+
   .sidebar .row {
     border-radius: 0;
     background: transparent;
@@ -654,11 +664,11 @@
   }
 
   .sidebar .row:hover {
-    background: color-mix(in srgb, var(--panel), transparent 25%);
+    background: var(--row-bg-hover);
   }
 
   .sidebar .row-sel {
-    background: color-mix(in srgb, var(--focus), var(--panel) 92%);
+    background: var(--row-bg-selected);
   }
 
   .sidebar .row-sel[data-ctx-kind]::after {

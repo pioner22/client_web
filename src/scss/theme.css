@@ -247,17 +247,17 @@
   --row-pad-x: 16px;
   --row-gap: 16px;
   --row-radius: 10px;
-  --row-bg-hover: var(--panel2);
-  --row-bg-selected: var(--sel);
-  --row-text-selected: var(--text);
-  --row-text-selected-muted: color-mix(in srgb, var(--text), var(--muted) 40%);
+  --row-bg-hover: color-mix(in srgb, var(--panel2), var(--panel) 20%);
+  --row-bg-selected: var(--focus);
+  --row-text-selected: #ffffff;
+  --row-text-selected-muted: rgba(255, 255, 255, 0.85);
   --row-bg-selected-hover: var(--row-bg-selected);
-  --row-text-selected-hover: var(--row-text-selected);
-  --row-text-selected-muted-hover: var(--row-text-selected-muted);
-  --row-unread-selected-bg: var(--panel);
+  --row-text-selected-hover: #ffffff;
+  --row-text-selected-muted-hover: rgba(255, 255, 255, 0.85);
+  --row-unread-selected-bg: #ffffff;
   --row-unread-selected-text: var(--focus);
   --row-star-color: var(--warn);
-  --row-dot-online: var(--good);
+  --row-dot-online: var(--focus);
   --row-dot-offline: var(--muted);
   --row-prefix-color: var(--muted);
 
