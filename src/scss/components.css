@@ -335,6 +335,7 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.25;
+  font-family: var(--font-rounded);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -382,7 +383,8 @@
   background: color-mix(in srgb, var(--focus), transparent 12%);
   color: #fff;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-rounded);
   font-variant-numeric: tabular-nums;
   box-shadow: 0 10px 22px color-mix(in srgb, var(--focus), transparent 78%);
 }
@@ -810,6 +812,7 @@
   flex: 0 0 auto;
   min-width: 56px;
   text-align: center;
+  font-family: var(--font-rounded);
   font-variant-numeric: tabular-nums;
   color: var(--muted);
   font-size: 12px;
@@ -1055,6 +1058,7 @@
   justify-content: flex-end;
   gap: var(--sp-2);
   font-size: 12px;
+  font-family: var(--font-rounded);
   color: var(--msg-time-color);
 }
 
@@ -1095,6 +1099,7 @@
 
 .msg-react-count {
   font-size: 12px;
+  font-family: var(--font-rounded);
   opacity: 0.85;
 }
 

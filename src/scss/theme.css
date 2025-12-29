@@ -1,3 +1,12 @@
+@font-face {
+  font-family: "Numbers Rounded";
+  src: url("/assets/fonts/Numbers-Rounded.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0030-0039, U+002B, U+002D;
+}
+
 :root {
   /* ===== Core palette (legacy базовые токены) ===== */
   --bg: #0b0f14;
@@ -17,12 +26,33 @@
   --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue",
     Arial, sans-serif;
+  --font-regular: var(--sans);
+  --font-monospace: var(--mono);
+  --font-rounded: -ui-rounded, "Numbers Rounded", "Roboto", "Helvetica Neue", sans-serif;
   --font-family: var(--sans);
   --emoji-font: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", "Android Emoji",
     "EmojiOne Color", "Twemoji Mozilla", "Segoe UI Symbol", sans-serif;
-  --font-size: 16px;
+  --font-size-20: 20px;
+  --font-size-18: 18px;
+  --font-size-16: 16px;
+  --font-size-15: 15px;
+  --font-size-14: 14px;
+  --font-size-13: 13px;
+  --font-size-12: 12px;
+  --font-size-11: 11px;
+  --font-size: var(--font-size-16);
+  --line-height-20: 26px;
+  --line-height-18: 24px;
+  --line-height-16: 21px;
+  --line-height-15: 20px;
+  --line-height-14: 18px;
+  --line-height-13: 17px;
+  --line-height-12: 16px;
+  --line-height-11: 15px;
   --line-height: 1.3125;
-  --font-weight: 400;
+  --font-weight-normal: 400;
+  --font-weight-bold: 500;
+  --font-weight: var(--font-weight-normal);
 
   /* ===== Spacing scale ===== */
   --sp-1: 4px;
