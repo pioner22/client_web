@@ -260,6 +260,15 @@ export function renderSidebar(
     if (!enabled && has) parts.splice(parts.indexOf(cls), 1);
     (node as any).className = parts.join(" ");
   };
+  const markCompactAvatarRows = (rows: Array<HTMLElement | null | undefined>): HTMLElement[] => {
+    const out: HTMLElement[] = [];
+    for (const row of rows) {
+      if (!row) continue;
+      toggleClass(row, "row-avatar-compact", true);
+      out.push(row);
+    }
+    return out;
+  };
 
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
@@ -665,22 +674,22 @@ export function renderSidebar(
       return;
     }
 
-    const onlineRows = online
-      .map((f) => {
+    const onlineRows = markCompactAvatarRows(
+      online.map((f) => {
         const k = dmKey(f.id);
         if (pinnedSet.has(k)) return null;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
       })
-      .filter(Boolean) as HTMLElement[];
-    const offlineRows = offline
-      .map((f) => {
+    );
+    const offlineRows = markCompactAvatarRows(
+      offline.map((f) => {
         const k = dmKey(f.id);
         if (pinnedSet.has(k)) return null;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
       })
-      .filter(Boolean) as HTMLElement[];
+    );
 
     const unknownAttnRows = unknownAttnPeers
       .filter((id) => (hasSidebarQuery ? matchesQuery(id) : true))
@@ -694,6 +703,7 @@ export function renderSidebar(
     });
 
     if (activeTab === "contacts") {
+      const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
       if (hasSidebarQuery) {
         const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
         allFriends.sort((a, b) => {
@@ -707,18 +717,19 @@ export function renderSidebar(
           const meta = previewForConversation(state, k, "dm", drafts[k]);
           return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
         });
-        const allRows = [...unknownAttnRows, ...rows];
+        const allRows = markCompactAvatarRows([...unknownAttnRows, ...rows]);
         mountMobile([
-          ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
+          ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
           ...(allRows.length
             ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
             : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])])
         ]);
         return;
       }
+      const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
       mountMobile([
-        ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
-        ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
+        ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
+        ...(compactUnknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows] : []),
         el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
         ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
         el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
@@ -1088,6 +1099,7 @@ export function renderSidebar(
     }
 
     if (activeTab === "contacts") {
+      const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
       const onlineAll = (state.friends || []).filter((f) => f.online).filter((f) => !pinnedSet.has(dmKey(f.id)));
       const offlineAll = (state.friends || []).filter((f) => !f.online).filter((f) => !pinnedSet.has(dmKey(f.id)));
 
@@ -1114,10 +1126,10 @@ export function renderSidebar(
             const pseudo: FriendEntry = { id, online: false, unread: 0 };
             return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
           });
-        const allRows = [...unknownAttnRows, ...rows];
+        const allRows = markCompactAvatarRows([...unknownAttnRows, ...rows]);
         mountPwa([
           ...(searchBar ? [searchBar] : []),
-          ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
+          ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
           ...(allRows.length
             ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
             : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]),
@@ -1125,21 +1137,26 @@ export function renderSidebar(
         return;
       }
 
-      const onlineRows = onlineAll
+      const onlineRows = markCompactAvatarRows(
+        onlineAll
         .filter((f) => matchesFriend(f))
         .map((f) => {
           const k = dmKey(f.id);
           const meta = previewForConversation(state, k, "dm", drafts[k]);
           return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-        });
-      const offlineRows = offlineAll
+        })
+      );
+      const offlineRows = markCompactAvatarRows(
+        offlineAll
         .filter((f) => matchesFriend(f))
         .map((f) => {
           const k = dmKey(f.id);
           const meta = previewForConversation(state, k, "dm", drafts[k]);
           return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-        });
-      const unknownAttnRows = unknownAttnPeers
+        })
+      );
+      const unknownAttnRows = markCompactAvatarRows(
+        unknownAttnPeers
         .map((id) => {
           const k = dmKey(id);
           const meta = previewForConversation(state, k, "dm", drafts[k]);
@@ -1148,11 +1165,11 @@ export function renderSidebar(
           const pseudo: FriendEntry = { id, online: false, unread: 0 };
           return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
         })
-        .filter(Boolean) as HTMLElement[];
+      );
 
       mountPwa([
         ...(searchBar ? [searchBar] : []),
-        ...(pinnedContactRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRows] : []),
+        ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
         ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
         el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
         ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
@@ -1521,22 +1538,22 @@ export function renderSidebar(
     .filter((f) => matchesFriend(f))
     .sort((a, b) => displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" }));
 
-  const onlineRows = onlineSorted
-    .map((f) => {
+  const onlineRows = markCompactAvatarRows(
+    onlineSorted.map((f) => {
       const k = dmKey(f.id);
       if (pinnedSet.has(k)) return null;
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     })
-    .filter(Boolean) as HTMLElement[];
-  const offlineRows = offlineSorted
-    .map((f) => {
+  );
+  const offlineRows = markCompactAvatarRows(
+    offlineSorted.map((f) => {
       const k = dmKey(f.id);
       if (pinnedSet.has(k)) return null;
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     })
-    .filter(Boolean) as HTMLElement[];
+  );
 
   if (hasSidebarQuery) {
     const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
@@ -1549,7 +1566,7 @@ export function renderSidebar(
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
     });
-    const allRows = [...unknownAttnRows, ...rows];
+    const allRows = markCompactAvatarRows([...unknownAttnRows, ...rows]);
     mountDesktop([
       ...(allRows.length
         ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
@@ -1558,8 +1575,9 @@ export function renderSidebar(
     return;
   }
 
+  const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
   mountDesktop([
-    ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
+    ...(compactUnknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows] : []),
     el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
     ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
     el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),

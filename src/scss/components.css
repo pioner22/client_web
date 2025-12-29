@@ -162,6 +162,11 @@
   touch-action: manipulation;
 }
 
+.sidebar:not(.sidebar-collapsed) .row.row-avatar-compact {
+  --avatar-size: 42px;
+  --avatar-font-size: 16px;
+}
+
 .avatar {
   width: var(--avatar-size);
   height: var(--avatar-size);
