@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.234",
+    date: "2025-12-29",
+    fixed: ["iOS/Safari: `--vh` теперь следует layout viewport (tweb parity) когда клавиатура скрыта — меньше ложных «усадок» интерфейса при небольшой разнице visualViewport"],
+  },
+  {
     version: "0.1.233",
     date: "2025-12-28",
     fixed: ["Доски (mobile): в редакторе при длинных черновиках скрепка/✏️ больше не «уезжают вниз» — кнопки закреплены сверху, а прокрутка текста держится у курсора"],

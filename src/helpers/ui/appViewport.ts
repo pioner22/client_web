@@ -32,7 +32,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     docStyle?.setProperty(name, value);
   };
 
-  const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number; gapBottom: number } => {
+  const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number; gapBottom: number; vhHeight: number } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 32;
     // On iOS/Safari even a small (few px) mismatch between layout viewport and visual viewport
@@ -121,12 +121,20 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const useVisualViewportHeight = Boolean(iosEnv && vvHeight && vvHeight > 0 && base > 0 && base - vvHeight >= USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX);
     const resolved = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : useVisualViewportHeight ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
-    return { height: height > 0 ? height : 0, keyboard: keyboardVisible, vvTop, vvBottom: Math.round(coveredBottom), gapBottom };
+    const vhHeight = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : base;
+    return {
+      height: height > 0 ? height : 0,
+      keyboard: keyboardVisible,
+      vvTop,
+      vvBottom: Math.round(coveredBottom),
+      gapBottom,
+      vhHeight: vhHeight > 0 ? vhHeight : 0,
+    };
   };
 
   const apply = () => {
     rafId = null;
-    const { height, keyboard, vvTop, vvBottom, gapBottom } = read();
+    const { height, keyboard, vvTop, vvBottom, gapBottom, vhHeight } = read();
     if (!height) {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
       if (docEl?.classList) docEl.classList.remove("kbd-open");
@@ -135,7 +143,8 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
     if (docEl?.classList) docEl.classList.toggle("kbd-open", keyboard);
 
-    const vh = +((height * 0.01) as number).toFixed(2);
+    const vhSource = vhHeight > 0 ? vhHeight : height;
+    const vh = +((vhSource * 0.01) as number).toFixed(2);
     setVar("--vh", `${vh}px`);
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
