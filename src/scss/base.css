@@ -22,6 +22,12 @@ body {
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
 
+@supports (padding: max(0px)) {
+  html {
+    padding: 0 min(16px, env(safe-area-inset-right)) 0 min(16px, env(safe-area-inset-left));
+  }
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;

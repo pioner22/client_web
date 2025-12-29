@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.235",
+    date: "2025-12-29",
+    fixed: [
+      "iOS/Safari: safe-area по бокам теперь задаётся на `html` (tweb parity), убраны дублирующие отступы в header/sidebar/chat/composer/footer — меньше «двойных» полей в landscape",
+    ],
+  },
+  {
     version: "0.1.234",
     date: "2025-12-29",
     fixed: ["iOS/Safari: `--vh` теперь следует layout viewport (tweb parity) когда клавиатура скрыта — меньше ложных «усадок» интерфейса при небольшой разнице visualViewport"],

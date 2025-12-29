@@ -18,8 +18,6 @@
   border-bottom: var(--header-border-width) solid var(--header-border-color);
   padding: var(--header-pad-y) var(--header-pad-x);
   padding-top: calc(var(--header-pad-y) + env(safe-area-inset-top));
-  padding-left: calc(var(--header-pad-x) + env(safe-area-inset-left));
-  padding-right: calc(var(--header-pad-x) + env(safe-area-inset-right));
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-rows: auto auto;
@@ -73,8 +71,6 @@
   background: var(--sidebar-bg);
   border-right: var(--sidebar-border-width) solid var(--sidebar-border-color);
   padding: var(--sidebar-pad);
-  padding-left: calc(var(--sidebar-pad) + env(safe-area-inset-left));
-  padding-right: calc(var(--sidebar-pad) + env(safe-area-inset-right));
   padding-bottom: 3px;
   min-height: 0;
   min-width: 0;
@@ -98,8 +94,6 @@
 .chat {
   background: var(--chat-bg);
   padding: var(--chat-pad);
-  padding-left: calc(var(--chat-pad) + env(safe-area-inset-left));
-  padding-right: calc(var(--chat-pad) + env(safe-area-inset-right));
   overflow: hidden;
   min-height: 0;
   min-width: 0;
@@ -126,8 +120,6 @@
   display: flex;
   flex-direction: column;
   padding: var(--composer-pad-y) var(--chat-pad);
-  padding-left: calc(var(--chat-pad) + env(safe-area-inset-left));
-  padding-right: calc(var(--chat-pad) + env(safe-area-inset-right));
   /* Avoid "double padding" feel on iOS: safe-area already provides spacing. */
   padding-bottom: max(var(--composer-pad-y), var(--safe-bottom-layout-pad));
   border-top: var(--composer-border-width) solid var(--composer-border-color);
@@ -566,8 +558,6 @@
 
 .footer {
   padding: var(--footer-pad-y) var(--footer-pad-x);
-  padding-left: calc(var(--footer-pad-x) + env(safe-area-inset-left));
-  padding-right: calc(var(--footer-pad-x) + env(safe-area-inset-right));
   padding-bottom: calc(var(--footer-pad-y) + var(--safe-bottom-layout-pad));
   border-top: var(--footer-border-width) solid var(--footer-border-color);
   background: var(--footer-bg);
