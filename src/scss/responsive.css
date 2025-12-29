@@ -192,6 +192,11 @@
 }
 
 @media (min-width: 601px) and (max-width: 925px) {
+  :root {
+    --floating-sidebar-width: 26.5rem;
+    --floating-sidebar-shift: calc(26.5rem + 1px);
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }
@@ -223,8 +228,8 @@
     top: 0;
     bottom: 0;
     left: 0;
-    width: 26.5rem;
-    max-width: min(26.5rem, 92vw);
+    width: var(--floating-sidebar-width);
+    max-width: min(var(--floating-sidebar-width), 92vw);
     transform: translateX(-110%);
     transition: transform 160ms ease;
     z-index: 41;
@@ -236,7 +241,7 @@
   }
 
   html.floating-sidebar-open .chat-col {
-    transform: translateX(26.5rem);
+    transform: translateX(var(--floating-sidebar-shift));
   }
 
   @media (prefers-reduced-motion: reduce) {
