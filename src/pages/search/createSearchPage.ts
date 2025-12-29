@@ -5,7 +5,8 @@ import { focusElement } from "../../helpers/ui/focus";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { mapKeyboardLayout } from "../../helpers/search/keyboardLayout";
 import { deriveServerSearchQuery } from "../../helpers/search/serverSearchQuery";
-import type { AppState, SearchResultEntry, TargetRef } from "../../stores/types";
+import { fileBadge } from "../../helpers/files/fileBadge";
+import type { AppState, ChatMessage, SearchResultEntry, TargetRef } from "../../stores/types";
 
 export interface SearchPageActions {
   onQueryChange: (query: string) => void;
@@ -55,6 +56,17 @@ const HISTORY_SCAN_LIMIT = 400;
 const HISTORY_PER_CHAT_LIMIT = 4;
 const HISTORY_MAX_RESULTS = 40;
 const SNIPPET_MAX = 140;
+const HISTORY_LINK_RE = /(https?:\/\/|www\.)\S+/i;
+
+type HistoryFilter = "all" | "media" | "files" | "links" | "audio";
+
+const HISTORY_FILTERS: Array<{ id: HistoryFilter; label: string }> = [
+  { id: "all", label: "Все" },
+  { id: "media", label: "Медиа" },
+  { id: "files", label: "Файлы" },
+  { id: "links", label: "Ссылки" },
+  { id: "audio", label: "Аудио" },
+];
 
 function normalizeSearchText(raw: string): string {
   return String(raw ?? "")
@@ -104,6 +116,31 @@ function formatHandle(handle: string): string {
   return h.startsWith("@") ? h : `@${h}`;
 }
 
+function classifyHistoryMessage(msg: ChatMessage) {
+  const attachment = msg?.attachment;
+  const text = String(msg?.text || "");
+  const hasLink = HISTORY_LINK_RE.test(text);
+  let hasMedia = false;
+  let hasAudio = false;
+  let hasFiles = false;
+  if (attachment?.kind === "file") {
+    const badge = fileBadge(attachment.name, attachment.mime);
+    if (badge.kind === "image" || badge.kind === "video") {
+      hasMedia = true;
+    } else if (badge.kind === "audio") {
+      hasAudio = true;
+    } else {
+      hasFiles = true;
+    }
+  }
+  return { media: hasMedia, files: hasFiles, links: hasLink, audio: hasAudio };
+}
+
+function matchesHistoryFilter(match: { flags: { media: boolean; files: boolean; links: boolean; audio: boolean } }, filter: HistoryFilter): boolean {
+  if (filter === "all") return true;
+  return Boolean(match.flags?.[filter]);
+}
+
 function resolveContactLabel(state: AppState, id: string): { title: string; handle: string; sub: string; online: boolean } {
   const friend = state.friends.find((f) => f.id === id);
   const profile = state.profiles?.[id];
@@ -149,10 +186,11 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   const btn = el("button", { class: "btn", type: "button" }, ["Искать"]);
 
   const form = el("div", { class: "page-form" }, [input, btn]);
+  const filterBar = el("div", { class: "search-filters hidden", role: "tablist" });
   const results = el("div", { class: "page-results" });
   const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — искать | Esc — назад"]);
 
-  const root = el("div", { class: "page" }, [title, form, results, ...(hint ? [hint] : [])]);
+  const root = el("div", { class: "page page-search" }, [title, form, filterBar, results, ...(hint ? [hint] : [])]);
 
   type ContactMatch = {
     id: string;
@@ -176,6 +214,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     title: string;
     sub: string;
     ts: number;
+    flags: { media: boolean; files: boolean; links: boolean; audio: boolean };
   };
 
   let cachedQuery = "";
@@ -188,6 +227,15 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let cachedRooms: RoomMatch[] = [];
   let cachedHistory: HistoryMatch[] = [];
   let cachedTotals = { contacts: 0, rooms: 0, history: 0 };
+  let cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, audio: 0 };
+  let activeFilter: HistoryFilter = "all";
+  let lastState: AppState | null = null;
+
+  const setActiveFilter = (next: HistoryFilter) => {
+    if (activeFilter === next) return;
+    activeFilter = next;
+    if (lastState) update(lastState);
+  };
 
   function computeLocalMatches(state: AppState, rawQuery: string) {
     const q = rawQuery.trim();
@@ -207,7 +255,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       cachedRooms = [];
       cachedHistory = [];
       cachedTotals = { contacts: 0, rooms: 0, history: 0 };
-      return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals };
+      cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, audio: 0 };
+      return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals, historyCounts: cachedHistoryCounts };
     }
 
     const canReuse =
@@ -218,7 +267,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       cachedProfilesRef === state.profiles &&
       cachedConversationsRef === state.conversations;
     if (canReuse) {
-      return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals };
+      return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals, historyCounts: cachedHistoryCounts };
     }
 
     const contactMatches: ContactMatch[] = [];
@@ -310,6 +359,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     roomMatches.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
 
     const historyMatches: HistoryMatch[] = [];
+    const historyCounts = { all: 0, media: 0, files: 0, links: 0, audio: 0 };
     if (tokens.length) {
       for (const [key, msgs] of Object.entries(state.conversations || {})) {
         if (!Array.isArray(msgs) || !msgs.length) continue;
@@ -341,7 +391,13 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           if (fromLabel && target.kind !== "dm") subParts.push(`От: ${fromLabel}`);
           if (snippet) subParts.push(snippet);
           const sub = subParts.join(" · ");
-          historyMatches.push({ target, idx, title, sub, ts: Number(msg?.ts || 0) });
+          const flags = classifyHistoryMessage(msg);
+          historyMatches.push({ target, idx, title, sub, ts: Number(msg?.ts || 0), flags });
+          historyCounts.all += 1;
+          if (flags.media) historyCounts.media += 1;
+          if (flags.files) historyCounts.files += 1;
+          if (flags.links) historyCounts.links += 1;
+          if (flags.audio) historyCounts.audio += 1;
           picked += 1;
           if (picked >= HISTORY_PER_CHAT_LIMIT) break;
         }
@@ -359,7 +415,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     cachedContacts = contactMatches.slice(0, CONTACTS_LIMIT);
     cachedRooms = roomMatches.slice(0, ROOMS_LIMIT);
     cachedHistory = historyMatches.slice(0, HISTORY_MAX_RESULTS);
-    return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals };
+    cachedHistoryCounts = historyCounts;
+    return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals, historyCounts: cachedHistoryCounts };
   }
 
   function submit() {
@@ -381,6 +438,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   });
 
   function update(state: AppState) {
+    lastState = state;
     if (document.activeElement !== input && input.value !== state.searchQuery) {
       input.value = state.searchQuery;
     }
@@ -390,6 +448,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     const canSearchNow = Boolean(deriveServerSearchQuery(qRaw));
 
     if (!q) {
+      activeFilter = "all";
+      filterBar.classList.add("hidden");
       results.replaceChildren(
         el("div", { class: "page-empty" }, [
           el("div", { class: "page-empty-title" }, ["Введите имя, @логин или ID"]),
@@ -400,12 +460,42 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     const local = computeLocalMatches(state, qRaw);
+    if (activeFilter !== "all" && local.historyCounts[activeFilter] === 0) {
+      activeFilter = "all";
+    }
     const list = state.searchResults || [];
     const blocks: HTMLElement[] = [];
 
     const pushSection = (label: string) => {
       blocks.push(el("div", { class: "pane-section" }, [label]));
     };
+
+    if (local.historyCounts.all > 0) {
+      filterBar.classList.remove("hidden");
+      filterBar.replaceChildren(
+        ...HISTORY_FILTERS.map((item) => {
+          const count = item.id === "all" ? local.historyCounts.all : local.historyCounts[item.id];
+          const active = item.id === activeFilter;
+          const disabled = item.id !== "all" && count === 0;
+          const btn = el(
+            "button",
+            {
+              class: `search-filter${active ? " is-active" : ""}`,
+              type: "button",
+              role: "tab",
+              "aria-selected": active ? "true" : "false",
+              ...(disabled ? { disabled: "true" } : {}),
+            },
+            [item.label, el("span", { class: "search-filter-count" }, [String(count)])]
+          );
+          if (!disabled) btn.addEventListener("click", () => setActiveFilter(item.id));
+          return btn;
+        })
+      );
+    } else {
+      filterBar.classList.add("hidden");
+      filterBar.replaceChildren();
+    }
 
     if (local.contacts.length) {
       pushSection(`Контакты (${local.totals.contacts})`);
@@ -446,14 +536,19 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
     if (local.history.length) {
       pushSection(`История чатов (${local.totals.history})`);
-      for (const item of local.history) {
-        const rowMain = el("span", { class: "row-main" }, [
-          el("span", { class: "row-title" }, [item.title]),
-          ...(item.sub ? [el("span", { class: "row-sub" }, [item.sub])] : []),
-        ]);
-        const row = el("button", { class: "row", type: "button" }, [avatar(item.target.kind, item.target.id), rowMain]);
-        row.addEventListener("click", () => actions.onOpenHistoryHit(item.target, q, item.idx));
-        blocks.push(el("div", { class: "result-item" }, [row]));
+      const historyItems = local.history.filter((item) => matchesHistoryFilter(item, activeFilter));
+      if (!historyItems.length) {
+        blocks.push(el("div", { class: "result-meta" }, ["По выбранному фильтру совпадений нет"]));
+      } else {
+        for (const item of historyItems) {
+          const rowMain = el("span", { class: "row-main" }, [
+            el("span", { class: "row-title" }, [item.title]),
+            ...(item.sub ? [el("span", { class: "row-sub" }, [item.sub])] : []),
+          ]);
+          const row = el("button", { class: "row", type: "button" }, [avatar(item.target.kind, item.target.id), rowMain]);
+          row.addEventListener("click", () => actions.onOpenHistoryHit(item.target, q, item.idx));
+          blocks.push(el("div", { class: "result-item" }, [row]));
+        }
       }
       blocks.push(el("div", { class: "result-meta" }, ["Поиск по загруженной истории сообщений"]));
     }
