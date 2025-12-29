@@ -24,6 +24,41 @@ function collectAttentionPeers(state: AppState): Set<string> {
   return ids;
 }
 
+const HANDLE_RE = /^[a-z0-9_]{3,16}$/;
+
+function collectSelfMentionHandles(state: AppState): Set<string> {
+  const out = new Set<string>();
+  const normalize = (raw: unknown): string | null => {
+    const base = String(raw || "").trim().toLowerCase();
+    if (!base) return null;
+    const stripped = base.startsWith("@") ? base.slice(1) : base;
+    if (!HANDLE_RE.test(stripped)) return null;
+    return stripped;
+  };
+  const add = (raw: unknown) => {
+    const handle = normalize(raw);
+    if (handle) out.add(handle);
+  };
+  add(state.selfId);
+  const profile = state.selfId ? state.profiles?.[state.selfId] : null;
+  add(profile?.handle);
+  return out;
+}
+
+function hasSelfMention(text: string, handles: Set<string>): boolean {
+  if (!handles.size) return false;
+  const s = String(text || "");
+  if (!s.includes("@")) return false;
+  const re = /@([a-z0-9_]{3,16})/gi;
+  for (;;) {
+    const m = re.exec(s);
+    if (!m) break;
+    const handle = String(m[1] || "").toLowerCase();
+    if (handles.has(handle)) return true;
+  }
+  return false;
+}
+
 function attentionHintForPeer(state: AppState, id: string): string | null {
   const peer = String(id || "").trim();
   if (!peer) return null;
@@ -269,8 +304,9 @@ export function renderSidebar(
     }
     return out;
   };
-  const dialogPriority = (opts: { hasDraft: boolean; unread?: number; attention?: boolean }): number => {
+  const dialogPriority = (opts: { hasDraft: boolean; unread?: number; attention?: boolean; mention?: boolean }): number => {
     let score = 0;
+    if (opts.mention) score += 4;
     if (opts.hasDraft) score += 3;
     if ((opts.unread || 0) > 0) score += 2;
     if (opts.attention) score += 1;
@@ -281,6 +317,7 @@ export function renderSidebar(
   const pinnedKeys = state.pinned || [];
   const pinnedSet = new Set(pinnedKeys);
   const attnSet = collectAttentionPeers(state);
+  const selfMentionHandles = collectSelfMentionHandles(state);
   const friendIdSet = new Set((state.friends || []).map((f) => String(f.id || "").trim()).filter(Boolean));
   const unknownAttnPeers = Array.from(attnSet).filter((id) => !friendIdSet.has(id)).sort();
   const online = state.friends.filter((f) => f.online);
@@ -615,6 +652,15 @@ export function renderSidebar(
       const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
       return Math.max(0, ts);
     };
+    const mentionForKey = (key: string): boolean => {
+      if (!selfMentionHandles.size) return false;
+      const conv = state.conversations[key] || [];
+      const last = conv.length ? conv[conv.length - 1] : null;
+      if (!last) return false;
+      const from = String(last.from || "").trim();
+      if (from && state.selfId && from === state.selfId) return false;
+      return hasSelfMention(String(last.text || ""), selfMentionHandles);
+    };
 
     if (activeTab === "chats") {
       const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
@@ -646,7 +692,7 @@ export function renderSidebar(
         const label = String(g.name || g.id);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          priority: dialogPriority({ hasDraft: meta.hasDraft }),
+          priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k) }),
           label,
           row: roomRow(
             null,
@@ -1041,6 +1087,15 @@ export function renderSidebar(
       const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
       return Math.max(0, ts);
     };
+    const mentionForKey = (key: string): boolean => {
+      if (!selfMentionHandles.size) return false;
+      const conv = state.conversations[key] || [];
+      const last = conv.length ? conv[conv.length - 1] : null;
+      if (!last) return false;
+      const from = String(last.from || "").trim();
+      if (from && state.selfId && from === state.selfId) return false;
+      return hasSelfMention(String(last.text || ""), selfMentionHandles);
+    };
 
     const mountPwa = (children: HTMLElement[]) => {
       body.replaceChildren(...children);
@@ -1083,7 +1138,7 @@ export function renderSidebar(
         const label = String(g.name || g.id);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          priority: dialogPriority({ hasDraft: meta.hasDraft }),
+          priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k) }),
           label,
           row: roomRow(
             null,
@@ -1399,6 +1454,15 @@ export function renderSidebar(
     const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
     return Math.max(0, ts);
   };
+  const mentionForKey = (key: string): boolean => {
+    if (!selfMentionHandles.size) return false;
+    const conv = state.conversations[key] || [];
+    const last = conv.length ? conv[conv.length - 1] : null;
+    if (!last) return false;
+    const from = String(last.from || "").trim();
+    if (from && state.selfId && from === state.selfId) return false;
+    return hasSelfMention(String(last.text || ""), selfMentionHandles);
+  };
 
   const pinnedDmRows: HTMLElement[] = [];
   const pinnedChatRows: HTMLElement[] = [];
@@ -1526,7 +1590,7 @@ export function renderSidebar(
       const label = String(g.name || g.id);
       dialogItems.push({
         sortTs: lastTsForKey(k),
-        priority: dialogPriority({ hasDraft: meta.hasDraft }),
+        priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k) }),
         label,
         row: roomRow(
           null,
