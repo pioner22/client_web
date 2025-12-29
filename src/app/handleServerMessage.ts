@@ -32,6 +32,7 @@ import {
 } from "../helpers/auth/session";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
+import { loadLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
 import { playNotificationSound } from "../helpers/notify/notifySound";
 
@@ -240,6 +241,7 @@ export function handleServerMessage(
   if (t === "auth_ok") {
     const selfId = String(msg?.id ?? state.selfId ?? "");
     const sess = typeof msg?.session === "string" ? msg.session : null;
+    const lastReadAt = selfId ? loadLastReadMarkers(selfId) : state.lastReadAt;
     if (selfId) storeAuthId(selfId);
     if (sess) storeSessionToken(sess);
     else {
@@ -255,6 +257,7 @@ export function handleServerMessage(
       ...(sess ? { authMode: "auto" as const } : {}),
       modal: null,
       status: "Connected",
+      lastReadAt,
     });
     gateway.send({ type: "client_info", client: "web", version: state.clientVersion });
     gateway.send({ type: "group_list" });

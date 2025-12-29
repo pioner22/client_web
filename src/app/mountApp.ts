@@ -61,6 +61,7 @@ import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "..
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
 import { applyMessageView, normalizeMessageView, storeMessageView } from "../helpers/ui/messageView";
 import { loadLastActiveTarget, saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
+import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
 import { nowTs } from "../helpers/time";
 import { applyLegacyIdMask } from "../helpers/id/legacyIdMask";
@@ -1061,11 +1062,32 @@ export function mountApp(root: HTMLElement) {
   let autoAuthAttemptedForConn = false;
   let lastConn: ConnStatus = "connecting";
   const lastReadSentAt = new Map<string, number>();
+  const lastReadSavedAt = new Map<string, number>();
   let pwaAutoApplyTimer: number | null = null;
   let pwaForceInFlight = false;
   let lastUserInputAt = Date.now();
   const markUserActivity = () => {
     lastUserInputAt = Date.now();
+  };
+
+  const maybeRecordLastRead = (key: string) => {
+    const k = String(key || "").trim();
+    if (!k || !k.startsWith("room:")) return;
+    const st = store.get();
+    if (!st.selfId) return;
+    const conv = st.conversations[k] || [];
+    const last = conv.length ? conv[conv.length - 1] : null;
+    const ts = Number(last?.ts ?? 0);
+    if (!Number.isFinite(ts) || ts <= 0) return;
+    const prev = Number(st.lastReadAt?.[k] ?? 0);
+    if (ts <= prev) return;
+    const now = Date.now();
+    const lastSave = lastReadSavedAt.get(k) ?? 0;
+    if (now - lastSave < 1200) return;
+    lastReadSavedAt.set(k, now);
+    const next = { ...(st.lastReadAt || {}), [k]: ts };
+    store.set({ lastReadAt: next });
+    saveLastReadMarkers(st.selfId, next);
   };
   // PWA auto-update: treat any pointer interaction as “activity” so we don’t reload while the user clicks/opens menus.
   window.addEventListener("pointerdown", markUserActivity, { capture: true, passive: true });
@@ -1263,6 +1285,7 @@ export function mountApp(root: HTMLElement) {
       const st = hostState.__stickBottom;
       if (!st || st.key !== k || !st.active) return;
       host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
+      maybeRecordLastRead(k);
     };
     queueMicrotask(stickNow);
     if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
@@ -1369,6 +1392,7 @@ export function mountApp(root: HTMLElement) {
       scheduleChatJumpVisibility();
       maybeAutoLoadMoreHistory(scrollTop, scrollingUp);
       maybeUpdateVirtualWindow(scrollTop);
+      if (atBottom) maybeRecordLastRead(key);
     },
     { passive: true }
   );
@@ -1396,6 +1420,7 @@ export function mountApp(root: HTMLElement) {
       if (!st || !st.active || st.key !== key) return;
       st.at = Date.now();
       host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
+      maybeRecordLastRead(key);
       scheduleChatJumpVisibility();
     });
   };

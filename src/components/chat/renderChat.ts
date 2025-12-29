@@ -817,6 +817,12 @@ export function renderChat(layout: Layout, state: AppState) {
     if (unread > 0 && msgs.length > 0) {
       unreadIdx = Math.max(0, Math.min(msgs.length - 1, msgs.length - unread));
     }
+  } else if (!searchActive && key) {
+    const lastReadAt = Number(state.lastReadAt?.[key] ?? 0);
+    if (lastReadAt > 0 && msgs.length > 0) {
+      const idx = msgs.findIndex((m) => Number(m?.ts ?? 0) > lastReadAt);
+      if (idx >= 0) unreadIdx = idx;
+    }
   }
   if (virtualEnabled && virtualStart > 0) {
     const prev = msgs[virtualStart - 1];
