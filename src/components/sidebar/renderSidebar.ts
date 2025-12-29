@@ -162,10 +162,11 @@ function friendRow(
   onOpenUser: (id: string) => void,
   attn?: boolean
 ): HTMLElement {
-  const clsBase = selected ? "row row-sel" : "row";
-  const cls = attn ? `${clsBase} row-attn` : clsBase;
   const peerId = String(f.id || "").trim();
   const muted = peerId ? (state.muted || []).includes(peerId) : false;
+  let cls = selected ? "row row-sel" : "row";
+  if (muted) cls += " row-muted-chat";
+  if (attn) cls += " row-attn";
   const unread = Math.max(0, Number(f.unread || 0) || 0);
   const unreadLabel = unread > 99 ? "99+" : String(unread);
   const tailChildren: HTMLElement[] = [];
@@ -221,7 +222,8 @@ function roomRow(
   meta?: SidebarRowMeta,
   opts?: { mention?: boolean; muted?: boolean }
 ): HTMLElement {
-  const cls = selected ? "row row-sel" : "row";
+  let cls = selected ? "row row-sel" : "row";
+  if (opts?.muted) cls += " row-muted-chat";
   const tailChildren: HTMLElement[] = [];
   if (meta?.time) tailChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
   if (opts?.muted) tailChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));

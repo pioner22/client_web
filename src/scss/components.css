@@ -239,6 +239,13 @@
   color: var(--row-text-selected-muted);
 }
 
+.row-muted-chat .row-unread,
+.row-muted-chat .row-mention {
+  background: color-mix(in srgb, var(--muted), transparent 10%);
+  color: #fff;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--muted), transparent 82%);
+}
+
 .row-sel .row-unread,
 .row-sel .row-mention {
   background: var(--row-unread-selected-bg);
