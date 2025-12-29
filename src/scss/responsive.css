@@ -195,6 +195,7 @@
   :root {
     --floating-sidebar-width: 26.5rem;
     --floating-sidebar-shift: calc(26.5rem + 1px);
+    --floating-sidebar-peek: 5rem;
   }
 
   .grid {
@@ -230,7 +231,7 @@
     left: 0;
     width: var(--floating-sidebar-width);
     max-width: min(var(--floating-sidebar-width), 92vw);
-    transform: translateX(-110%);
+    transform: translateX(calc(var(--floating-sidebar-peek) * -1));
     transition: transform 160ms ease;
     z-index: 41;
     overflow: hidden;

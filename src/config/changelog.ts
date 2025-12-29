@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.244",
+    date: "2025-12-29",
+    improved: ["Сайдбар: floating-режим закрытого состояния как в tweb (смещение -5rem, без полного скрытия)"],
+  },
+  {
     version: "0.1.243",
     date: "2025-12-29",
     improved: ["Сайдбар: floating-режим сдвига чата синхронизирован с tweb (+1px под границу)"],
