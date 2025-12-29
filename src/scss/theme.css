@@ -210,9 +210,10 @@
   /* ===== Sidebar rows ===== */
   --row-bg: transparent;
   --row-text: var(--text);
-  --row-pad-y: 8px;
-  --row-pad-x: 10px;
-  --row-gap: 8px;
+  --row-min-h: 56px;
+  --row-pad-y: 7px;
+  --row-pad-x: 16px;
+  --row-gap: 16px;
   --row-radius: 10px;
   --row-bg-hover: var(--panel2);
   --row-bg-selected: var(--sel);
@@ -229,9 +230,9 @@
   --row-prefix-color: var(--muted);
 
   /* Avatars (local UI only) */
-  --avatar-size: 28px;
+  --avatar-size: 40px;
   --avatar-radius: 999px;
-  --avatar-font-size: 11px;
+  --avatar-font-size: 14px;
   --avatar-border-color: color-mix(in srgb, var(--line), transparent 15%);
   --avatar-text: #0b0f14;
 

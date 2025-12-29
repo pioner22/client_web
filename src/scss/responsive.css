@@ -285,10 +285,10 @@
     --msg-out-pad-y: 7px;
     --msg-out-pad-x: 10px;
 
-    --row-pad-y: 10px;
-    --row-pad-x: 10px;
-    --row-gap: 10px;
-    --avatar-size: 48px;
+    --row-pad-y: 7px;
+    --row-pad-x: 16px;
+    --row-gap: 16px;
+    --avatar-size: 40px;
     --avatar-font-size: 14px;
 
     --pane-section-mt: var(--sp-3);
@@ -580,7 +580,7 @@
   .sidebar .row[data-ctx-kind] {
     border-bottom: 0;
     position: relative;
-    min-height: 56px;
+    min-height: var(--row-min-h);
     /* tweb-like "row-grid": stable columns (avatar / main / meta) and two rows (title + subtitle). */
     display: grid;
     grid-template-columns: var(--avatar-size) minmax(0, 1fr) auto;

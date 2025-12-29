@@ -151,6 +151,7 @@
   padding: var(--row-pad-y) var(--row-pad-x);
   border-radius: var(--row-radius);
   font-family: var(--font-family);
+  min-height: var(--row-min-h);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -313,13 +314,13 @@
 
 .row-title {
   font-weight: 650;
-  line-height: 1.2;
+  line-height: 1.375;
 }
 
 .row-sub {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.2;
+  font-size: 14px;
+  line-height: 1.25;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -332,8 +333,8 @@
 
 .row-time {
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1;
+  font-size: 12px;
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -352,7 +353,7 @@
 
 .row-draft {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
   border-radius: 999px;
