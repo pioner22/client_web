@@ -115,7 +115,7 @@
   --sidebar-width: clamp(var(--sidebar-width-min), var(--current-sidebar-left-width, var(--sidebar-width-max)), var(--sidebar-width-max));
 
   --chat-bg: var(--bg);
-  --chat-pad: 16px;
+  --chat-pad: 13px;
 
   --composer-bg: var(--panel);
   /* Background color for iOS safe-area (home indicator zone). Should match the bottom bar. */
@@ -151,8 +151,8 @@
   --composer-field-border-width: var(--field-border-width);
   --composer-field-text: var(--field-text);
   --composer-field-radius: 18px;
-  --composer-field-pad: var(--sp-2);
-  --composer-field-min-h: 44px;
+  --composer-field-pad: 8px;
+  --composer-field-min-h: 54px;
   --composer-field-max-h: 120px;
   --composer-field-focus-border: var(--field-focus-border);
   --composer-field-placeholder: var(--field-placeholder);
@@ -164,6 +164,8 @@
   --composer-input-line-height: 1.3125;
   --composer-input-font-weight: 450;
   --composer-input-letter-spacing: 0em;
+  --composer-input-pad-y: 5px;
+  --composer-btn-size: 54px;
 
   /* Send button icon (brand berry) */
   --send-berry-glint: rgba(255, 255, 255, 0.78);

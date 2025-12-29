@@ -1960,7 +1960,7 @@
 .composer-field .input {
   background: transparent;
   border: 0;
-  padding: 8px 0;
+  padding: var(--composer-input-pad-y) 0;
   min-height: 24px;
   width: auto;
   flex: 1 1 auto;
@@ -1989,9 +1989,9 @@
 }
 
 .btn.composer-attach {
-  min-width: 40px;
-  width: 40px;
-  height: 40px;
+  min-width: var(--composer-btn-size);
+  width: var(--composer-btn-size);
+  height: var(--composer-btn-size);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
@@ -2004,9 +2004,9 @@
 }
 
 .btn.composer-emoji {
-  min-width: 40px;
-  width: 40px;
-  height: 40px;
+  min-width: var(--composer-btn-size);
+  width: var(--composer-btn-size);
+  height: var(--composer-btn-size);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
@@ -2019,9 +2019,9 @@
 }
 
 .btn.composer-board-editor {
-  min-width: 40px;
-  width: 40px;
-  height: 40px;
+  min-width: var(--composer-btn-size);
+  width: var(--composer-btn-size);
+  height: var(--composer-btn-size);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;

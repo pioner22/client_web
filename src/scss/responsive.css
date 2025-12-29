@@ -263,7 +263,7 @@
 
     --sidebar-pad: var(--sp-3);
 
-    --chat-pad: var(--sp-3);
+    --chat-pad: 8px;
     --msg-body-max-width: 86%;
     --chat-line-gap: 8px;
     --msg-pad-y: 3px;
@@ -302,6 +302,9 @@
     --composer-field-bg: color-mix(in srgb, var(--panel2), transparent 4%);
     --composer-input-font-family: var(--font-family);
     --composer-input-font-weight: 500;
+    --composer-field-pad: 4px;
+    --composer-field-min-h: 46px;
+    --composer-btn-size: 46px;
   }
 
   :root[data-skin][data-msg-view="plain"] {
