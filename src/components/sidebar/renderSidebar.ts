@@ -300,6 +300,18 @@ export function renderSidebar(
     toggleClass(sidebarDock, "hidden", isMobile);
     if (isMobile) sidebarDock.replaceChildren();
   }
+  const bindHeaderScroll = (header: HTMLElement | null) => {
+    const prev = (body as any)._sidebarHeaderScrollHandler as (() => void) | undefined;
+    if (prev) body.removeEventListener("scroll", prev);
+    if (!header) {
+      delete (body as any)._sidebarHeaderScrollHandler;
+      return;
+    }
+    const handler = () => toggleClass(header, "sidebar-header-scrolled", (body as any).scrollTop > 0);
+    (body as any)._sidebarHeaderScrollHandler = handler;
+    body.addEventListener("scroll", handler, { passive: true });
+    handler();
+  };
 
   const matchesQuery = (raw: string): boolean => {
     if (!hasSidebarQuery) return true;
@@ -524,6 +536,7 @@ export function renderSidebar(
       const snap = isSameTab ? takeScrollSnapshot() : initialSnap;
       body.replaceChildren(...children);
       target.replaceChildren(sticky, body, bottom);
+      bindHeaderScroll(sticky);
       restoreScrollSnapshot(snap);
       try {
         window.requestAnimationFrame(() => restoreScrollSnapshot(snap));
@@ -950,6 +963,7 @@ export function renderSidebar(
             });
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
+    const header = searchBar ? el("div", { class: "sidebar-header" }, [searchBar]) : null;
 
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
@@ -1012,9 +1026,13 @@ export function renderSidebar(
 
     const mountPwa = (children: HTMLElement[]) => {
       body.replaceChildren(...children);
-      if (useDock && sidebarDock) target.replaceChildren(body, sidebarDock);
-      else if (desktopBottom) target.replaceChildren(body, desktopBottom);
-      else target.replaceChildren(body);
+      const nodes: HTMLElement[] = [];
+      if (header) nodes.push(header);
+      nodes.push(body);
+      if (useDock && sidebarDock) nodes.push(sidebarDock);
+      else if (desktopBottom) nodes.push(desktopBottom);
+      target.replaceChildren(...nodes);
+      bindHeaderScroll(header);
     };
 
     if (activeTab === "chats") {
@@ -1059,7 +1077,6 @@ export function renderSidebar(
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
       mountPwa([
-        ...(searchBar ? [searchBar] : []),
         ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
         ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
@@ -1090,7 +1107,6 @@ export function renderSidebar(
       const boardRows = boardItems.map((x) => x.row);
 
       mountPwa([
-        ...(searchBar ? [searchBar] : []),
         ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
         ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])]),
@@ -1128,7 +1144,6 @@ export function renderSidebar(
           });
         const allRows = markCompactAvatarRows([...unknownAttnRows, ...rows]);
         mountPwa([
-          ...(searchBar ? [searchBar] : []),
           ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
           ...(allRows.length
             ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
@@ -1168,7 +1183,6 @@ export function renderSidebar(
       );
 
       mountPwa([
-        ...(searchBar ? [searchBar] : []),
         ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
         ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
         el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
@@ -1233,7 +1247,6 @@ export function renderSidebar(
     }
 
     mountPwa([
-      ...(searchBar ? [searchBar] : []),
       el("div", { class: "pane-section" }, ["Навигация"]),
       ...navRows,
       ...(accountRows.length ? [el("div", { class: "pane-section" }, ["Аккаунт"]), ...accountRows] : []),
@@ -1349,6 +1362,7 @@ export function renderSidebar(
     });
     return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
   })();
+  const header = el("div", { class: "sidebar-header" }, [searchBar]);
 
   const lastTsForKey = (key: string): number => {
     const conv = state.conversations[key] || [];
@@ -1426,10 +1440,12 @@ export function renderSidebar(
   const desiredScrollTop = didSwitchTab ? Number(scrollMemory[activeDesktopTab] || 0) || 0 : Number((body as any).scrollTop || 0) || 0;
 
   const mountDesktop = (children: HTMLElement[]) => {
-    body.replaceChildren(searchBar, ...children);
-    if (useDock && sidebarDock) target.replaceChildren(body, sidebarDock);
-    else if (desktopBottom) target.replaceChildren(body, desktopBottom);
-    else target.replaceChildren(body);
+    body.replaceChildren(...children);
+    const nodes: HTMLElement[] = [header, body];
+    if (useDock && sidebarDock) nodes.push(sidebarDock);
+    else if (desktopBottom) nodes.push(desktopBottom);
+    target.replaceChildren(...nodes);
+    bindHeaderScroll(header);
     (target as any)._desktopSidebarPrevTab = activeDesktopTab;
 
     if (!didSwitchTab) return;
