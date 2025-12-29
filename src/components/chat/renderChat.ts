@@ -849,16 +849,16 @@ export function renderChat(layout: Layout, state: AppState) {
     prevMsg = m.kind === "sys" ? null : m;
   }
 
-  if (key && (hasMore || loadingMore)) {
+  if (key && loadingMore) {
     const btn = el(
       "button",
       {
-        class: loadingMore ? "btn chat-history-more btn-loading" : "btn chat-history-more",
+        class: "btn chat-history-more btn-loading",
         type: "button",
-        "data-action": "chat-history-more",
-        ...(loadingMore ? { disabled: "true" } : {}),
+        disabled: "true",
+        "aria-live": "polite",
       },
-      [loadingMore ? "Загрузка…" : "Показать предыдущие сообщения"]
+      ["Загрузка…"]
     );
     lines.unshift(el("div", { class: "chat-history-more-wrap" }, [btn]));
   }
