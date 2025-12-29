@@ -269,6 +269,13 @@ export function renderSidebar(
     }
     return out;
   };
+  const dialogPriority = (opts: { hasDraft: boolean; unread?: number; attention?: boolean }): number => {
+    let score = 0;
+    if (opts.hasDraft) score += 3;
+    if ((opts.unread || 0) > 0) score += 2;
+    if (opts.attention) score += 1;
+    return score;
+  };
 
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
@@ -610,7 +617,7 @@ export function renderSidebar(
     };
 
     if (activeTab === "chats") {
-      const dialogItems: Array<{ sortTs: number; label: string; row: HTMLElement }> = [];
+      const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
 
       // Активные диалоги (ЛС): показываем только тех, у кого есть история/черновик/unread/attention.
       for (const f of state.friends || []) {
@@ -621,10 +628,14 @@ export function renderSidebar(
         if (!hasActiveDialogForFriend(f)) continue;
         if (!matchesFriend(f)) continue;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
+        const label = displayNameForFriend(state, f);
+        const unread = Math.max(0, Number(f.unread || 0) || 0);
+        const attention = attnSet.has(id);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          label: displayNameForFriend(state, f),
-          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attnSet.has(id)),
+          priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
+          label,
+          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attention),
         });
       }
 
@@ -632,12 +643,14 @@ export function renderSidebar(
         if (!matchesRoom(g)) continue;
         const k = roomKey(g.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
+        const label = String(g.name || g.id);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          label: String(g.name || g.id),
+          priority: dialogPriority({ hasDraft: meta.hasDraft }),
+          label,
           row: roomRow(
             null,
-            String(g.name || g.id),
+            label,
             Boolean(sel && sel.kind === "group" && sel.id === g.id),
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
@@ -646,7 +659,12 @@ export function renderSidebar(
         });
       }
 
-      dialogItems.sort((a, b) => b.sortTs - a.sortTs || a.label.localeCompare(b.label, "ru", { sensitivity: "base" }));
+      dialogItems.sort(
+        (a, b) =>
+          b.priority - a.priority ||
+          b.sortTs - a.sortTs ||
+          a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
+      );
       const dialogRows = dialogItems.map((x) => x.row);
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
@@ -1037,7 +1055,7 @@ export function renderSidebar(
 
     if (activeTab === "chats") {
       const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
-      const dialogItems: Array<{ sortTs: number; label: string; row: HTMLElement }> = [];
+      const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
 
       for (const f of state.friends || []) {
         const id = String(f?.id || "").trim();
@@ -1047,10 +1065,14 @@ export function renderSidebar(
         if (!hasActiveDialogForFriend(f)) continue;
         if (!matchesFriend(f)) continue;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
+        const label = displayNameForFriend(state, f);
+        const unread = Math.max(0, Number(f.unread || 0) || 0);
+        const attention = attnSet.has(id);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          label: displayNameForFriend(state, f),
-          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attnSet.has(id)),
+          priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
+          label,
+          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attention),
         });
       }
 
@@ -1058,12 +1080,14 @@ export function renderSidebar(
         if (!matchesRoom(g)) continue;
         const k = roomKey(g.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
+        const label = String(g.name || g.id);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          label: String(g.name || g.id),
+          priority: dialogPriority({ hasDraft: meta.hasDraft }),
+          label,
           row: roomRow(
             null,
-            String(g.name || g.id),
+            label,
             Boolean(sel && sel.kind === "group" && sel.id === g.id),
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
@@ -1072,7 +1096,12 @@ export function renderSidebar(
         });
       }
 
-      dialogItems.sort((a, b) => b.sortTs - a.sortTs || a.label.localeCompare(b.label, "ru", { sensitivity: "base" }));
+      dialogItems.sort(
+        (a, b) =>
+          b.priority - a.priority ||
+          b.sortTs - a.sortTs ||
+          a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
+      );
       const dialogRows = dialogItems.map((x) => x.row);
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
@@ -1469,7 +1498,7 @@ export function renderSidebar(
 
   if (activeDesktopTab === "chats") {
     const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
-    const dialogItems: Array<{ sortTs: number; label: string; row: HTMLElement }> = [];
+    const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
 
     for (const f of state.friends || []) {
       const id = String(f?.id || "").trim();
@@ -1479,10 +1508,14 @@ export function renderSidebar(
       if (!hasActiveDialogForFriend(f)) continue;
       if (!matchesFriend(f)) continue;
       const meta = previewForConversation(state, k, "dm", drafts[k]);
+      const label = displayNameForFriend(state, f);
+      const unread = Math.max(0, Number(f.unread || 0) || 0);
+      const attention = attnSet.has(id);
       dialogItems.push({
         sortTs: lastTsForKey(k),
-        label: displayNameForFriend(state, f),
-        row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attnSet.has(id)),
+        priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
+        label,
+        row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attention),
       });
     }
 
@@ -1490,12 +1523,14 @@ export function renderSidebar(
       if (!matchesRoom(g)) continue;
       const k = roomKey(g.id);
       const meta = previewForConversation(state, k, "room", drafts[k]);
+      const label = String(g.name || g.id);
       dialogItems.push({
         sortTs: lastTsForKey(k),
-        label: String(g.name || g.id),
+        priority: dialogPriority({ hasDraft: meta.hasDraft }),
+        label,
         row: roomRow(
           null,
-          String(g.name || g.id),
+          label,
           Boolean(sel && sel.kind === "group" && sel.id === g.id),
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
@@ -1504,7 +1539,12 @@ export function renderSidebar(
       });
     }
 
-    dialogItems.sort((a, b) => b.sortTs - a.sortTs || a.label.localeCompare(b.label, "ru", { sensitivity: "base" }));
+    dialogItems.sort(
+      (a, b) =>
+        b.priority - a.priority ||
+        b.sortTs - a.sortTs ||
+        a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
+    );
     const dialogRows = dialogItems.map((x) => x.row);
     const pinnedDialogRows = [...pinnedDmRows, ...pinnedChatRows];
 
