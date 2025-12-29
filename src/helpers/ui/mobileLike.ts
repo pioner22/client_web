@@ -3,7 +3,7 @@ export function isMobileLikeUi(): boolean {
     if (typeof window === "undefined") return false;
     if (typeof window.matchMedia !== "function") return false;
     return Boolean(
-      window.matchMedia("(max-width: 820px)").matches ||
+      window.matchMedia("(max-width: 600px)").matches ||
         window.matchMedia("(pointer: coarse)").matches ||
         window.matchMedia("(any-pointer: coarse)").matches ||
         window.matchMedia("(hover: none)").matches

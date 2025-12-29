@@ -233,7 +233,7 @@ export function renderSidebar(
   sidebarDock?: HTMLElement | null
 ) {
   const isMobile =
-    typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)").matches : false;
+    typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 600px)").matches : false;
   const mobileUi = isMobileLikeUi();
   const disableSearchWhileTyping = (() => {
     try {

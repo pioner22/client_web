@@ -142,7 +142,7 @@ function withDomStubs(run) {
   globalThis.window = {
     matchMedia: (q) => {
       const query = String(q || "");
-      if (query.includes("max-width: 820px")) return { matches: true };
+      if (query.includes("max-width: 600px")) return { matches: true };
       if (query.includes("pointer: coarse")) return { matches: true };
       if (query.includes("hover: none")) return { matches: true };
       return { matches: false };

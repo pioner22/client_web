@@ -1,4 +1,4 @@
-@media (max-width: 820px) {
+@media (max-width: 600px) {
   /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
   html #app {
     --app-outer-pad: 0px;
@@ -191,7 +191,66 @@
   }
 }
 
-@media (max-width: 820px) and (pointer: coarse) {
+@media (min-width: 601px) and (max-width: 925px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chat-col {
+    grid-column: 1;
+    grid-row: 1;
+    transition: transform 160ms ease;
+  }
+
+  .nav-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--overlay-bg);
+    z-index: 40;
+    touch-action: none;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 26.5rem;
+    max-width: min(26.5rem, 92vw);
+    transform: translateX(-110%);
+    transition: transform 160ms ease;
+    z-index: 41;
+    overflow: hidden;
+  }
+
+  .sidebar.sidebar-float-open {
+    transform: translateX(0);
+  }
+
+  html.floating-sidebar-open .chat-col {
+    transform: translateX(26.5rem);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-col {
+      transition: none;
+    }
+
+    .sidebar {
+      transition: none;
+    }
+  }
+}
+
+@media (max-width: 600px) and (pointer: coarse) {
   :root[data-skin] {
     --font-family:
       ui-sans-serif,
@@ -723,7 +782,7 @@
 }
 
 /* ===== Mobile composer controls ===== */
-@media (pointer: coarse) and (max-width: 820px) {
+@media (pointer: coarse) and (max-width: 600px) {
   /* Phones/tablets: keep the composer minimal (phone keyboards already have emoji + send). */
   .btn.composer-emoji {
     display: none;
@@ -768,7 +827,7 @@
   }
 }
 
-@media (max-width: 820px) and (prefers-reduced-motion: reduce) {
+@media (max-width: 600px) and (prefers-reduced-motion: reduce) {
   .sidebar {
     transition: none;
   }

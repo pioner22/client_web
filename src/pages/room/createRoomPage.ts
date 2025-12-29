@@ -354,7 +354,7 @@ export function createRoomPage(kind: TargetKind, actions: RoomPageActions): Room
     root,
     update,
     focus: () => {
-      if (window.matchMedia && window.matchMedia("(max-width: 820px)").matches) return;
+      if (window.matchMedia && window.matchMedia("(max-width: 600px)").matches) return;
       btnChat.focus();
     },
   };

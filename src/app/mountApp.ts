@@ -1090,7 +1090,8 @@ export function mountApp(root: HTMLElement) {
   let previewWarmupInFlight = false;
   let previewWarmupLastKey = "";
   let previewWarmupLastSig = "";
-  const mobileSidebarMq = window.matchMedia("(max-width: 820px)");
+  const mobileSidebarMq = window.matchMedia("(max-width: 600px)");
+  const floatingSidebarMq = window.matchMedia("(min-width: 601px) and (max-width: 925px)");
   const coarsePointerMq = window.matchMedia("(pointer: coarse)");
   const anyFinePointerMq = window.matchMedia("(any-pointer: fine)");
   const hoverMq = window.matchMedia("(hover: hover)");
@@ -1099,6 +1100,11 @@ export function mountApp(root: HTMLElement) {
   let mobileSidebarChatKey: string | null = null;
   let mobileSidebarChatWasAtBottom = false;
   let suppressMobileSidebarCloseStickBottom = false;
+  let floatingSidebarOpen = false;
+  let floatingSidebarAutoOpened = false;
+  let floatingSidebarChatKey: string | null = null;
+  let floatingSidebarChatWasAtBottom = false;
+  let suppressFloatingSidebarCloseStickBottom = false;
   let searchDebounceTimer: number | null = null;
   let lastSearchIssued = "";
   const membersAddStatus = new Map<string, MembersAddUiStatus>();
@@ -2124,6 +2130,12 @@ export function mountApp(root: HTMLElement) {
     return host.scrollTop + host.clientHeight >= host.scrollHeight - 24;
   }
 
+  function syncNavOverlay() {
+    const show = mobileSidebarOpen || floatingSidebarOpen;
+    layout.navOverlay.classList.toggle("hidden", !show);
+    layout.navOverlay.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+
   function setMobileSidebarOpen(open: boolean) {
     const st = store.get();
     const forcedOpen = Boolean(mobileSidebarMq.matches && st.page === "main" && !st.selected && !st.modal);
@@ -2153,8 +2165,7 @@ export function mountApp(root: HTMLElement) {
 
     mobileSidebarOpen = shouldOpen;
     layout.sidebar.classList.toggle("sidebar-mobile-open", shouldOpen);
-    layout.navOverlay.classList.toggle("hidden", !shouldOpen);
-    layout.navOverlay.setAttribute("aria-hidden", shouldOpen ? "false" : "true");
+    syncNavOverlay();
     if (shouldOpen) {
       queueMicrotask(() => {
         const closeBtn = layout.sidebar.querySelector("button[data-action='sidebar-close']") as HTMLButtonElement | null;
@@ -2165,9 +2176,54 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
+  function setFloatingSidebarOpen(open: boolean) {
+    const st = store.get();
+    const forcedOpen = Boolean(floatingSidebarMq.matches && st.page === "main" && !st.selected && !st.modal);
+    const shouldOpen = Boolean((open || forcedOpen) && floatingSidebarMq.matches);
+    if (floatingSidebarOpen === shouldOpen) return;
+
+    const prevOpen = floatingSidebarOpen;
+    const selKey = st.page === "main" && st.selected ? conversationKey(st.selected) : "";
+    const restoreKey =
+      !shouldOpen &&
+      prevOpen &&
+      !suppressFloatingSidebarCloseStickBottom &&
+      floatingSidebarChatWasAtBottom &&
+      floatingSidebarChatKey &&
+      selKey &&
+      selKey === floatingSidebarChatKey
+        ? selKey
+        : "";
+
+    if (shouldOpen) {
+      floatingSidebarChatKey = selKey || null;
+      floatingSidebarChatWasAtBottom = Boolean(selKey && isChatAtBottom(selKey));
+    } else {
+      floatingSidebarChatKey = null;
+      floatingSidebarChatWasAtBottom = false;
+    }
+
+    floatingSidebarOpen = shouldOpen;
+    layout.sidebar.classList.toggle("sidebar-float-open", shouldOpen);
+    document.documentElement.classList.toggle("floating-sidebar-open", shouldOpen);
+    syncNavOverlay();
+    if (restoreKey) {
+      scrollChatToBottom(restoreKey);
+    }
+  }
+
   function closeMobileSidebar() {
-    if (!mobileSidebarOpen) return;
+    if (!mobileSidebarOpen) {
+      closeFloatingSidebar();
+      return;
+    }
     setMobileSidebarOpen(false);
+    closeFloatingSidebar();
+  }
+
+  function closeFloatingSidebar() {
+    if (!floatingSidebarOpen) return;
+    setFloatingSidebarOpen(false);
   }
 
   function setMobileSidebarTab(tab: MobileSidebarTab) {
@@ -2408,9 +2464,14 @@ export function mountApp(root: HTMLElement) {
     if (action !== "sidebar-toggle") return;
     e.preventDefault();
     const st = store.get();
-    if (!mobileSidebarMq.matches) return;
     if (st.modal) return;
-    setMobileSidebarOpen(!mobileSidebarOpen);
+    if (mobileSidebarMq.matches) {
+      setMobileSidebarOpen(!mobileSidebarOpen);
+      return;
+    }
+    if (floatingSidebarMq.matches) {
+      setFloatingSidebarOpen(!floatingSidebarOpen);
+    }
   });
 
   const onMobileSidebarMqChange = () => {
@@ -2419,11 +2480,23 @@ export function mountApp(root: HTMLElement) {
       mobileSidebarAutoOpened = false;
     }
   };
+  const onFloatingSidebarMqChange = () => {
+    if (!floatingSidebarMq.matches) {
+      closeFloatingSidebar();
+      floatingSidebarAutoOpened = false;
+    }
+  };
   if (typeof mobileSidebarMq.addEventListener === "function") {
     mobileSidebarMq.addEventListener("change", onMobileSidebarMqChange);
   } else {
     const legacy = mobileSidebarMq as MediaQueryList & { addListener?: (cb: (ev: MediaQueryListEvent) => void) => void };
     legacy.addListener?.(onMobileSidebarMqChange);
+  }
+  if (typeof floatingSidebarMq.addEventListener === "function") {
+    floatingSidebarMq.addEventListener("change", onFloatingSidebarMqChange);
+  } else {
+    const legacy = floatingSidebarMq as MediaQueryList & { addListener?: (cb: (ev: MediaQueryListEvent) => void) => void };
+    legacy.addListener?.(onFloatingSidebarMqChange);
   }
 
   async function initSkins() {
@@ -2612,11 +2685,14 @@ export function mountApp(root: HTMLElement) {
     if (page !== "main") closeEmojiPopover();
     // Mobile: не допускаем "пустой экран" (main без выбранного чата) — в этом случае
     // возвращаем пользователя в список (sidebar) вместо закрытия drawer.
-    const keepSidebar = Boolean(mobileSidebarMq.matches && page === "main" && !store.get().selected && !store.get().modal);
+    const keepSidebar = Boolean(
+      (mobileSidebarMq.matches || floatingSidebarMq.matches) && page === "main" && !store.get().selected && !store.get().modal
+    );
     if (page !== "main" || !keepSidebar) {
       closeMobileSidebar();
     } else {
-      setMobileSidebarOpen(true);
+      if (mobileSidebarMq.matches) setMobileSidebarOpen(true);
+      else if (floatingSidebarMq.matches) setFloatingSidebarOpen(true);
     }
     store.set((prev) => ({
       ...prev,
@@ -2833,7 +2909,7 @@ export function mountApp(root: HTMLElement) {
     const composerHadFocus = document.activeElement === layout.input;
     const prev = store.get();
     if (prev.page === "main" && prev.selected && prev.selected.kind === t.kind && prev.selected.id === t.id) {
-      // When tapping the already-selected chat in the mobile sidebar,
+      // When tapping the already-selected chat in the mobile/floating sidebar,
       // allow the sidebar-close logic to restore "pinned to bottom" if it was at bottom.
       closeMobileSidebar();
       if (
@@ -2847,20 +2923,22 @@ export function mountApp(root: HTMLElement) {
         scheduleFocusComposer();
       }
       return;
-	    }
-	    suppressMobileSidebarCloseStickBottom = true;
-	    try {
-	      closeMobileSidebar();
-	    } finally {
-	      suppressMobileSidebarCloseStickBottom = false;
-	    }
-	    const prevKey = prev.selected ? conversationKey(prev.selected) : "";
-	    const nextKey = conversationKey(t);
-	    if (nextKey) {
-	      // UX: открываем чат сразу "внизу" (Telegram-like), не завязываясь на historyLoaded,
-	      // чтобы даже медиа-последнее сообщение не "съедало" автоскролл.
-	      markChatAutoScroll(nextKey, false);
-	    }
+    }
+    suppressMobileSidebarCloseStickBottom = true;
+    suppressFloatingSidebarCloseStickBottom = true;
+    try {
+      closeMobileSidebar();
+    } finally {
+      suppressMobileSidebarCloseStickBottom = false;
+      suppressFloatingSidebarCloseStickBottom = false;
+    }
+    const prevKey = prev.selected ? conversationKey(prev.selected) : "";
+    const nextKey = conversationKey(t);
+    if (nextKey) {
+      // UX: открываем чат сразу "внизу" (Telegram-like), не завязываясь на historyLoaded,
+      // чтобы даже медиа-последнее сообщение не "съедало" автоскролл.
+      markChatAutoScroll(nextKey, false);
+    }
     const leavingEdit = Boolean(prev.editing && prevKey && prev.editing.key === prevKey && prevKey !== nextKey);
     const prevText = leavingEdit ? prev.editing?.prevDraft || "" : layout.input.value || "";
     const nextDrafts = prevKey ? updateDraftMap(prev.drafts, prevKey, prevText) : prev.drafts;
@@ -8030,7 +8108,7 @@ export function mountApp(root: HTMLElement) {
     }
 
     if (e.key === "Escape") {
-      if (!st.modal && mobileSidebarOpen) {
+      if (!st.modal && (mobileSidebarOpen || floatingSidebarOpen)) {
         e.preventDefault();
         closeMobileSidebar();
         return;
@@ -9401,10 +9479,15 @@ export function mountApp(root: HTMLElement) {
     if (st.modal && st.modal.kind !== "context_menu") {
       closeMobileSidebar();
     }
-    // Mobile UX: если чат не выбран — основной экран это список (никаких "пустых" экранов).
-    if (mobileSidebarMq.matches && !mobileSidebarOpen && st.page === "main" && !st.modal && !st.selected) {
-      mobileSidebarAutoOpened = true;
-      setMobileSidebarOpen(true);
+    // Mobile/floating UX: если чат не выбран — основной экран это список (никаких "пустых" экранов).
+    if (st.page === "main" && !st.modal && !st.selected) {
+      if (mobileSidebarMq.matches && !mobileSidebarOpen) {
+        mobileSidebarAutoOpened = true;
+        setMobileSidebarOpen(true);
+      } else if (floatingSidebarMq.matches && !floatingSidebarOpen) {
+        floatingSidebarAutoOpened = true;
+        setFloatingSidebarOpen(true);
+      }
     }
     if (st.pwaUpdateAvailable) {
       scheduleAutoApplyPwaUpdate();
