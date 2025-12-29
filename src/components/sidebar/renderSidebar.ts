@@ -215,11 +215,13 @@ function roomRow(
   selected: boolean,
   onClick: () => void,
   ctx?: { kind: "group" | "board"; id: string },
-  meta?: SidebarRowMeta
+  meta?: SidebarRowMeta,
+  opts?: { mention?: boolean }
 ): HTMLElement {
   const cls = selected ? "row row-sel" : "row";
   const tailChildren: HTMLElement[] = [];
   if (meta?.time) tailChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
+  if (opts?.mention) tailChildren.push(el("span", { class: "row-mention", "aria-label": "Упоминание" }, ["@"]));
   if (meta?.hasDraft) tailChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
   const tail = tailChildren.length ? el("span", { class: "row-tail" }, tailChildren) : null;
   const hasConversationMeta = Boolean(ctx);
@@ -590,6 +592,16 @@ export function renderSidebar(
       (target as any)._mobileSidebarPrevTab = activeTab;
     };
 
+    const mentionForKey = (key: string): boolean => {
+      if (!selfMentionHandles.size) return false;
+      const conv = state.conversations[key] || [];
+      const last = conv.length ? conv[conv.length - 1] : null;
+      if (!last) return false;
+      const from = String(last.from || "").trim();
+      if (from && state.selfId && from === state.selfId) return false;
+      return hasSelfMention(String(last.text || ""), selfMentionHandles);
+    };
+
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
     const pinnedContactRows: HTMLElement[] = [];
@@ -619,7 +631,8 @@ export function renderSidebar(
               Boolean(sel && sel.kind === "group" && sel.id === g.id),
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
-              meta
+              meta,
+              { mention: mentionForKey(k) }
             )
           );
           continue;
@@ -651,15 +664,6 @@ export function renderSidebar(
       const last = conv.length ? conv[conv.length - 1] : null;
       const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
       return Math.max(0, ts);
-    };
-    const mentionForKey = (key: string): boolean => {
-      if (!selfMentionHandles.size) return false;
-      const conv = state.conversations[key] || [];
-      const last = conv.length ? conv[conv.length - 1] : null;
-      if (!last) return false;
-      const from = String(last.from || "").trim();
-      if (from && state.selfId && from === state.selfId) return false;
-      return hasSelfMention(String(last.text || ""), selfMentionHandles);
     };
 
     if (activeTab === "chats") {
@@ -700,7 +704,8 @@ export function renderSidebar(
             Boolean(sel && sel.kind === "group" && sel.id === g.id),
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
-            meta
+            meta,
+            { mention: mentionForKey(k) }
           ),
         });
       }
@@ -1029,6 +1034,16 @@ export function renderSidebar(
           })();
     const header = searchBar ? el("div", { class: "sidebar-header" }, [searchBar]) : null;
 
+    const mentionForKey = (key: string): boolean => {
+      if (!selfMentionHandles.size) return false;
+      const conv = state.conversations[key] || [];
+      const last = conv.length ? conv[conv.length - 1] : null;
+      if (!last) return false;
+      const from = String(last.from || "").trim();
+      if (from && state.selfId && from === state.selfId) return false;
+      return hasSelfMention(String(last.text || ""), selfMentionHandles);
+    };
+
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
     const pinnedContactRows: HTMLElement[] = [];
@@ -1057,7 +1072,8 @@ export function renderSidebar(
               Boolean(sel && sel.kind === "group" && sel.id === g.id),
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
-              meta
+              meta,
+              { mention: mentionForKey(k) }
             )
           );
           continue;
@@ -1086,15 +1102,6 @@ export function renderSidebar(
       const last = conv.length ? conv[conv.length - 1] : null;
       const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
       return Math.max(0, ts);
-    };
-    const mentionForKey = (key: string): boolean => {
-      if (!selfMentionHandles.size) return false;
-      const conv = state.conversations[key] || [];
-      const last = conv.length ? conv[conv.length - 1] : null;
-      if (!last) return false;
-      const from = String(last.from || "").trim();
-      if (from && state.selfId && from === state.selfId) return false;
-      return hasSelfMention(String(last.text || ""), selfMentionHandles);
     };
 
     const mountPwa = (children: HTMLElement[]) => {
@@ -1146,7 +1153,8 @@ export function renderSidebar(
             Boolean(sel && sel.kind === "group" && sel.id === g.id),
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
-            meta
+            meta,
+            { mention: mentionForKey(k) }
           ),
         });
       }
@@ -1492,7 +1500,8 @@ export function renderSidebar(
           Boolean(sel && sel.kind === "group" && sel.id === g.id),
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
-          meta
+          meta,
+          { mention: mentionForKey(k) }
         )
       );
       continue;
@@ -1598,7 +1607,8 @@ export function renderSidebar(
           Boolean(sel && sel.kind === "group" && sel.id === g.id),
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
-          meta
+          meta,
+          { mention: mentionForKey(k) }
         ),
       });
     }

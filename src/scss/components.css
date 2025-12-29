@@ -239,7 +239,8 @@
   color: var(--row-text-selected-muted);
 }
 
-.row-sel .row-unread {
+.row-sel .row-unread,
+.row-sel .row-mention {
   background: var(--row-unread-selected-bg);
   color: var(--row-unread-selected-text);
   box-shadow: 0 10px 20px color-mix(in srgb, var(--row-unread-selected-text), transparent 70%);
@@ -383,6 +384,22 @@
   min-width: 22px;
   height: 22px;
   padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--focus), transparent 12%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-rounded);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--focus), transparent 78%);
+}
+
+.row-mention {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--focus), transparent 12%);
   color: #fff;
