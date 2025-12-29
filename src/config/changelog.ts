@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.257",
+    date: "2025-12-30",
+    improved: ["История: липкие разделители дат + «Непрочитанные» в ЛС"],
+  },
+  {
     version: "0.1.256",
     date: "2025-12-30",
     improved: ["Чаты: бейджи chatlist появляются с tweb‑подобной анимацией"],

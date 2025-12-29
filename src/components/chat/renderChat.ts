@@ -811,6 +811,13 @@ export function renderChat(layout: Layout, state: AppState) {
   const lines: HTMLElement[] = [];
   let prevDay = "";
   let prevMsg: ChatMessage | null = null;
+  let unreadIdx = -1;
+  if (state.selected?.kind === "dm" && !searchActive) {
+    const unread = (state.friends || []).find((f) => f.id === state.selected?.id)?.unread ?? 0;
+    if (unread > 0 && msgs.length > 0) {
+      unreadIdx = Math.max(0, Math.min(msgs.length - 1, msgs.length - unread));
+    }
+  }
   if (virtualEnabled && virtualStart > 0) {
     const prev = msgs[virtualStart - 1];
     if (prev) {
@@ -826,7 +833,17 @@ export function renderChat(layout: Layout, state: AppState) {
     const dk = dayKey(m.ts);
     if (dk && dk !== prevDay) {
       prevDay = dk;
-      lineItems.push(el("div", { class: "msg-sep", "aria-hidden": "true" }, [el("span", { class: "msg-sep-text" }, [formatDayLabel(m.ts)])]));
+      lineItems.push(
+        el("div", { class: "msg-sep msg-date", "aria-hidden": "true" }, [el("span", { class: "msg-sep-text" }, [formatDayLabel(m.ts)])])
+      );
+      prevMsg = null;
+    }
+    if (msgIdx === unreadIdx) {
+      lineItems.push(
+        el("div", { class: "msg-sep msg-unread", role: "separator", "aria-label": "Непрочитанные" }, [
+          el("span", { class: "msg-sep-text" }, ["Непрочитанные"]),
+        ])
+      );
       prevMsg = null;
     }
 

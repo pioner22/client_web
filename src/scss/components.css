@@ -1019,6 +1019,24 @@
   padding: 10px 0;
 }
 
+.msg-date {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.msg-unread {
+  color: var(--focus);
+}
+
+.msg-unread .msg-sep-text {
+  border-color: color-mix(in srgb, var(--focus), transparent 65%);
+  background: color-mix(in srgb, var(--focus), transparent 88%);
+  color: color-mix(in srgb, var(--focus), #ffffff 15%);
+  font-weight: 600;
+}
+
 .msg-sep::before,
 .msg-sep::after {
   content: "";
