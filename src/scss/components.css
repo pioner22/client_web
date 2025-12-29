@@ -1028,13 +1028,24 @@
 
 .msg-unread {
   color: var(--focus);
+  padding: 0;
 }
 
 .msg-unread .msg-sep-text {
-  border-color: color-mix(in srgb, var(--focus), transparent 65%);
-  background: color-mix(in srgb, var(--focus), transparent 88%);
-  color: color-mix(in srgb, var(--focus), #ffffff 15%);
-  font-weight: 600;
+  border: 0;
+  border-radius: 0;
+  background: var(--chat-bg);
+  color: var(--focus);
+  font-weight: var(--font-weight-bold, 600);
+  font-size: 15px;
+  height: 30px;
+  line-height: 30px;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  width: 200vw;
+  margin-left: -50vw;
+  margin-right: -50vw;
 }
 
 .msg-sep::before,
@@ -1043,6 +1054,11 @@
   flex: 1;
   height: 1px;
   background: color-mix(in srgb, var(--msg-sep-color), transparent 70%);
+}
+
+.msg-unread::before,
+.msg-unread::after {
+  display: none;
 }
 
 .msg-sep-text {
