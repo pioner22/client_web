@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.239",
+    date: "2025-12-29",
+    improved: ["Типографика: базовый шрифт Roboto, размер 16px и line-height 1.3125 (tweb parity)"],
+    fixed: ["Mobile: базовый размер шрифта синхронизирован с десктопом (16px)"],
+  },
+  {
     version: "0.1.238",
     date: "2025-12-29",
     improved: [
