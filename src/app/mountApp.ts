@@ -1264,6 +1264,44 @@ export function mountApp(root: HTMLElement) {
   let suppressChatClickUntil = 0;
   let pendingChatAutoScroll: { key: string; waitForHistory: boolean } | null = null;
 
+  const computeRoomUnread = (key: string, st: AppState): number => {
+    if (!key.startsWith("room:")) return 0;
+    const conv = st.conversations?.[key] || [];
+    if (!Array.isArray(conv) || conv.length === 0) return 0;
+    const marker = st.lastRead?.[key];
+    const lastReadId = Number(marker?.id ?? 0);
+    const lastReadTs = Number(marker?.ts ?? 0);
+    if (lastReadId <= 0 && lastReadTs <= 0) return 0;
+    let count = 0;
+    for (let i = conv.length - 1; i >= 0; i -= 1) {
+      const msg = conv[i];
+      if (!msg || msg.kind !== "in") continue;
+      const msgId = Number(msg.id ?? 0);
+      const msgTs = Number(msg.ts ?? 0);
+      if (lastReadId > 0) {
+        if (Number.isFinite(msgId) && msgId > lastReadId) {
+          count += 1;
+          continue;
+        }
+        if (Number.isFinite(msgId) && msgId <= lastReadId) break;
+        if (lastReadTs > 0 && msgTs > lastReadTs) {
+          count += 1;
+          continue;
+        }
+        if (lastReadTs > 0 && msgTs <= lastReadTs) break;
+        continue;
+      }
+      if (lastReadTs > 0) {
+        if (msgTs > lastReadTs) {
+          count += 1;
+          continue;
+        }
+        if (msgTs > 0 && msgTs <= lastReadTs) break;
+      }
+    }
+    return count;
+  };
+
   const updateChatJumpVisibility = () => {
     chatJumpRaf = null;
     const btn = layout.chatJump;
@@ -1272,8 +1310,12 @@ export function mountApp(root: HTMLElement) {
     const st = store.get();
     const badge = layout.chatJumpBadge;
     if (badge) {
-      const unread =
-        st.selected?.kind === "dm" ? st.friends.find((f) => f.id === st.selected?.id)?.unread ?? 0 : 0;
+      let unread = 0;
+      if (st.selected?.kind === "dm") {
+        unread = st.friends.find((f) => f.id === st.selected?.id)?.unread ?? 0;
+      } else {
+        unread = computeRoomUnread(key, st);
+      }
       if (unread > 0) {
         badge.textContent = unread > 999 ? "999+" : String(unread);
         badge.classList.remove("hidden");
