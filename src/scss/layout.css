@@ -201,6 +201,16 @@
   flex: 1 1 auto;
 }
 
+.input-wrap > .composer-edit,
+.input-wrap > .board-editor,
+.input-wrap > .composer-row,
+.input-wrap > .composer-meta {
+  max-width: var(--messages-container-width);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .sidebar-bottom-dock {
   display: flex;
   align-items: center;

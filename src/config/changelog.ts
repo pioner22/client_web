@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.237",
+    date: "2025-12-29",
+    improved: [
+      "Чат: лента сообщений и композер теперь ограничены шириной 728px и центрированы (tweb parity), чтобы диалоги выглядели плотнее",
+      "Сообщения: режимы plain/compact теперь следуют общей ширине контейнера",
+    ],
+  },
+  {
     version: "0.1.236",
     date: "2025-12-29",
     improved: [

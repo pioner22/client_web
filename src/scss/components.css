@@ -869,6 +869,9 @@
   gap: var(--chat-line-gap);
   white-space: pre-wrap;
   word-break: break-word;
+  width: 100%;
+  max-width: var(--messages-container-width);
+  margin: 0 auto;
 }
 
 .msg-sep {

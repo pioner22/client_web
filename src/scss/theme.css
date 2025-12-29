@@ -247,7 +247,8 @@
   --chat-line-gap: 6px;
   --msg-pad-y: 2px;
   --msg-status-read-color: var(--focus);
-  --msg-body-max-width: min(78%, 720px);
+  --messages-container-width: 728px;
+  --msg-body-max-width: min(78%, var(--messages-container-width));
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-end;
   --msg-sys-justify: flex-start;
@@ -317,7 +318,7 @@
   --msg-out-pad-x: 0;
   --msg-pad-y: 1px;
   --chat-line-gap: 2px;
-  --msg-body-max-width: min(100%, 980px);
+  --msg-body-max-width: min(100%, var(--messages-container-width));
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-start;
 }
@@ -333,7 +334,7 @@
   --msg-out-pad-x: 0;
   --msg-pad-y: 1px;
   --chat-line-gap: 3px;
-  --msg-body-max-width: min(100%, 940px);
+  --msg-body-max-width: min(100%, var(--messages-container-width));
   --msg-in-radius: 0;
   --msg-out-radius: 0;
   --msg-in-justify: flex-start;
