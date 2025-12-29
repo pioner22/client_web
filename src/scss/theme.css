@@ -256,6 +256,8 @@
   --row-text-selected-muted-hover: rgba(255, 255, 255, 0.85);
   --row-unread-selected-bg: #ffffff;
   --row-unread-selected-text: var(--focus);
+  --chatlist-badge-transition-in: 0.25s cubic-bezier(0.35, 0.35, 0.47, 1.34);
+  --chatlist-badge-transition-out: 0.25s cubic-bezier(0.35, 0.35, 0.7, 1);
   --row-star-color: var(--warn);
   --row-dot-online: var(--focus);
   --row-dot-offline: var(--muted);
