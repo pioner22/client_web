@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.306",
+    date: "2025-12-31",
+    improved: ["Сайдбар: бейдж реакций в чатах (best‑effort для сообщений с реакциями)"],
+  },
+  {
     version: "0.1.305",
     date: "2025-12-30",
     improved: ["Сайдбар: бейдж «закреплено» и порядок бейджей (упоминание/непрочитано/закреп) как в tweb"],

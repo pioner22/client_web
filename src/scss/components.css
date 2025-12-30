@@ -241,14 +241,16 @@
 }
 
 .row-muted-chat .row-unread,
-.row-muted-chat .row-mention {
+.row-muted-chat .row-mention,
+.row-muted-chat .row-reaction {
   background: color-mix(in srgb, var(--muted), transparent 10%);
   color: #fff;
   box-shadow: 0 8px 18px color-mix(in srgb, var(--muted), transparent 82%);
 }
 
 .row-sel .row-unread,
-.row-sel .row-mention {
+.row-sel .row-mention,
+.row-sel .row-reaction {
   background: var(--row-unread-selected-bg);
   color: var(--row-unread-selected-text);
   box-shadow: 0 10px 20px color-mix(in srgb, var(--row-unread-selected-text), transparent 70%);
@@ -338,6 +340,7 @@
 
   .row-unread,
   .row-mention,
+  .row-reaction,
   .row-pin,
   .row-muted {
     animation: none;
@@ -450,6 +453,10 @@
   margin-top: auto;
 }
 
+.row-tail-bottom .row-reaction {
+  order: 1;
+}
+
 .row-tail-bottom .row-mention {
   order: 2;
 }
@@ -517,6 +524,28 @@
   font-weight: var(--font-weight-bold);
   font-family: var(--font-rounded);
   font-variant-numeric: tabular-nums;
+  transform: scale(1);
+  transform-origin: center;
+  animation: row-badge-in var(--chatlist-badge-transition-in) both;
+  transition: background-color var(--chatlist-badge-transition-in),
+    transform var(--chatlist-badge-transition-in),
+    opacity var(--chatlist-badge-transition-in);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--focus), transparent 78%);
+}
+
+.row-reaction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--focus), transparent 12%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-rounded);
+  line-height: 1;
   transform: scale(1);
   transform-origin: center;
   animation: row-badge-in var(--chatlist-badge-transition-in) both;

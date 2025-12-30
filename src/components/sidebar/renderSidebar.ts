@@ -84,6 +84,7 @@ type SidebarRowMeta = {
   sub: string | null;
   time: string | null;
   hasDraft: boolean;
+  reactionEmoji?: string | null;
 };
 
 function displayNameForFriend(state: AppState, f: FriendEntry): string {
@@ -100,6 +101,22 @@ function compactOneLine(raw: string): string {
   return String(raw ?? "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function pickPreviewReactionEmoji(state: AppState, msg: ChatMessage | null): string | null {
+  if (!msg || msg.kind === "sys") return null;
+  const selfId = String(state.selfId || "").trim();
+  const from = String(msg.from || "").trim();
+  const isSelf = msg.kind === "out" || (selfId && from === selfId);
+  if (!isSelf) return null;
+  const counts = msg.reactions?.counts;
+  if (!counts || typeof counts !== "object") return null;
+  const entries = Object.entries(counts)
+    .map(([emoji, count]) => [String(emoji || "").trim(), Number(count)] as const)
+    .filter(([emoji, count]) => emoji && Number.isFinite(count) && count > 0);
+  if (!entries.length) return null;
+  entries.sort((a, b) => b[1] - a[1]);
+  return entries[0][0];
 }
 
 function shouldSuppressRowClick(btn: HTMLElement): boolean {
@@ -125,6 +142,7 @@ function previewForConversation(state: AppState, key: string, kind: "dm" | "room
   const conv = state.conversations[key] || [];
   const last = conv.length ? conv[conv.length - 1] : null;
   const time = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? formatTime(last.ts) : null;
+  const reactionEmoji = pickPreviewReactionEmoji(state, last);
 
   let sub: string | null = null;
   if (draft) {
@@ -151,7 +169,7 @@ function previewForConversation(state: AppState, key: string, kind: "dm" | "room
   }
 
   if (sub && sub.length > 84) sub = `${sub.slice(0, 81)}…`;
-  return { sub, time, hasDraft: Boolean(draft) };
+  return { sub, time, hasDraft: Boolean(draft), reactionEmoji };
 }
 
 function friendRow(
@@ -177,6 +195,11 @@ function friendRow(
     tailTopChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
   }
   const tailBottomChildren: HTMLElement[] = [];
+  if (meta.reactionEmoji) {
+    tailBottomChildren.push(
+      el("span", { class: "row-reaction", "aria-label": `Реакция: ${meta.reactionEmoji}` }, [meta.reactionEmoji])
+    );
+  }
   if (unread > 0) {
     tailBottomChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
   }
@@ -241,6 +264,11 @@ function roomRow(
   const tailTopChildren: HTMLElement[] = [];
   if (meta?.time) tailTopChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
   const tailBottomChildren: HTMLElement[] = [];
+  if (meta?.reactionEmoji) {
+    tailBottomChildren.push(
+      el("span", { class: "row-reaction", "aria-label": `Реакция: ${meta.reactionEmoji}` }, [meta.reactionEmoji])
+    );
+  }
   if (opts?.mention) tailBottomChildren.push(el("span", { class: "row-mention", "aria-label": "Упоминание" }, ["@"]));
   if (unread > 0) {
     tailBottomChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
