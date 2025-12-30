@@ -55,9 +55,26 @@
   min-height: 0;
 }
 
+body.has-right-col {
+  --grid-cols: var(--sidebar-width) minmax(0, 1fr) var(--right-column-width);
+}
+
 .chat-col {
   min-height: 0;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-col {
+  display: none;
+  min-height: 0;
+  min-width: 0;
+  background: var(--right-column-bg);
+  border-left: var(--right-column-border-width) solid var(--right-column-border-color);
+}
+
+body.has-right-col .right-col {
   display: flex;
   flex-direction: column;
 }

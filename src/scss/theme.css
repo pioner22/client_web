@@ -116,6 +116,10 @@
   /* Main grid columns + gap */
   --grid-cols: var(--sidebar-width) minmax(0, 1fr);
   --grid-gap: 0px;
+  --right-column-width: 420px;
+  --right-column-bg: var(--panel);
+  --right-column-border-color: var(--line);
+  --right-column-border-width: var(--border-width);
 
   --header-bg: var(--panel);
   --header-border-color: var(--line);

@@ -192,7 +192,8 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const overlay = el("div", { class: "overlay hidden" });
 
   const chatCol = el("div", { class: "chat-col" }, [chat, inputWrap]);
-  const grid = el("div", { class: "grid" }, [sidebar, chatCol]);
+  const rightCol = el("aside", { class: "right-col hidden", "aria-hidden": "true" });
+  const grid = el("div", { class: "grid" }, [sidebar, chatCol, rightCol]);
 
   const app = el("div", { class: "app" }, [header, grid, footer, toastHost, navOverlay, overlay]);
   // Keep the boot screen in DOM until the app signals it has booted.
@@ -214,6 +215,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     chatHost,
     chatJump,
     chatJumpBadge,
+    rightCol,
     toastHost,
     inputWrap,
     input,

@@ -1,4 +1,8 @@
 @media (max-width: 600px) {
+  :root {
+    --right-column-width: 100vw;
+  }
+
   /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
   html #app {
     --app-outer-pad: 0px;
@@ -45,6 +49,10 @@
 
   .grid {
     grid-template-columns: 1fr;
+  }
+
+  .right-col {
+    display: none;
   }
 
   .nav-toggle {
@@ -259,6 +267,7 @@
 @media (min-width: 1276px) and (max-width: 1680px) {
   :root {
     --app-max-width: 100%;
+    --right-column-width: 25vw;
   }
 }
 
