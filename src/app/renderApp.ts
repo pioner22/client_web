@@ -1,5 +1,14 @@
 import type { Layout } from "../components/layout/types";
-import type { ActionModalPayload, AppState, MessageViewMode, MobileSidebarTab, PageKind, TargetRef, ThemeMode } from "../stores/types";
+import type {
+  ActionModalPayload,
+  AppState,
+  MessageViewMode,
+  MobileSidebarTab,
+  PageKind,
+  SearchResultEntry,
+  TargetRef,
+  ThemeMode,
+} from "../stores/types";
 import { APP_MSG_MAX_LEN } from "../config/app";
 import { renderHeader } from "../components/header/renderHeader";
 import { renderSidebar } from "../components/sidebar/renderSidebar";
@@ -141,6 +150,7 @@ export interface RenderActions {
   onBoardJoin: (boardId: string) => void;
   onOpenHistoryHit: (t: TargetRef, query: string, msgIdx?: number) => void;
   onSearchHistoryDelete: (items: Array<{ target: TargetRef; idx: number }>, mode: "local" | "remote") => void;
+  onSearchServerForward: (items: SearchResultEntry[]) => void;
   onGroupInviteAccept: (groupId: string) => void;
   onGroupInviteDecline: (groupId: string) => void;
   onGroupJoinAccept: (groupId: string, peer: string) => void;
@@ -524,6 +534,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onAuthCancel: actions.onAuthCancel,
         onGroupJoin: actions.onGroupJoin,
         onBoardJoin: actions.onBoardJoin,
+        onSearchServerForward: actions.onSearchServerForward,
         onOpenHistoryHit: actions.onOpenHistoryHit,
         onSearchHistoryDelete: actions.onSearchHistoryDelete,
       });

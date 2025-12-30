@@ -474,6 +474,28 @@ export function mountApp(root: HTMLElement) {
     scheduleSaveDrafts(store);
   }
 
+  function formatSearchServerShareLine(st: AppState, entry: SearchResultEntry): string {
+    const id = String(entry?.id || "").trim();
+    if (!id) return "";
+    if (entry.board) {
+      const board = st.boards.find((b) => b.id === id);
+      const name = String(board?.name || "").trim();
+      return name ? `${name} (#${id})` : `#${id}`;
+    }
+    if (entry.group) {
+      const group = st.groups.find((g) => g.id === id);
+      const name = String(group?.name || "").trim();
+      return name ? `${name} (#${id})` : `#${id}`;
+    }
+    const profile = st.profiles?.[id];
+    const displayName = String(profile?.display_name || "").trim();
+    return displayName ? `${displayName} (ID: ${id})` : `ID: ${id}`;
+  }
+
+  function formatSearchServerShareText(st: AppState, items: SearchResultEntry[]): string {
+    return items.map((entry) => formatSearchServerShareLine(st, entry)).filter(Boolean).join("\n").trim();
+  }
+
   function canSendShareNow(st: AppState, target: TargetRef | null): { ok: boolean; reason: string } {
     if (st.conn !== "connected") return { ok: false, reason: "Нет соединения" };
     if (!st.authed) return { ok: false, reason: "Сначала войдите или зарегистрируйтесь" };
@@ -9724,6 +9746,22 @@ export function mountApp(root: HTMLElement) {
         profileDraftHandle: draft.handle,
         profileDraftBio: draft.bio,
         profileDraftStatus: draft.status,
+      });
+    },
+    onSearchServerForward: (items: SearchResultEntry[]) => {
+      const st = store.get();
+      const list = Array.isArray(items) ? items : [];
+      const text = formatSearchServerShareText(st, list);
+      if (!text) return;
+      const target = st.selected;
+      const canSend = canSendShareNow(st, target);
+      if (canSend.ok && target) {
+        appendShareTextToComposer(text, target);
+        store.set({ status: list.length > 1 ? "Пересланы ID в поле ввода" : "Переслан ID в поле ввода" });
+        return;
+      }
+      copyText(text).then((ok) => {
+        store.set({ status: ok ? "ID скопирован" : "Не удалось скопировать ID" });
       });
     },
     onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => {

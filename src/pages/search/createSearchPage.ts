@@ -20,6 +20,7 @@ export interface SearchPageActions {
   onAuthCancel: (peer: string) => void;
   onGroupJoin: (groupId: string) => void;
   onBoardJoin: (boardId: string) => void;
+  onSearchServerForward: (items: SearchResultEntry[]) => void;
 }
 
 export interface SearchPage {
@@ -953,6 +954,15 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
               if (lastState) update(lastState);
             });
             actionsWrap.append(joinBtn);
+          }
+          if (selectedItems.length) {
+            const forwardBtn = el("button", { class: "btn", type: "button" }, ["Переслать ID"]);
+            forwardBtn.addEventListener("click", () => {
+              actions.onSearchServerForward(selectedItems);
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(forwardBtn);
           }
           selectionBar.append(cancelBtn, countEl, actionsWrap);
         }
