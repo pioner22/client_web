@@ -49,6 +49,7 @@
 }
 
 .grid {
+  position: relative;
   display: grid;
   grid-template-columns: var(--grid-cols);
   gap: var(--grid-gap);

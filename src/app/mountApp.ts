@@ -2429,8 +2429,13 @@ export function mountApp(root: HTMLElement) {
     return host.scrollTop + host.clientHeight >= host.scrollHeight - 24;
   }
 
+  function shouldShowRightOverlay(st: AppState): boolean {
+    return Boolean(st.rightPanel && st.page === "main" && !st.modal && floatingSidebarMq.matches);
+  }
+
   function syncNavOverlay() {
-    const show = mobileSidebarOpen || floatingSidebarOpen;
+    const st = store.get();
+    const show = mobileSidebarOpen || floatingSidebarOpen || shouldShowRightOverlay(st);
     layout.navOverlay.classList.toggle("hidden", !show);
     layout.navOverlay.setAttribute("aria-hidden", show ? "false" : "true");
   }
@@ -2540,7 +2545,14 @@ export function mountApp(root: HTMLElement) {
     store.set({ mobileSidebarTab: next });
   }
 
-  layout.navOverlay.addEventListener("click", () => closeMobileSidebar());
+  layout.navOverlay.addEventListener("click", () => {
+    const st = store.get();
+    if (shouldShowRightOverlay(st)) {
+      closeRightPanel();
+      return;
+    }
+    closeMobileSidebar();
+  });
 
   layout.sidebar.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement | null)?.closest("button[data-action='sidebar-close']") as HTMLButtonElement | null;
@@ -9921,6 +9933,7 @@ export function mountApp(root: HTMLElement) {
       }
     }
     renderApp(layout, st, actions);
+    syncNavOverlay();
     if (historyPrependAnchor) {
       const selectedKey = st.selected ? conversationKey(st.selected) : "";
       const anchorKey = historyPrependAnchor.key;
