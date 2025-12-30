@@ -402,6 +402,7 @@ export interface AppState {
 
   chatSearchOpen: boolean;
   chatSearchQuery: string;
+  chatSearchDate: string;
   chatSearchFilter: import("../helpers/chat/chatSearch").ChatSearchFilter;
   chatSearchHits: number[];
   chatSearchPos: number;

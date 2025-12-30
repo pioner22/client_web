@@ -18,6 +18,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   sidebar.appendChild(sidebarResizeHandle);
   const chatTop = el("div", { class: "chat-top hidden" });
   const chatHost = el("div", { class: "chat-host" });
+  const chatSearchFooter = el("div", { class: "chat-search-footer hidden" });
   const chatJumpIcon = el("span", { class: "chat-jump-icon", "aria-hidden": "true" }, ["↓"]);
   const chatJumpBadge = el("span", { class: "chat-jump-badge hidden", "aria-hidden": "true" }, [""]);
   const chatJump = el(
@@ -191,7 +192,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const navOverlay = el("div", { class: "nav-overlay hidden", "aria-hidden": "true" });
   const overlay = el("div", { class: "overlay hidden" });
 
-  const chatCol = el("div", { class: "chat-col" }, [chat, inputWrap]);
+  const chatCol = el("div", { class: "chat-col" }, [chat, chatSearchFooter, inputWrap]);
   const rightCol = el("aside", { class: "right-col hidden", "aria-hidden": "true" });
   const grid = el("div", { class: "grid" }, [sidebar, chatCol, rightCol]);
 
@@ -212,6 +213,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     sidebarResizeHandle,
     chat,
     chatTop,
+    chatSearchFooter,
     chatHost,
     chatJump,
     chatJumpBadge,

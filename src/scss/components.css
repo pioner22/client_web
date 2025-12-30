@@ -996,6 +996,26 @@
   margin-bottom: var(--sp-3);
 }
 
+.chat-search-footer {
+  border-top: var(--border-width) solid var(--line);
+  background: var(--panel);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.chat-search-footer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.chat-search-controls {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 .chat-search-row {
   display: flex;
   align-items: center;
@@ -1063,6 +1083,27 @@
   font-variant-numeric: tabular-nums;
   color: var(--muted);
   font-size: 12px;
+}
+
+.chat-search-count.is-empty {
+  visibility: hidden;
+}
+
+.chat-search-date {
+  min-width: 140px;
+  max-width: 200px;
+  font-size: 12px;
+}
+
+.btn.chat-search-date-clear {
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  font-size: 16px;
 }
 
 .btn.chat-search-nav,

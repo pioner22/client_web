@@ -26,6 +26,7 @@ import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey
 import { newestServerMessageId } from "../helpers/chat/historySync";
 import {
   HISTORY_VIRTUAL_OVERSCAN,
+  HISTORY_VIRTUAL_WINDOW,
   clampVirtualAvg,
   getVirtualMaxStart,
   getVirtualStart,
@@ -1991,6 +1992,12 @@ export function mountApp(root: HTMLElement) {
       stepChatSearch(1);
       return;
     }
+    const searchDateClearBtn = target?.closest("button[data-action='chat-search-date-clear']") as HTMLButtonElement | null;
+    if (searchDateClearBtn) {
+      e.preventDefault();
+      setChatSearchDate("");
+      return;
+    }
     const searchFilterBtn = target?.closest("button[data-action='chat-search-filter']") as HTMLButtonElement | null;
     if (searchFilterBtn) {
       const filter = String(searchFilterBtn.getAttribute("data-filter") || "all") as ChatSearchFilter;
@@ -2246,9 +2253,23 @@ export function mountApp(root: HTMLElement) {
   layout.chat.addEventListener("input", (e) => {
     const t = e.target as HTMLElement | null;
     if (!t || !(t instanceof HTMLInputElement)) return;
-    if (t.id !== "chat-search-input") return;
+    if (t.id === "chat-search-input") {
+      lastUserInputAt = Date.now();
+      setChatSearchQuery(t.value);
+      return;
+    }
+    if (t.id === "chat-search-date") {
+      lastUserInputAt = Date.now();
+      setChatSearchDate(t.value);
+    }
+  });
+
+  layout.chat.addEventListener("change", (e) => {
+    const t = e.target as HTMLElement | null;
+    if (!t || !(t instanceof HTMLInputElement)) return;
+    if (t.id !== "chat-search-date") return;
     lastUserInputAt = Date.now();
-    setChatSearchQuery(t.value);
+    setChatSearchDate(t.value);
   });
 
   layout.chat.addEventListener("keydown", (e) => {
@@ -3120,7 +3141,15 @@ export function mountApp(root: HTMLElement) {
       ...(page !== "main" ? { rightPanel: null } : {}),
       ...(page !== "main" ? { mobileSidebarTab: "menu" as MobileSidebarTab } : {}),
       ...(page !== "main"
-        ? { chatSearchOpen: false, chatSearchQuery: "", chatSearchFilter: "all", chatSearchHits: [], chatSearchPos: 0, chatSearchCounts: createChatSearchCounts() }
+        ? {
+            chatSearchOpen: false,
+            chatSearchQuery: "",
+            chatSearchDate: "",
+            chatSearchFilter: "all",
+            chatSearchHits: [],
+            chatSearchPos: 0,
+            chatSearchCounts: createChatSearchCounts(),
+          }
         : {}),
     }));
   }
@@ -3413,6 +3442,7 @@ export function mountApp(root: HTMLElement) {
         boardComposerOpen: t.kind === "board" ? p.boardComposerOpen : false,
         chatSearchOpen: false,
         chatSearchQuery: "",
+        chatSearchDate: "",
         chatSearchFilter: "all",
         chatSearchHits: [],
         chatSearchPos: 0,
@@ -3508,6 +3538,77 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
+  function parseChatSearchDate(value: string): { start: number; end: number } | null {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const [yearRaw, monthRaw, dayRaw] = raw.split("-");
+    const year = Number.parseInt(yearRaw, 10);
+    const month = Number.parseInt(monthRaw, 10);
+    const day = Number.parseInt(dayRaw, 10);
+    if (!year || !month || !day) return null;
+    const start = new Date(year, month - 1, day, 0, 0, 0, 0).getTime() / 1000;
+    const end = new Date(year, month - 1, day + 1, 0, 0, 0, 0).getTime() / 1000;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { start, end };
+  }
+
+  function jumpToChatMsgIdx(idx: number) {
+    const msgIdx = Number(idx);
+    if (!Number.isFinite(msgIdx) || msgIdx < 0) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const tryJump = () => {
+      const row = layout.chat.querySelector(`[data-msg-idx='${msgIdx}']`) as HTMLElement | null;
+      if (!row) return false;
+      try {
+        row.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+      } catch {
+        row.scrollIntoView();
+      }
+      row.classList.add("msg-jump");
+      window.setTimeout(() => row.classList.remove("msg-jump"), 900);
+      return true;
+    };
+    if (tryJump()) return;
+    window.setTimeout(() => {
+      if (tryJump()) return;
+      window.setTimeout(tryJump, 160);
+    }, 0);
+  }
+
+  function setChatSearchDate(value: string) {
+    const v = String(value ?? "");
+    store.set((prev) => ({ ...prev, chatSearchDate: v }));
+    const range = parseChatSearchDate(v);
+    if (!range) return;
+    const st = store.get();
+    if (!st.selected) return;
+    const key = conversationKey(st.selected);
+    if (!key) return;
+    const msgs = st.conversations[key] || [];
+    if (!Array.isArray(msgs) || !msgs.length) {
+      showToast("Сообщения пока не загружены", { kind: "info" });
+      return;
+    }
+    const idx = msgs.findIndex((m) => {
+      const ts = Number(m?.ts ?? 0);
+      return ts >= range.start && ts < range.end;
+    });
+    if (idx < 0) {
+      showToast("Сообщений за эту дату нет", { kind: "info" });
+      return;
+    }
+    const searchActive = Boolean(st.chatSearchOpen && st.chatSearchQuery.trim());
+    if (shouldVirtualize(msgs.length, searchActive)) {
+      const maxStart = getVirtualMaxStart(msgs.length);
+      const targetStart = Math.max(0, Math.min(maxStart, idx - Math.floor(HISTORY_VIRTUAL_WINDOW / 2)));
+      store.set((prev) => ({
+        ...prev,
+        historyVirtualStart: { ...prev.historyVirtualStart, [key]: targetStart },
+      }));
+    }
+    jumpToChatMsgIdx(idx);
+  }
+
   function focusChatSearch(selectAll = false) {
     const input = layout.chat.querySelector("#chat-search-input") as HTMLInputElement | null;
     if (!input) return;
@@ -3534,6 +3635,7 @@ export function mountApp(root: HTMLElement) {
       ...prev,
       chatSearchOpen: false,
       chatSearchQuery: "",
+      chatSearchDate: "",
       chatSearchFilter: "all",
       chatSearchHits: [],
       chatSearchPos: 0,
@@ -3570,10 +3672,11 @@ export function mountApp(root: HTMLElement) {
       store.set((prev) => ({
         ...prev,
         ...(q
-          ? { chatSearchOpen: true, chatSearchQuery: q, chatSearchFilter: "all" }
+          ? { chatSearchOpen: true, chatSearchQuery: q, chatSearchDate: "", chatSearchFilter: "all" }
           : {
               chatSearchOpen: false,
               chatSearchQuery: "",
+              chatSearchDate: "",
               chatSearchFilter: "all",
               chatSearchHits: [],
               chatSearchPos: 0,
@@ -6219,6 +6322,7 @@ export function mountApp(root: HTMLElement) {
       boardScheduledPosts: [],
       chatSearchOpen: false,
       chatSearchQuery: "",
+      chatSearchDate: "",
       chatSearchFilter: "all",
       chatSearchHits: [],
       chatSearchPos: 0,
@@ -8354,6 +8458,7 @@ export function mountApp(root: HTMLElement) {
         pinned: st.pinned,
         chatSearchOpen: st.chatSearchOpen,
         chatSearchQuery: st.chatSearchQuery,
+        chatSearchDate: st.chatSearchDate,
         chatSearchFilter: st.chatSearchFilter,
         chatSearchPos: st.chatSearchPos,
         searchQuery: st.searchQuery,
@@ -8380,6 +8485,7 @@ export function mountApp(root: HTMLElement) {
         pinned?: string[];
         chatSearchOpen?: boolean;
         chatSearchQuery?: string;
+        chatSearchDate?: string;
         chatSearchFilter?: ChatSearchFilter;
         chatSearchPos?: number;
         searchQuery?: string;
@@ -8418,6 +8524,7 @@ export function mountApp(root: HTMLElement) {
       const pinned = sanitizePins(obj.pinned);
       const chatSearchOpen = Boolean(obj.chatSearchOpen);
       const chatSearchQuery = typeof obj.chatSearchQuery === "string" ? obj.chatSearchQuery : "";
+      const chatSearchDate = typeof obj.chatSearchDate === "string" ? obj.chatSearchDate : "";
       const chatSearchFilter =
         typeof obj.chatSearchFilter === "string" && ["all", "media", "files", "links", "audio"].includes(obj.chatSearchFilter)
           ? (obj.chatSearchFilter as ChatSearchFilter)
@@ -8440,6 +8547,7 @@ export function mountApp(root: HTMLElement) {
         pinned,
         chatSearchOpen,
         chatSearchQuery,
+        chatSearchDate,
         chatSearchFilter,
         chatSearchPos,
         searchQuery,
@@ -9951,6 +10059,7 @@ export function mountApp(root: HTMLElement) {
 	      pinned: restored.pinned ?? prev.pinned,
 	      chatSearchOpen: restored.chatSearchOpen ?? prev.chatSearchOpen,
 	      chatSearchQuery: restored.chatSearchQuery ?? prev.chatSearchQuery,
+	      chatSearchDate: restored.chatSearchDate ?? prev.chatSearchDate,
 	      chatSearchFilter: restored.chatSearchFilter ?? prev.chatSearchFilter,
 	      chatSearchPos: restored.chatSearchPos ?? prev.chatSearchPos,
 	      searchQuery: restored.searchQuery ?? prev.searchQuery,

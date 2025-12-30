@@ -793,6 +793,8 @@ export function renderChat(layout: Layout, state: AppState) {
     layout.chatTop.replaceChildren();
     scrollHost.replaceChildren();
     layout.chatJump.classList.add("hidden");
+    layout.chatSearchFooter.classList.add("hidden");
+    layout.chatSearchFooter.replaceChildren();
     return;
   }
 
@@ -998,26 +1000,7 @@ export function renderChat(layout: Layout, state: AppState) {
       enterkeyhint: "search",
     }) as HTMLInputElement;
     input.value = state.chatSearchQuery || "";
-    const total = hits.length;
-    const countLabel = total ? `${Math.min(activePos + 1, total)}/${total}` : "0";
-    const btnPrev = el(
-      "button",
-      { class: "btn chat-search-nav", type: "button", "data-action": "chat-search-prev", ...(total ? {} : { disabled: "true" }) },
-      ["↑"]
-    );
-    const btnNext = el(
-      "button",
-      { class: "btn chat-search-nav", type: "button", "data-action": "chat-search-next", ...(total ? {} : { disabled: "true" }) },
-      ["↓"]
-    );
-    const btnClose = el("button", { class: "btn chat-search-close", type: "button", "data-action": "chat-search-close", title: "Закрыть" }, ["×"]);
-    const row = el("div", { class: "chat-search-row" }, [
-      input,
-      el("span", { class: "chat-search-count", "aria-live": "polite" }, [countLabel]),
-      btnPrev,
-      btnNext,
-      btnClose,
-    ]);
+    const row = el("div", { class: "chat-search-row" }, [input]);
     const filters: HTMLElement[] = [];
     const counts = state.chatSearchCounts || { all: 0, media: 0, files: 0, links: 0, audio: 0 };
     const hasQuery = Boolean((state.chatSearchQuery || "").trim());
@@ -1044,6 +1027,60 @@ export function renderChat(layout: Layout, state: AppState) {
     }
     const filterRow = filters.length ? el("div", { class: "chat-search-filters", role: "tablist" }, filters) : null;
     searchBar = el("div", { class: "chat-search" }, [row, ...(filterRow ? [filterRow] : [])]);
+  }
+
+  let searchFooter: HTMLElement | null = null;
+  if (state.selected && state.chatSearchOpen) {
+    const total = hits.length;
+    const hasQuery = Boolean((state.chatSearchQuery || "").trim());
+    const countLabel = total ? `${Math.min(activePos + 1, total)}/${total}` : hasQuery ? "0/0" : "";
+    const count = el(
+      "span",
+      { class: `chat-search-count${hasQuery ? "" : " is-empty"}`, "aria-live": "polite" },
+      [countLabel || ""]
+    );
+    const dateInput = el("input", {
+      class: "modal-input chat-search-date",
+      id: "chat-search-date",
+      type: "date",
+      "aria-label": "Перейти к дате",
+    }) as HTMLInputElement;
+    dateInput.value = state.chatSearchDate || "";
+    const dateClear = el(
+      "button",
+      {
+        class: "btn chat-search-date-clear",
+        type: "button",
+        title: "Сбросить дату",
+        "data-action": "chat-search-date-clear",
+        ...(dateInput.value ? {} : { disabled: "true" }),
+      },
+      ["×"]
+    );
+    const btnPrev = el(
+      "button",
+      {
+        class: "btn chat-search-nav",
+        type: "button",
+        "data-action": "chat-search-prev",
+        "aria-label": "Предыдущий результат",
+        ...(total ? {} : { disabled: "true" }),
+      },
+      ["↑"]
+    );
+    const btnNext = el(
+      "button",
+      {
+        class: "btn chat-search-nav",
+        type: "button",
+        "data-action": "chat-search-next",
+        "aria-label": "Следующий результат",
+        ...(total ? {} : { disabled: "true" }),
+      },
+      ["↓"]
+    );
+    const controls = el("div", { class: "chat-search-controls" }, [btnPrev, btnNext]);
+    searchFooter = el("div", { class: "chat-search-footer-row" }, [count, dateInput, dateClear, controls]);
   }
 
   let pinnedBar: HTMLElement | null = null;
@@ -1089,6 +1126,13 @@ export function renderChat(layout: Layout, state: AppState) {
   if (pinnedBar) topChildren.push(pinnedBar);
   if (searchBar) topChildren.push(searchBar);
   layout.chatTop.replaceChildren(...topChildren);
+  if (searchFooter) {
+    layout.chatSearchFooter.classList.remove("hidden");
+    layout.chatSearchFooter.replaceChildren(searchFooter);
+  } else {
+    layout.chatSearchFooter.classList.add("hidden");
+    layout.chatSearchFooter.replaceChildren();
+  }
   scrollHost.replaceChildren(el("div", { class: "chat-lines" }, lines));
 
   if (virtualEnabled && key) {
