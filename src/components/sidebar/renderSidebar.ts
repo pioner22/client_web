@@ -220,15 +220,20 @@ function roomRow(
   onClick: () => void,
   ctx?: { kind: "group" | "board"; id: string },
   meta?: SidebarRowMeta,
-  opts?: { mention?: boolean; muted?: boolean }
+  opts?: { mention?: boolean; muted?: boolean; unread?: number }
 ): HTMLElement {
   let cls = selected ? "row row-sel" : "row";
   if (opts?.muted) cls += " row-muted-chat";
   const tailChildren: HTMLElement[] = [];
+  const unread = Math.max(0, Number(opts?.unread || 0) || 0);
+  const unreadLabel = unread > 99 ? "99+" : String(unread);
   if (meta?.time) tailChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
   if (opts?.muted) tailChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
   if (opts?.mention) tailChildren.push(el("span", { class: "row-mention", "aria-label": "Упоминание" }, ["@"]));
   if (meta?.hasDraft) tailChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
+  if (unread > 0) {
+    tailChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
+  }
   const tail = tailChildren.length ? el("span", { class: "row-tail" }, tailChildren) : null;
   const hasConversationMeta = Boolean(ctx);
   const hasSub = Boolean(meta?.sub);
@@ -319,6 +324,53 @@ export function renderSidebar(
     if ((opts.unread || 0) > 0) score += 2;
     if (opts.attention) score += 1;
     return score;
+  };
+
+  const roomUnreadCache = new Map<string, number>();
+  const computeRoomUnread = (key: string): number => {
+    if (!key.startsWith("room:")) return 0;
+    if (roomUnreadCache.has(key)) return roomUnreadCache.get(key) || 0;
+    const conv = state.conversations?.[key] || [];
+    if (!Array.isArray(conv) || conv.length === 0) {
+      roomUnreadCache.set(key, 0);
+      return 0;
+    }
+    const marker = state.lastRead?.[key];
+    const lastReadId = Number((marker as any)?.id ?? 0);
+    const lastReadTs = Number((marker as any)?.ts ?? 0);
+    if (lastReadId <= 0 && lastReadTs <= 0) {
+      roomUnreadCache.set(key, 0);
+      return 0;
+    }
+    let count = 0;
+    for (let i = conv.length - 1; i >= 0; i -= 1) {
+      const msg = conv[i] as any;
+      if (!msg || msg.kind !== "in") continue;
+      const msgId = Number(msg.id ?? 0);
+      const msgTs = Number(msg.ts ?? 0);
+      if (lastReadId > 0) {
+        if (Number.isFinite(msgId) && msgId > lastReadId) {
+          count += 1;
+          continue;
+        }
+        if (Number.isFinite(msgId) && msgId <= lastReadId) break;
+        if (lastReadTs > 0 && msgTs > lastReadTs) {
+          count += 1;
+          continue;
+        }
+        if (lastReadTs > 0 && msgTs <= lastReadTs) break;
+        continue;
+      }
+      if (lastReadTs > 0) {
+        if (msgTs > lastReadTs) {
+          count += 1;
+          continue;
+        }
+        if (msgTs > 0 && msgTs <= lastReadTs) break;
+      }
+    }
+    roomUnreadCache.set(key, count);
+    return count;
   };
 
   const drafts = state.drafts || {};
@@ -632,6 +684,7 @@ export function renderSidebar(
           if (!matchesRoom(g)) continue;
           const k = roomKey(g.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
+          const unread = computeRoomUnread(k);
           pinnedChatRows.push(
             roomRow(
               null,
@@ -640,7 +693,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k), muted: isMuted(g.id) }
+              { mention: mentionForKey(k), muted: isMuted(g.id), unread }
             )
           );
           continue;
@@ -650,6 +703,7 @@ export function renderSidebar(
           if (!matchesRoom(b)) continue;
           const k = roomKey(b.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
+          const unread = computeRoomUnread(k);
           pinnedBoardRows.push(
             roomRow(
               null,
@@ -658,7 +712,7 @@ export function renderSidebar(
               () => onSelect({ kind: "board", id: b.id }),
               { kind: "board", id: b.id },
               meta,
-              { muted: isMuted(b.id) }
+              { muted: isMuted(b.id), unread }
             )
           );
         }
@@ -702,10 +756,11 @@ export function renderSidebar(
         if (!matchesRoom(g)) continue;
         const k = roomKey(g.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
+        const unread = computeRoomUnread(k);
         const label = String(g.name || g.id);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k) }),
+          priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k), unread }),
           label,
           row: roomRow(
             null,
@@ -714,7 +769,7 @@ export function renderSidebar(
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
             meta,
-            { mention: mentionForKey(k), muted: isMuted(g.id) }
+            { mention: mentionForKey(k), muted: isMuted(g.id), unread }
           ),
         });
       }
@@ -742,6 +797,7 @@ export function renderSidebar(
         if (!matchesRoom(b)) continue;
         const k = roomKey(b.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
+        const unread = computeRoomUnread(k);
         boardItems.push({
           sortTs: lastTsForKey(k),
           row: roomRow(
@@ -751,7 +807,7 @@ export function renderSidebar(
             () => onSelect({ kind: "board", id: b.id }),
             { kind: "board", id: b.id },
             meta,
-            { muted: isMuted(b.id) }
+            { muted: isMuted(b.id), unread }
           ),
         });
       }
@@ -1075,6 +1131,7 @@ export function renderSidebar(
           if (!matchesRoom(g)) continue;
           const k = roomKey(g.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
+          const unread = computeRoomUnread(k);
           pinnedChatRows.push(
             roomRow(
               null,
@@ -1083,7 +1140,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k), muted: isMuted(g.id) }
+              { mention: mentionForKey(k), muted: isMuted(g.id), unread }
             )
           );
           continue;
@@ -1093,6 +1150,7 @@ export function renderSidebar(
           if (!matchesRoom(b)) continue;
           const k = roomKey(b.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
+          const unread = computeRoomUnread(k);
           pinnedBoardRows.push(
             roomRow(
               null,
@@ -1101,7 +1159,7 @@ export function renderSidebar(
               () => onSelect({ kind: "board", id: b.id }),
               { kind: "board", id: b.id },
               meta,
-              { muted: isMuted(b.id) }
+              { muted: isMuted(b.id), unread }
             )
           );
         }
@@ -1153,10 +1211,11 @@ export function renderSidebar(
         if (!matchesRoom(g)) continue;
         const k = roomKey(g.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
+        const unread = computeRoomUnread(k);
         const label = String(g.name || g.id);
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k) }),
+          priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k), unread }),
           label,
           row: roomRow(
             null,
@@ -1165,7 +1224,7 @@ export function renderSidebar(
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
             meta,
-            { mention: mentionForKey(k), muted: isMuted(g.id) }
+            { mention: mentionForKey(k), muted: isMuted(g.id), unread }
           ),
         });
       }
@@ -1194,6 +1253,7 @@ export function renderSidebar(
         if (!matchesRoom(b)) continue;
         const k = roomKey(b.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
+        const unread = computeRoomUnread(k);
         boardItems.push({
           sortTs: lastTsForKey(k),
           row: roomRow(
@@ -1203,7 +1263,7 @@ export function renderSidebar(
             () => onSelect({ kind: "board", id: b.id }),
             { kind: "board", id: b.id },
             meta,
-            { muted: isMuted(b.id) }
+            { muted: isMuted(b.id), unread }
           ),
         });
       }
@@ -1505,6 +1565,7 @@ export function renderSidebar(
       if (!matchesRoom(g)) continue;
       const k = roomKey(g.id);
       const meta = previewForConversation(state, k, "room", drafts[k]);
+      const unread = computeRoomUnread(k);
       pinnedChatRows.push(
         roomRow(
           null,
@@ -1513,7 +1574,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k), muted: isMuted(g.id) }
+          { mention: mentionForKey(k), muted: isMuted(g.id), unread }
         )
       );
       continue;
@@ -1523,6 +1584,7 @@ export function renderSidebar(
     if (!matchesRoom(b)) continue;
     const k = roomKey(b.id);
     const meta = previewForConversation(state, k, "room", drafts[k]);
+    const unread = computeRoomUnread(k);
     pinnedBoardRows.push(
       roomRow(
         null,
@@ -1531,7 +1593,7 @@ export function renderSidebar(
         () => onSelect({ kind: "board", id: b.id }),
         { kind: "board", id: b.id },
         meta,
-        { muted: isMuted(b.id) }
+        { muted: isMuted(b.id), unread }
       )
     );
   }
@@ -1609,10 +1671,11 @@ export function renderSidebar(
       if (!matchesRoom(g)) continue;
       const k = roomKey(g.id);
       const meta = previewForConversation(state, k, "room", drafts[k]);
+      const unread = computeRoomUnread(k);
       const label = String(g.name || g.id);
       dialogItems.push({
         sortTs: lastTsForKey(k),
-        priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k) }),
+        priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k), unread }),
         label,
         row: roomRow(
           null,
@@ -1621,7 +1684,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k), muted: isMuted(g.id) }
+          { mention: mentionForKey(k), muted: isMuted(g.id), unread }
         ),
       });
     }
@@ -1650,6 +1713,7 @@ export function renderSidebar(
       if (!matchesRoom(b)) continue;
       const k = roomKey(b.id);
       const meta = previewForConversation(state, k, "room", drafts[k]);
+      const unread = computeRoomUnread(k);
       boardItems.push({
         sortTs: lastTsForKey(k),
         row: roomRow(
@@ -1659,7 +1723,7 @@ export function renderSidebar(
           () => onSelect({ kind: "board", id: b.id }),
           { kind: "board", id: b.id },
           meta,
-          { muted: isMuted(b.id) }
+          { muted: isMuted(b.id), unread }
         ),
       });
     }
