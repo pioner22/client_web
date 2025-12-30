@@ -137,8 +137,12 @@ body.has-right-col .right-col {
 .sidebar.sidebar-collapsed {
   --avatar-size: 32px;
   --avatar-font-size: 12px;
-  padding-left: var(--sp-2);
-  padding-right: var(--sp-2);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebar.sidebar-collapsed .sidebar-header {
+  display: none;
 }
 
 .sidebar.sidebar-collapsed .sidebar-searchbar,
@@ -150,9 +154,10 @@ body.has-right-col .right-col {
 }
 
 .sidebar.sidebar-collapsed .row {
-  justify-content: center;
-  padding-left: 0;
-  padding-right: 0;
+  justify-content: flex-start;
+  padding-inline-start: 13px;
+  padding-inline-end: 0;
+  border-radius: 0;
 }
 
 .sidebar.sidebar-collapsed .row-main,

@@ -354,6 +354,12 @@
   --modal-actions-mt: 10px;
 }
 
+@media (min-width: 926px) {
+  html.sidebar-left-collapsed {
+    --sidebar-width-min: var(--sidebar-collapsed-width);
+  }
+}
+
 :root[data-msg-view="plain"] {
   --msg-in-bg: transparent;
   --msg-out-bg: transparent;

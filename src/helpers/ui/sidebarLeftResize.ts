@@ -3,6 +3,8 @@ const MIN_SIDEBAR_WIDTH = 308;
 const MAX_SIDEBAR_WIDTH = 420;
 const SIDEBAR_COLLAPSE_FACTOR = 0.65;
 const COLLAPSED_SIDEBAR_WIDTH = 80;
+const COLLAPSED_ROOT_CLASS = "sidebar-left-collapsed";
+const DESKTOP_MEDIA_QUERY = "(min-width: 926px)";
 
 type SidebarResizeState = {
   width: number;
@@ -44,9 +46,14 @@ const storeWidth = (value: number) => {
 export function installSidebarLeftResize(sidebar: HTMLElement, handle: HTMLElement | null): void {
   if (!handle) return;
   const root = document.documentElement;
+  const desktopQuery = window.matchMedia(DESKTOP_MEDIA_QUERY);
+  const syncRootClass = (collapsed: boolean) => {
+    root.classList.toggle(COLLAPSED_ROOT_CLASS, collapsed && desktopQuery.matches);
+  };
   const applyState = (state: SidebarResizeState, persist: boolean) => {
     root.style.setProperty("--current-sidebar-left-width", `${state.width}px`);
     sidebar.classList.toggle("sidebar-collapsed", state.collapsed);
+    syncRootClass(state.collapsed);
     if (persist) storeWidth(state.stored);
   };
 
@@ -58,6 +65,8 @@ export function installSidebarLeftResize(sidebar: HTMLElement, handle: HTMLEleme
   let startX = 0;
   let startWidth = initialState.width;
   let lastState = initialState;
+
+  desktopQuery.addEventListener("change", () => syncRootClass(lastState.collapsed));
 
   const cleanupPointerStyles = () => {
     document.body.style.removeProperty("cursor");

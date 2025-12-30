@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.297",
+    date: "2025-12-30",
+    improved: ["Sidebar: collapsed width 80px + список в collapsed выровнен под tweb"],
+  },
+  {
     version: "0.1.296",
     date: "2025-12-30",
     improved: ["Auth: фон страницы входа/регистрации как в tweb (body/html.has-auth-pages)"],
