@@ -59,7 +59,8 @@ const CONTACTS_LIMIT = 60;
 const ROOMS_LIMIT = 40;
 const HISTORY_SCAN_LIMIT = 400;
 const HISTORY_PER_CHAT_LIMIT = 4;
-const HISTORY_MAX_RESULTS = 40;
+const HISTORY_MAX_RESULTS = 200;
+const HISTORY_PAGE_SIZE = 30;
 const HISTORY_INLINE_LIMIT = 6;
 const SNIPPET_MAX = 140;
 const HISTORY_LINK_RE = /(https?:\/\/|www\.)\S+/i;
@@ -362,10 +363,46 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let selectedServer = new Map<string, SearchResultEntry>();
   let activeDate = "";
   let showAllHistory = false;
+  let historyVisible = HISTORY_PAGE_SIZE;
+  let historyAutoLoadHost: HTMLElement | null = null;
+  let historyAutoLoadRaf: number | null = null;
+  let historyAutoLoadEnabled = false;
+  let historyAutoLoadTotal = 0;
   let cachedDate = "";
   let lastQueryKey = "";
   let lastDateKey = "";
   let lastState: AppState | null = null;
+
+  const resetHistoryPaging = () => {
+    historyVisible = HISTORY_PAGE_SIZE;
+  };
+
+  const updateHistoryScrollHost = () => {
+    const nextHost = root.closest(".chat-host") as HTMLElement | null;
+    if (nextHost === historyAutoLoadHost) return;
+    if (historyAutoLoadHost) historyAutoLoadHost.removeEventListener("scroll", onHistoryScroll);
+    historyAutoLoadHost = nextHost;
+    if (historyAutoLoadHost) historyAutoLoadHost.addEventListener("scroll", onHistoryScroll, { passive: true });
+  };
+
+  const scheduleHistoryAutoLoad = () => {
+    if (!historyAutoLoadEnabled || historyAutoLoadRaf !== null) return;
+    if (typeof window === "undefined") return;
+    historyAutoLoadRaf = window.requestAnimationFrame(() => {
+      historyAutoLoadRaf = null;
+      if (!historyAutoLoadEnabled || !historyAutoLoadHost) return;
+      if (historyVisible >= historyAutoLoadTotal) return;
+      const host = historyAutoLoadHost;
+      const distance = host.scrollHeight - host.scrollTop - host.clientHeight;
+      if (distance > 240) return;
+      historyVisible = Math.min(historyVisible + HISTORY_PAGE_SIZE, historyAutoLoadTotal);
+      if (lastState) update(lastState);
+    });
+  };
+
+  function onHistoryScroll() {
+    scheduleHistoryAutoLoad();
+  }
 
   const historyKey = (target: TargetRef, idx: number) => `${target.kind}:${target.id}:${idx}`;
   const serverKey = (entry: SearchResultEntry) => `${entry.board ? "board" : entry.group ? "group" : "dm"}:${entry.id}`;
@@ -404,6 +441,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     if (!activeDate) return;
     activeDate = "";
     showAllHistory = false;
+    resetHistoryPaging();
     dateInput.value = "";
     if (lastState) update(lastState);
   });
@@ -412,6 +450,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     if (activeFilter === next) return;
     activeFilter = next;
     showAllHistory = false;
+    resetHistoryPaging();
     if (lastState) update(lastState);
   };
 
@@ -419,6 +458,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     if (activeTab === next) return;
     activeTab = next;
     showAllHistory = false;
+    resetHistoryPaging();
     if (lastState) update(lastState);
   };
 
@@ -676,6 +716,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
   function update(state: AppState) {
     lastState = state;
+    updateHistoryScrollHost();
     if (document.activeElement !== input && input.value !== state.searchQuery) {
       input.value = state.searchQuery;
     }
@@ -689,11 +730,13 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     if (qRaw !== lastQueryKey) {
       clearSelection();
       showAllHistory = false;
+      resetHistoryPaging();
       lastQueryKey = qRaw;
     }
     if (activeDate !== lastDateKey) {
       clearSelection();
       showAllHistory = false;
+      resetHistoryPaging();
       lastDateKey = activeDate;
     }
 
@@ -701,6 +744,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       activeFilter = "all";
       activeTab = "chats";
       showAllHistory = false;
+      resetHistoryPaging();
       tabsWrap.classList.add("hidden");
       tabsBar.replaceChildren();
       filterBar.classList.add("hidden");
@@ -737,6 +781,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     const visibleTabs = SEARCH_TABS.filter((tab) => tab.id === "chats" || tabCounts[tab.id] > 0);
     if (!visibleTabs.some((tab) => tab.id === activeTab)) {
       activeTab = visibleTabs[0]?.id ?? "chats";
+      showAllHistory = false;
+      resetHistoryPaging();
     }
 
     tabsWrap.classList.remove("hidden");
@@ -767,6 +813,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     const showHistory = showChatsTab || isHistoryTab;
     if (showChatsTab && activeFilter !== "all" && local.historyCounts[activeFilter] === 0) {
       activeFilter = "all";
+      showAllHistory = false;
+      resetHistoryPaging();
     }
     const effectiveHistoryFilter: HistoryFilter = isHistoryTab ? (activeTab as HistoryFilter) : activeFilter;
     const serverList = showChannelsTab ? serverBoards : showChatsTab ? list.filter((r) => !r.board) : [];
@@ -1042,7 +1090,15 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       const historyItems = local.history.filter((item) => matchesHistoryFilter(item, effectiveHistoryFilter));
       const inlineHistory = showChatsTab && !showAllHistory;
       const showAllButton = inlineHistory && historyItems.length > HISTORY_INLINE_LIMIT;
-      const visibleHistory = showAllButton ? historyItems.slice(0, HISTORY_INLINE_LIMIT) : historyItems;
+      if (!inlineHistory && historyVisible > historyItems.length) {
+        historyVisible = historyItems.length;
+      }
+      const visibleHistory = inlineHistory
+        ? historyItems.slice(0, HISTORY_INLINE_LIMIT)
+        : historyItems.slice(0, historyVisible);
+      historyAutoLoadTotal = historyItems.length;
+      historyAutoLoadEnabled = !inlineHistory && historyItems.length > historyVisible;
+      if (historyAutoLoadEnabled) scheduleHistoryAutoLoad();
       if (!historyItems.length) {
         blocks.push(el("div", { class: "result-meta" }, ["По выбранному фильтру совпадений нет"]));
       } else {
@@ -1073,12 +1129,28 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           const showAll = el("button", { class: "btn", type: "button" }, ["Показать все"]);
           showAll.addEventListener("click", () => {
             showAllHistory = true;
+            resetHistoryPaging();
             if (lastState) update(lastState);
           });
           blocks.push(el("div", { class: "result-meta" }, [showAll]));
         }
+        if (!inlineHistory && historyVisible < historyItems.length) {
+          const showMore = el("button", { class: "btn", type: "button" }, ["Показать еще"]);
+          showMore.addEventListener("click", () => {
+            historyVisible = Math.min(historyVisible + HISTORY_PAGE_SIZE, historyItems.length);
+            if (lastState) update(lastState);
+          });
+          blocks.push(el("div", { class: "result-meta" }, [showMore]));
+        }
+        const totalForFilter = effectiveHistoryFilter === "all" ? local.historyCounts.all : local.historyCounts[effectiveHistoryFilter];
+        if (totalForFilter > historyItems.length) {
+          blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${historyItems.length} совпадений`]));
+        }
       }
       blocks.push(el("div", { class: "result-meta" }, ["Поиск по загруженной истории сообщений"]));
+    } else {
+      historyAutoLoadTotal = 0;
+      historyAutoLoadEnabled = false;
     }
 
     if (serverList.length) {
