@@ -180,7 +180,7 @@
   --composer-field-border-color: var(--line);
   --composer-field-border-width: var(--field-border-width);
   --composer-field-text: var(--field-text);
-  --composer-field-radius: 18px;
+  --composer-field-radius: 16px;
   --composer-field-pad: 8px;
   --composer-field-min-h: 54px;
   --composer-field-max-h: 120px;

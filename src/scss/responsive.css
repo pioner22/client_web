@@ -317,7 +317,7 @@
     --composer-pad-y: var(--sp-1);
     --composer-pad-x: var(--sp-3);
     --composer-gap: var(--sp-1);
-    --composer-field-radius: 22px;
+    --composer-field-radius: 16px;
     --composer-field-border-width: 0px;
     --composer-field-bg: color-mix(in srgb, var(--panel2), transparent 4%);
     --composer-input-font-family: var(--font-family);
