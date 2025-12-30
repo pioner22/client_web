@@ -1075,7 +1075,7 @@
   white-space: pre-wrap;
   word-break: break-word;
   width: 100%;
-  max-width: var(--messages-container-width);
+  max-width: var(--chat-bubbles-max-width);
   margin: 0 auto;
 }
 
