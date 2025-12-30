@@ -2700,6 +2700,7 @@
 .composer-field:focus-within {
   border-color: var(--composer-field-focus-border);
   box-shadow:
+    var(--composer-field-shadow),
     0 0 0 var(--composer-focus-ring-width) color-mix(in srgb, var(--composer-field-focus-border), transparent 64%),
     0 12px 26px color-mix(in srgb, var(--composer-field-focus-border), transparent 86%);
 }
@@ -2707,6 +2708,7 @@
 .input-wrap.composer-drag .composer-field {
   border-color: var(--composer-field-focus-border);
   box-shadow:
+    var(--composer-field-shadow),
     0 0 0 var(--composer-focus-ring-width) color-mix(in srgb, var(--composer-field-focus-border), transparent 58%),
     0 18px 38px color-mix(in srgb, var(--composer-field-focus-border), transparent 84%);
 }

@@ -234,6 +234,7 @@
   background: var(--composer-field-bg);
   border: var(--composer-field-border-width) solid var(--composer-field-border-color);
   border-radius: var(--composer-field-radius);
+  box-shadow: var(--composer-field-shadow);
   /* Telegram-like: controls sit inside the pill, so keep vertical padding minimal. */
   padding: 0 var(--composer-field-pad);
 }
