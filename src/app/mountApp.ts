@@ -1696,6 +1696,16 @@ export function mountApp(root: HTMLElement) {
     store.set({ status: `Скачивание: ${name}` });
   }
 
+  function navigateFileViewer(dir: "prev" | "next") {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "file_viewer") return;
+    const chatKey = modal.chatKey ? String(modal.chatKey) : "";
+    const targetIdx = dir === "prev" ? modal.prevIdx : modal.nextIdx;
+    if (!chatKey || typeof targetIdx !== "number" || !Number.isFinite(targetIdx)) return;
+    void openFileViewerFromMessageIndex(chatKey, targetIdx);
+  }
+
   layout.chat.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
 
@@ -8489,6 +8499,19 @@ export function mountApp(root: HTMLElement) {
       return;
     }
 
+    if (st.modal?.kind === "file_viewer") {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        navigateFileViewer("prev");
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        navigateFileViewer("next");
+        return;
+      }
+    }
+
     if ((e.ctrlKey || e.metaKey) && (e.key === "u" || e.key === "U")) {
       e.preventDefault();
       if (!st.authed) return;
@@ -9469,15 +9492,7 @@ export function mountApp(root: HTMLElement) {
     onBoardInviteJoin: (boardId: string) => joinBoardFromInvite(boardId),
     onBoardInviteDecline: (boardId: string) => declineBoardInvite(boardId),
     onFileSendConfirm: (captionText: string) => confirmFileSend(captionText),
-    onFileViewerNavigate: (dir: "prev" | "next") => {
-      const st = store.get();
-      const modal = st.modal;
-      if (!modal || modal.kind !== "file_viewer") return;
-      const chatKey = modal.chatKey ? String(modal.chatKey) : "";
-      const targetIdx = dir === "prev" ? modal.prevIdx : modal.nextIdx;
-      if (!chatKey || typeof targetIdx !== "number" || !Number.isFinite(targetIdx)) return;
-      void openFileViewerFromMessageIndex(chatKey, targetIdx);
-    },
+    onFileViewerNavigate: (dir: "prev" | "next") => navigateFileViewer(dir),
     onFileSend: (file: File | null, target: TargetRef | null) => {
       const st = store.get();
       if (st.conn !== "connected") {
