@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.268",
+    date: "2025-12-30",
+    improved: ["Layout: body background token для html/body (tweb parity)"],
+  },
+  {
     version: "0.1.267",
     date: "2025-12-30",
     improved: ["Компоузер: радиус ввода 1rem (tweb parity)"],

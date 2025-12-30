@@ -92,6 +92,7 @@
 
   /* ===== App / layout tokens ===== */
   --app-bg: var(--bg);
+  --body-bg: var(--bg);
   --app-text: var(--text);
   --app-muted: var(--muted);
 
