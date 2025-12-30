@@ -8,6 +8,7 @@ export interface Layout {
   sidebarResizeHandle: HTMLElement;
   chat: HTMLElement;
   chatTop: HTMLElement;
+  chatSearchResults: HTMLElement;
   chatSearchFooter: HTMLElement;
   chatHost: HTMLElement;
   chatJump: HTMLButtonElement;

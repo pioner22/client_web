@@ -17,6 +17,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   sidebar.appendChild(sidebarDock);
   sidebar.appendChild(sidebarResizeHandle);
   const chatTop = el("div", { class: "chat-top hidden" });
+  const chatSearchResults = el("div", { class: "chat-search-results hidden" });
   const chatHost = el("div", { class: "chat-host" });
   const chatSearchFooter = el("div", { class: "chat-search-footer hidden" });
   const chatJumpIcon = el("span", { class: "chat-jump-icon", "aria-hidden": "true" }, ["↓"]);
@@ -26,7 +27,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     { class: "btn chat-jump hidden", type: "button", "data-action": "chat-jump-bottom", "aria-label": "Вниз" },
     [chatJumpIcon, chatJumpBadge]
   ) as HTMLButtonElement;
-  const chat = el("main", { class: "chat" }, [chatTop, chatHost, chatJump]);
+  const chat = el("main", { class: "chat" }, [chatTop, chatSearchResults, chatHost, chatJump]);
 
   const input = el("textarea", {
     class: "input",
@@ -213,6 +214,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     sidebarResizeHandle,
     chat,
     chatTop,
+    chatSearchResults,
     chatSearchFooter,
     chatHost,
     chatJump,

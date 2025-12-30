@@ -147,6 +147,27 @@ function resolveUserLabel(state: AppState, id: string, friendLabels?: Map<string
   return fromFriends || pid;
 }
 
+function searchResultPreview(m: ChatMessage): string {
+  const text = String(m.text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text) return text;
+  const attachment = m.attachment;
+  if (attachment?.kind === "file") {
+    const name = String(attachment.name || "файл");
+    const badge = fileBadge(name, attachment.mime);
+    return `${badge.label}: ${name}`;
+  }
+  if (m.kind === "sys") return "Системное сообщение";
+  return "Сообщение";
+}
+
+function trimSearchPreview(text: string, maxLen = 180): string {
+  const t = String(text || "").trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, Math.max(0, maxLen - 1))}…`;
+}
+
 type FileAttachmentInfo = {
   name: string;
   size: number;
@@ -793,6 +814,8 @@ export function renderChat(layout: Layout, state: AppState) {
     layout.chatTop.replaceChildren();
     scrollHost.replaceChildren();
     layout.chatJump.classList.add("hidden");
+    layout.chatSearchResults.classList.add("hidden");
+    layout.chatSearchResults.replaceChildren();
     layout.chatSearchFooter.classList.add("hidden");
     layout.chatSearchFooter.replaceChildren();
     return;
@@ -811,6 +834,7 @@ export function renderChat(layout: Layout, state: AppState) {
   const hitSet = searchActive && hits.length ? new Set(hits) : null;
   const activePos = searchActive ? Math.max(0, Math.min(hits.length ? hits.length - 1 : 0, state.chatSearchPos | 0)) : 0;
   const activeMsgIdx = searchActive && hits.length ? hits[activePos] : null;
+  const searchResultsOpen = Boolean(searchActive && state.chatSearchResultsOpen);
   const virtualEnabled = Boolean(key && shouldVirtualize(msgs.length, searchActive));
   const virtualAvgMap: Map<string, number> = hostState.__chatVirtualAvgHeights || new Map();
   hostState.__chatVirtualAvgHeights = virtualAvgMap;
@@ -1080,7 +1104,74 @@ export function renderChat(layout: Layout, state: AppState) {
       ["↓"]
     );
     const controls = el("div", { class: "chat-search-controls" }, [btnPrev, btnNext]);
-    searchFooter = el("div", { class: "chat-search-footer-row" }, [count, dateInput, dateClear, controls]);
+    const footerClass = `chat-search-footer-row${searchResultsOpen ? " is-open" : ""}`;
+    searchFooter = el(
+      "div",
+      { class: footerClass, "data-action": "chat-search-results-toggle", "aria-expanded": searchResultsOpen ? "true" : "false" },
+      [count, dateInput, dateClear, controls]
+    );
+  }
+
+  if (searchResultsOpen) {
+    const maxResults = 200;
+    const totalHits = hits.length;
+    let windowStart = 0;
+    let windowHits = hits;
+    if (totalHits > maxResults) {
+      const half = Math.floor(maxResults / 2);
+      const clampStart = Math.max(0, Math.min(totalHits - maxResults, activePos - half));
+      windowStart = clampStart;
+      windowHits = hits.slice(windowStart, windowStart + maxResults);
+    }
+    const rows: HTMLElement[] = [];
+    const showFrom = Boolean(state.selected && state.selected.kind !== "dm");
+    for (let i = 0; i < windowHits.length; i += 1) {
+      const msgIdx = windowHits[i];
+      const m = msgs[msgIdx];
+      if (!m) continue;
+      const hitPos = windowStart + i;
+      const preview = trimSearchPreview(searchResultPreview(m));
+      const textEl = el("div", { class: "chat-search-result-text" }, [preview]);
+      const metaItems: HTMLElement[] = [];
+      if (showFrom && m.kind !== "sys") {
+        metaItems.push(el("span", { class: "chat-search-result-from" }, [resolveUserLabel(state, m.from, friendLabels)]));
+      }
+      const time = typeof m.ts === "number" && Number.isFinite(m.ts) ? formatTime(m.ts) : "";
+      if (time) {
+        metaItems.push(el("span", { class: "chat-search-result-time" }, [time]));
+      }
+      const body = el("div", { class: "chat-search-result-body" }, [textEl, ...(metaItems.length ? [el("div", { class: "chat-search-result-meta" }, metaItems)] : [])]);
+      const active = hitPos === activePos;
+      rows.push(
+        el(
+          "button",
+          {
+            class: `chat-search-result${active ? " is-active" : ""}`,
+            type: "button",
+            "data-action": "chat-search-result",
+            "data-msg-idx": String(msgIdx),
+            "data-hit-pos": String(hitPos),
+            ...(active ? { "aria-current": "true" } : {}),
+          },
+          [body]
+        )
+      );
+    }
+    if (!rows.length) {
+      rows.push(el("div", { class: "chat-search-results-empty" }, ["Ничего не найдено"]));
+    }
+    const list = el("div", { class: "chat-search-results-list", role: "list" }, rows);
+    const header =
+      totalHits > maxResults
+        ? el("div", { class: "chat-search-results-hint" }, [
+            `Показаны ${windowStart + 1}–${windowStart + windowHits.length} из ${totalHits}`,
+          ])
+        : null;
+    layout.chatSearchResults.classList.remove("hidden");
+    layout.chatSearchResults.replaceChildren(...(header ? [header, list] : [list]));
+  } else {
+    layout.chatSearchResults.classList.add("hidden");
+    layout.chatSearchResults.replaceChildren();
   }
 
   let pinnedBar: HTMLElement | null = null;

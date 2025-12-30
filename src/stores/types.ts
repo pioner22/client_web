@@ -401,6 +401,7 @@ export interface AppState {
   boardScheduledPosts: BoardScheduledPost[];
 
   chatSearchOpen: boolean;
+  chatSearchResultsOpen: boolean;
   chatSearchQuery: string;
   chatSearchDate: string;
   chatSearchFilter: import("../helpers/chat/chatSearch").ChatSearchFilter;

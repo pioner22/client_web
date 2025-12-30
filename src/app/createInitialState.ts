@@ -92,6 +92,7 @@ export function createInitialState(): AppState {
     boardComposerOpen: false,
     boardScheduledPosts: [],
     chatSearchOpen: false,
+    chatSearchResultsOpen: false,
     chatSearchQuery: "",
     chatSearchDate: "",
     chatSearchFilter: "all",

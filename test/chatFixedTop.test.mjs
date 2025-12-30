@@ -209,11 +209,13 @@ test("renderChat: закреп/поиск рендерятся в chatTop (не 
     withDomStubs(() => {
       const chat = document.createElement("div");
       const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
       chat.className = "chat";
       chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
@@ -224,7 +226,7 @@ test("renderChat: закреп/поиск рендерятся в chatTop (не 
       chatHost.clientHeight = 120;
       chatHost.scrollHeight = 2000;
 
-      const layout = { chat, chatTop, chatSearchFooter, chatHost, chatJump };
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump };
       const state = {
         selected: { kind: "dm", id: "123-456-789" },
         conversations: {
@@ -276,11 +278,13 @@ test("renderChat: без выбранного чата область чата �
     withDomStubs(() => {
       const chat = document.createElement("div");
       const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
       chat.className = "chat";
       chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump";
@@ -289,7 +293,7 @@ test("renderChat: без выбранного чата область чата �
       chatHost.replaceChildren({ nodeType: 3, textContent: "seed-host" });
 
       helper.renderChat(
-        { chat, chatTop, chatSearchFooter, chatHost, chatJump },
+        { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump },
         {
           selected: null,
         }
@@ -310,11 +314,13 @@ test("renderChat: сохраняет scrollTop если replaceChildren сбра
     withDomStubs(() => {
       const chat = document.createElement("div");
       const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
       chat.className = "chat";
       chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
@@ -331,7 +337,7 @@ test("renderChat: сохраняет scrollTop если replaceChildren сбра
         chatHost.scrollTop = 0;
       };
 
-      const layout = { chat, chatTop, chatSearchFooter, chatHost, chatJump };
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump };
       const state = {
         selected: { kind: "dm", id: "123-456-789" },
         conversations: {

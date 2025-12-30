@@ -2005,6 +2005,29 @@ export function mountApp(root: HTMLElement) {
       setChatSearchFilter(filter);
       return;
     }
+    const searchResultsToggle = target?.closest("[data-action='chat-search-results-toggle']") as HTMLElement | null;
+    if (searchResultsToggle) {
+      e.preventDefault();
+      toggleChatSearchResults();
+      return;
+    }
+    const searchResultBtn = target?.closest("[data-action='chat-search-result']") as HTMLButtonElement | null;
+    if (searchResultBtn) {
+      const st = store.get();
+      const msgIdx = Number(searchResultBtn.getAttribute("data-msg-idx"));
+      if (!Number.isFinite(msgIdx)) return;
+      let pos = Number(searchResultBtn.getAttribute("data-hit-pos"));
+      if (!Number.isFinite(pos)) {
+        pos = st.chatSearchHits.indexOf(msgIdx);
+      }
+      if (!Number.isFinite(pos) || pos < 0) return;
+      e.preventDefault();
+      setChatSearchPos(pos);
+      store.set({ chatSearchResultsOpen: false });
+      jumpToChatMsgIdx(msgIdx);
+      focusChatSearch(false);
+      return;
+    }
 
     const jumpBtn = target?.closest("button[data-action='chat-jump-bottom']") as HTMLButtonElement | null;
     if (jumpBtn) {
@@ -3143,6 +3166,7 @@ export function mountApp(root: HTMLElement) {
       ...(page !== "main"
         ? {
             chatSearchOpen: false,
+            chatSearchResultsOpen: false,
             chatSearchQuery: "",
             chatSearchDate: "",
             chatSearchFilter: "all",
@@ -3441,6 +3465,7 @@ export function mountApp(root: HTMLElement) {
         editing: leavingEdit ? null : p.editing,
         boardComposerOpen: t.kind === "board" ? p.boardComposerOpen : false,
         chatSearchOpen: false,
+        chatSearchResultsOpen: false,
         chatSearchQuery: "",
         chatSearchDate: "",
         chatSearchFilter: "all",
@@ -3634,6 +3659,7 @@ export function mountApp(root: HTMLElement) {
     store.set((prev) => ({
       ...prev,
       chatSearchOpen: false,
+      chatSearchResultsOpen: false,
       chatSearchQuery: "",
       chatSearchDate: "",
       chatSearchFilter: "all",
@@ -3649,7 +3675,7 @@ export function mountApp(root: HTMLElement) {
     if (st.page !== "main") return;
     if (st.modal) return;
     if (!st.selected) return;
-    store.set((prev) => ({ ...prev, chatSearchOpen: true }));
+    store.set((prev) => ({ ...prev, chatSearchOpen: true, chatSearchResultsOpen: false }));
     queueMicrotask(() => focusChatSearch(true));
   }
 
@@ -3672,9 +3698,10 @@ export function mountApp(root: HTMLElement) {
       store.set((prev) => ({
         ...prev,
         ...(q
-          ? { chatSearchOpen: true, chatSearchQuery: q, chatSearchDate: "", chatSearchFilter: "all" }
+          ? { chatSearchOpen: true, chatSearchResultsOpen: false, chatSearchQuery: q, chatSearchDate: "", chatSearchFilter: "all" }
           : {
               chatSearchOpen: false,
+              chatSearchResultsOpen: false,
               chatSearchQuery: "",
               chatSearchDate: "",
               chatSearchFilter: "all",
@@ -3694,9 +3721,18 @@ export function mountApp(root: HTMLElement) {
 
   function setChatSearchQuery(query: string) {
     const q = String(query ?? "");
+    const trimmed = q.trim();
     store.set((prev) => {
       if (!prev.selected) {
-        return { ...prev, chatSearchQuery: q, chatSearchFilter: "all", chatSearchHits: [], chatSearchPos: 0, chatSearchCounts: createChatSearchCounts() };
+        return {
+          ...prev,
+          chatSearchQuery: q,
+          chatSearchResultsOpen: trimmed ? prev.chatSearchResultsOpen : false,
+          chatSearchFilter: "all",
+          chatSearchHits: [],
+          chatSearchPos: 0,
+          chatSearchCounts: createChatSearchCounts(),
+        };
       }
       const messages = searchableMessagesForSelected(prev);
       const counts = computeChatSearchCounts(messages, q);
@@ -3705,6 +3741,7 @@ export function mountApp(root: HTMLElement) {
       return {
         ...prev,
         chatSearchQuery: q,
+        chatSearchResultsOpen: trimmed ? prev.chatSearchResultsOpen : false,
         chatSearchFilter: nextFilter,
         chatSearchHits: hits,
         chatSearchPos: 0,
@@ -3731,6 +3768,25 @@ export function mountApp(root: HTMLElement) {
     }));
     if (hits.length) scrollToChatMsgIdx(hits[0]);
     focusChatSearch(false);
+  }
+
+  function toggleChatSearchResults(force?: boolean) {
+    const st = store.get();
+    if (!st.chatSearchOpen) return;
+    if (!String(st.chatSearchQuery || "").trim()) {
+      store.set({ chatSearchResultsOpen: false });
+      return;
+    }
+    const next = force === undefined ? !st.chatSearchResultsOpen : Boolean(force);
+    store.set({ chatSearchResultsOpen: next });
+  }
+
+  function setChatSearchPos(pos: number) {
+    const st = store.get();
+    if (!st.chatSearchOpen) return;
+    if (!st.chatSearchHits.length) return;
+    const nextPos = clampChatSearchPos(st.chatSearchHits, pos);
+    store.set({ chatSearchPos: nextPos });
   }
 
   function stepChatSearch(dir: 1 | -1) {
@@ -6321,6 +6377,7 @@ export function mountApp(root: HTMLElement) {
       boardComposerOpen: false,
       boardScheduledPosts: [],
       chatSearchOpen: false,
+      chatSearchResultsOpen: false,
       chatSearchQuery: "",
       chatSearchDate: "",
       chatSearchFilter: "all",
