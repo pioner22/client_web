@@ -219,9 +219,6 @@ body.has-right-col .right-col {
     gap: 4px;
   }
 
-  .sidebar:not(.sidebar-collapsed) .row[data-ctx-kind] > .row-tail .row-unread {
-    margin-top: auto;
-  }
 }
 
 .sidebar-resize-handle {

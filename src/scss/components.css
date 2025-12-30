@@ -434,6 +434,17 @@
   flex: 0 0 auto;
 }
 
+.row-tail-top,
+.row-tail-bottom {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-tail-bottom {
+  margin-top: auto;
+}
+
 @keyframes row-badge-in {
   from {
     transform: scale(0);

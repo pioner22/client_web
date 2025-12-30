@@ -170,14 +170,22 @@ function friendRow(
   if (attn) cls += " row-attn";
   const unread = Math.max(0, Number(f.unread || 0) || 0);
   const unreadLabel = unread > 99 ? "99+" : String(unread);
-  const tailChildren: HTMLElement[] = [];
-  if (meta.time) tailChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
-  if (muted) tailChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
-  if (meta.hasDraft) tailChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
-  if (unread > 0) {
-    tailChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
+  const tailTopChildren: HTMLElement[] = [];
+  if (meta.time) {
+    tailTopChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
   }
-  const tail = tailChildren.length ? el("span", { class: "row-tail", "aria-hidden": tailChildren.length ? "false" : "true" }, tailChildren) : null;
+  const tailBottomChildren: HTMLElement[] = [];
+  if (unread > 0) {
+    tailBottomChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
+  }
+  if (meta.hasDraft) tailBottomChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
+  if (muted) tailBottomChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
+  const tailChildren: HTMLElement[] = [];
+  if (tailTopChildren.length) tailChildren.push(el("span", { class: "row-tail-top" }, tailTopChildren));
+  if (tailBottomChildren.length) tailChildren.push(el("span", { class: "row-tail-bottom" }, tailBottomChildren));
+  const tail = tailChildren.length
+    ? el("span", { class: "row-tail", "aria-hidden": tailChildren.length ? "false" : "true" }, tailChildren)
+    : null;
   const titleText = displayNameForFriend(state, f);
   const isIdTitle = titleText === String(f.id || "").trim();
   const mainChildren: Array<string | HTMLElement> = [el("span", { class: isIdTitle ? "row-title row-id" : "row-title row-name" }, [titleText])];
@@ -225,16 +233,20 @@ function roomRow(
 ): HTMLElement {
   let cls = selected ? "row row-sel" : "row";
   if (opts?.muted) cls += " row-muted-chat";
-  const tailChildren: HTMLElement[] = [];
   const unread = Math.max(0, Number(opts?.unread || 0) || 0);
   const unreadLabel = unread > 99 ? "99+" : String(unread);
-  if (meta?.time) tailChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
-  if (opts?.muted) tailChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
-  if (opts?.mention) tailChildren.push(el("span", { class: "row-mention", "aria-label": "Упоминание" }, ["@"]));
-  if (meta?.hasDraft) tailChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
+  const tailTopChildren: HTMLElement[] = [];
+  if (meta?.time) tailTopChildren.push(el("span", { class: "row-time", "aria-label": `Время: ${meta.time}` }, [meta.time]));
+  const tailBottomChildren: HTMLElement[] = [];
+  if (opts?.mention) tailBottomChildren.push(el("span", { class: "row-mention", "aria-label": "Упоминание" }, ["@"]));
   if (unread > 0) {
-    tailChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
+    tailBottomChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
   }
+  if (meta?.hasDraft) tailBottomChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
+  if (opts?.muted) tailBottomChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
+  const tailChildren: HTMLElement[] = [];
+  if (tailTopChildren.length) tailChildren.push(el("span", { class: "row-tail-top" }, tailTopChildren));
+  if (tailBottomChildren.length) tailChildren.push(el("span", { class: "row-tail-bottom" }, tailBottomChildren));
   const tail = tailChildren.length ? el("span", { class: "row-tail" }, tailChildren) : null;
   const hasConversationMeta = Boolean(ctx);
   const hasSub = Boolean(meta?.sub);
