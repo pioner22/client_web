@@ -135,6 +135,7 @@ export interface RenderActions {
   onNotifySoundDisable: () => void;
   onForcePwaUpdate: () => void;
   onContextMenuAction: (itemId: string) => void;
+  onFileViewerNavigate: (dir: "prev" | "next") => void;
 }
 
 export function renderApp(layout: Layout, state: AppState, actions: RenderActions) {
@@ -393,10 +394,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onBoardInviteJoin: actions.onBoardInviteJoin,
         onBoardInviteDecline: actions.onBoardInviteDecline,
         onFileOfferAccept: actions.onFileOfferAccept,
-        onFileOfferReject: actions.onFileOfferReject,
-        onFileSendConfirm: actions.onFileSendConfirm,
-        onContextMenuAction: actions.onContextMenuAction,
-      })
+      onFileOfferReject: actions.onFileOfferReject,
+      onFileSendConfirm: actions.onFileSendConfirm,
+      onFileViewerNavigate: actions.onFileViewerNavigate,
+      onContextMenuAction: actions.onContextMenuAction,
+    })
     : null;
 
   // Большинство модалок рендерим inline (в теле чата), чтобы не перекрывать всё приложение.

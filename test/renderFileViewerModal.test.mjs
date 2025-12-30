@@ -176,7 +176,7 @@ test("renderFileViewerModal: renders <video> for video files", async () => {
   const helper = await loadRenderFileViewerModal();
   try {
     withDomStubs(() => {
-      const node = helper.renderFileViewerModal("blob:video", "clip.mp4", 123, "video/mp4", { onClose() {} });
+      const node = helper.renderFileViewerModal("blob:video", "clip.mp4", 123, "video/mp4", null, { onClose() {} });
       const video = findFirst(node, (n) => n && n.tagName === "VIDEO");
       assert.ok(video, "video element missing");
       assert.ok(String(video.className || "").includes("viewer-video"));
@@ -190,7 +190,7 @@ test("renderFileViewerModal: renders <audio> for audio files", async () => {
   const helper = await loadRenderFileViewerModal();
   try {
     withDomStubs(() => {
-      const node = helper.renderFileViewerModal("blob:audio", "note.ogg", 123, "audio/ogg", { onClose() {} });
+      const node = helper.renderFileViewerModal("blob:audio", "note.ogg", 123, "audio/ogg", null, { onClose() {} });
       const audio = findFirst(node, (n) => n && n.tagName === "AUDIO");
       assert.ok(audio, "audio element missing");
       assert.ok(String(audio.className || "").includes("viewer-audio"));
@@ -199,4 +199,3 @@ test("renderFileViewerModal: renders <audio> for audio files", async () => {
     await helper.cleanup();
   }
 });
-

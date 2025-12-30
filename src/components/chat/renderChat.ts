@@ -413,7 +413,12 @@ function renderMultilineText(text: string): HTMLElement {
   return el("div", { class: "invite-text" }, nodes);
 }
 
-function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string, string>, opts?: { mobileUi: boolean; boardUi?: boolean }): HTMLElement {
+function messageLine(
+  state: AppState,
+  m: ChatMessage,
+  friendLabels?: Map<string, string>,
+  opts?: { mobileUi: boolean; boardUi?: boolean; msgIdx?: number }
+): HTMLElement {
   const actionBtn = (
     label: string,
     attrs: Record<string, string>,
@@ -635,7 +640,8 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
     const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
     const isVisualMedia = isImage || isVideo;
     if (isVisualMedia) {
-      const preview = isImage ? renderImagePreviewButton(info, { caption: viewerCaption }) : renderVideoPreviewButton(info, { caption: viewerCaption });
+      const previewOpts = { caption: viewerCaption, msgIdx: opts?.msgIdx };
+      const preview = isImage ? renderImagePreviewButton(info, previewOpts) : renderVideoPreviewButton(info, previewOpts);
       if (preview) rowChildren.unshift(preview);
     }
 
@@ -893,7 +899,7 @@ export function renderChat(layout: Layout, state: AppState) {
       }
     }
 
-    const line = messageLine(state, m, friendLabels, { mobileUi, boardUi });
+    const line = messageLine(state, m, friendLabels, { mobileUi, boardUi, msgIdx });
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
     line.setAttribute("data-msg-idx", String(msgIdx));
     if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");

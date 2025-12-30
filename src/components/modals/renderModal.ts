@@ -41,6 +41,7 @@ export interface ModalActions {
   onFileOfferAccept: (fileId: string) => void;
   onFileOfferReject: (fileId: string) => void;
   onContextMenuAction: (itemId: string) => void;
+  onFileViewerNavigate: (dir: "prev" | "next") => void;
 }
 
 export function renderModal(state: AppState, actions: ModalActions): HTMLElement | null {
@@ -108,7 +109,13 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     });
   }
   if (kind === "file_viewer") {
-    return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, modal.caption ?? null, { onClose: actions.onClose });
+    const canPrev = typeof modal.prevIdx === "number" && Number.isFinite(modal.prevIdx);
+    const canNext = typeof modal.nextIdx === "number" && Number.isFinite(modal.nextIdx);
+    return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, modal.caption ?? null, {
+      onClose: actions.onClose,
+      ...(canPrev ? { onPrev: () => actions.onFileViewerNavigate("prev") } : {}),
+      ...(canNext ? { onNext: () => actions.onFileViewerNavigate("next") } : {}),
+    });
   }
   if (kind === "invite_user") {
     return renderInviteUserModal(modal.peer, state.selfId ?? null, state.groups || [], state.boards || [], modal.message, {

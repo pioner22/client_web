@@ -4,6 +4,8 @@ import { safeUrl } from "../../helpers/security/safeUrl";
 
 export interface FileViewerModalActions {
   onClose: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 function formatBytes(size: number): string {
@@ -57,13 +59,25 @@ export function renderFileViewerModal(
 
   const btnClose = el("button", { class: "btn auth-close", type: "button", title: "Закрыть", "aria-label": "Закрыть" }, ["×"]);
   btnClose.addEventListener("click", () => actions.onClose());
+  const navButtons: HTMLElement[] = [];
+  if (actions.onPrev) {
+    const btnPrev = el("button", { class: "btn viewer-nav-btn", type: "button", "aria-label": "Предыдущее медиа" }, ["←"]);
+    btnPrev.addEventListener("click", () => actions.onPrev && actions.onPrev());
+    navButtons.push(btnPrev);
+  }
+  if (actions.onNext) {
+    const btnNext = el("button", { class: "btn viewer-nav-btn", type: "button", "aria-label": "Следующее медиа" }, ["→"]);
+    btnNext.addEventListener("click", () => actions.onNext && actions.onNext());
+    navButtons.push(btnNext);
+  }
+  const headerActions = el("div", { class: "viewer-header-actions" }, [...navButtons, btnClose]);
 
   const header = el("div", { class: "viewer-header" }, [
     el("div", { class: "viewer-title-wrap" }, [
       el("div", { class: "viewer-title", title: titleText }, [titleText]),
       el("div", { class: "viewer-sub" }, [`${formatBytes(Number(size) || 0)}`]),
     ]),
-    btnClose,
+    headerActions,
   ]);
 
   let body: HTMLElement;

@@ -1131,7 +1131,15 @@ export function mountApp(root: HTMLElement) {
   const uploadByFileId = new Map<string, UploadState>();
   const downloadByFileId = new Map<string, DownloadState>();
   const pendingStreamRequests = new Map<string, { fileId: string; name: string; size: number; mime: string | null }>();
-  let pendingFileViewer: { fileId: string; name: string; size: number; mime: string | null; caption: string | null } | null = null;
+  let pendingFileViewer: {
+    fileId: string;
+    name: string;
+    size: number;
+    mime: string | null;
+    caption: string | null;
+    chatKey: string | null;
+    msgIdx: number | null;
+  } | null = null;
   const pendingFileDownloads = new Map<string, { name: string }>();
   let transferSeq = 0;
   let localChatMsgSeq = 0;
@@ -1590,6 +1598,104 @@ export function mountApp(root: HTMLElement) {
   layout.chatHost.addEventListener("touchend", resetChatTouch, { passive: true });
   layout.chatHost.addEventListener("touchcancel", resetChatTouch, { passive: true });
 
+  function isVideoLikeFile(name: string, mime?: string | null): boolean {
+    const mt = String(mime || "").toLowerCase();
+    if (mt.startsWith("video/")) return true;
+    const n = String(name || "").toLowerCase();
+    return /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n);
+  }
+
+  function isMediaAttachment(att: ChatMessage["attachment"] | null | undefined): att is {
+    kind: "file";
+    localId?: string | null;
+    fileId?: string | null;
+    name: string;
+    size: number;
+    mime?: string | null;
+  } {
+    if (!att || att.kind !== "file") return false;
+    return isImageLikeFile(att.name, att.mime) || isVideoLikeFile(att.name, att.mime);
+  }
+
+  function findNeighborMediaIndex(msgs: ChatMessage[], startIdx: number, direction: -1 | 1): number | null {
+    if (!Number.isFinite(startIdx) || startIdx < 0 || startIdx >= msgs.length) return null;
+    for (let i = startIdx + direction; i >= 0 && i < msgs.length; i += direction) {
+      const msg = msgs[i];
+      if (!msg || msg.kind === "sys") continue;
+      if (isMediaAttachment(msg.attachment)) return i;
+    }
+    return null;
+  }
+
+  function buildFileViewerModalState(params: {
+    url: string;
+    name: string;
+    size: number;
+    mime: string | null;
+    caption: string | null;
+    chatKey: string | null;
+    msgIdx: number | null;
+  }) {
+    const st = store.get();
+    const chatKey = params.chatKey ? String(params.chatKey) : null;
+    const msgIdx = Number.isFinite(params.msgIdx) ? Math.trunc(Number(params.msgIdx)) : null;
+    const msgs = chatKey ? st.conversations[chatKey] || [] : [];
+    const prevIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(msgs, msgIdx, -1) : null;
+    const nextIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(msgs, msgIdx, 1) : null;
+    return {
+      kind: "file_viewer" as const,
+      url: params.url,
+      name: params.name,
+      size: params.size,
+      mime: params.mime,
+      caption: params.caption,
+      chatKey,
+      msgIdx,
+      prevIdx,
+      nextIdx,
+    };
+  }
+
+  async function openFileViewerFromMessageIndex(
+    chatKey: string,
+    msgIdx: number,
+    fallback?: { url?: string | null; name?: string; size?: number; mime?: string | null; caption?: string | null; fileId?: string | null }
+  ) {
+    const st = store.get();
+    const msgs = st.conversations[chatKey] || [];
+    if (!Number.isFinite(msgIdx) || msgIdx < 0 || msgIdx >= msgs.length) return;
+    const msg = msgs[msgIdx];
+    const att = msg?.attachment;
+    if (!isMediaAttachment(att)) return;
+    const name = String(att.name || fallback?.name || "файл");
+    const size = Number(att.size || fallback?.size || 0) || 0;
+    const mime = (att.mime ?? fallback?.mime) || null;
+    const rawCaption = String(msg.text || "").trim();
+    const captionText = rawCaption && !rawCaption.startsWith("[file]") ? rawCaption : String(fallback?.caption || "").trim();
+    const caption = captionText ? captionText : null;
+    const fileId = att.fileId ? String(att.fileId) : fallback?.fileId || null;
+    const localId = att.localId ? String(att.localId) : null;
+    const entry = fileId
+      ? st.fileTransfers.find((t) => String(t.id || "").trim() === fileId)
+      : localId
+        ? st.fileTransfers.find((t) => String(t.localId || "").trim() === localId)
+        : null;
+    const url = entry?.url || fallback?.url || null;
+    if (url) {
+      store.set({ modal: buildFileViewerModalState({ url, name, size, mime, caption, chatKey, msgIdx }) });
+      return;
+    }
+    if (!fileId) {
+      store.set({ status: "Файл пока недоступен" });
+      return;
+    }
+    const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime, caption, chatKey, msgIdx });
+    if (opened) return;
+    pendingFileViewer = { fileId, name, size, mime, caption, chatKey, msgIdx };
+    gateway.send({ type: "file_get", file_id: fileId });
+    store.set({ status: `Скачивание: ${name}` });
+  }
+
   layout.chat.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
 
@@ -1967,20 +2073,37 @@ export function mountApp(root: HTMLElement) {
       const captionRaw = viewBtn.getAttribute("data-caption");
       const caption = captionRaw ? String(captionRaw).trim() : "";
       const captionText = caption || null;
+      const msgIdxRaw = viewBtn.getAttribute("data-msg-idx");
+      const msgIdx = msgIdxRaw !== null && msgIdxRaw.trim() ? Number(msgIdxRaw) : null;
+      const st = store.get();
+      const chatKey = st.selected ? conversationKey(st.selected) : null;
       e.preventDefault();
       closeMobileSidebar();
+      if (chatKey && msgIdx !== null && Number.isFinite(msgIdx)) {
+        void openFileViewerFromMessageIndex(chatKey, Math.trunc(msgIdx), { url, name, size, mime, caption: captionText, fileId: fileId || null });
+        return;
+      }
       if (url) {
-        store.set({ modal: { kind: "file_viewer", url, name, size, mime, caption: captionText } });
+        store.set({ modal: buildFileViewerModalState({ url, name, size, mime, caption: captionText, chatKey: null, msgIdx: null }) });
         return;
       }
       void (async () => {
-        const st = store.get();
         const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean(t.url));
         if (existing?.url) {
-          store.set({ modal: { kind: "file_viewer", url: existing.url, name, size: size || existing.size || 0, mime: mime || existing.mime || null, caption: captionText } });
+          store.set({
+            modal: buildFileViewerModalState({
+              url: existing.url,
+              name,
+              size: size || existing.size || 0,
+              mime: mime || existing.mime || null,
+              caption: captionText,
+              chatKey: null,
+              msgIdx: null,
+            }),
+          });
           return;
         }
-        const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime, caption: captionText });
+        const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime, caption: captionText, chatKey: null, msgIdx: null });
         if (opened) return;
 
         const latest = store.get();
@@ -1992,7 +2115,7 @@ export function mountApp(root: HTMLElement) {
           store.set({ status: "Сначала войдите или зарегистрируйтесь" });
           return;
         }
-        pendingFileViewer = { fileId, name, size, mime, caption: captionText };
+        pendingFileViewer = { fileId, name, size, mime, caption: captionText, chatKey: null, msgIdx: null };
         gateway.send({ type: "file_get", file_id: fileId });
         store.set({ status: `Скачивание: ${name}` });
       })();
@@ -4758,7 +4881,7 @@ export function mountApp(root: HTMLElement) {
 
   async function tryOpenFileViewerFromCache(
     fileId: string,
-    meta: { name: string; size: number; mime: string | null; caption?: string | null }
+    meta: { name: string; size: number; mime: string | null; caption?: string | null; chatKey?: string | null; msgIdx?: number | null }
   ): Promise<boolean> {
     const st = store.get();
     if (!st.selfId) return false;
@@ -4812,7 +4935,19 @@ export function mountApp(root: HTMLElement) {
         };
         return [next, ...prev.fileTransfers];
       })();
-      return { ...prev, fileTransfers: nextTransfers, modal: { kind: "file_viewer", url, name, size, mime, caption: caption || null } };
+      return {
+        ...prev,
+        fileTransfers: nextTransfers,
+        modal: buildFileViewerModalState({
+          url,
+          name,
+          size,
+          mime,
+          caption: caption || null,
+          chatKey: meta.chatKey ? String(meta.chatKey) : null,
+          msgIdx: typeof meta.msgIdx === "number" && Number.isFinite(meta.msgIdx) ? meta.msgIdx : null,
+        }),
+      };
     });
     scheduleSaveFileTransfers(store);
     return true;
@@ -5783,7 +5918,17 @@ export function mountApp(root: HTMLElement) {
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) {
           const pv = pendingFileViewer;
           pendingFileViewer = null;
-          store.set({ modal: { kind: "file_viewer", url, name: pv.name, size: pv.size, mime: pv.mime, caption: pv.caption || null } });
+          store.set({
+            modal: buildFileViewerModalState({
+              url,
+              name: pv.name,
+              size: pv.size,
+              mime: pv.mime,
+              caption: pv.caption || null,
+              chatKey: pv.chatKey,
+              msgIdx: pv.msgIdx,
+            }),
+          });
         }
       } else {
         silentFileGets.delete(fileId);
@@ -9324,6 +9469,15 @@ export function mountApp(root: HTMLElement) {
     onBoardInviteJoin: (boardId: string) => joinBoardFromInvite(boardId),
     onBoardInviteDecline: (boardId: string) => declineBoardInvite(boardId),
     onFileSendConfirm: (captionText: string) => confirmFileSend(captionText),
+    onFileViewerNavigate: (dir: "prev" | "next") => {
+      const st = store.get();
+      const modal = st.modal;
+      if (!modal || modal.kind !== "file_viewer") return;
+      const chatKey = modal.chatKey ? String(modal.chatKey) : "";
+      const targetIdx = dir === "prev" ? modal.prevIdx : modal.nextIdx;
+      if (!chatKey || typeof targetIdx !== "number" || !Number.isFinite(targetIdx)) return;
+      void openFileViewerFromMessageIndex(chatKey, targetIdx);
+    },
     onFileSend: (file: File | null, target: TargetRef | null) => {
       const st = store.get();
       if (st.conn !== "connected") {

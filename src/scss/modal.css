@@ -1056,6 +1056,25 @@ input.modal-input[type="file"]::file-selector-button:active {
   margin-bottom: var(--sp-3);
 }
 
+.viewer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewer-nav-btn {
+  min-width: 36px;
+  height: 32px;
+  padding: 0 10px;
+  line-height: 1;
+}
+
+.overlay.overlay-viewer .viewer-nav-btn {
+  --btn-bg: rgba(255, 255, 255, 0.08);
+  --btn-border-color: rgba(255, 255, 255, 0.25);
+  --btn-text: #fff;
+}
+
 .overlay.overlay-viewer .viewer-header {
   margin: 0;
   padding: 12px;
