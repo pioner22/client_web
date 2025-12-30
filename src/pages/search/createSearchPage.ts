@@ -50,6 +50,8 @@ function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement {
 }
 
 const SEARCH_NORMALIZE_RE = /[^a-z0-9а-яё_@]+/gi;
+const SEARCH_FILTER_FROM_RE = /^(from|от):(.+)$/i;
+const SEARCH_FILTER_TAG_RE = /^#([a-z0-9_а-яё-]{1,64})$/i;
 const CONTACTS_LIMIT = 60;
 const ROOMS_LIMIT = 40;
 const HISTORY_SCAN_LIMIT = 400;
@@ -116,6 +118,69 @@ function formatHandle(handle: string): string {
   return h.startsWith("@") ? h : `@${h}`;
 }
 
+type SearchQueryFilters = {
+  text: string;
+  from: string;
+  hashtags: string[];
+};
+
+function extractSearchFilters(raw: string): SearchQueryFilters {
+  const tokens = String(raw ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const rest: string[] = [];
+  const hashtags = new Set<string>();
+  let from = "";
+  for (const token of tokens) {
+    const fromMatch = token.match(SEARCH_FILTER_FROM_RE);
+    if (fromMatch) {
+      const value = String(fromMatch[2] || "").trim();
+      if (value && !from) {
+        from = value;
+        continue;
+      }
+    }
+    const tagMatch = token.match(SEARCH_FILTER_TAG_RE);
+    if (tagMatch) {
+      const tag = String(tagMatch[1] || "").trim().toLowerCase();
+      if (tag) hashtags.add(tag);
+      continue;
+    }
+    rest.push(token);
+  }
+  return { text: rest.join(" "), from, hashtags: Array.from(hashtags) };
+}
+
+function buildOpenQuery(filters: SearchQueryFilters): string {
+  const parts: string[] = [];
+  if (filters.text) parts.push(filters.text);
+  if (filters.hashtags.length) parts.push(...filters.hashtags.map((tag) => `#${tag}`));
+  return parts.join(" ").trim();
+}
+
+function matchesSenderFilter(state: AppState, msg: ChatMessage, rawFilter: string): boolean {
+  const needle = normalizeSearchText(rawFilter);
+  if (!needle) return true;
+  const senderId = String(msg?.from || "").trim();
+  if (!senderId) return false;
+  const label = resolveContactLabel(state, senderId);
+  const haystack = buildHaystack([senderId, label.title, label.handle, formatHandle(label.handle)]);
+  if (haystack.includes(needle)) return true;
+  const needleDigits = rawFilter.replace(/\D/g, "");
+  if (needleDigits) {
+    const senderDigits = senderId.replace(/\D/g, "");
+    if (senderDigits.includes(needleDigits)) return true;
+  }
+  return false;
+}
+
+function matchesHashtags(text: string, hashtags: string[]): boolean {
+  if (!hashtags.length) return true;
+  const haystack = String(text || "").toLowerCase();
+  return hashtags.every((tag) => haystack.includes(`#${tag}`));
+}
+
 function classifyHistoryMessage(msg: ChatMessage) {
   const attachment = msg?.attachment;
   const text = String(msg?.text || "");
@@ -173,7 +238,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   const input = el("input", {
     class: "modal-input",
     type: "text",
-    placeholder: "Имя, @логин, ID или текст сообщения",
+    placeholder: "Имя, @логин, ID, текст, from:@логин, #тег",
     "data-ios-assistant": "off",
     autocomplete: "off",
     autocorrect: "off",
@@ -237,20 +302,21 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     if (lastState) update(lastState);
   };
 
-  function computeLocalMatches(state: AppState, rawQuery: string) {
-    const q = rawQuery.trim();
-    const qAltEn = mapKeyboardLayout(q, "ruToEn");
-    const qAltRu = mapKeyboardLayout(q, "enToRu");
-    const tokens = tokenizeSearchQuery(q);
-    const tokensAltEn = qAltEn !== q ? tokenizeSearchQuery(qAltEn) : [];
-    const tokensAltRu = qAltRu !== q ? tokenizeSearchQuery(qAltRu) : [];
+  function computeLocalMatches(state: AppState, rawQuery: string, filters: SearchQueryFilters) {
+    const qRaw = rawQuery.trim();
+    const qText = String(filters.text || "").trim();
+    const qAltEn = mapKeyboardLayout(qText, "ruToEn");
+    const qAltRu = mapKeyboardLayout(qText, "enToRu");
+    const tokens = tokenizeSearchQuery(qText);
+    const tokensAltEn = qAltEn !== qText ? tokenizeSearchQuery(qAltEn) : [];
+    const tokensAltRu = qAltRu !== qText ? tokenizeSearchQuery(qAltRu) : [];
     const tokenSets = [tokens, tokensAltEn, tokensAltRu].filter((set) => set.length > 0);
-    const qNorm = normalizeSearchText(q);
-    const qNormAltEn = qAltEn !== q ? normalizeSearchText(qAltEn) : "";
-    const qNormAltRu = qAltRu !== q ? normalizeSearchText(qAltRu) : "";
-    const qDigits = q.replace(/\D/g, "");
-    if (!q) {
-      cachedQuery = q;
+    const qNorm = normalizeSearchText(qText);
+    const qNormAltEn = qAltEn !== qText ? normalizeSearchText(qAltEn) : "";
+    const qNormAltRu = qAltRu !== qText ? normalizeSearchText(qAltRu) : "";
+    const qDigits = qText.replace(/\D/g, "");
+    if (!qRaw) {
+      cachedQuery = qRaw;
       cachedContacts = [];
       cachedRooms = [];
       cachedHistory = [];
@@ -260,7 +326,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     const canReuse =
-      q === cachedQuery &&
+      qRaw === cachedQuery &&
       cachedFriendsRef === state.friends &&
       cachedGroupsRef === state.groups &&
       cachedBoardsRef === state.boards &&
@@ -360,7 +426,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
     const historyMatches: HistoryMatch[] = [];
     const historyCounts = { all: 0, media: 0, files: 0, links: 0, audio: 0 };
-    if (tokens.length) {
+    const hasHistoryQuery = tokenSets.length > 0 || Boolean(filters.from) || filters.hashtags.length > 0;
+    if (hasHistoryQuery) {
       for (const [key, msgs] of Object.entries(state.conversations || {})) {
         if (!Array.isArray(msgs) || !msgs.length) continue;
         let target: TargetRef | null = null;
@@ -383,8 +450,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           const text = String(msg?.text || "");
           const attachmentName = msg?.attachment?.kind === "file" ? String(msg.attachment.name || "") : "";
           const haystack = buildHaystack([text, attachmentName]);
-          const tokenHit = tokenSets.some((set) => matchesTokens(haystack, set));
-          if (!tokenHit) continue;
+          const textHit = tokenSets.length ? tokenSets.some((set) => matchesTokens(haystack, set)) : true;
+          if (!textHit) continue;
+          if (filters.from && !matchesSenderFilter(state, msg, filters.from)) continue;
+          if (filters.hashtags.length && !matchesHashtags(text, filters.hashtags)) continue;
           const fromLabel = msg?.from ? resolveContactLabel(state, String(msg.from)).title : "";
           const snippet = truncateText(text || attachmentName, SNIPPET_MAX);
           const subParts: string[] = [];
@@ -445,6 +514,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
     const qRaw = String(state.searchQuery || "");
     const q = qRaw.trim();
+    const filters = extractSearchFilters(qRaw);
+    const openQuery = buildOpenQuery(filters);
     const canSearchNow = Boolean(deriveServerSearchQuery(qRaw));
 
     if (!q) {
@@ -453,13 +524,13 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       results.replaceChildren(
         el("div", { class: "page-empty" }, [
           el("div", { class: "page-empty-title" }, ["Введите имя, @логин или ID"]),
-          el("div", { class: "page-empty-sub" }, ["По контактам и истории поиск работает сразу, по серверу — от 3 цифр ID или 3+ символов логина (@ необязателен)"]),
+          el("div", { class: "page-empty-sub" }, ["По контактам и истории поиск работает сразу, по серверу — от 3 цифр ID или 3+ символов логина (@ необязателен). Фильтры: from:@логин, #тег"]),
         ])
       );
       return;
     }
 
-    const local = computeLocalMatches(state, qRaw);
+    const local = computeLocalMatches(state, qRaw, filters);
     if (activeFilter !== "all" && local.historyCounts[activeFilter] === 0) {
       activeFilter = "all";
     }
@@ -546,7 +617,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             ...(item.sub ? [el("span", { class: "row-sub" }, [item.sub])] : []),
           ]);
           const row = el("button", { class: "row", type: "button" }, [avatar(item.target.kind, item.target.id), rowMain]);
-          row.addEventListener("click", () => actions.onOpenHistoryHit(item.target, q, item.idx));
+          row.addEventListener("click", () => actions.onOpenHistoryHit(item.target, openQuery, item.idx));
           blocks.push(el("div", { class: "result-item" }, [row]));
         }
       }

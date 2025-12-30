@@ -3445,7 +3445,6 @@ export function mountApp(root: HTMLElement) {
 
   function openChatFromSearch(target: TargetRef, query: string, msgIdx?: number) {
     const q = String(query || "").trim();
-    if (!q) return;
     selectTarget(target);
     const apply = () => {
       const st = store.get();
@@ -3453,9 +3452,16 @@ export function mountApp(root: HTMLElement) {
       if (conversationKey(st.selected) !== conversationKey(target)) return;
       store.set((prev) => ({
         ...prev,
-        chatSearchOpen: true,
-        chatSearchQuery: q,
-        chatSearchFilter: "all",
+        ...(q
+          ? { chatSearchOpen: true, chatSearchQuery: q, chatSearchFilter: "all" }
+          : {
+              chatSearchOpen: false,
+              chatSearchQuery: "",
+              chatSearchFilter: "all",
+              chatSearchHits: [],
+              chatSearchPos: 0,
+              chatSearchCounts: createChatSearchCounts(),
+            }),
       }));
       if (Number.isFinite(msgIdx)) scrollToChatMsgIdx(Number(msgIdx));
     };
