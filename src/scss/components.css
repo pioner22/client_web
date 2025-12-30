@@ -216,6 +216,14 @@
   background: var(--row-bg-hover);
 }
 
+.row-menu-open:not(.row-sel) {
+  background: var(--row-bg-menu-open);
+}
+
+.row-menu-open:not(.row-sel):hover {
+  background: var(--row-bg-menu-open);
+}
+
 .row-sel {
   background: var(--row-bg-selected);
   color: var(--row-text-selected);

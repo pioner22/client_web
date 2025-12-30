@@ -6,7 +6,17 @@ import { focusElement } from "../../helpers/ui/focus";
 import { isIOS, isStandaloneDisplayMode } from "../../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { normalizeContactSortMode } from "../../helpers/ui/contactSort";
-import type { ActionModalPayload, AppState, ContactSortMode, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
+import type {
+  ActionModalPayload,
+  AppState,
+  ChatMessage,
+  ContactSortMode,
+  ContextMenuTargetKind,
+  FriendEntry,
+  MobileSidebarTab,
+  PageKind,
+  TargetRef,
+} from "../../stores/types";
 
 function collectAttentionPeers(state: AppState): Set<string> {
   const ids = new Set<string>();
@@ -70,6 +80,16 @@ function attentionHintForPeer(state: AppState, id: string): string | null {
   if ((state.pendingBoardInvites || []).some((x) => String(x?.from || "").trim() === peer)) return "Инвайт в доску";
   if ((state.pendingGroupJoinRequests || []).some((x) => String(x?.from || "").trim() === peer)) return "Запрос вступления";
   return null;
+}
+
+function isRowMenuOpen(state: AppState, kind: ContextMenuTargetKind, id: string): boolean {
+  if (kind !== "dm" && kind !== "group" && kind !== "board") return false;
+  const rowId = String(id || "").trim();
+  if (!rowId) return false;
+  const modal = state.modal;
+  if (!modal || modal.kind !== "context_menu") return false;
+  const target = modal.payload.target;
+  return target.kind === kind && String(target.id || "").trim() === rowId;
 }
 
 function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement {
@@ -188,6 +208,7 @@ function friendRow(
   let cls = selected ? "row row-sel" : "row";
   if (muted) cls += " row-muted-chat";
   if (attn) cls += " row-attn";
+  if (isRowMenuOpen(state, "dm", peerId)) cls += " row-menu-open";
   const unread = Math.max(0, Number(f.unread || 0) || 0);
   const unreadLabel = unread > 99 ? "99+" : String(unread);
   const tailTopChildren: HTMLElement[] = [];
@@ -255,10 +276,11 @@ function roomRow(
   onClick: () => void,
   ctx?: { kind: "group" | "board"; id: string },
   meta?: SidebarRowMeta,
-  opts?: { mention?: boolean; muted?: boolean; unread?: number; pinned?: boolean }
+  opts?: { mention?: boolean; muted?: boolean; unread?: number; pinned?: boolean; menuOpen?: boolean }
 ): HTMLElement {
   let cls = selected ? "row row-sel" : "row";
   if (opts?.muted) cls += " row-muted-chat";
+  if (opts?.menuOpen) cls += " row-menu-open";
   const unread = Math.max(0, Number(opts?.unread || 0) || 0);
   const unreadLabel = unread > 99 ? "99+" : String(unread);
   const tailTopChildren: HTMLElement[] = [];
@@ -819,7 +841,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true }
+              { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
             )
           );
           continue;
@@ -838,7 +860,7 @@ export function renderSidebar(
               () => onSelect({ kind: "board", id: b.id }),
               { kind: "board", id: b.id },
               meta,
-              { muted: isMuted(b.id), unread, pinned: true }
+              { muted: isMuted(b.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "board", b.id) }
             )
           );
         }
@@ -895,7 +917,7 @@ export function renderSidebar(
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
             meta,
-            { mention: mentionForKey(k), muted: isMuted(g.id), unread }
+            { mention: mentionForKey(k), muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
           ),
         });
       }
@@ -933,7 +955,7 @@ export function renderSidebar(
             () => onSelect({ kind: "board", id: b.id }),
             { kind: "board", id: b.id },
             meta,
-            { muted: isMuted(b.id), unread }
+            { muted: isMuted(b.id), unread, menuOpen: isRowMenuOpen(state, "board", b.id) }
           ),
         });
       }
@@ -1229,8 +1251,8 @@ export function renderSidebar(
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
     const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
-    const headerStack = contactSortBar ? el("div", { class: "sidebar-header-stack" }, [searchBar, contactSortBar]) : searchBar;
-    const header = searchBar ? el("div", { class: "sidebar-header" }, [headerStack]) : null;
+    const headerStack = contactSortBar ? el("div", { class: "sidebar-header-stack" }, [searchBar!, contactSortBar]) : searchBar;
+    const header = headerStack ? el("div", { class: "sidebar-header" }, [headerStack]) : null;
 
     const mentionForKey = (key: string): boolean => {
       if (!selfMentionHandles.size) return false;
@@ -1272,7 +1294,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true }
+              { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
             )
           );
           continue;
@@ -1291,7 +1313,7 @@ export function renderSidebar(
               () => onSelect({ kind: "board", id: b.id }),
               { kind: "board", id: b.id },
               meta,
-              { muted: isMuted(b.id), unread, pinned: true }
+              { muted: isMuted(b.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "board", b.id) }
             )
           );
         }
@@ -1356,7 +1378,7 @@ export function renderSidebar(
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
             meta,
-            { mention: mentionForKey(k), muted: isMuted(g.id), unread }
+            { mention: mentionForKey(k), muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
           ),
         });
       }
@@ -1395,7 +1417,7 @@ export function renderSidebar(
             () => onSelect({ kind: "board", id: b.id }),
             { kind: "board", id: b.id },
             meta,
-            { muted: isMuted(b.id), unread }
+            { muted: isMuted(b.id), unread, menuOpen: isRowMenuOpen(state, "board", b.id) }
           ),
         });
       }
@@ -1707,7 +1729,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true }
+          { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
         )
       );
       continue;
@@ -1726,7 +1748,7 @@ export function renderSidebar(
         () => onSelect({ kind: "board", id: b.id }),
         { kind: "board", id: b.id },
         meta,
-        { muted: isMuted(b.id), unread, pinned: true }
+        { muted: isMuted(b.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "board", b.id) }
       )
     );
   }
@@ -1817,7 +1839,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k), muted: isMuted(g.id), unread }
+          { mention: mentionForKey(k), muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
         ),
       });
     }
@@ -1856,7 +1878,7 @@ export function renderSidebar(
           () => onSelect({ kind: "board", id: b.id }),
           { kind: "board", id: b.id },
           meta,
-          { muted: isMuted(b.id), unread }
+          { muted: isMuted(b.id), unread, menuOpen: isRowMenuOpen(state, "board", b.id) }
         ),
       });
     }

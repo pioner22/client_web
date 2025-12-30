@@ -255,6 +255,7 @@
   --row-gap: 16px;
   --row-radius: 10px;
   --row-bg-hover: color-mix(in srgb, var(--panel2), var(--panel) 20%);
+  --row-bg-menu-open: var(--row-bg-hover);
   --row-bg-selected: var(--focus);
   --row-text-selected: #ffffff;
   --row-text-selected-muted: rgba(255, 255, 255, 0.85);
