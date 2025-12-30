@@ -256,6 +256,18 @@
   }
 }
 
+@media (min-width: 1276px) and (max-width: 1680px) {
+  :root {
+    --app-max-width: 100%;
+  }
+}
+
+@media (min-width: 1681px) {
+  :root {
+    --app-max-width: 1680px;
+  }
+}
+
 @media (max-width: 600px) and (pointer: coarse) {
   :root[data-skin] {
     --font-family: var(--sans);
