@@ -165,6 +165,8 @@ function friendRow(
 ): HTMLElement {
   const peerId = String(f.id || "").trim();
   const muted = peerId ? (state.muted || []).includes(peerId) : false;
+  const pinKey = peerId ? dmKey(peerId) : "";
+  const pinned = Boolean(pinKey && (state.pinned || []).includes(pinKey));
   let cls = selected ? "row row-sel" : "row";
   if (muted) cls += " row-muted-chat";
   if (attn) cls += " row-attn";
@@ -178,6 +180,7 @@ function friendRow(
   if (unread > 0) {
     tailBottomChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
   }
+  if (pinned) tailBottomChildren.push(el("span", { class: "row-pin", "aria-label": "Закреплено" }, ["📌"]));
   if (meta.hasDraft) tailBottomChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
   if (muted) tailBottomChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
   const tailChildren: HTMLElement[] = [];
@@ -229,7 +232,7 @@ function roomRow(
   onClick: () => void,
   ctx?: { kind: "group" | "board"; id: string },
   meta?: SidebarRowMeta,
-  opts?: { mention?: boolean; muted?: boolean; unread?: number }
+  opts?: { mention?: boolean; muted?: boolean; unread?: number; pinned?: boolean }
 ): HTMLElement {
   let cls = selected ? "row row-sel" : "row";
   if (opts?.muted) cls += " row-muted-chat";
@@ -242,6 +245,7 @@ function roomRow(
   if (unread > 0) {
     tailBottomChildren.push(el("span", { class: "row-unread", "aria-label": `Непрочитано: ${unread}` }, [unreadLabel]));
   }
+  if (opts?.pinned) tailBottomChildren.push(el("span", { class: "row-pin", "aria-label": "Закреплено" }, ["📌"]));
   if (meta?.hasDraft) tailBottomChildren.push(el("span", { class: "row-draft", "aria-label": "Есть черновик" }, ["черновик"]));
   if (opts?.muted) tailBottomChildren.push(el("span", { class: "row-muted", "aria-label": "Звук отключён" }, ["M"]));
   const tailChildren: HTMLElement[] = [];
@@ -787,7 +791,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k), muted: isMuted(g.id), unread }
+              { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true }
             )
           );
           continue;
@@ -806,7 +810,7 @@ export function renderSidebar(
               () => onSelect({ kind: "board", id: b.id }),
               { kind: "board", id: b.id },
               meta,
-              { muted: isMuted(b.id), unread }
+              { muted: isMuted(b.id), unread, pinned: true }
             )
           );
         }
@@ -1240,7 +1244,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k), muted: isMuted(g.id), unread }
+              { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true }
             )
           );
           continue;
@@ -1259,7 +1263,7 @@ export function renderSidebar(
               () => onSelect({ kind: "board", id: b.id }),
               { kind: "board", id: b.id },
               meta,
-              { muted: isMuted(b.id), unread }
+              { muted: isMuted(b.id), unread, pinned: true }
             )
           );
         }
@@ -1675,7 +1679,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k), muted: isMuted(g.id), unread }
+          { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true }
         )
       );
       continue;
@@ -1694,7 +1698,7 @@ export function renderSidebar(
         () => onSelect({ kind: "board", id: b.id }),
         { kind: "board", id: b.id },
         meta,
-        { muted: isMuted(b.id), unread }
+        { muted: isMuted(b.id), unread, pinned: true }
       )
     );
   }

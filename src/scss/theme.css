@@ -269,6 +269,7 @@
   --row-dot-online: var(--focus);
   --row-dot-offline: var(--muted);
   --row-prefix-color: var(--muted);
+  --row-pin-color: var(--muted);
 
   /* Avatars (local UI only) */
   --avatar-size: 40px;

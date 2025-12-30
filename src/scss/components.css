@@ -254,6 +254,10 @@
   box-shadow: 0 10px 20px color-mix(in srgb, var(--row-unread-selected-text), transparent 70%);
 }
 
+.row-sel .row-pin {
+  color: #fff;
+}
+
 .row-sel .row-muted {
   border-color: color-mix(in srgb, var(--row-text-selected-muted), transparent 60%);
   color: var(--row-text-selected-muted);
@@ -334,6 +338,7 @@
 
   .row-unread,
   .row-mention,
+  .row-pin,
   .row-muted {
     animation: none;
   }
@@ -445,6 +450,26 @@
   margin-top: auto;
 }
 
+.row-tail-bottom .row-mention {
+  order: 2;
+}
+
+.row-tail-bottom .row-unread {
+  order: 3;
+}
+
+.row-tail-bottom .row-pin {
+  order: 4;
+}
+
+.row-tail-bottom .row-draft {
+  order: 5;
+}
+
+.row-tail-bottom .row-muted {
+  order: 6;
+}
+
 @keyframes row-badge-in {
   from {
     transform: scale(0);
@@ -499,6 +524,26 @@
     transform var(--chatlist-badge-transition-in),
     opacity var(--chatlist-badge-transition-in);
   box-shadow: 0 10px 22px color-mix(in srgb, var(--focus), transparent 78%);
+}
+
+.row-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  color: var(--row-pin-color);
+  font-size: 12px;
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-rounded);
+  line-height: 1;
+  transform: scale(1);
+  transform-origin: center;
+  animation: row-badge-in var(--chatlist-badge-transition-in) both;
+  transition: color var(--chatlist-badge-transition-in),
+    transform var(--chatlist-badge-transition-in),
+    opacity var(--chatlist-badge-transition-in);
 }
 
 .row-muted {
