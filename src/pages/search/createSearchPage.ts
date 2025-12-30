@@ -61,12 +61,24 @@ const SNIPPET_MAX = 140;
 const HISTORY_LINK_RE = /(https?:\/\/|www\.)\S+/i;
 
 type HistoryFilter = "all" | "media" | "files" | "links" | "music" | "voice";
+type SearchTab = "chats" | "channels" | "apps" | "media" | "links" | "files" | "music" | "voice";
 
 const HISTORY_FILTERS: Array<{ id: HistoryFilter; label: string }> = [
   { id: "all", label: "Все" },
   { id: "media", label: "Медиа" },
   { id: "files", label: "Файлы" },
   { id: "links", label: "Ссылки" },
+  { id: "music", label: "Музыка" },
+  { id: "voice", label: "Голос" },
+];
+
+const SEARCH_TABS: Array<{ id: SearchTab; label: string }> = [
+  { id: "chats", label: "Чаты" },
+  { id: "channels", label: "Каналы" },
+  { id: "apps", label: "Приложения" },
+  { id: "media", label: "Медиа" },
+  { id: "links", label: "Ссылки" },
+  { id: "files", label: "Файлы" },
   { id: "music", label: "Музыка" },
   { id: "voice", label: "Голос" },
 ];
@@ -273,11 +285,13 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   const btn = el("button", { class: "btn", type: "button" }, ["Искать"]);
 
   const form = el("div", { class: "page-form" }, [input, btn]);
+  const tabsBar = el("div", { class: "search-tabs", role: "tablist" });
+  const tabsWrap = el("div", { class: "search-tabs-wrap" }, [tabsBar]);
   const filterBar = el("div", { class: "search-filters hidden", role: "tablist" });
   const results = el("div", { class: "page-results" });
   const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — искать | Esc — назад"]);
 
-  const root = el("div", { class: "page page-search" }, [title, form, filterBar, results, ...(hint ? [hint] : [])]);
+  const root = el("div", { class: "page page-search" }, [title, form, tabsWrap, filterBar, results, ...(hint ? [hint] : [])]);
 
   type ContactMatch = {
     id: string;
@@ -312,15 +326,24 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let cachedConversationsRef: AppState["conversations"] | null = null;
   let cachedContacts: ContactMatch[] = [];
   let cachedRooms: RoomMatch[] = [];
+  let cachedGroups: RoomMatch[] = [];
+  let cachedBoards: RoomMatch[] = [];
   let cachedHistory: HistoryMatch[] = [];
-  let cachedTotals = { contacts: 0, rooms: 0, history: 0 };
+  let cachedTotals = { contacts: 0, rooms: 0, groups: 0, boards: 0, history: 0 };
   let cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 };
   let activeFilter: HistoryFilter = "all";
+  let activeTab: SearchTab = "chats";
   let lastState: AppState | null = null;
 
   const setActiveFilter = (next: HistoryFilter) => {
     if (activeFilter === next) return;
     activeFilter = next;
+    if (lastState) update(lastState);
+  };
+
+  const setActiveTab = (next: SearchTab) => {
+    if (activeTab === next) return;
+    activeTab = next;
     if (lastState) update(lastState);
   };
 
@@ -341,10 +364,20 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       cachedQuery = qRaw;
       cachedContacts = [];
       cachedRooms = [];
+      cachedGroups = [];
+      cachedBoards = [];
       cachedHistory = [];
-      cachedTotals = { contacts: 0, rooms: 0, history: 0 };
+      cachedTotals = { contacts: 0, rooms: 0, groups: 0, boards: 0, history: 0 };
       cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 };
-      return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals, historyCounts: cachedHistoryCounts };
+      return {
+        contacts: cachedContacts,
+        rooms: cachedRooms,
+        groups: cachedGroups,
+        boards: cachedBoards,
+        history: cachedHistory,
+        totals: cachedTotals,
+        historyCounts: cachedHistoryCounts,
+      };
     }
 
     const canReuse =
@@ -355,7 +388,15 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       cachedProfilesRef === state.profiles &&
       cachedConversationsRef === state.conversations;
     if (canReuse) {
-      return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals, historyCounts: cachedHistoryCounts };
+      return {
+        contacts: cachedContacts,
+        rooms: cachedRooms,
+        groups: cachedGroups,
+        boards: cachedBoards,
+        history: cachedHistory,
+        totals: cachedTotals,
+        historyCounts: cachedHistoryCounts,
+      };
     }
 
     const contactMatches: ContactMatch[] = [];
@@ -389,7 +430,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
     contactMatches.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
 
-    const roomMatches: RoomMatch[] = [];
+    const groupMatches: RoomMatch[] = [];
+    const boardMatches: RoomMatch[] = [];
     for (const g of state.groups) {
       const id = String(g.id || "").trim();
       if (!id) continue;
@@ -415,7 +457,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         bestHandle +
         (qDigits && idDigits.startsWith(qDigits) ? 70 : qDigits && idDigits.includes(qDigits) ? 30 : 0) +
         (tokens.length > 1 ? 10 : 0);
-      roomMatches.push({ id, kind: "group", title, sub, score });
+      groupMatches.push({ id, kind: "group", title, sub, score });
     }
     for (const b of state.boards) {
       const id = String(b.id || "").trim();
@@ -442,8 +484,11 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         bestHandle +
         (qDigits && idDigits.startsWith(qDigits) ? 70 : qDigits && idDigits.includes(qDigits) ? 30 : 0) +
         (tokens.length > 1 ? 10 : 0);
-      roomMatches.push({ id, kind: "board", title, sub, score });
+      boardMatches.push({ id, kind: "board", title, sub, score });
     }
+    groupMatches.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+    boardMatches.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+    const roomMatches = [...groupMatches, ...boardMatches];
     roomMatches.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
 
     const historyMatches: HistoryMatch[] = [];
@@ -497,18 +542,34 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       historyMatches.sort((a, b) => b.ts - a.ts);
     }
 
-    cachedQuery = q;
+    cachedQuery = qRaw;
     cachedFriendsRef = state.friends;
     cachedGroupsRef = state.groups;
     cachedBoardsRef = state.boards;
     cachedProfilesRef = state.profiles;
     cachedConversationsRef = state.conversations;
-    cachedTotals = { contacts: contactMatches.length, rooms: roomMatches.length, history: historyMatches.length };
+    cachedTotals = {
+      contacts: contactMatches.length,
+      rooms: roomMatches.length,
+      groups: groupMatches.length,
+      boards: boardMatches.length,
+      history: historyMatches.length,
+    };
     cachedContacts = contactMatches.slice(0, CONTACTS_LIMIT);
     cachedRooms = roomMatches.slice(0, ROOMS_LIMIT);
+    cachedGroups = groupMatches.slice(0, ROOMS_LIMIT);
+    cachedBoards = boardMatches.slice(0, ROOMS_LIMIT);
     cachedHistory = historyMatches.slice(0, HISTORY_MAX_RESULTS);
     cachedHistoryCounts = historyCounts;
-    return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals, historyCounts: cachedHistoryCounts };
+    return {
+      contacts: cachedContacts,
+      rooms: cachedRooms,
+      groups: cachedGroups,
+      boards: cachedBoards,
+      history: cachedHistory,
+      totals: cachedTotals,
+      historyCounts: cachedHistoryCounts,
+    };
   }
 
   function submit() {
@@ -543,6 +604,9 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
     if (!q) {
       activeFilter = "all";
+      activeTab = "chats";
+      tabsWrap.classList.add("hidden");
+      tabsBar.replaceChildren();
       filterBar.classList.add("hidden");
       results.replaceChildren(
         el("div", { class: "page-empty" }, [
@@ -554,17 +618,65 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     const local = computeLocalMatches(state, qRaw, filters);
-    if (activeFilter !== "all" && local.historyCounts[activeFilter] === 0) {
+    const list = state.searchResults || [];
+    const serverDm = list.filter((r) => !r.group && !r.board);
+    const serverGroups = list.filter((r) => r.group);
+    const serverBoards = list.filter((r) => r.board);
+    const historyTabIds: SearchTab[] = ["media", "links", "files", "music", "voice"];
+    const tabCounts: Record<SearchTab, number> = {
+      chats: local.totals.contacts + local.totals.groups + local.totals.history + serverDm.length + serverGroups.length,
+      channels: local.totals.boards + serverBoards.length,
+      apps: 0,
+      media: local.historyCounts.media,
+      links: local.historyCounts.links,
+      files: local.historyCounts.files,
+      music: local.historyCounts.music,
+      voice: local.historyCounts.voice,
+    };
+    const visibleTabs = SEARCH_TABS.filter((tab) => tab.id === "chats" || tabCounts[tab.id] > 0);
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      activeTab = visibleTabs[0]?.id ?? "chats";
+    }
+
+    tabsWrap.classList.remove("hidden");
+    tabsWrap.classList.toggle("is-single", visibleTabs.length <= 1);
+    tabsBar.replaceChildren(
+      ...visibleTabs.map((tab) => {
+        const active = tab.id === activeTab;
+        const count = tabCounts[tab.id];
+        const btn = el(
+          "button",
+          {
+            class: `search-tab${active ? " is-active" : ""}`,
+            type: "button",
+            role: "tab",
+            "aria-selected": active ? "true" : "false",
+          },
+          [tab.label, el("span", { class: "search-tab-count" }, [String(count)])]
+        );
+        btn.addEventListener("click", () => setActiveTab(tab.id));
+        return btn;
+      })
+    );
+
+    const showChatsTab = activeTab === "chats";
+    const showChannelsTab = activeTab === "channels";
+    const showAppsTab = activeTab === "apps";
+    const isHistoryTab = historyTabIds.includes(activeTab);
+    const showHistory = showChatsTab || isHistoryTab;
+    if (showChatsTab && activeFilter !== "all" && local.historyCounts[activeFilter] === 0) {
       activeFilter = "all";
     }
-    const list = state.searchResults || [];
+    const effectiveHistoryFilter: HistoryFilter = isHistoryTab ? (activeTab as HistoryFilter) : activeFilter;
+    const serverList = showChannelsTab ? serverBoards : showChatsTab ? list.filter((r) => !r.board) : [];
     const blocks: HTMLElement[] = [];
 
     const pushSection = (label: string) => {
       blocks.push(el("div", { class: "pane-section" }, [label]));
     };
 
-    if (local.historyCounts.all > 0) {
+    const showFilterBar = showChatsTab && local.historyCounts.all > 0;
+    if (showFilterBar) {
       filterBar.classList.remove("hidden");
       filterBar.replaceChildren(
         ...HISTORY_FILTERS.map((item) => {
@@ -591,7 +703,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       filterBar.replaceChildren();
     }
 
-    if (local.contacts.length) {
+    if (showChatsTab && local.contacts.length) {
       pushSection(`Контакты (${local.totals.contacts})`);
       for (const item of local.contacts) {
         const dot = item.online ? "●" : "○";
@@ -612,9 +724,9 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       }
     }
 
-    if (local.rooms.length) {
-      pushSection(`Чаты и доски (${local.totals.rooms})`);
-      for (const item of local.rooms) {
+    if (showChatsTab && local.groups.length) {
+      pushSection(`Группы (${local.totals.groups})`);
+      for (const item of local.groups) {
         const rowMain = el("span", { class: "row-main" }, [
           el("span", { class: "row-title" }, [item.title]),
           ...(item.sub ? [el("span", { class: "row-sub" }, [item.sub])] : []),
@@ -623,14 +735,30 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         row.addEventListener("click", () => actions.onSelectTarget({ kind: item.kind, id: item.id }));
         blocks.push(el("div", { class: "result-item" }, [row]));
       }
-      if (local.totals.rooms > local.rooms.length) {
-        blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${local.rooms.length} чатов/досок`]));
+      if (local.totals.groups > local.groups.length) {
+        blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${local.groups.length} групп`]));
       }
     }
 
-    if (local.history.length) {
+    if (showChannelsTab && local.boards.length) {
+      pushSection(`Доски (${local.totals.boards})`);
+      for (const item of local.boards) {
+        const rowMain = el("span", { class: "row-main" }, [
+          el("span", { class: "row-title" }, [item.title]),
+          ...(item.sub ? [el("span", { class: "row-sub" }, [item.sub])] : []),
+        ]);
+        const row = el("button", { class: "row", type: "button" }, [avatar(item.kind, item.id), rowMain]);
+        row.addEventListener("click", () => actions.onSelectTarget({ kind: item.kind, id: item.id }));
+        blocks.push(el("div", { class: "result-item" }, [row]));
+      }
+      if (local.totals.boards > local.boards.length) {
+        blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${local.boards.length} досок`]));
+      }
+    }
+
+    if (showHistory && local.history.length) {
       pushSection(`История чатов (${local.totals.history})`);
-      const historyItems = local.history.filter((item) => matchesHistoryFilter(item, activeFilter));
+      const historyItems = local.history.filter((item) => matchesHistoryFilter(item, effectiveHistoryFilter));
       if (!historyItems.length) {
         blocks.push(el("div", { class: "result-meta" }, ["По выбранному фильтру совпадений нет"]));
       } else {
@@ -647,10 +775,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       blocks.push(el("div", { class: "result-meta" }, ["Поиск по загруженной истории сообщений"]));
     }
 
-    if (list.length) {
+    if (serverList.length) {
       pushSection("Поиск по ID/@логину");
       blocks.push(
-        ...list.map((r) => {
+        ...serverList.map((r) => {
           const isGroup = Boolean(r.group);
           const isBoard = Boolean(r.board);
           const isFriend = r.friend ?? state.friends.some((f) => f.id === r.id);
@@ -731,6 +859,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       );
     }
 
+    if (showAppsTab) {
+      blocks.push(el("div", { class: "page-empty" }, [el("div", { class: "page-empty-title" }, ["Приложения пока не поддерживаются"])]));
+    }
+
     if (!blocks.length) {
       const message = canSearchNow
         ? "Проверьте запрос или попробуйте другие первые цифры/буквы"
@@ -741,7 +873,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       return;
     }
 
-    if (!list.length && !canSearchNow) {
+    if (!serverList.length && !canSearchNow && (showChatsTab || showChannelsTab)) {
       blocks.push(el("div", { class: "result-meta" }, ["Поиск по серверу доступен от 3 цифр ID или 3+ символов логина (@ необязателен)"]));
     }
 
