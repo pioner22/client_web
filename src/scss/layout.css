@@ -137,6 +137,7 @@ body.has-right-col .right-col {
 .sidebar.sidebar-collapsed {
   --avatar-size: 32px;
   --avatar-font-size: 12px;
+  --sidebar-list-pad: 0px;
   padding-left: 0;
   padding-right: 0;
 }
