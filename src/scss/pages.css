@@ -483,8 +483,22 @@
 }
 
 .page-search .pane-section {
-  padding: 0 23px;
+  margin: 0;
+  padding: 0;
+}
+
+.page-search .search-group {
+  width: 100%;
+  padding: 1rem 0 0.5rem;
+  margin-bottom: 17px;
+}
+
+.page-search .search-group__name {
+  color: var(--muted);
+  margin: 0;
+  padding: 0 23px 1rem;
   font-weight: 600;
+  user-select: none;
 }
 
 .search-history-list {
@@ -716,7 +730,15 @@
     padding: 0;
   }
 
-  .page-search .pane-section {
+  .page-search .search-group {
+    margin-bottom: 0;
+  }
+
+  .page-search .search-group-recent {
+    padding: 2px 0 0;
+  }
+
+  .page-search .search-group__name {
     padding: 5px 9px 0 16px;
     font-size: 15px;
   }

@@ -916,8 +916,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     };
     const blocks: HTMLElement[] = [];
 
-    const pushSection = (label: string) => {
-      blocks.push(el("div", { class: "pane-section" }, [label]));
+    const makeGroup = (label: string, className = "") => {
+      const group = el("div", { class: `search-group${className ? ` ${className}` : ""}` });
+      group.append(el("div", { class: "pane-section search-group__name" }, [label]));
+      return group;
     };
 
     const showFilterBar = showChatsTab && local.historyCounts.all > 0;
@@ -1118,7 +1120,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     if (showChatsTab && local.contacts.length) {
-      pushSection(`Контакты (${local.totals.contacts})`);
+      const group = makeGroup(`Контакты (${local.totals.contacts})`, "search-group-contacts");
       for (const item of local.contacts) {
         const dot = item.online ? "●" : "○";
         const rowMain = el("span", { class: "row-main" }, [
@@ -1131,15 +1133,16 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           el("span", { class: "row-tail" }, [el("span", { class: `row-dot ${item.online ? "row-dot-online" : "row-dot-offline"}` }, [dot])]),
         ]);
         row.addEventListener("click", () => actions.onSelectTarget({ kind: "dm", id: item.id }));
-        blocks.push(el("div", { class: "result-item" }, [row]));
+        group.append(el("div", { class: "result-item" }, [row]));
       }
       if (local.totals.contacts > local.contacts.length) {
-        blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${local.contacts.length} контактов`]));
+        group.append(el("div", { class: "result-meta" }, [`Показаны первые ${local.contacts.length} контактов`]));
       }
+      blocks.push(group);
     }
 
     if (showChatsTab && local.groups.length) {
-      pushSection(`Группы (${local.totals.groups})`);
+      const group = makeGroup(`Группы (${local.totals.groups})`, "search-group-contacts");
       for (const item of local.groups) {
         const rowMain = el("span", { class: "row-main" }, [
           el("span", { class: "row-title" }, [item.title]),
@@ -1147,15 +1150,16 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         ]);
         const row = el("button", { class: "row", type: "button" }, [avatar(item.kind, item.id), rowMain]);
         row.addEventListener("click", () => actions.onSelectTarget({ kind: item.kind, id: item.id }));
-        blocks.push(el("div", { class: "result-item" }, [row]));
+        group.append(el("div", { class: "result-item" }, [row]));
       }
       if (local.totals.groups > local.groups.length) {
-        blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${local.groups.length} групп`]));
+        group.append(el("div", { class: "result-meta" }, [`Показаны первые ${local.groups.length} групп`]));
       }
+      blocks.push(group);
     }
 
     if (showChannelsTab && local.boards.length) {
-      pushSection(`Доски (${local.totals.boards})`);
+      const group = makeGroup(`Доски (${local.totals.boards})`, "search-group-contacts");
       for (const item of local.boards) {
         const rowMain = el("span", { class: "row-main" }, [
           el("span", { class: "row-title" }, [item.title]),
@@ -1163,15 +1167,16 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         ]);
         const row = el("button", { class: "row", type: "button" }, [avatar(item.kind, item.id), rowMain]);
         row.addEventListener("click", () => actions.onSelectTarget({ kind: item.kind, id: item.id }));
-        blocks.push(el("div", { class: "result-item" }, [row]));
+        group.append(el("div", { class: "result-item" }, [row]));
       }
       if (local.totals.boards > local.boards.length) {
-        blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${local.boards.length} досок`]));
+        group.append(el("div", { class: "result-meta" }, [`Показаны первые ${local.boards.length} досок`]));
       }
+      blocks.push(group);
     }
 
     if (showHistory && local.history.length) {
-      pushSection(`История чатов (${local.totals.history})`);
+      const historyGroup = makeGroup(`История чатов (${local.totals.history})`, "search-group-messages search-group-recent");
       const historyItems = local.history.filter((item) => matchesHistoryFilter(item, effectiveHistoryFilter));
       const inlineHistory = showChatsTab && !showAllHistory;
       const showAllButton = inlineHistory && historyItems.length > HISTORY_INLINE_LIMIT;
@@ -1184,7 +1189,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         historyVirtualEnabled = false;
         historyAutoLoadTotal = 0;
         historyAutoLoadEnabled = false;
-        blocks.push(el("div", { class: "result-meta" }, ["По выбранному фильтру совпадений нет"]));
+        historyGroup.append(el("div", { class: "result-meta" }, ["По выбранному фильтру совпадений нет"]));
       } else {
         const historyTotal = inlineHistory ? Math.min(historyItems.length, HISTORY_INLINE_LIMIT) : Math.min(historyItems.length, historyVisible);
         historyAutoLoadTotal = historyItems.length;
@@ -1246,7 +1251,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         if (historyVirtualEnabled && bottomSpacerHeight > 0) {
           historyWrap.append(makeSpacer(bottomSpacerHeight, "bottom"));
         }
-        blocks.push(historyWrap);
+        historyGroup.append(historyWrap);
         if (showAllButton) {
           const showAll = el("button", { class: "btn", type: "button" }, ["Показать все"]);
           showAll.addEventListener("click", () => {
@@ -1254,7 +1259,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             resetHistoryPaging();
             if (lastState) update(lastState);
           });
-          blocks.push(el("div", { class: "result-meta" }, [showAll]));
+          historyGroup.append(el("div", { class: "result-meta" }, [showAll]));
         }
         if (!inlineHistory && historyVisible < historyItems.length) {
           const showMore = el("button", { class: "btn", type: "button" }, ["Показать еще"]);
@@ -1262,15 +1267,16 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             historyVisible = Math.min(historyVisible + HISTORY_PAGE_SIZE, historyItems.length);
             if (lastState) update(lastState);
           });
-          blocks.push(el("div", { class: "result-meta" }, [showMore]));
+          historyGroup.append(el("div", { class: "result-meta" }, [showMore]));
         }
         const totalForFilter = effectiveHistoryFilter === "all" ? local.historyCounts.all : local.historyCounts[effectiveHistoryFilter];
         if (totalForFilter > historyItems.length) {
-          blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${historyItems.length} совпадений`]));
+          historyGroup.append(el("div", { class: "result-meta" }, [`Показаны первые ${historyItems.length} совпадений`]));
         }
         if (historyAutoLoadEnabled) scheduleHistoryAutoLoad();
       }
-      blocks.push(el("div", { class: "result-meta" }, ["Поиск по загруженной истории сообщений"]));
+      historyGroup.append(el("div", { class: "result-meta" }, ["Поиск по загруженной истории сообщений"]));
+      blocks.push(historyGroup);
     } else {
       historyAutoLoadTotal = 0;
       historyAutoLoadEnabled = false;
@@ -1280,8 +1286,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     if (serverList.length) {
-      pushSection("Поиск по ID/@логину");
-      blocks.push(
+      const serverGroup = makeGroup("Поиск по ID/@логину", "search-group-contacts search-group-people");
+      serverGroup.append(
         ...serverList.map((r) => {
           const info = resolveServerState(r);
           const isGroup = info.kind === "group";
@@ -1382,6 +1388,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           return el("div", { class: "result-item" }, itemChildren);
         })
       );
+      blocks.push(serverGroup);
     }
 
     if (showAppsTab) {
