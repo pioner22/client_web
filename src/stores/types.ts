@@ -274,6 +274,12 @@ export interface FriendEntry {
   avatar_mime?: string | null;
 }
 
+export interface TopPeerEntry {
+  id: string;
+  last_ts?: number | null;
+  msg_count?: number;
+}
+
 export interface GroupEntry {
   id: string;
   name?: string | null;
@@ -336,7 +342,7 @@ export interface SkinInfo {
 
 export type ThemeMode = "light" | "dark";
 export type MessageViewMode = "bubble" | "plain" | "compact";
-export type ContactSortMode = "online" | "name";
+export type ContactSortMode = "online" | "name" | "top";
 
 export interface AppState {
   conn: ConnStatus;
@@ -359,6 +365,7 @@ export interface AppState {
   contactSortMode: ContactSortMode;
 
   friends: FriendEntry[];
+  topPeers: TopPeerEntry[];
   pendingIn: string[];
   pendingOut: string[];
   muted: string[];

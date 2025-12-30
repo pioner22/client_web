@@ -333,6 +333,7 @@ export function renderSidebar(
   };
   const contactSortOptions: Array<{ id: ContactSortMode; label: string }> = [
     { id: "online", label: "По активности" },
+    { id: "top", label: "Топ" },
     { id: "name", label: "По имени" },
   ];
   const buildContactSortBar = (): HTMLElement => {
@@ -451,6 +452,10 @@ export function renderSidebar(
   const isMuted = (id: string): boolean => mutedSet.has(String(id || "").trim());
   const selfMentionHandles = collectSelfMentionHandles(state);
   const friendIdSet = new Set((state.friends || []).map((f) => String(f.id || "").trim()).filter(Boolean));
+  const friendsById = new Map((state.friends || []).map((f) => [String(f.id || "").trim(), f]));
+  const topPeersRaw = Array.isArray(state.topPeers) ? state.topPeers : [];
+  const topPeerIds = topPeersRaw.map((p) => String(p?.id || "").trim()).filter(Boolean);
+  const topPeerSet = new Set(topPeerIds);
   const unknownAttnPeers = Array.from(attnSet).filter((id) => !friendIdSet.has(id)).sort();
   const online = state.friends.filter((f) => f.online);
   const offline = state.friends.filter((f) => !f.online);
@@ -512,6 +517,19 @@ export function renderSidebar(
     const handle = entry.handle ? String(entry.handle).trim() : "";
     const h = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "";
     return matchesQuery([name, h, id].filter(Boolean).join(" "));
+  };
+
+  const buildTopPeerRows = (): HTMLElement[] => {
+    const rows = topPeerIds.map((id) => {
+      const f = friendsById.get(id);
+      if (!f) return null;
+      if (pinnedSet.has(dmKey(id))) return null;
+      if (!matchesFriend(f)) return null;
+      const k = dmKey(id);
+      const meta = previewForConversation(state, k, "dm", drafts[k]);
+      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attnSet.has(id));
+    });
+    return markCompactAvatarRows(rows);
   };
 
   const hasActiveDialogForFriend = (f: FriendEntry): boolean => {
@@ -898,9 +916,10 @@ export function renderSidebar(
       return;
     }
 
+    const skipTop = contactSortMode === "top";
     const onlineRows = markCompactAvatarRows(
       [...online]
-      .filter((f) => matchesFriend(f))
+      .filter((f) => matchesFriend(f) && !(skipTop && topPeerSet.has(String(f.id || "").trim())))
       .sort(compareFriendsByLastSeen)
       .map((f) => {
         const k = dmKey(f.id);
@@ -911,7 +930,7 @@ export function renderSidebar(
     );
     const offlineRows = markCompactAvatarRows(
       [...offline]
-      .filter((f) => matchesFriend(f))
+      .filter((f) => matchesFriend(f) && !(skipTop && topPeerSet.has(String(f.id || "").trim())))
       .sort(compareFriendsByLastSeen)
       .map((f) => {
         const k = dmKey(f.id);
@@ -951,9 +970,11 @@ export function renderSidebar(
         ]);
         return;
       }
+      const topPeerRows = contactSortMode === "top" ? buildTopPeerRows() : [];
       const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
       mountMobile([
         ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
+        ...(topPeerRows.length ? [el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows] : []),
         ...(compactUnknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows] : []),
         el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
         ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
@@ -1821,11 +1842,12 @@ export function renderSidebar(
   // Contacts tab.
   const contactSortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByLastSeen;
   const contactQuerySortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByStatus;
+  const skipTop = contactSortMode === "top";
   const onlineSorted = [...online]
-    .filter((f) => matchesFriend(f))
+    .filter((f) => matchesFriend(f) && !(skipTop && topPeerSet.has(String(f.id || "").trim())))
     .sort(contactSortFn);
   const offlineSorted = [...offline]
-    .filter((f) => matchesFriend(f))
+    .filter((f) => matchesFriend(f) && !(skipTop && topPeerSet.has(String(f.id || "").trim())))
     .sort(contactSortFn);
 
   const onlineRows = markCompactAvatarRows(
@@ -1862,9 +1884,11 @@ export function renderSidebar(
     return;
   }
 
+  const topPeerRows = contactSortMode === "top" ? buildTopPeerRows() : [];
   const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
   mountDesktop([
     ...(compactUnknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows] : []),
+    ...(topPeerRows.length ? [el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows] : []),
     el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
     ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
     el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),

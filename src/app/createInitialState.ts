@@ -61,6 +61,7 @@ export function createInitialState(): AppState {
     sidebarQuery: "",
     contactSortMode,
     friends: [],
+    topPeers: [],
     pendingIn: [],
     pendingOut: [],
     muted: [],

@@ -402,6 +402,7 @@ export function handleServerMessage(
       let nextState: any = {
         ...prev,
         friends: r.friends,
+        topPeers: r.topPeers,
         pendingIn: r.pendingIn,
         pendingOut: r.pendingOut,
         ...(nextProfiles ? { profiles: nextProfiles } : {}),

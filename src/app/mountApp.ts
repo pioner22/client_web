@@ -2949,7 +2949,7 @@ export function mountApp(root: HTMLElement) {
   function setContactSortMode(mode: ContactSortMode | string) {
     const next = normalizeContactSortMode(mode);
     if (store.get().contactSortMode === next) return;
-    const label = next === "name" ? "по имени" : "по активности";
+    const label = next === "name" ? "по имени" : next === "top" ? "топ" : "по активности";
     store.set({ contactSortMode: next, status: `Контакты: сортировка ${label}` });
     storeContactSortMode(next);
   }

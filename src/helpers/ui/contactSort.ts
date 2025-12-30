@@ -4,7 +4,7 @@ const STORAGE_KEY = "yagodka_contacts_sort";
 
 export function normalizeContactSortMode(input: unknown): ContactSortMode {
   const raw = String(input ?? "").trim().toLowerCase();
-  if (raw === "name" || raw === "online") return raw;
+  if (raw === "name" || raw === "online" || raw === "top") return raw;
   return "online";
 }
 
