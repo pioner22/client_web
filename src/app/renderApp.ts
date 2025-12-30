@@ -152,6 +152,7 @@ export interface RenderActions {
   onBoardJoin: (boardId: string) => void;
   onOpenHistoryHit: (t: TargetRef, query: string, msgIdx?: number) => void;
   onSearchHistoryDelete: (items: Array<{ target: TargetRef; idx: number }>, mode: "local" | "remote") => void;
+  onSearchHistoryForward: (items: Array<{ target: TargetRef; idx: number }>) => void;
   onSearchServerForward: (items: SearchResultEntry[]) => void;
   onGroupInviteAccept: (groupId: string) => void;
   onGroupInviteDecline: (groupId: string) => void;
@@ -540,6 +541,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onSearchServerForward: actions.onSearchServerForward,
         onOpenHistoryHit: actions.onOpenHistoryHit,
         onSearchHistoryDelete: actions.onSearchHistoryDelete,
+        onSearchHistoryForward: actions.onSearchHistoryForward,
       });
     }
     mountChat(layout, searchPage.root);

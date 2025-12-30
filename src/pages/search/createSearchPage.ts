@@ -14,6 +14,7 @@ export interface SearchPageActions {
   onSelectTarget: (t: TargetRef) => void;
   onOpenHistoryHit: (t: TargetRef, query: string, msgIdx?: number) => void;
   onSearchHistoryDelete: (items: Array<{ target: TargetRef; idx: number }>, mode: "local" | "remote") => void;
+  onSearchHistoryForward: (items: Array<{ target: TargetRef; idx: number }>) => void;
   onAuthRequest: (peer: string) => void;
   onAuthAccept: (peer: string) => void;
   onAuthDecline: (peer: string) => void;
@@ -59,6 +60,7 @@ const ROOMS_LIMIT = 40;
 const HISTORY_SCAN_LIMIT = 400;
 const HISTORY_PER_CHAT_LIMIT = 4;
 const HISTORY_MAX_RESULTS = 40;
+const HISTORY_INLINE_LIMIT = 6;
 const SNIPPET_MAX = 140;
 const HISTORY_LINK_RE = /(https?:\/\/|www\.)\S+/i;
 
@@ -359,6 +361,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let selectedHistory = new Map<string, { target: TargetRef; idx: number }>();
   let selectedServer = new Map<string, SearchResultEntry>();
   let activeDate = "";
+  let showAllHistory = false;
   let cachedDate = "";
   let lastQueryKey = "";
   let lastDateKey = "";
@@ -400,6 +403,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   dateClear.addEventListener("click", () => {
     if (!activeDate) return;
     activeDate = "";
+    showAllHistory = false;
     dateInput.value = "";
     if (lastState) update(lastState);
   });
@@ -407,12 +411,14 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   const setActiveFilter = (next: HistoryFilter) => {
     if (activeFilter === next) return;
     activeFilter = next;
+    showAllHistory = false;
     if (lastState) update(lastState);
   };
 
   const setActiveTab = (next: SearchTab) => {
     if (activeTab === next) return;
     activeTab = next;
+    showAllHistory = false;
     if (lastState) update(lastState);
   };
 
@@ -682,16 +688,19 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
     if (qRaw !== lastQueryKey) {
       clearSelection();
+      showAllHistory = false;
       lastQueryKey = qRaw;
     }
     if (activeDate !== lastDateKey) {
       clearSelection();
+      showAllHistory = false;
       lastDateKey = activeDate;
     }
 
     if (!q) {
       activeFilter = "all";
       activeTab = "chats";
+      showAllHistory = false;
       tabsWrap.classList.add("hidden");
       tabsBar.replaceChildren();
       filterBar.classList.add("hidden");
@@ -864,6 +873,12 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             });
             actionsWrap.append(gotoBtn);
           }
+          const forwardBtn = el("button", { class: "btn", type: "button" }, ["Переслать"]);
+          forwardBtn.addEventListener("click", () => {
+            actions.onSearchHistoryForward(Array.from(selectedHistory.values()));
+            clearSelection();
+            if (lastState) update(lastState);
+          });
           const delLocalBtn = el("button", { class: "btn", type: "button" }, ["Удалить у меня"]);
           delLocalBtn.addEventListener("click", () => {
             actions.onSearchHistoryDelete(Array.from(selectedHistory.values()), "local");
@@ -876,7 +891,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             clearSelection();
             if (lastState) update(lastState);
           });
-          actionsWrap.append(delLocalBtn, delRemoteBtn);
+          actionsWrap.append(forwardBtn, delLocalBtn, delRemoteBtn);
           selectionBar.append(cancelBtn, countEl, actionsWrap);
         } else if (selectionScope === "server") {
           const selectedItems = Array.from(selectedServer.values());
@@ -1025,10 +1040,13 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     if (showHistory && local.history.length) {
       pushSection(`История чатов (${local.totals.history})`);
       const historyItems = local.history.filter((item) => matchesHistoryFilter(item, effectiveHistoryFilter));
+      const inlineHistory = showChatsTab && !showAllHistory;
+      const showAllButton = inlineHistory && historyItems.length > HISTORY_INLINE_LIMIT;
+      const visibleHistory = showAllButton ? historyItems.slice(0, HISTORY_INLINE_LIMIT) : historyItems;
       if (!historyItems.length) {
         blocks.push(el("div", { class: "result-meta" }, ["По выбранному фильтру совпадений нет"]));
       } else {
-        for (const item of historyItems) {
+        for (const item of visibleHistory) {
           const key = historyKey(item.target, item.idx);
           const isSelected = selectionMode && selectedHistory.has(key);
           const rowMain = el("span", { class: "row-main" }, [
@@ -1050,6 +1068,14 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             if (lastState) update(lastState);
           });
           blocks.push(el("div", { class: "result-item" }, [row]));
+        }
+        if (showAllButton) {
+          const showAll = el("button", { class: "btn", type: "button" }, ["Показать все"]);
+          showAll.addEventListener("click", () => {
+            showAllHistory = true;
+            if (lastState) update(lastState);
+          });
+          blocks.push(el("div", { class: "result-meta" }, [showAll]));
         }
       }
       blocks.push(el("div", { class: "result-meta" }, ["Поиск по загруженной истории сообщений"]));

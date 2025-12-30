@@ -498,6 +498,80 @@ export function mountApp(root: HTMLElement) {
     return items.map((entry) => formatSearchServerShareLine(st, entry)).filter(Boolean).join("\n").trim();
   }
 
+  function formatSearchHistoryTargetLabel(st: AppState, target: TargetRef): string {
+    const id = String(target?.id || "").trim();
+    if (!id) return "";
+    if (target.kind === "dm") {
+      const friend = st.friends.find((f) => f.id === id);
+      const profile = st.profiles?.[id];
+      const displayName = String(friend?.display_name || profile?.display_name || "").trim();
+      const handleRaw = String(friend?.handle || profile?.handle || "").trim();
+      const handle = handleRaw ? (handleRaw.startsWith("@") ? handleRaw : `@${handleRaw}`) : "";
+      if (displayName) return displayName;
+      if (handle) return handle;
+      return `ID: ${id}`;
+    }
+    const entry = target.kind === "group" ? st.groups.find((g) => g.id === id) : st.boards.find((b) => b.id === id);
+    const name = String(entry?.name || "").trim();
+    return name ? `${name} (#${id})` : `#${id}`;
+  }
+
+  function formatSearchHistorySenderLabel(st: AppState, senderId: string): string {
+    const id = String(senderId || "").trim();
+    if (!id) return "";
+    if (String(st.selfId || "") === id) return "Я";
+    const friend = st.friends.find((f) => f.id === id);
+    const profile = st.profiles?.[id];
+    const displayName = String(friend?.display_name || profile?.display_name || "").trim();
+    const handleRaw = String(friend?.handle || profile?.handle || "").trim();
+    const handle = handleRaw ? (handleRaw.startsWith("@") ? handleRaw : `@${handleRaw}`) : "";
+    if (displayName) return displayName;
+    if (handle) return handle;
+    return id;
+  }
+
+  function formatSearchHistoryAttachmentLabel(attachment: ChatMessage["attachment"]): string {
+    if (!attachment) return "";
+    if (attachment.kind === "action") return "Действие";
+    if (attachment.kind !== "file") return "";
+    const name = String(attachment.name || "").trim();
+    const badge = fileBadge(attachment.name, attachment.mime);
+    let kindLabel = "Файл";
+    if (badge.kind === "image") kindLabel = "Фото";
+    else if (badge.kind === "video") kindLabel = "Видео";
+    else if (badge.kind === "audio") kindLabel = "Аудио";
+    else if (badge.kind === "archive") kindLabel = "Архив";
+    else if (badge.kind === "doc") kindLabel = "Документ";
+    else if (badge.kind === "pdf") kindLabel = "PDF";
+    return name ? `${kindLabel}: ${name}` : kindLabel;
+  }
+
+  function formatSearchHistoryBody(msg: ChatMessage): string {
+    const text = String(msg?.text || "").trim();
+    if (text) return text;
+    return formatSearchHistoryAttachmentLabel(msg?.attachment);
+  }
+
+  function formatSearchHistoryShareLine(st: AppState, item: { target: TargetRef; idx: number }): string {
+    const key = conversationKey(item.target);
+    if (!key) return "";
+    const conv = st.conversations[key];
+    if (!Array.isArray(conv)) return "";
+    const msg = conv[item.idx];
+    if (!msg) return "";
+    const body = formatSearchHistoryBody(msg);
+    const targetLabel = formatSearchHistoryTargetLabel(st, item.target);
+    const senderLabel = formatSearchHistorySenderLabel(st, String(msg.from || ""));
+    const header = [targetLabel, senderLabel].filter(Boolean).join(" — ");
+    if (!body) return header;
+    return header ? `${header}: ${body}` : body;
+  }
+
+  function formatSearchHistoryShareText(st: AppState, items: Array<{ target: TargetRef; idx: number }>): string {
+    const list = Array.isArray(items) ? items : [];
+    return list.map((item) => formatSearchHistoryShareLine(st, item)).filter(Boolean).join("\n").trim();
+  }
+
   function canSendShareNow(st: AppState, target: TargetRef | null): { ok: boolean; reason: string } {
     if (st.conn !== "connected") return { ok: false, reason: "Нет соединения" };
     if (!st.authed) return { ok: false, reason: "Сначала войдите или зарегистрируйтесь" };
@@ -9749,6 +9823,25 @@ export function mountApp(root: HTMLElement) {
         };
       });
       showToast("Удалено у вас", { kind: "success" });
+    },
+    onSearchHistoryForward: (items: Array<{ target: TargetRef; idx: number }>) => {
+      const st = store.get();
+      const list = Array.isArray(items) ? items : [];
+      const text = formatSearchHistoryShareText(st, list);
+      if (!text) {
+        store.set({ status: "Нет сообщений для пересылки" });
+        return;
+      }
+      const target = st.selected;
+      const canSend = canSendShareNow(st, target);
+      if (canSend.ok && target) {
+        appendShareTextToComposer(text, target);
+        store.set({ status: list.length > 1 ? "Пересланы сообщения в поле ввода" : "Переслано сообщение в поле ввода" });
+        return;
+      }
+      copyText(text).then((ok) => {
+        store.set({ status: ok ? (list.length > 1 ? "Сообщения скопированы" : "Сообщение скопировано") : "Не удалось скопировать сообщение" });
+      });
     },
     onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => {
       lastUserInputAt = Date.now();
