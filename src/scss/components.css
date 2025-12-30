@@ -165,6 +165,7 @@
 .sidebar:not(.sidebar-collapsed) .row.row-avatar-compact {
   --avatar-size: 42px;
   --avatar-font-size: 16px;
+  --row-min-h: 48px;
 }
 
 .avatar {
