@@ -1253,7 +1253,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         }
         historyGroup.append(historyWrap);
         if (showAllButton) {
-          const showAll = el("button", { class: "btn", type: "button" }, ["Показать все"]);
+          const showAll = el("button", { class: "btn search-group__show-more", type: "button" }, ["Показать все"]);
           showAll.addEventListener("click", () => {
             showAllHistory = true;
             resetHistoryPaging();
@@ -1262,7 +1262,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           historyGroup.append(el("div", { class: "result-meta" }, [showAll]));
         }
         if (!inlineHistory && historyVisible < historyItems.length) {
-          const showMore = el("button", { class: "btn", type: "button" }, ["Показать еще"]);
+          const showMore = el("button", { class: "btn search-group__show-more", type: "button" }, ["Показать еще"]);
           showMore.addEventListener("click", () => {
             historyVisible = Math.min(historyVisible + HISTORY_PAGE_SIZE, historyItems.length);
             if (lastState) update(lastState);

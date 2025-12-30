@@ -501,6 +501,25 @@
   user-select: none;
 }
 
+.page-search .search-group__show-more {
+  color: var(--focus);
+  cursor: pointer;
+  font-weight: 400;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.page-search .search-group-people.search-group-contacts {
+  padding: 5px 0;
+}
+
+@media (min-width: 601px) {
+  .page-search .search-group-recent.search-group-contacts {
+    padding: 0 0 7px;
+  }
+}
+
 .search-history-list {
   display: grid;
   gap: var(--sp-1);
@@ -531,6 +550,21 @@
 .page-empty-sub {
   font-size: 12px;
   opacity: 0.75;
+}
+
+.page-search .page-empty {
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+}
+
+.page-search .page-empty-title {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.page-search .page-empty-sub {
+  opacity: 1;
 }
 
 .page-warn {
