@@ -478,6 +478,16 @@
   gap: var(--sp-1);
 }
 
+.search-history-list {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.search-virtual-spacer {
+  width: 100%;
+  pointer-events: none;
+}
+
 .page-empty {
   display: grid;
   place-items: center;

@@ -62,6 +62,12 @@ const HISTORY_PER_CHAT_LIMIT = 4;
 const HISTORY_MAX_RESULTS = 200;
 const HISTORY_PAGE_SIZE = 30;
 const HISTORY_INLINE_LIMIT = 6;
+const HISTORY_VIRTUAL_THRESHOLD = 120;
+const HISTORY_VIRTUAL_WINDOW = 80;
+const HISTORY_VIRTUAL_OVERSCAN = 24;
+const HISTORY_VIRTUAL_AVG_FALLBACK = 64;
+const HISTORY_VIRTUAL_AVG_MIN = 40;
+const HISTORY_VIRTUAL_AVG_MAX = 120;
 const SNIPPET_MAX = 140;
 const HISTORY_LINK_RE = /(https?:\/\/|www\.)\S+/i;
 
@@ -368,6 +374,14 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let historyAutoLoadRaf: number | null = null;
   let historyAutoLoadEnabled = false;
   let historyAutoLoadTotal = 0;
+  let historyVirtualAnchor: HTMLElement | null = null;
+  let historyVirtualAvg = HISTORY_VIRTUAL_AVG_FALLBACK;
+  let historyVirtualStart = 0;
+  let historyVirtualTotal = 0;
+  let historyVirtualEnabled = false;
+  let historyVirtualUpdateRaf: number | null = null;
+  let historyVirtualMeasureRaf: number | null = null;
+  let historyVirtualLastUpdateAt = 0;
   let cachedDate = "";
   let lastQueryKey = "";
   let lastDateKey = "";
@@ -375,6 +389,30 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
   const resetHistoryPaging = () => {
     historyVisible = HISTORY_PAGE_SIZE;
+    historyVirtualStart = 0;
+    historyVirtualTotal = 0;
+    historyVirtualEnabled = false;
+  };
+
+  const clampHistoryVirtualAvg = (value?: number | null) => {
+    const v = typeof value === "number" && Number.isFinite(value) ? value : HISTORY_VIRTUAL_AVG_FALLBACK;
+    return Math.max(HISTORY_VIRTUAL_AVG_MIN, Math.min(HISTORY_VIRTUAL_AVG_MAX, v));
+  };
+
+  const getHistoryVirtualMaxStart = (total: number) => {
+    if (!Number.isFinite(total) || total <= 0) return 0;
+    return Math.max(0, total - HISTORY_VIRTUAL_WINDOW);
+  };
+
+  const getHistoryVirtualStart = (total: number, start?: number | null) => {
+    const maxStart = getHistoryVirtualMaxStart(total);
+    if (typeof start !== "number" || !Number.isFinite(start)) return maxStart;
+    return Math.max(0, Math.min(maxStart, Math.floor(start)));
+  };
+
+  const getHistoryVirtualEnd = (total: number, start: number) => {
+    if (!Number.isFinite(total) || total <= 0) return 0;
+    return Math.min(total, Math.max(0, start) + HISTORY_VIRTUAL_WINDOW);
   };
 
   const updateHistoryScrollHost = () => {
@@ -400,8 +438,55 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     });
   };
 
+  const scheduleHistoryVirtualUpdate = () => {
+    if (!historyVirtualEnabled || historyVirtualUpdateRaf !== null) return;
+    if (typeof window === "undefined") return;
+    historyVirtualUpdateRaf = window.requestAnimationFrame(() => {
+      historyVirtualUpdateRaf = null;
+      if (!historyVirtualEnabled || !historyAutoLoadHost || !historyVirtualAnchor) return;
+      if (historyVirtualTotal <= HISTORY_VIRTUAL_THRESHOLD) return;
+      const host = historyAutoLoadHost;
+      const anchor = historyVirtualAnchor;
+      const hostRect = host.getBoundingClientRect();
+      const anchorRect = anchor.getBoundingClientRect();
+      const listTop = anchorRect.top - hostRect.top + host.scrollTop;
+      const relativeTop = host.scrollTop - listTop;
+      const maxStart = getHistoryVirtualMaxStart(historyVirtualTotal);
+      let targetStart = Math.floor(relativeTop / historyVirtualAvg) - HISTORY_VIRTUAL_OVERSCAN;
+      targetStart = Math.max(0, Math.min(maxStart, targetStart));
+      const currentStart = getHistoryVirtualStart(historyVirtualTotal, historyVirtualStart);
+      const delta = Math.abs(targetStart - currentStart);
+      if (delta < Math.max(4, Math.floor(HISTORY_VIRTUAL_OVERSCAN / 2))) return;
+      const now = Date.now();
+      if (now - historyVirtualLastUpdateAt < 80) return;
+      historyVirtualLastUpdateAt = now;
+      historyVirtualStart = targetStart;
+      if (lastState) update(lastState);
+    });
+  };
+
+  const scheduleHistoryVirtualMeasure = () => {
+    if (!historyVirtualEnabled || historyVirtualMeasureRaf !== null) return;
+    if (typeof window === "undefined") return;
+    historyVirtualMeasureRaf = window.requestAnimationFrame(() => {
+      historyVirtualMeasureRaf = null;
+      if (!historyVirtualEnabled || !historyVirtualAnchor) return;
+      const rows = Array.from(historyVirtualAnchor.querySelectorAll<HTMLElement>(".row-history"));
+      if (!rows.length) return;
+      let total = 0;
+      for (const row of rows) {
+        total += row.getBoundingClientRect().height;
+      }
+      const avg = clampHistoryVirtualAvg(total / rows.length);
+      if (Math.abs(avg - historyVirtualAvg) < 1) return;
+      historyVirtualAvg = avg;
+      if (lastState) update(lastState);
+    });
+  };
+
   function onHistoryScroll() {
     scheduleHistoryAutoLoad();
+    scheduleHistoryVirtualUpdate();
   }
 
   const historyKey = (target: TargetRef, idx: number) => `${target.kind}:${target.id}:${idx}`;
@@ -1093,15 +1178,45 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       if (!inlineHistory && historyVisible > historyItems.length) {
         historyVisible = historyItems.length;
       }
-      const visibleHistory = inlineHistory
-        ? historyItems.slice(0, HISTORY_INLINE_LIMIT)
-        : historyItems.slice(0, historyVisible);
-      historyAutoLoadTotal = historyItems.length;
-      historyAutoLoadEnabled = !inlineHistory && historyItems.length > historyVisible;
-      if (historyAutoLoadEnabled) scheduleHistoryAutoLoad();
       if (!historyItems.length) {
+        historyVirtualAnchor = null;
+        historyVirtualTotal = 0;
+        historyVirtualEnabled = false;
+        historyAutoLoadTotal = 0;
+        historyAutoLoadEnabled = false;
         blocks.push(el("div", { class: "result-meta" }, ["По выбранному фильтру совпадений нет"]));
       } else {
+        const historyTotal = inlineHistory ? Math.min(historyItems.length, HISTORY_INLINE_LIMIT) : Math.min(historyItems.length, historyVisible);
+        historyAutoLoadTotal = historyItems.length;
+        historyAutoLoadEnabled = !inlineHistory && historyItems.length > historyVisible;
+        historyVirtualTotal = historyTotal;
+        historyVirtualEnabled = !inlineHistory && historyTotal > HISTORY_VIRTUAL_THRESHOLD;
+        if (!historyVirtualEnabled) {
+          historyVirtualStart = 0;
+        }
+        const maxVirtualStart = historyVirtualEnabled ? getHistoryVirtualMaxStart(historyVirtualTotal) : 0;
+        const safeVirtualStart = historyVirtualEnabled ? Math.max(0, Math.min(maxVirtualStart, Math.floor(historyVirtualStart))) : 0;
+        if (historyVirtualEnabled && safeVirtualStart !== historyVirtualStart) {
+          historyVirtualStart = safeVirtualStart;
+        }
+        const virtualEnd = historyVirtualEnabled ? getHistoryVirtualEnd(historyVirtualTotal, safeVirtualStart) : historyTotal;
+        const topSpacerHeight = historyVirtualEnabled ? Math.max(0, safeVirtualStart) * historyVirtualAvg : 0;
+        const bottomSpacerHeight = historyVirtualEnabled ? Math.max(0, historyVirtualTotal - virtualEnd) * historyVirtualAvg : 0;
+        const visibleHistory = inlineHistory
+          ? historyItems.slice(0, HISTORY_INLINE_LIMIT)
+          : historyVirtualEnabled
+            ? historyItems.slice(safeVirtualStart, virtualEnd)
+            : historyItems.slice(0, historyTotal);
+        const historyWrap = el("div", { class: "search-history-list" });
+        historyVirtualAnchor = historyWrap;
+        const makeSpacer = (height: number, pos: "top" | "bottom") => {
+          const spacer = el("div", { class: "search-virtual-spacer", "data-virtual-spacer": pos, "aria-hidden": "true" });
+          spacer.style.height = `${height}px`;
+          return spacer;
+        };
+        if (historyVirtualEnabled && topSpacerHeight > 0) {
+          historyWrap.append(makeSpacer(topSpacerHeight, "top"));
+        }
         for (const item of visibleHistory) {
           const key = historyKey(item.target, item.idx);
           const isSelected = selectionMode && selectedHistory.has(key);
@@ -1109,7 +1224,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             el("span", { class: "row-title" }, [item.title]),
             ...(item.sub ? [el("span", { class: "row-sub" }, [item.sub])] : []),
           ]);
-          const row = el("button", { class: `row${isSelected ? " row-sel" : ""}`, type: "button" }, [avatar(item.target.kind, item.target.id), rowMain]);
+          const row = el("button", { class: `row row-history${isSelected ? " row-sel" : ""}`, type: "button" }, [
+            avatar(item.target.kind, item.target.id),
+            rowMain,
+          ]);
           row.addEventListener("click", (e) => {
             if (!selectionMode) {
               actions.onOpenHistoryHit(item.target, openQuery, item.idx);
@@ -1123,8 +1241,12 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             }
             if (lastState) update(lastState);
           });
-          blocks.push(el("div", { class: "result-item" }, [row]));
+          historyWrap.append(el("div", { class: "result-item" }, [row]));
         }
+        if (historyVirtualEnabled && bottomSpacerHeight > 0) {
+          historyWrap.append(makeSpacer(bottomSpacerHeight, "bottom"));
+        }
+        blocks.push(historyWrap);
         if (showAllButton) {
           const showAll = el("button", { class: "btn", type: "button" }, ["Показать все"]);
           showAll.addEventListener("click", () => {
@@ -1146,11 +1268,15 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         if (totalForFilter > historyItems.length) {
           blocks.push(el("div", { class: "result-meta" }, [`Показаны первые ${historyItems.length} совпадений`]));
         }
+        if (historyAutoLoadEnabled) scheduleHistoryAutoLoad();
       }
       blocks.push(el("div", { class: "result-meta" }, ["Поиск по загруженной истории сообщений"]));
     } else {
       historyAutoLoadTotal = 0;
       historyAutoLoadEnabled = false;
+      historyVirtualAnchor = null;
+      historyVirtualTotal = 0;
+      historyVirtualEnabled = false;
     }
 
     if (serverList.length) {
@@ -1277,6 +1403,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     results.replaceChildren(...blocks);
+    if (historyVirtualEnabled) {
+      scheduleHistoryVirtualMeasure();
+      scheduleHistoryVirtualUpdate();
+    }
   }
 
   return {
