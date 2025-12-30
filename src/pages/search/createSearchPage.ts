@@ -63,6 +63,7 @@ const HISTORY_LINK_RE = /(https?:\/\/|www\.)\S+/i;
 
 type HistoryFilter = "all" | "media" | "files" | "links" | "music" | "voice";
 type SearchTab = "chats" | "channels" | "apps" | "media" | "links" | "files" | "music" | "voice";
+type SelectionScope = "history" | "server";
 
 const HISTORY_FILTERS: Array<{ id: HistoryFilter; label: string }> = [
   { id: "all", label: "Все" },
@@ -336,15 +337,31 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let activeFilter: HistoryFilter = "all";
   let activeTab: SearchTab = "chats";
   let selectionMode = false;
+  let selectionScope: SelectionScope | null = null;
   let selectedHistory = new Map<string, { target: TargetRef; idx: number }>();
+  let selectedServer = new Map<string, SearchResultEntry>();
   let lastQueryKey = "";
   let lastState: AppState | null = null;
 
   const historyKey = (target: TargetRef, idx: number) => `${target.kind}:${target.id}:${idx}`;
+  const serverKey = (entry: SearchResultEntry) => `${entry.board ? "board" : entry.group ? "group" : "dm"}:${entry.id}`;
 
   const clearSelection = () => {
     selectionMode = false;
+    selectionScope = null;
     selectedHistory.clear();
+    selectedServer.clear();
+  };
+
+  const startSelection = (scope: SelectionScope) => {
+    selectionMode = true;
+    selectionScope = scope;
+    if (scope === "history") {
+      selectedServer.clear();
+    } else {
+      selectedHistory.clear();
+    }
+    if (lastState) update(lastState);
   };
 
   const setActiveFilter = (next: HistoryFilter) => {
@@ -689,6 +706,17 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
     const effectiveHistoryFilter: HistoryFilter = isHistoryTab ? (activeTab as HistoryFilter) : activeFilter;
     const serverList = showChannelsTab ? serverBoards : showChatsTab ? list.filter((r) => !r.board) : [];
+    const serverSelectable = serverList.length > 0;
+    const resolveServerState = (entry: SearchResultEntry) => {
+      const kind: "dm" | "group" | "board" = entry.board ? "board" : entry.group ? "group" : "dm";
+      const isFriend = entry.friend ?? state.friends.some((f) => f.id === entry.id);
+      const pendingIn = state.pendingIn.includes(entry.id);
+      const pendingOut = state.pendingOut.includes(entry.id);
+      const inGroup = kind === "group" && state.groups.some((g) => g.id === entry.id);
+      const inBoard = kind === "board" && state.boards.some((b) => b.id === entry.id);
+      const canOpen = kind === "dm" ? isFriend : kind === "group" ? inGroup : inBoard;
+      return { kind, isFriend, pendingIn, pendingOut, inGroup, inBoard, canOpen };
+    };
     const blocks: HTMLElement[] = [];
 
     const pushSection = (label: string) => {
@@ -724,7 +752,17 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     const historySelectable = showHistory && local.history.length > 0;
-    if (!historySelectable) {
+    if (selectionMode) {
+      if (selectionScope === "history" && !historySelectable) clearSelection();
+      if (selectionScope === "server" && !serverSelectable) clearSelection();
+    }
+    if (selectionScope === "server" && selectedServer.size) {
+      const visibleKeys = new Set(serverList.map(serverKey));
+      for (const key of selectedServer.keys()) {
+        if (!visibleKeys.has(key)) selectedServer.delete(key);
+      }
+    }
+    if (!historySelectable && !serverSelectable) {
       selectionBar.classList.add("hidden");
       selectionBar.replaceChildren();
       clearSelection();
@@ -732,44 +770,130 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       selectionBar.classList.remove("hidden");
       selectionBar.replaceChildren();
       if (!selectionMode) {
-        const selectBtn = el("button", { class: "btn", type: "button" }, ["Выбрать"]);
-        selectBtn.addEventListener("click", () => {
-          selectionMode = true;
-          if (lastState) update(lastState);
-        });
-        selectionBar.append(selectBtn);
+        const makeSelectButton = (label: string, scope: SelectionScope) => {
+          const btn = el("button", { class: "btn", type: "button" }, [label]);
+          btn.addEventListener("click", () => startSelection(scope));
+          return btn;
+        };
+        if (historySelectable && serverSelectable) {
+          selectionBar.append(makeSelectButton("Выбрать историю", "history"), makeSelectButton("Выбрать сервер", "server"));
+        } else if (historySelectable) {
+          selectionBar.append(makeSelectButton("Выбрать", "history"));
+        } else if (serverSelectable) {
+          selectionBar.append(makeSelectButton("Выбрать", "server"));
+        }
       } else {
         const cancelBtn = el("button", { class: "btn", type: "button" }, ["Отмена"]);
         cancelBtn.addEventListener("click", () => {
           clearSelection();
           if (lastState) update(lastState);
         });
-        const countEl = el("span", { class: "search-selection-count" }, [`Выбрано: ${selectedHistory.size}`]);
         const actionsWrap = el("div", { class: "search-selection-actions" });
-        if (selectedHistory.size === 1) {
-          const only = Array.from(selectedHistory.values())[0];
-          const gotoBtn = el("button", { class: "btn", type: "button" }, ["Перейти"]);
-          gotoBtn.addEventListener("click", () => {
-            actions.onOpenHistoryHit(only.target, openQuery, only.idx);
+        if (selectionScope === "history") {
+          const countEl = el("span", { class: "search-selection-count" }, [`Выбрано: ${selectedHistory.size}`]);
+          if (selectedHistory.size === 1) {
+            const only = Array.from(selectedHistory.values())[0];
+            const gotoBtn = el("button", { class: "btn", type: "button" }, ["Перейти"]);
+            gotoBtn.addEventListener("click", () => {
+              actions.onOpenHistoryHit(only.target, openQuery, only.idx);
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(gotoBtn);
+          }
+          const delLocalBtn = el("button", { class: "btn", type: "button" }, ["Удалить у меня"]);
+          delLocalBtn.addEventListener("click", () => {
+            actions.onSearchHistoryDelete(Array.from(selectedHistory.values()), "local");
             clearSelection();
             if (lastState) update(lastState);
           });
-          actionsWrap.append(gotoBtn);
+          const delRemoteBtn = el("button", { class: "btn", type: "button" }, ["Удалить у всех"]);
+          delRemoteBtn.addEventListener("click", () => {
+            actions.onSearchHistoryDelete(Array.from(selectedHistory.values()), "remote");
+            clearSelection();
+            if (lastState) update(lastState);
+          });
+          actionsWrap.append(delLocalBtn, delRemoteBtn);
+          selectionBar.append(cancelBtn, countEl, actionsWrap);
+        } else if (selectionScope === "server") {
+          const selectedItems = Array.from(selectedServer.values());
+          const countEl = el("span", { class: "search-selection-count" }, [`Выбрано: ${selectedItems.length}`]);
+          const uniq = (ids: string[]) => Array.from(new Set(ids));
+          const labelWithCount = (label: string, count: number) => (count > 1 ? `${label} (${count})` : label);
+          const selectedStates = selectedItems.map((entry) => ({ entry, ...resolveServerState(entry) }));
+          if (selectedStates.length === 1 && selectedStates[0].canOpen) {
+            const only = selectedStates[0].entry;
+            const gotoBtn = el("button", { class: "btn", type: "button" }, ["Перейти"]);
+            gotoBtn.addEventListener("click", () => {
+              actions.onSelectTarget(inferTarget(only));
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(gotoBtn);
+          }
+          const reqContacts = uniq(
+            selectedStates
+              .filter((s) => s.kind === "dm" && !s.isFriend && !s.pendingIn && !s.pendingOut)
+              .map((s) => s.entry.id)
+          );
+          if (reqContacts.length) {
+            const reqBtn = el("button", { class: "btn", type: "button" }, [labelWithCount("Запросить контакт", reqContacts.length)]);
+            reqBtn.addEventListener("click", () => {
+              reqContacts.forEach((id) => actions.onAuthRequest(id));
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(reqBtn);
+          }
+          const acceptIds = uniq(selectedStates.filter((s) => s.kind === "dm" && s.pendingIn).map((s) => s.entry.id));
+          const declineIds = acceptIds;
+          if (acceptIds.length) {
+            const acceptBtn = el("button", { class: "btn", type: "button" }, [labelWithCount("Принять", acceptIds.length)]);
+            acceptBtn.addEventListener("click", () => {
+              acceptIds.forEach((id) => actions.onAuthAccept(id));
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            const declineBtn = el("button", { class: "btn", type: "button" }, [labelWithCount("Отклонить", declineIds.length)]);
+            declineBtn.addEventListener("click", () => {
+              declineIds.forEach((id) => actions.onAuthDecline(id));
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(acceptBtn, declineBtn);
+          }
+          const cancelIds = uniq(selectedStates.filter((s) => s.kind === "dm" && s.pendingOut).map((s) => s.entry.id));
+          if (cancelIds.length) {
+            const cancelBtn = el("button", { class: "btn", type: "button" }, [labelWithCount("Отменить запрос", cancelIds.length)]);
+            cancelBtn.addEventListener("click", () => {
+              cancelIds.forEach((id) => actions.onAuthCancel(id));
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(cancelBtn);
+          }
+          const joinGroups = uniq(selectedStates.filter((s) => s.kind === "group" && !s.inGroup).map((s) => s.entry.id));
+          if (joinGroups.length) {
+            const joinBtn = el("button", { class: "btn", type: "button" }, [labelWithCount("Запросить вступление", joinGroups.length)]);
+            joinBtn.addEventListener("click", () => {
+              joinGroups.forEach((id) => actions.onGroupJoin(id));
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(joinBtn);
+          }
+          const joinBoards = uniq(selectedStates.filter((s) => s.kind === "board" && !s.inBoard).map((s) => s.entry.id));
+          if (joinBoards.length) {
+            const joinBtn = el("button", { class: "btn", type: "button" }, [labelWithCount("Вступить", joinBoards.length)]);
+            joinBtn.addEventListener("click", () => {
+              joinBoards.forEach((id) => actions.onBoardJoin(id));
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(joinBtn);
+          }
+          selectionBar.append(cancelBtn, countEl, actionsWrap);
         }
-        const delLocalBtn = el("button", { class: "btn", type: "button" }, ["Удалить у меня"]);
-        delLocalBtn.addEventListener("click", () => {
-          actions.onSearchHistoryDelete(Array.from(selectedHistory.values()), "local");
-          clearSelection();
-          if (lastState) update(lastState);
-        });
-        const delRemoteBtn = el("button", { class: "btn", type: "button" }, ["Удалить у всех"]);
-        delRemoteBtn.addEventListener("click", () => {
-          actions.onSearchHistoryDelete(Array.from(selectedHistory.values()), "remote");
-          clearSelection();
-          if (lastState) update(lastState);
-        });
-        actionsWrap.append(delLocalBtn, delRemoteBtn);
-        selectionBar.append(cancelBtn, countEl, actionsWrap);
       }
     }
 
@@ -863,14 +987,18 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       pushSection("Поиск по ID/@логину");
       blocks.push(
         ...serverList.map((r) => {
-          const isGroup = Boolean(r.group);
-          const isBoard = Boolean(r.board);
-          const isFriend = r.friend ?? state.friends.some((f) => f.id === r.id);
-          const pendingIn = state.pendingIn.includes(r.id);
-          const pendingOut = state.pendingOut.includes(r.id);
-          const inGroup = state.groups.some((g) => g.id === r.id);
-          const inBoard = state.boards.some((b) => b.id === r.id);
-          const canOpen = isGroup ? inGroup : isBoard ? inBoard : isFriend;
+          const info = resolveServerState(r);
+          const isGroup = info.kind === "group";
+          const isBoard = info.kind === "board";
+          const isFriend = info.isFriend;
+          const pendingIn = info.pendingIn;
+          const pendingOut = info.pendingOut;
+          const inGroup = info.inGroup;
+          const inBoard = info.inBoard;
+          const canOpen = info.canOpen;
+          const key = serverKey(r);
+          const isSelected = selectionMode && selectionScope === "server" && selectedServer.has(key);
+          const disableRow = !canOpen && !(selectionMode && selectionScope === "server");
 
           const rowChildren: Array<string | HTMLElement> = [];
           if (isGroup) {
@@ -890,10 +1018,27 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
           const rowBtn = el(
             "button",
-            { class: "row", type: "button", ...(canOpen ? {} : { disabled: "true" }) },
+            {
+              class: `row${isSelected ? " row-sel" : ""}`,
+              type: "button",
+              ...(disableRow ? { disabled: "true" } : {}),
+              ...(isSelected ? { "aria-pressed": "true" } : {}),
+            },
             rowChildren.length ? rowChildren : [resultLabel(r)]
           );
-          if (canOpen) rowBtn.addEventListener("click", () => actions.onSelectTarget(inferTarget(r)));
+          rowBtn.addEventListener("click", (e) => {
+            if (selectionMode && selectionScope === "server") {
+              e.preventDefault();
+              if (selectedServer.has(key)) {
+                selectedServer.delete(key);
+              } else {
+                selectedServer.set(key, r);
+              }
+              if (lastState) update(lastState);
+              return;
+            }
+            if (canOpen) actions.onSelectTarget(inferTarget(r));
+          });
 
           const actionButtons: HTMLElement[] = [];
           if (isGroup) {
