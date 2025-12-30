@@ -60,14 +60,15 @@ const HISTORY_MAX_RESULTS = 40;
 const SNIPPET_MAX = 140;
 const HISTORY_LINK_RE = /(https?:\/\/|www\.)\S+/i;
 
-type HistoryFilter = "all" | "media" | "files" | "links" | "audio";
+type HistoryFilter = "all" | "media" | "files" | "links" | "music" | "voice";
 
 const HISTORY_FILTERS: Array<{ id: HistoryFilter; label: string }> = [
   { id: "all", label: "Все" },
   { id: "media", label: "Медиа" },
   { id: "files", label: "Файлы" },
   { id: "links", label: "Ссылки" },
-  { id: "audio", label: "Аудио" },
+  { id: "music", label: "Музыка" },
+  { id: "voice", label: "Голос" },
 ];
 
 function normalizeSearchText(raw: string): string {
@@ -116,6 +117,24 @@ function formatHandle(handle: string): string {
   const h = String(handle || "").trim();
   if (!h) return "";
   return h.startsWith("@") ? h : `@${h}`;
+}
+
+function extOf(name: string): string {
+  const n = String(name ?? "").trim();
+  const idx = n.lastIndexOf(".");
+  if (idx <= 0 || idx === n.length - 1) return "";
+  return n.slice(idx + 1).toLowerCase();
+}
+
+function classifyAudioAttachment(name: string, mime?: string | null): "voice" | "music" {
+  const mt = String(mime ?? "")
+    .trim()
+    .toLowerCase();
+  const ext = extOf(name);
+  if (mt.includes("opus") || mt.includes("ogg")) return "voice";
+  if (["opus", "ogg", "oga"].includes(ext)) return "voice";
+  if (["mp3", "m4a", "wav", "flac", "aac"].includes(ext)) return "music";
+  return "music";
 }
 
 type SearchQueryFilters = {
@@ -186,22 +205,25 @@ function classifyHistoryMessage(msg: ChatMessage) {
   const text = String(msg?.text || "");
   const hasLink = HISTORY_LINK_RE.test(text);
   let hasMedia = false;
-  let hasAudio = false;
   let hasFiles = false;
+  let hasMusic = false;
+  let hasVoice = false;
   if (attachment?.kind === "file") {
     const badge = fileBadge(attachment.name, attachment.mime);
     if (badge.kind === "image" || badge.kind === "video") {
       hasMedia = true;
     } else if (badge.kind === "audio") {
-      hasAudio = true;
+      const audioKind = classifyAudioAttachment(attachment.name, attachment.mime);
+      if (audioKind === "voice") hasVoice = true;
+      else hasMusic = true;
     } else {
       hasFiles = true;
     }
   }
-  return { media: hasMedia, files: hasFiles, links: hasLink, audio: hasAudio };
+  return { media: hasMedia, files: hasFiles, links: hasLink, music: hasMusic, voice: hasVoice };
 }
 
-function matchesHistoryFilter(match: { flags: { media: boolean; files: boolean; links: boolean; audio: boolean } }, filter: HistoryFilter): boolean {
+function matchesHistoryFilter(match: { flags: { media: boolean; files: boolean; links: boolean; music: boolean; voice: boolean } }, filter: HistoryFilter): boolean {
   if (filter === "all") return true;
   return Boolean(match.flags?.[filter]);
 }
@@ -279,7 +301,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     title: string;
     sub: string;
     ts: number;
-    flags: { media: boolean; files: boolean; links: boolean; audio: boolean };
+    flags: { media: boolean; files: boolean; links: boolean; music: boolean; voice: boolean };
   };
 
   let cachedQuery = "";
@@ -292,7 +314,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let cachedRooms: RoomMatch[] = [];
   let cachedHistory: HistoryMatch[] = [];
   let cachedTotals = { contacts: 0, rooms: 0, history: 0 };
-  let cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, audio: 0 };
+  let cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 };
   let activeFilter: HistoryFilter = "all";
   let lastState: AppState | null = null;
 
@@ -321,7 +343,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       cachedRooms = [];
       cachedHistory = [];
       cachedTotals = { contacts: 0, rooms: 0, history: 0 };
-      cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, audio: 0 };
+      cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 };
       return { contacts: cachedContacts, rooms: cachedRooms, history: cachedHistory, totals: cachedTotals, historyCounts: cachedHistoryCounts };
     }
 
@@ -425,7 +447,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     roomMatches.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
 
     const historyMatches: HistoryMatch[] = [];
-    const historyCounts = { all: 0, media: 0, files: 0, links: 0, audio: 0 };
+    const historyCounts = { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 };
     const hasHistoryQuery = tokenSets.length > 0 || Boolean(filters.from) || filters.hashtags.length > 0;
     if (hasHistoryQuery) {
       for (const [key, msgs] of Object.entries(state.conversations || {})) {
@@ -466,7 +488,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           if (flags.media) historyCounts.media += 1;
           if (flags.files) historyCounts.files += 1;
           if (flags.links) historyCounts.links += 1;
-          if (flags.audio) historyCounts.audio += 1;
+          if (flags.music) historyCounts.music += 1;
+          if (flags.voice) historyCounts.voice += 1;
           picked += 1;
           if (picked >= HISTORY_PER_CHAT_LIMIT) break;
         }
