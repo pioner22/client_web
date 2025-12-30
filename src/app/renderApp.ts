@@ -2,6 +2,7 @@ import type { Layout } from "../components/layout/types";
 import type {
   ActionModalPayload,
   AppState,
+  ContactSortMode,
   MessageViewMode,
   MobileSidebarTab,
   PageKind,
@@ -123,6 +124,7 @@ export interface RenderActions {
   onSetPage: (page: PageKind) => void;
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void;
   onSetSidebarQuery: (query: string) => void;
+  onContactSortChange: (mode: ContactSortMode) => void;
   onAuthLogin: () => void;
   onAuthRegister: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
@@ -357,6 +359,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onOpenBoardCreate,
     actions.onSetMobileSidebarTab,
     actions.onSetSidebarQuery,
+    actions.onContactSortChange,
     actions.onAuthOpen,
     actions.onAuthLogout,
     layout.sidebarDock

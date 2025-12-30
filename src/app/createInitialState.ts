@@ -6,6 +6,7 @@ import { getStoredAuthId, getStoredSessionToken, isSessionAutoAuthBlocked } from
 import { getPushOptOut } from "../helpers/pwa/pushPrefs";
 import { getNotifyInAppEnabled, getNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { getStoredMessageView } from "../helpers/ui/messageView";
+import { getStoredContactSortMode } from "../helpers/ui/contactSort";
 
 export function createInitialState(): AppState {
   const skin = getStoredSkinId();
@@ -42,6 +43,7 @@ export function createInitialState(): AppState {
   const pushOptOut = getPushOptOut();
   const notifyInAppEnabled = getNotifyInAppEnabled();
   const notifySoundEnabled = getNotifySoundEnabled();
+  const contactSortMode = getStoredContactSortMode();
   return {
     conn: "connecting",
     authed: false,
@@ -57,6 +59,7 @@ export function createInitialState(): AppState {
     messageView,
     mobileSidebarTab: "chats",
     sidebarQuery: "",
+    contactSortMode,
     friends: [],
     pendingIn: [],
     pendingOut: [],

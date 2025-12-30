@@ -8,6 +8,7 @@ import type {
   ActionModalPayload,
   AppState,
   ChatMessage,
+  ContactSortMode,
   ConnStatus,
   ConfirmAction,
   ContextMenuItem,
@@ -69,6 +70,7 @@ import {
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
 import { applyMessageView, normalizeMessageView, storeMessageView } from "../helpers/ui/messageView";
+import { normalizeContactSortMode, storeContactSortMode } from "../helpers/ui/contactSort";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { loadLastActiveTarget, saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
 import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
@@ -2868,6 +2870,14 @@ export function mountApp(root: HTMLElement) {
     store.set({ messageView: mode, status: `Отображение сообщений: ${label}` });
     storeMessageView(mode);
     applyMessageView(mode);
+  }
+
+  function setContactSortMode(mode: ContactSortMode | string) {
+    const next = normalizeContactSortMode(mode);
+    if (store.get().contactSortMode === next) return;
+    const label = next === "name" ? "по имени" : "по активности";
+    store.set({ contactSortMode: next, status: `Контакты: сортировка ${label}` });
+    storeContactSortMode(next);
   }
 
   const gateway = new GatewayClient(
@@ -9545,6 +9555,7 @@ export function mountApp(root: HTMLElement) {
       if (store.get().sidebarQuery === q) return;
       store.set({ sidebarQuery: q });
     },
+    onContactSortChange: (mode: ContactSortMode) => setContactSortMode(mode),
     onAuthOpen: () =>
       store.set((prev) => ({
         ...prev,

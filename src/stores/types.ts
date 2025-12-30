@@ -336,6 +336,7 @@ export interface SkinInfo {
 
 export type ThemeMode = "light" | "dark";
 export type MessageViewMode = "bubble" | "plain" | "compact";
+export type ContactSortMode = "online" | "name";
 
 export interface AppState {
   conn: ConnStatus;
@@ -355,6 +356,7 @@ export interface AppState {
 
   mobileSidebarTab: MobileSidebarTab;
   sidebarQuery: string;
+  contactSortMode: ContactSortMode;
 
   friends: FriendEntry[];
   pendingIn: string[];

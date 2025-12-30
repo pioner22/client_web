@@ -5,7 +5,8 @@ import { formatTime } from "../../helpers/time";
 import { focusElement } from "../../helpers/ui/focus";
 import { isIOS, isStandaloneDisplayMode } from "../../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
-import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
+import { normalizeContactSortMode } from "../../helpers/ui/contactSort";
+import type { ActionModalPayload, AppState, ContactSortMode, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 
 function collectAttentionPeers(state: AppState): Set<string> {
   const ids = new Set<string>();
@@ -276,6 +277,7 @@ export function renderSidebar(
   onCreateBoard: () => void,
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void,
   onSetSidebarQuery: (query: string) => void,
+  onContactSortChange: (mode: ContactSortMode) => void,
   onAuthOpen: () => void,
   onAuthLogout: () => void,
   sidebarDock?: HTMLElement | null
@@ -316,6 +318,39 @@ export function renderSidebar(
       out.push(row);
     }
     return out;
+  };
+  const contactSortOptions: Array<{ id: ContactSortMode; label: string }> = [
+    { id: "online", label: "По активности" },
+    { id: "name", label: "По имени" },
+  ];
+  const buildContactSortBar = (): HTMLElement => {
+    const buttons = contactSortOptions.map((item) => {
+      const active = contactSortMode === item.id;
+      const btn = el(
+        "button",
+        {
+          class: `search-filter${active ? " is-active" : ""}`,
+          type: "button",
+          role: "tab",
+          "aria-selected": String(active),
+        },
+        [item.label]
+      );
+      btn.addEventListener("click", () => {
+        if (contactSortMode === item.id) return;
+        onContactSortChange(item.id);
+      });
+      return btn;
+    });
+    return el(
+      "div",
+      {
+        class: "search-filters sidebar-contact-sort",
+        role: "tablist",
+        "aria-label": "Сортировка контактов",
+      },
+      buttons
+    );
   };
   const dialogPriority = (opts: { hasDraft: boolean; unread?: number; attention?: boolean; mention?: boolean }): number => {
     let score = 0;
@@ -389,6 +424,8 @@ export function renderSidebar(
     if (aSeen !== bSeen) return bSeen - aSeen;
     return displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
   };
+  const compareFriendsByName = (a: FriendEntry, b: FriendEntry): number =>
+    displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
   const compareFriendsByStatus = (a: FriendEntry, b: FriendEntry): number => {
     if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
     return compareFriendsByLastSeen(a, b);
@@ -411,6 +448,7 @@ export function renderSidebar(
   const sidebarQueryRaw = compactOneLine(String((state as any).sidebarQuery || ""));
   const sidebarQuery = sidebarQueryRaw.toLowerCase();
   const hasSidebarQuery = Boolean(sidebarQuery);
+  const contactSortMode = normalizeContactSortMode(state.contactSortMode);
   const body = (() => {
     const existing =
       typeof (target as HTMLElement | null)?.querySelector === "function"
@@ -617,8 +655,13 @@ export function renderSidebar(
             });
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
+    const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
 
-    const sticky = el("div", { class: "sidebar-mobile-sticky" }, [top, ...(searchBar ? [searchBar] : [])]);
+    const sticky = el("div", { class: "sidebar-mobile-sticky" }, [
+      top,
+      ...(searchBar ? [searchBar] : []),
+      ...(contactSortBar ? [contactSortBar] : []),
+    ]);
     const bottom = el("div", { class: "sidebar-mobile-bottom" }, [tabs]);
     const takeScrollSnapshot = (): SidebarScrollSnapshot => {
       const scrollTop = body.scrollTop || 0;
@@ -1120,7 +1163,9 @@ export function renderSidebar(
             });
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
-    const header = searchBar ? el("div", { class: "sidebar-header" }, [searchBar]) : null;
+    const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
+    const headerStack = contactSortBar ? el("div", { class: "sidebar-header-stack" }, [searchBar, contactSortBar]) : searchBar;
+    const header = searchBar ? el("div", { class: "sidebar-header" }, [headerStack]) : null;
 
     const mentionForKey = (key: string): boolean => {
       if (!selfMentionHandles.size) return false;
@@ -1302,17 +1347,14 @@ export function renderSidebar(
 
     if (activeTab === "contacts") {
       const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
+      const contactSortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByLastSeen;
+      const contactQuerySortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByStatus;
       const onlineAll = (state.friends || []).filter((f) => f.online).filter((f) => !pinnedSet.has(dmKey(f.id)));
       const offlineAll = (state.friends || []).filter((f) => !f.online).filter((f) => !pinnedSet.has(dmKey(f.id)));
 
       if (hasSidebarQuery) {
         const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
-        allFriends.sort((a, b) => {
-          if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
-          const an = displayNameForFriend(state, a);
-          const bn = displayNameForFriend(state, b);
-          return an.localeCompare(bn, "ru", { sensitivity: "base" });
-        });
+        allFriends.sort(contactQuerySortFn);
         const rows = allFriends.map((f) => {
           const k = dmKey(f.id);
           const meta = previewForConversation(state, k, "dm", drafts[k]);
@@ -1340,23 +1382,23 @@ export function renderSidebar(
 
       const onlineRows = markCompactAvatarRows(
         onlineAll
-        .filter((f) => matchesFriend(f))
-        .sort(compareFriendsByLastSeen)
-        .map((f) => {
-          const k = dmKey(f.id);
-          const meta = previewForConversation(state, k, "dm", drafts[k]);
-          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-        })
+          .filter((f) => matchesFriend(f))
+          .sort(contactSortFn)
+          .map((f) => {
+            const k = dmKey(f.id);
+            const meta = previewForConversation(state, k, "dm", drafts[k]);
+            return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+          })
       );
       const offlineRows = markCompactAvatarRows(
         offlineAll
-        .filter((f) => matchesFriend(f))
-        .sort(compareFriendsByLastSeen)
-        .map((f) => {
-          const k = dmKey(f.id);
-          const meta = previewForConversation(state, k, "dm", drafts[k]);
-          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-        })
+          .filter((f) => matchesFriend(f))
+          .sort(contactSortFn)
+          .map((f) => {
+            const k = dmKey(f.id);
+            const meta = previewForConversation(state, k, "dm", drafts[k]);
+            return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+          })
       );
       const unknownAttnRows = markCompactAvatarRows(
         unknownAttnPeers
@@ -1550,7 +1592,9 @@ export function renderSidebar(
     });
     return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
   })();
-  const header = el("div", { class: "sidebar-header" }, [searchBar]);
+  const contactSortBar = activeDesktopTab === "contacts" ? buildContactSortBar() : null;
+  const headerStack = contactSortBar ? el("div", { class: "sidebar-header-stack" }, [searchBar, contactSortBar]) : searchBar;
+  const header = el("div", { class: "sidebar-header" }, [headerStack]);
 
   const lastTsForKey = (key: string): number => {
     const conv = state.conversations[key] || [];
@@ -1763,12 +1807,14 @@ export function renderSidebar(
   }
 
   // Contacts tab.
+  const contactSortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByLastSeen;
+  const contactQuerySortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByStatus;
   const onlineSorted = [...online]
     .filter((f) => matchesFriend(f))
-    .sort(compareFriendsByLastSeen);
+    .sort(contactSortFn);
   const offlineSorted = [...offline]
     .filter((f) => matchesFriend(f))
-    .sort(compareFriendsByLastSeen);
+    .sort(contactSortFn);
 
   const onlineRows = markCompactAvatarRows(
     onlineSorted.map((f) => {
@@ -1789,7 +1835,7 @@ export function renderSidebar(
 
   if (hasSidebarQuery) {
     const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
-    allFriends.sort(compareFriendsByStatus);
+    allFriends.sort(contactQuerySortFn);
     const rows = allFriends.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
