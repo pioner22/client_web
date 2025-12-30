@@ -196,6 +196,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const showRightPanel = Boolean(rightTarget && state.page === "main" && !mobileUi);
   if (typeof document !== "undefined") {
     document.body.classList.toggle("has-right-col", showRightPanel);
+    document.body.classList.toggle("has-auth-pages", !state.authed);
+    document.documentElement.classList.toggle("has-auth-pages", !state.authed);
   }
   layout.rightCol.classList.toggle("hidden", !showRightPanel);
   layout.rightCol.setAttribute("aria-hidden", showRightPanel ? "false" : "true");

@@ -48,6 +48,11 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+html.has-auth-pages,
+body.has-auth-pages {
+  background: var(--panel);
+}
+
 button {
   touch-action: manipulation;
 }
