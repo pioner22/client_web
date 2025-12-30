@@ -262,6 +262,7 @@ body.has-right-col .right-col {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  padding-inline: var(--sidebar-list-pad);
   /* Prevent browser scroll anchoring from jumping the list during re-renders/context menus. */
   overflow-anchor: none;
   touch-action: pan-y;
