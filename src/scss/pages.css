@@ -478,6 +478,15 @@
   gap: var(--sp-1);
 }
 
+.page-search .page-results {
+  padding: 0 0.5rem;
+}
+
+.page-search .pane-section {
+  padding: 0 23px;
+  font-weight: 600;
+}
+
 .search-history-list {
   display: grid;
   gap: var(--sp-1);
@@ -703,6 +712,15 @@
 }
 
 @media (max-width: 600px) {
+  .page-search .page-results {
+    padding: 0;
+  }
+
+  .page-search .pane-section {
+    padding: 5px 9px 0 16px;
+    font-size: 15px;
+  }
+
   .profile-head-top {
     flex-direction: column;
     text-align: center;
