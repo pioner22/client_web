@@ -1135,6 +1135,22 @@ input.modal-input[type="file"]::file-selector-button:active {
   padding: 18px 14px;
 }
 
+.viewer-caption {
+  margin-top: var(--sp-3);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.overlay.overlay-viewer .viewer-caption {
+  margin: 0;
+  padding: 8px 12px 12px;
+  padding-left: calc(12px + env(safe-area-inset-left));
+  padding-right: calc(12px + env(safe-area-inset-right));
+}
+
 .overlay.overlay-viewer .viewer-img {
   max-height: 100%;
   background: transparent;

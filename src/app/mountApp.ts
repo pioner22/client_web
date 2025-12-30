@@ -1131,7 +1131,7 @@ export function mountApp(root: HTMLElement) {
   const uploadByFileId = new Map<string, UploadState>();
   const downloadByFileId = new Map<string, DownloadState>();
   const pendingStreamRequests = new Map<string, { fileId: string; name: string; size: number; mime: string | null }>();
-  let pendingFileViewer: { fileId: string; name: string; size: number; mime: string | null } | null = null;
+  let pendingFileViewer: { fileId: string; name: string; size: number; mime: string | null; caption: string | null } | null = null;
   const pendingFileDownloads = new Map<string, { name: string }>();
   let transferSeq = 0;
   let localChatMsgSeq = 0;
@@ -1964,20 +1964,23 @@ export function mountApp(root: HTMLElement) {
       const size = Number(viewBtn.getAttribute("data-size") || 0) || 0;
       const mimeRaw = viewBtn.getAttribute("data-mime");
       const mime = mimeRaw ? String(mimeRaw) : null;
+      const captionRaw = viewBtn.getAttribute("data-caption");
+      const caption = captionRaw ? String(captionRaw).trim() : "";
+      const captionText = caption || null;
       e.preventDefault();
       closeMobileSidebar();
       if (url) {
-        store.set({ modal: { kind: "file_viewer", url, name, size, mime } });
+        store.set({ modal: { kind: "file_viewer", url, name, size, mime, caption: captionText } });
         return;
       }
       void (async () => {
         const st = store.get();
         const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean(t.url));
         if (existing?.url) {
-          store.set({ modal: { kind: "file_viewer", url: existing.url, name, size: size || existing.size || 0, mime: mime || existing.mime || null } });
+          store.set({ modal: { kind: "file_viewer", url: existing.url, name, size: size || existing.size || 0, mime: mime || existing.mime || null, caption: captionText } });
           return;
         }
-        const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime });
+        const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime, caption: captionText });
         if (opened) return;
 
         const latest = store.get();
@@ -1989,7 +1992,7 @@ export function mountApp(root: HTMLElement) {
           store.set({ status: "Сначала войдите или зарегистрируйтесь" });
           return;
         }
-        pendingFileViewer = { fileId, name, size, mime };
+        pendingFileViewer = { fileId, name, size, mime, caption: captionText };
         gateway.send({ type: "file_get", file_id: fileId });
         store.set({ status: `Скачивание: ${name}` });
       })();
@@ -4755,7 +4758,7 @@ export function mountApp(root: HTMLElement) {
 
   async function tryOpenFileViewerFromCache(
     fileId: string,
-    meta: { name: string; size: number; mime: string | null }
+    meta: { name: string; size: number; mime: string | null; caption?: string | null }
   ): Promise<boolean> {
     const st = store.get();
     if (!st.selfId) return false;
@@ -4773,6 +4776,7 @@ export function mountApp(root: HTMLElement) {
     const name = meta.name || entry?.name || "файл";
     const size = meta.size || entry?.size || cached.size || 0;
     const mime = meta.mime || entry?.mime || cached.mime || null;
+    const caption = meta.caption ? String(meta.caption).trim() : "";
     const direction = entry?.direction || "in";
     const peer = entry?.peer || "—";
     const room = typeof entry?.room === "string" ? entry.room : null;
@@ -4808,7 +4812,7 @@ export function mountApp(root: HTMLElement) {
         };
         return [next, ...prev.fileTransfers];
       })();
-      return { ...prev, fileTransfers: nextTransfers, modal: { kind: "file_viewer", url, name, size, mime } };
+      return { ...prev, fileTransfers: nextTransfers, modal: { kind: "file_viewer", url, name, size, mime, caption: caption || null } };
     });
     scheduleSaveFileTransfers(store);
     return true;
@@ -5779,7 +5783,7 @@ export function mountApp(root: HTMLElement) {
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) {
           const pv = pendingFileViewer;
           pendingFileViewer = null;
-          store.set({ modal: { kind: "file_viewer", url, name: pv.name, size: pv.size, mime: pv.mime } });
+          store.set({ modal: { kind: "file_viewer", url, name: pv.name, size: pv.size, mime: pv.mime, caption: pv.caption || null } });
         }
       } else {
         silentFileGets.delete(fileId);

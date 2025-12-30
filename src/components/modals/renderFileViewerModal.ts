@@ -1,3 +1,4 @@
+import { renderRichText } from "../../helpers/chat/richText";
 import { el } from "../../helpers/dom/el";
 import { safeUrl } from "../../helpers/security/safeUrl";
 
@@ -39,9 +40,18 @@ function isAudioFile(name: string, mime?: string | null): boolean {
   return /\.(mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n);
 }
 
-export function renderFileViewerModal(url: string, name: string, size: number, mime: string | null | undefined, actions: FileViewerModalActions): HTMLElement {
+export function renderFileViewerModal(
+  url: string,
+  name: string,
+  size: number,
+  mime: string | null | undefined,
+  caption: string | null | undefined,
+  actions: FileViewerModalActions
+): HTMLElement {
   const safeHref = safeUrl(url, { base: window.location.href, allowedProtocols: ["http:", "https:", "blob:"] });
   const titleText = String(name || "файл");
+  const captionRaw = caption ? String(caption).trim() : "";
+  const captionText = captionRaw && !captionRaw.startsWith("[file]") ? captionRaw : "";
 
   const box = el("div", { class: "modal modal-viewer", role: "dialog", "aria-modal": "true" });
 
@@ -86,6 +96,11 @@ export function renderFileViewerModal(url: string, name: string, size: number, m
     actionsRow.append(btnCloseBottom);
   }
 
-  box.append(header, body, actionsRow);
+  const nodes: HTMLElement[] = [header, body];
+  if (captionText) {
+    nodes.push(el("div", { class: "viewer-caption" }, renderRichText(captionText)));
+  }
+  nodes.push(actionsRow);
+  box.append(...nodes);
   return box;
 }

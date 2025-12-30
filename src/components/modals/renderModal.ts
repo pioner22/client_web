@@ -108,7 +108,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     });
   }
   if (kind === "file_viewer") {
-    return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, { onClose: actions.onClose });
+    return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, modal.caption ?? null, { onClose: actions.onClose });
   }
   if (kind === "invite_user") {
     return renderInviteUserModal(modal.peer, state.selfId ?? null, state.groups || [], state.boards || [], modal.message, {

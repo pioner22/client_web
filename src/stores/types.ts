@@ -159,7 +159,7 @@ export type ModalState =
       restoreInput?: string | null;
       previewUrls?: Array<string | null>;
     }
-  | { kind: "file_viewer"; url: string; name: string; size: number; mime?: string | null }
+  | { kind: "file_viewer"; url: string; name: string; size: number; mime?: string | null; caption?: string | null }
   | { kind: "invite_user"; peer: string; message?: string }
   | { kind: "action"; payload: ActionModalPayload; message?: string }
   | { kind: "context_menu"; payload: ContextMenuPayload };

@@ -277,7 +277,7 @@ function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileU
   };
 }
 
-function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number }): HTMLElement | null {
+function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number; caption?: string | null }): HTMLElement | null {
   if (!info.isImage) return null;
   if (!info.url && !info.fileId) return null;
   const classes = info.url ? ["chat-file-preview"] : ["chat-file-preview", "chat-file-preview-empty"];
@@ -294,6 +294,7 @@ function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?:
   if (!info.url && info.fileId) attrs["data-file-id"] = info.fileId;
   if (info.mime) attrs["data-mime"] = info.mime;
   if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
+  if (opts?.caption) attrs["data-caption"] = opts.caption;
 
   const child = info.url
     ? el("img", { class: "chat-file-img", src: info.url, alt: info.name, loading: "lazy", decoding: "async" })
@@ -301,7 +302,7 @@ function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?:
   return el("button", attrs, [child]);
 }
 
-function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number }): HTMLElement | null {
+function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number; caption?: string | null }): HTMLElement | null {
   if (!info.isVideo) return null;
   if (!info.url && !info.fileId) return null;
   const classes = info.url ? ["chat-file-preview", "chat-file-preview-video"] : ["chat-file-preview", "chat-file-preview-video", "chat-file-preview-empty"];
@@ -318,6 +319,7 @@ function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: { className?:
   if (!info.url && info.fileId) attrs["data-file-id"] = info.fileId;
   if (info.mime) attrs["data-mime"] = info.mime;
   if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
+  if (opts?.caption) attrs["data-caption"] = opts.caption;
 
   const child = info.url
     ? el("video", { class: "chat-file-video", src: info.url, preload: "metadata", playsinline: "true", muted: "true" })
@@ -629,9 +631,11 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
       el("div", { class: "file-actions" }, actions),
     ];
 
+    const caption = String(m.text || "").trim();
+    const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
     const isVisualMedia = isImage || isVideo;
     if (isVisualMedia) {
-      const preview = isImage ? renderImagePreviewButton(info) : renderVideoPreviewButton(info);
+      const preview = isImage ? renderImagePreviewButton(info, { caption: viewerCaption }) : renderVideoPreviewButton(info, { caption: viewerCaption });
       if (preview) rowChildren.unshift(preview);
     }
 
@@ -642,14 +646,13 @@ function messageLine(state: AppState, m: ChatMessage, friendLabels?: Map<string,
         ? "file-row file-row-chat file-row-audio"
         : "file-row file-row-chat";
     bodyChildren.push(el("div", { class: fileRowClass }, rowChildren));
-    const caption = String(m.text || "").trim();
-    if (caption && !caption.startsWith("[file]")) {
-      const emojiOnlyCaption = isEmojiOnlyText(caption);
+    if (viewerCaption) {
+      const emojiOnlyCaption = isEmojiOnlyText(viewerCaption);
       const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
       if (boardUi && !emojiOnlyCaption) {
-        bodyChildren.push(el("div", { class: "msg-text msg-caption msg-text-board" }, [renderBoardPost(caption)]));
+        bodyChildren.push(el("div", { class: "msg-text msg-caption msg-text-board" }, [renderBoardPost(viewerCaption)]));
       } else {
-        bodyChildren.push(el("div", { class: `msg-text msg-caption${emojiOnlyCaption ? " msg-emoji-only" : ""}` }, renderRichText(caption)));
+        bodyChildren.push(el("div", { class: `msg-text msg-caption${emojiOnlyCaption ? " msg-emoji-only" : ""}` }, renderRichText(viewerCaption)));
       }
     }
   } else {
@@ -715,7 +718,9 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
 
   const gridItems: HTMLElement[] = [];
   for (const item of items) {
-    const preview = renderImagePreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx });
+    const caption = String(item.msg.text || "").trim();
+    const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
+    const preview = renderImagePreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx, caption: viewerCaption });
     if (!preview) continue;
     const wrap = el("div", { class: "chat-album-item", "data-msg-idx": String(item.idx) }, [preview]);
     gridItems.push(wrap);
