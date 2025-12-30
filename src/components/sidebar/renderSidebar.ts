@@ -372,6 +372,27 @@ export function renderSidebar(
     roomUnreadCache.set(key, count);
     return count;
   };
+  const lastSeenTs = (f: FriendEntry): number => {
+    const raw = (f as any).last_seen_at;
+    if (!raw) return 0;
+    if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
+    if (raw instanceof Date) {
+      const ts = raw.getTime();
+      return Number.isFinite(ts) ? ts : 0;
+    }
+    const ts = Date.parse(String(raw));
+    return Number.isFinite(ts) ? ts : 0;
+  };
+  const compareFriendsByLastSeen = (a: FriendEntry, b: FriendEntry): number => {
+    const aSeen = lastSeenTs(a);
+    const bSeen = lastSeenTs(b);
+    if (aSeen !== bSeen) return bSeen - aSeen;
+    return displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
+  };
+  const compareFriendsByStatus = (a: FriendEntry, b: FriendEntry): number => {
+    if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
+    return compareFriendsByLastSeen(a, b);
+  };
 
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
@@ -823,7 +844,10 @@ export function renderSidebar(
     }
 
     const onlineRows = markCompactAvatarRows(
-      online.map((f) => {
+      [...online]
+      .filter((f) => matchesFriend(f))
+      .sort(compareFriendsByLastSeen)
+      .map((f) => {
         const k = dmKey(f.id);
         if (pinnedSet.has(k)) return null;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
@@ -831,7 +855,10 @@ export function renderSidebar(
       })
     );
     const offlineRows = markCompactAvatarRows(
-      offline.map((f) => {
+      [...offline]
+      .filter((f) => matchesFriend(f))
+      .sort(compareFriendsByLastSeen)
+      .map((f) => {
         const k = dmKey(f.id);
         if (pinnedSet.has(k)) return null;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
@@ -854,12 +881,7 @@ export function renderSidebar(
       const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
       if (hasSidebarQuery) {
         const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
-        allFriends.sort((a, b) => {
-          if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
-          const an = displayNameForFriend(state, a);
-          const bn = displayNameForFriend(state, b);
-          return an.localeCompare(bn, "ru", { sensitivity: "base" });
-        });
+        allFriends.sort(compareFriendsByStatus);
         const rows = allFriends.map((f) => {
           const k = dmKey(f.id);
           const meta = previewForConversation(state, k, "dm", drafts[k]);
@@ -1319,6 +1341,7 @@ export function renderSidebar(
       const onlineRows = markCompactAvatarRows(
         onlineAll
         .filter((f) => matchesFriend(f))
+        .sort(compareFriendsByLastSeen)
         .map((f) => {
           const k = dmKey(f.id);
           const meta = previewForConversation(state, k, "dm", drafts[k]);
@@ -1328,6 +1351,7 @@ export function renderSidebar(
       const offlineRows = markCompactAvatarRows(
         offlineAll
         .filter((f) => matchesFriend(f))
+        .sort(compareFriendsByLastSeen)
         .map((f) => {
           const k = dmKey(f.id);
           const meta = previewForConversation(state, k, "dm", drafts[k]);
@@ -1741,10 +1765,10 @@ export function renderSidebar(
   // Contacts tab.
   const onlineSorted = [...online]
     .filter((f) => matchesFriend(f))
-    .sort((a, b) => displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" }));
+    .sort(compareFriendsByLastSeen);
   const offlineSorted = [...offline]
     .filter((f) => matchesFriend(f))
-    .sort((a, b) => displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" }));
+    .sort(compareFriendsByLastSeen);
 
   const onlineRows = markCompactAvatarRows(
     onlineSorted.map((f) => {
@@ -1765,10 +1789,7 @@ export function renderSidebar(
 
   if (hasSidebarQuery) {
     const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
-    allFriends.sort((a, b) => {
-      if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
-      return displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
-    });
+    allFriends.sort(compareFriendsByStatus);
     const rows = allFriends.map((f) => {
       const k = dmKey(f.id);
       const meta = previewForConversation(state, k, "dm", drafts[k]);
