@@ -31,7 +31,15 @@ import {
   shouldVirtualize,
 } from "../helpers/chat/virtualHistory";
 import { loadDraftsForUser, sanitizeDraftMap, saveDraftsForUser, updateDraftMap } from "../helpers/chat/drafts";
-import { clampChatSearchPos, computeChatSearchHits, stepChatSearchPos } from "../helpers/chat/chatSearch";
+import {
+  clampChatSearchPos,
+  computeChatSearchCounts,
+  computeChatSearchHits,
+  createChatSearchCounts,
+  stepChatSearchPos,
+  type ChatSearchFilter,
+  type ChatSearchFlags,
+} from "../helpers/chat/chatSearch";
 import { loadPinsForUser, sanitizePins, savePinsForUser, togglePin } from "../helpers/chat/pins";
 import {
   loadPinnedMessagesForUser,
@@ -41,6 +49,7 @@ import {
   togglePinnedMessage,
 } from "../helpers/chat/pinnedMessages";
 import { cleanupFileCache, getCachedFileBlob, isImageLikeFile, putCachedFileBlob } from "../helpers/files/fileBlobCache";
+import { fileBadge } from "../helpers/files/fileBadge";
 import { loadFileCachePrefs, saveFileCachePrefs } from "../helpers/files/fileCachePrefs";
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
@@ -1756,6 +1765,13 @@ export function mountApp(root: HTMLElement) {
       stepChatSearch(1);
       return;
     }
+    const searchFilterBtn = target?.closest("button[data-action='chat-search-filter']") as HTMLButtonElement | null;
+    if (searchFilterBtn) {
+      const filter = String(searchFilterBtn.getAttribute("data-filter") || "all") as ChatSearchFilter;
+      e.preventDefault();
+      setChatSearchFilter(filter);
+      return;
+    }
 
     const jumpBtn = target?.closest("button[data-action='chat-jump-bottom']") as HTMLButtonElement | null;
     if (jumpBtn) {
@@ -2836,7 +2852,9 @@ export function mountApp(root: HTMLElement) {
       ...(page !== "group" ? { groupViewId: null } : {}),
       ...(page !== "board" ? { boardViewId: null } : {}),
       ...(page !== "main" ? { mobileSidebarTab: "menu" as MobileSidebarTab } : {}),
-      ...(page !== "main" ? { chatSearchOpen: false, chatSearchQuery: "", chatSearchHits: [], chatSearchPos: 0 } : {}),
+      ...(page !== "main"
+        ? { chatSearchOpen: false, chatSearchQuery: "", chatSearchFilter: "all", chatSearchHits: [], chatSearchPos: 0, chatSearchCounts: createChatSearchCounts() }
+        : {}),
     }));
   }
 
@@ -3109,8 +3127,10 @@ export function mountApp(root: HTMLElement) {
         boardComposerOpen: t.kind === "board" ? p.boardComposerOpen : false,
         chatSearchOpen: false,
         chatSearchQuery: "",
+        chatSearchFilter: "all",
         chatSearchHits: [],
         chatSearchPos: 0,
+        chatSearchCounts: createChatSearchCounts(),
         ...(trimmed ? { conversations: trimmed.conversations, historyCursor: trimmed.historyCursor } : {}),
       };
     });
@@ -3154,9 +3174,28 @@ export function mountApp(root: HTMLElement) {
     if (!st.selected) return [];
     const key = conversationKey(st.selected);
     const msgs = st.conversations[key] || [];
+    const linkRe = /(https?:\/\/|www\.)\S+/i;
+    const flagsForMessage = (msg: ChatMessage): ChatSearchFlags => {
+      const flags: ChatSearchFlags = {};
+      const attachment = msg?.attachment;
+      if (attachment?.kind === "file") {
+        const badge = fileBadge(attachment.name, attachment.mime);
+        if (badge.kind === "image" || badge.kind === "video") {
+          flags.media = true;
+        } else if (badge.kind === "audio") {
+          flags.audio = true;
+        } else {
+          flags.files = true;
+        }
+      }
+      const text = String(msg?.text || "");
+      if (text && linkRe.test(text)) flags.links = true;
+      return flags;
+    };
     return msgs.map((m) => ({
       text: m.text,
       attachmentName: m.attachment?.kind === "file" ? m.attachment.name : null,
+      flags: flagsForMessage(m),
     }));
   }
 
@@ -3194,7 +3233,15 @@ export function mountApp(root: HTMLElement) {
   }
 
   function closeChatSearch() {
-    store.set((prev) => ({ ...prev, chatSearchOpen: false, chatSearchQuery: "", chatSearchHits: [], chatSearchPos: 0 }));
+    store.set((prev) => ({
+      ...prev,
+      chatSearchOpen: false,
+      chatSearchQuery: "",
+      chatSearchFilter: "all",
+      chatSearchHits: [],
+      chatSearchPos: 0,
+      chatSearchCounts: createChatSearchCounts(),
+    }));
     queueMicrotask(() => scheduleFocusComposer());
   }
 
@@ -3207,6 +3254,15 @@ export function mountApp(root: HTMLElement) {
     queueMicrotask(() => focusChatSearch(true));
   }
 
+  function normalizeChatSearchFilter(filter: ChatSearchFilter, counts: ReturnType<typeof createChatSearchCounts>): ChatSearchFilter {
+    if (filter === "all") return "all";
+    return counts[filter] > 0 ? filter : "all";
+  }
+
+  function sameChatSearchCounts(a: ReturnType<typeof createChatSearchCounts>, b: ReturnType<typeof createChatSearchCounts>): boolean {
+    return a.all === b.all && a.media === b.media && a.files === b.files && a.links === b.links && a.audio === b.audio;
+  }
+
   function openChatFromSearch(target: TargetRef, query: string, msgIdx?: number) {
     const q = String(query || "").trim();
     if (!q) return;
@@ -3215,7 +3271,12 @@ export function mountApp(root: HTMLElement) {
       const st = store.get();
       if (!st.selected) return;
       if (conversationKey(st.selected) !== conversationKey(target)) return;
-      store.set((prev) => ({ ...prev, chatSearchOpen: true, chatSearchQuery: q }));
+      store.set((prev) => ({
+        ...prev,
+        chatSearchOpen: true,
+        chatSearchQuery: q,
+        chatSearchFilter: "all",
+      }));
       if (Number.isFinite(msgIdx)) scrollToChatMsgIdx(Number(msgIdx));
     };
     queueMicrotask(apply);
@@ -3228,13 +3289,42 @@ export function mountApp(root: HTMLElement) {
   function setChatSearchQuery(query: string) {
     const q = String(query ?? "");
     store.set((prev) => {
-      if (!prev.selected) return { ...prev, chatSearchQuery: q, chatSearchHits: [], chatSearchPos: 0 };
-      const hits = computeChatSearchHits(searchableMessagesForSelected(prev), q);
-      const pos = hits.length ? 0 : 0;
-      return { ...prev, chatSearchQuery: q, chatSearchHits: hits, chatSearchPos: pos };
+      if (!prev.selected) {
+        return { ...prev, chatSearchQuery: q, chatSearchFilter: "all", chatSearchHits: [], chatSearchPos: 0, chatSearchCounts: createChatSearchCounts() };
+      }
+      const messages = searchableMessagesForSelected(prev);
+      const counts = computeChatSearchCounts(messages, q);
+      const nextFilter = normalizeChatSearchFilter(prev.chatSearchFilter, counts);
+      const hits = computeChatSearchHits(messages, q, nextFilter);
+      return {
+        ...prev,
+        chatSearchQuery: q,
+        chatSearchFilter: nextFilter,
+        chatSearchHits: hits,
+        chatSearchPos: 0,
+        chatSearchCounts: counts,
+      };
     });
     const st = store.get();
     if (st.chatSearchHits.length) scrollToChatMsgIdx(st.chatSearchHits[st.chatSearchPos] ?? st.chatSearchHits[0]);
+  }
+
+  function setChatSearchFilter(next: ChatSearchFilter) {
+    const st = store.get();
+    if (!st.selected) return;
+    const messages = searchableMessagesForSelected(st);
+    const counts = computeChatSearchCounts(messages, st.chatSearchQuery || "");
+    const normalized = normalizeChatSearchFilter(next, counts);
+    const hits = computeChatSearchHits(messages, st.chatSearchQuery || "", normalized);
+    store.set((prev) => ({
+      ...prev,
+      chatSearchFilter: normalized,
+      chatSearchHits: hits,
+      chatSearchPos: 0,
+      chatSearchCounts: counts,
+    }));
+    if (hits.length) scrollToChatMsgIdx(hits[0]);
+    focusChatSearch(false);
   }
 
   function stepChatSearch(dir: 1 | -1) {
@@ -5803,8 +5893,10 @@ export function mountApp(root: HTMLElement) {
       boardScheduledPosts: [],
       chatSearchOpen: false,
       chatSearchQuery: "",
+      chatSearchFilter: "all",
       chatSearchHits: [],
       chatSearchPos: 0,
+      chatSearchCounts: createChatSearchCounts(),
       profiles: {},
       profileDraftDisplayName: "",
       profileDraftHandle: "",
@@ -7936,6 +8028,7 @@ export function mountApp(root: HTMLElement) {
         pinned: st.pinned,
         chatSearchOpen: st.chatSearchOpen,
         chatSearchQuery: st.chatSearchQuery,
+        chatSearchFilter: st.chatSearchFilter,
         chatSearchPos: st.chatSearchPos,
         searchQuery: st.searchQuery,
         profileDraftDisplayName: st.profileDraftDisplayName,
@@ -7961,6 +8054,7 @@ export function mountApp(root: HTMLElement) {
         pinned?: string[];
         chatSearchOpen?: boolean;
         chatSearchQuery?: string;
+        chatSearchFilter?: ChatSearchFilter;
         chatSearchPos?: number;
         searchQuery?: string;
         profileDraftDisplayName?: string;
@@ -7998,6 +8092,10 @@ export function mountApp(root: HTMLElement) {
       const pinned = sanitizePins(obj.pinned);
       const chatSearchOpen = Boolean(obj.chatSearchOpen);
       const chatSearchQuery = typeof obj.chatSearchQuery === "string" ? obj.chatSearchQuery : "";
+      const chatSearchFilter =
+        typeof obj.chatSearchFilter === "string" && ["all", "media", "files", "links", "audio"].includes(obj.chatSearchFilter)
+          ? (obj.chatSearchFilter as ChatSearchFilter)
+          : "all";
       const chatSearchPos = Number.isFinite(obj.chatSearchPos) ? Math.trunc(obj.chatSearchPos) : 0;
       const searchQuery = typeof obj.searchQuery === "string" ? obj.searchQuery : "";
       const profileDraftDisplayName = typeof obj.profileDraftDisplayName === "string" ? obj.profileDraftDisplayName : "";
@@ -8016,6 +8114,7 @@ export function mountApp(root: HTMLElement) {
         pinned,
         chatSearchOpen,
         chatSearchQuery,
+        chatSearchFilter,
         chatSearchPos,
         searchQuery,
         profileDraftDisplayName,
@@ -9391,6 +9490,7 @@ export function mountApp(root: HTMLElement) {
 	      pinned: restored.pinned ?? prev.pinned,
 	      chatSearchOpen: restored.chatSearchOpen ?? prev.chatSearchOpen,
 	      chatSearchQuery: restored.chatSearchQuery ?? prev.chatSearchQuery,
+	      chatSearchFilter: restored.chatSearchFilter ?? prev.chatSearchFilter,
 	      chatSearchPos: restored.chatSearchPos ?? prev.chatSearchPos,
 	      searchQuery: restored.searchQuery ?? prev.searchQuery,
 	      profileDraftDisplayName: restored.profileDraftDisplayName ?? prev.profileDraftDisplayName,
@@ -9588,13 +9688,24 @@ export function mountApp(root: HTMLElement) {
 
     if (st.page === "main" && st.chatSearchOpen && st.selected) {
       const q = st.chatSearchQuery || "";
-      const hits = q.trim() ? computeChatSearchHits(searchableMessagesForSelected(st), q) : [];
+      const messages = searchableMessagesForSelected(st);
+      const counts = computeChatSearchCounts(messages, q);
+      const nextFilter = normalizeChatSearchFilter(st.chatSearchFilter, counts);
+      const hits = q.trim() ? computeChatSearchHits(messages, q, nextFilter) : [];
       const nextPos = clampChatSearchPos(hits, st.chatSearchPos);
       const hitsChanged = !sameNumberArray(hits, st.chatSearchHits);
       const posChanged = nextPos !== st.chatSearchPos;
+      const countsChanged = !sameChatSearchCounts(counts, st.chatSearchCounts);
+      const filterChanged = nextFilter !== st.chatSearchFilter;
       const shouldClear = !q.trim() && (st.chatSearchHits.length > 0 || st.chatSearchPos !== 0);
-      if (hitsChanged || posChanged || shouldClear) {
-        store.set((prev) => ({ ...prev, chatSearchHits: hits, chatSearchPos: nextPos }));
+      if (hitsChanged || posChanged || countsChanged || filterChanged || shouldClear) {
+        store.set((prev) => ({
+          ...prev,
+          chatSearchFilter: nextFilter,
+          chatSearchHits: hits,
+          chatSearchPos: nextPos,
+          chatSearchCounts: counts,
+        }));
         return;
       }
     }

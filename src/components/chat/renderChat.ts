@@ -11,6 +11,7 @@ import { renderBoardPost } from "../../helpers/boards/boardPost";
 import type { Layout } from "../layout/types";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { clampVirtualAvg, getVirtualEnd, getVirtualMaxStart, getVirtualStart, shouldVirtualize } from "../../helpers/chat/virtualHistory";
+import { CHAT_SEARCH_FILTERS } from "../../helpers/chat/chatSearch";
 
 function dayKey(ts: number): string {
   try {
@@ -992,13 +993,39 @@ export function renderChat(layout: Layout, state: AppState) {
       ["↓"]
     );
     const btnClose = el("button", { class: "btn chat-search-close", type: "button", "data-action": "chat-search-close", title: "Закрыть" }, ["×"]);
-    searchBar = el("div", { class: "chat-search" }, [
+    const row = el("div", { class: "chat-search-row" }, [
       input,
       el("span", { class: "chat-search-count", "aria-live": "polite" }, [countLabel]),
       btnPrev,
       btnNext,
       btnClose,
     ]);
+    const filters: HTMLElement[] = [];
+    const counts = state.chatSearchCounts || { all: 0, media: 0, files: 0, links: 0, audio: 0 };
+    const hasQuery = Boolean((state.chatSearchQuery || "").trim());
+    if (hasQuery) {
+      for (const item of CHAT_SEARCH_FILTERS) {
+        const count = item.id === "all" ? counts.all : counts[item.id] || 0;
+        const active = item.id === state.chatSearchFilter;
+        const disabled = item.id !== "all" && count === 0;
+        const btn = el(
+          "button",
+          {
+            class: `chat-search-filter${active ? " is-active" : ""}`,
+            type: "button",
+            role: "tab",
+            "aria-selected": active ? "true" : "false",
+            "data-action": "chat-search-filter",
+            "data-filter": item.id,
+            ...(disabled ? { disabled: "true" } : {}),
+          },
+          [item.label, el("span", { class: "chat-search-filter-count" }, [String(count)])]
+        );
+        filters.push(btn);
+      }
+    }
+    const filterRow = filters.length ? el("div", { class: "chat-search-filters", role: "tablist" }, filters) : null;
+    searchBar = el("div", { class: "chat-search" }, [row, ...(filterRow ? [filterRow] : [])]);
   }
 
   let pinnedBar: HTMLElement | null = null;

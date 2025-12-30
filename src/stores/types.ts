@@ -382,8 +382,10 @@ export interface AppState {
 
   chatSearchOpen: boolean;
   chatSearchQuery: string;
+  chatSearchFilter: import("../helpers/chat/chatSearch").ChatSearchFilter;
   chatSearchHits: number[];
   chatSearchPos: number;
+  chatSearchCounts: import("../helpers/chat/chatSearch").ChatSearchCounts;
 
   page: PageKind;
   userViewId: string | null;

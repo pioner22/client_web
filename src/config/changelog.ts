@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.265",
+    date: "2025-12-30",
+    improved: ["Чат: фильтры поиска (Все/Медиа/Файлы/Ссылки/Аудио) в строке поиска чата"],
+  },
+  {
     version: "0.1.264",
     date: "2025-12-30",
     improved: ["Поиск: фильтры истории (Все/Медиа/Файлы/Ссылки/Аудио) для локальных результатов"],
