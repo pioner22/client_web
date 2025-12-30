@@ -423,6 +423,29 @@
   opacity: 0.95;
 }
 
+.search-selection {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-2);
+}
+
+.search-selection.hidden {
+  display: none;
+}
+
+.search-selection-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.search-selection-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
 .page-actions {
   display: flex;
   gap: var(--sp-3);

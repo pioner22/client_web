@@ -140,6 +140,7 @@ export interface RenderActions {
   onGroupJoin: (groupId: string) => void;
   onBoardJoin: (boardId: string) => void;
   onOpenHistoryHit: (t: TargetRef, query: string, msgIdx?: number) => void;
+  onSearchHistoryDelete: (items: Array<{ target: TargetRef; idx: number }>, mode: "local" | "remote") => void;
   onGroupInviteAccept: (groupId: string) => void;
   onGroupInviteDecline: (groupId: string) => void;
   onGroupJoinAccept: (groupId: string, peer: string) => void;
@@ -524,6 +525,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onGroupJoin: actions.onGroupJoin,
         onBoardJoin: actions.onBoardJoin,
         onOpenHistoryHit: actions.onOpenHistoryHit,
+        onSearchHistoryDelete: actions.onSearchHistoryDelete,
       });
     }
     mountChat(layout, searchPage.root);

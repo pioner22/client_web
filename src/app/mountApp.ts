@@ -9638,6 +9638,85 @@ export function mountApp(root: HTMLElement) {
     onOpenHistoryHit: (target: TargetRef, query: string, msgIdx?: number) => {
       openChatFromSearch(target, query, msgIdx);
     },
+    onSearchHistoryDelete: (items: Array<{ target: TargetRef; idx: number }>, mode: "local" | "remote") => {
+      if (!Array.isArray(items) || !items.length) return;
+      const st = store.get();
+      if (mode === "remote") {
+        if (st.conn !== "connected" || !st.authed) {
+          store.set({ status: "Нет соединения" });
+          return;
+        }
+      }
+      const grouped = new Map<string, Array<{ target: TargetRef; idx: number }>>();
+      for (const item of items) {
+        const key = conversationKey(item.target);
+        if (!key) continue;
+        const list = grouped.get(key);
+        if (list) list.push(item);
+        else grouped.set(key, [item]);
+      }
+      if (!grouped.size) return;
+      if (mode === "remote") {
+        const ids: number[] = [];
+        for (const [key, list] of grouped) {
+          const conv = st.conversations[key];
+          if (!Array.isArray(conv)) continue;
+          for (const entry of list) {
+            const msg = conv[entry.idx];
+            const id = typeof msg?.id === "number" ? msg.id : null;
+            if (id && id > 0) ids.push(id);
+          }
+        }
+        if (!ids.length) {
+          store.set({ status: "Нет сообщений для удаления" });
+          return;
+        }
+        ids.forEach((id) => gateway.send({ type: "message_delete", id }));
+        store.set({ status: "Удаляем сообщения…" });
+        return;
+      }
+      store.set((prev) => {
+        const nextConversations = { ...prev.conversations };
+        const nextPinned = { ...prev.pinnedMessages };
+        const nextActive = { ...prev.pinnedMessageActive };
+        for (const [key, list] of grouped) {
+          const cur = nextConversations[key];
+          if (!Array.isArray(cur) || !cur.length) continue;
+          const removeIdx = new Set<number>();
+          const removedIds = new Set<number>();
+          for (const entry of list) {
+            const idx = entry.idx;
+            if (idx < 0 || idx >= cur.length) continue;
+            removeIdx.add(idx);
+            const msg = cur[idx];
+            if (typeof msg?.id === "number") removedIds.add(msg.id);
+          }
+          if (!removeIdx.size) continue;
+          nextConversations[key] = cur.filter((_, i) => !removeIdx.has(i));
+          if (removedIds.size) {
+            const pinned = nextPinned[key];
+            if (Array.isArray(pinned) && pinned.length) {
+              const nextList = pinned.filter((id) => !removedIds.has(id));
+              if (nextList.length) {
+                nextPinned[key] = nextList;
+                if (!nextList.includes(nextActive[key])) nextActive[key] = nextList[0];
+              } else {
+                delete nextPinned[key];
+                delete nextActive[key];
+              }
+            }
+          }
+        }
+        if (prev.selfId) savePinnedMessagesForUser(prev.selfId, nextPinned);
+        return {
+          ...prev,
+          conversations: nextConversations,
+          pinnedMessages: nextPinned,
+          pinnedMessageActive: nextActive,
+        };
+      });
+      showToast("Удалено у вас", { kind: "success" });
+    },
     onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => {
       lastUserInputAt = Date.now();
       store.set({

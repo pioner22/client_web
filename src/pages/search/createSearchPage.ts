@@ -13,6 +13,7 @@ export interface SearchPageActions {
   onSubmit: (query: string) => void;
   onSelectTarget: (t: TargetRef) => void;
   onOpenHistoryHit: (t: TargetRef, query: string, msgIdx?: number) => void;
+  onSearchHistoryDelete: (items: Array<{ target: TargetRef; idx: number }>, mode: "local" | "remote") => void;
   onAuthRequest: (peer: string) => void;
   onAuthAccept: (peer: string) => void;
   onAuthDecline: (peer: string) => void;
@@ -288,10 +289,11 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   const tabsBar = el("div", { class: "search-tabs", role: "tablist" });
   const tabsWrap = el("div", { class: "search-tabs-wrap" }, [tabsBar]);
   const filterBar = el("div", { class: "search-filters hidden", role: "tablist" });
+  const selectionBar = el("div", { class: "search-selection hidden" });
   const results = el("div", { class: "page-results" });
   const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — искать | Esc — назад"]);
 
-  const root = el("div", { class: "page page-search" }, [title, form, tabsWrap, filterBar, results, ...(hint ? [hint] : [])]);
+  const root = el("div", { class: "page page-search" }, [title, form, tabsWrap, filterBar, selectionBar, results, ...(hint ? [hint] : [])]);
 
   type ContactMatch = {
     id: string;
@@ -333,7 +335,17 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let cachedHistoryCounts = { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 };
   let activeFilter: HistoryFilter = "all";
   let activeTab: SearchTab = "chats";
+  let selectionMode = false;
+  let selectedHistory = new Map<string, { target: TargetRef; idx: number }>();
+  let lastQueryKey = "";
   let lastState: AppState | null = null;
+
+  const historyKey = (target: TargetRef, idx: number) => `${target.kind}:${target.id}:${idx}`;
+
+  const clearSelection = () => {
+    selectionMode = false;
+    selectedHistory.clear();
+  };
 
   const setActiveFilter = (next: HistoryFilter) => {
     if (activeFilter === next) return;
@@ -602,12 +614,20 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     const openQuery = buildOpenQuery(filters);
     const canSearchNow = Boolean(deriveServerSearchQuery(qRaw));
 
+    if (qRaw !== lastQueryKey) {
+      clearSelection();
+      lastQueryKey = qRaw;
+    }
+
     if (!q) {
       activeFilter = "all";
       activeTab = "chats";
       tabsWrap.classList.add("hidden");
       tabsBar.replaceChildren();
       filterBar.classList.add("hidden");
+      selectionBar.classList.add("hidden");
+      selectionBar.replaceChildren();
+      clearSelection();
       results.replaceChildren(
         el("div", { class: "page-empty" }, [
           el("div", { class: "page-empty-title" }, ["Введите имя, @логин или ID"]),
@@ -703,6 +723,56 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       filterBar.replaceChildren();
     }
 
+    const historySelectable = showHistory && local.history.length > 0;
+    if (!historySelectable) {
+      selectionBar.classList.add("hidden");
+      selectionBar.replaceChildren();
+      clearSelection();
+    } else {
+      selectionBar.classList.remove("hidden");
+      selectionBar.replaceChildren();
+      if (!selectionMode) {
+        const selectBtn = el("button", { class: "btn", type: "button" }, ["Выбрать"]);
+        selectBtn.addEventListener("click", () => {
+          selectionMode = true;
+          if (lastState) update(lastState);
+        });
+        selectionBar.append(selectBtn);
+      } else {
+        const cancelBtn = el("button", { class: "btn", type: "button" }, ["Отмена"]);
+        cancelBtn.addEventListener("click", () => {
+          clearSelection();
+          if (lastState) update(lastState);
+        });
+        const countEl = el("span", { class: "search-selection-count" }, [`Выбрано: ${selectedHistory.size}`]);
+        const actionsWrap = el("div", { class: "search-selection-actions" });
+        if (selectedHistory.size === 1) {
+          const only = Array.from(selectedHistory.values())[0];
+          const gotoBtn = el("button", { class: "btn", type: "button" }, ["Перейти"]);
+          gotoBtn.addEventListener("click", () => {
+            actions.onOpenHistoryHit(only.target, openQuery, only.idx);
+            clearSelection();
+            if (lastState) update(lastState);
+          });
+          actionsWrap.append(gotoBtn);
+        }
+        const delLocalBtn = el("button", { class: "btn", type: "button" }, ["Удалить у меня"]);
+        delLocalBtn.addEventListener("click", () => {
+          actions.onSearchHistoryDelete(Array.from(selectedHistory.values()), "local");
+          clearSelection();
+          if (lastState) update(lastState);
+        });
+        const delRemoteBtn = el("button", { class: "btn", type: "button" }, ["Удалить у всех"]);
+        delRemoteBtn.addEventListener("click", () => {
+          actions.onSearchHistoryDelete(Array.from(selectedHistory.values()), "remote");
+          clearSelection();
+          if (lastState) update(lastState);
+        });
+        actionsWrap.append(delLocalBtn, delRemoteBtn);
+        selectionBar.append(cancelBtn, countEl, actionsWrap);
+      }
+    }
+
     if (showChatsTab && local.contacts.length) {
       pushSection(`Контакты (${local.totals.contacts})`);
       for (const item of local.contacts) {
@@ -763,12 +833,26 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         blocks.push(el("div", { class: "result-meta" }, ["По выбранному фильтру совпадений нет"]));
       } else {
         for (const item of historyItems) {
+          const key = historyKey(item.target, item.idx);
+          const isSelected = selectionMode && selectedHistory.has(key);
           const rowMain = el("span", { class: "row-main" }, [
             el("span", { class: "row-title" }, [item.title]),
             ...(item.sub ? [el("span", { class: "row-sub" }, [item.sub])] : []),
           ]);
-          const row = el("button", { class: "row", type: "button" }, [avatar(item.target.kind, item.target.id), rowMain]);
-          row.addEventListener("click", () => actions.onOpenHistoryHit(item.target, openQuery, item.idx));
+          const row = el("button", { class: `row${isSelected ? " row-sel" : ""}`, type: "button" }, [avatar(item.target.kind, item.target.id), rowMain]);
+          row.addEventListener("click", (e) => {
+            if (!selectionMode) {
+              actions.onOpenHistoryHit(item.target, openQuery, item.idx);
+              return;
+            }
+            e.preventDefault();
+            if (selectedHistory.has(key)) {
+              selectedHistory.delete(key);
+            } else {
+              selectedHistory.set(key, { target: item.target, idx: item.idx });
+            }
+            if (lastState) update(lastState);
+          });
           blocks.push(el("div", { class: "result-item" }, [row]));
         }
       }
