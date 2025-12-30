@@ -67,3 +67,18 @@ test("chatSearch: stepChatSearchPos циклично переключает", as
   }
 });
 
+test("chatSearch: поддерживает from:/# фильтры", async () => {
+  const { computeChatSearchHits, cleanup } = await loadChatSearch();
+  try {
+    const msgs = [
+      { text: "Привет #тег", senderTokens: "alice @alice" },
+      { text: "Привет", senderTokens: "bob @bob" },
+      { text: "Другой #тег", senderTokens: "bob @bob" },
+    ];
+    assert.deepEqual(computeChatSearchHits(msgs, "from:@bob"), [1, 2]);
+    assert.deepEqual(computeChatSearchHits(msgs, "#тег"), [0, 2]);
+    assert.deepEqual(computeChatSearchHits(msgs, "#тег from:@bob"), [2]);
+  } finally {
+    await cleanup();
+  }
+});

@@ -3355,6 +3355,16 @@ export function mountApp(root: HTMLElement) {
     const key = conversationKey(st.selected);
     const msgs = st.conversations[key] || [];
     const linkRe = /(https?:\/\/|www\.)\S+/i;
+    const senderTokensForMessage = (msg: ChatMessage): string => {
+      const senderId = String(msg?.from || "").trim();
+      if (!senderId) return "";
+      const friend = st.friends.find((f) => f.id === senderId);
+      const profile = st.profiles?.[senderId];
+      const displayName = String(friend?.display_name || profile?.display_name || "").trim();
+      const handleRaw = String(friend?.handle || profile?.handle || "").trim();
+      const handle = handleRaw.startsWith("@") ? handleRaw : handleRaw ? `@${handleRaw}` : "";
+      return [senderId, displayName, handleRaw, handle].filter(Boolean).join(" ");
+    };
     const flagsForMessage = (msg: ChatMessage): ChatSearchFlags => {
       const flags: ChatSearchFlags = {};
       const attachment = msg?.attachment;
@@ -3375,6 +3385,7 @@ export function mountApp(root: HTMLElement) {
     return msgs.map((m) => ({
       text: m.text,
       attachmentName: m.attachment?.kind === "file" ? m.attachment.name : null,
+      senderTokens: senderTokensForMessage(m),
       flags: flagsForMessage(m),
     }));
   }
