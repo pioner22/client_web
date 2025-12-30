@@ -435,6 +435,27 @@
   display: none;
 }
 
+.search-date {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-2);
+}
+
+.search-date.hidden {
+  display: none;
+}
+
+.search-date-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.search-date-input {
+  min-width: 160px;
+}
+
 .search-selection-count {
   font-size: 12px;
   color: var(--muted);

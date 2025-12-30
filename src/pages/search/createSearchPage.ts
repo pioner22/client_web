@@ -290,11 +290,28 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   const tabsBar = el("div", { class: "search-tabs", role: "tablist" });
   const tabsWrap = el("div", { class: "search-tabs-wrap" }, [tabsBar]);
   const filterBar = el("div", { class: "search-filters hidden", role: "tablist" });
+  const dateLabel = el("span", { class: "search-date-label" }, ["Дата"]);
+  const dateInput = el("input", {
+    class: "modal-input search-date-input",
+    type: "date",
+    "aria-label": "Фильтр по дате",
+  }) as HTMLInputElement;
+  const dateClear = el("button", { class: "btn", type: "button" }, ["Сброс"]);
+  const dateBar = el("div", { class: "search-date hidden" }, [dateLabel, dateInput, dateClear]);
   const selectionBar = el("div", { class: "search-selection hidden" });
   const results = el("div", { class: "page-results" });
   const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — искать | Esc — назад"]);
 
-  const root = el("div", { class: "page page-search" }, [title, form, tabsWrap, filterBar, selectionBar, results, ...(hint ? [hint] : [])]);
+  const root = el("div", { class: "page page-search" }, [
+    title,
+    form,
+    tabsWrap,
+    filterBar,
+    dateBar,
+    selectionBar,
+    results,
+    ...(hint ? [hint] : []),
+  ]);
 
   type ContactMatch = {
     id: string;
@@ -340,11 +357,26 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let selectionScope: SelectionScope | null = null;
   let selectedHistory = new Map<string, { target: TargetRef; idx: number }>();
   let selectedServer = new Map<string, SearchResultEntry>();
+  let activeDate = "";
+  let cachedDate = "";
   let lastQueryKey = "";
+  let lastDateKey = "";
   let lastState: AppState | null = null;
 
   const historyKey = (target: TargetRef, idx: number) => `${target.kind}:${target.id}:${idx}`;
   const serverKey = (entry: SearchResultEntry) => `${entry.board ? "board" : entry.group ? "group" : "dm"}:${entry.id}`;
+
+  const parseDateRange = (value: string): { start: number; end: number } | null => {
+    if (!value) return null;
+    const parts = value.split("-").map((p) => Number(p));
+    if (parts.length !== 3 || parts.some((v) => Number.isNaN(v))) return null;
+    const [year, month, day] = parts;
+    if (!year || !month || !day) return null;
+    const start = new Date(year, month - 1, day, 0, 0, 0, 0).getTime() / 1000;
+    const end = new Date(year, month - 1, day + 1, 0, 0, 0, 0).getTime() / 1000;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { start, end };
+  };
 
   const clearSelection = () => {
     selectionMode = false;
@@ -363,6 +395,13 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
     if (lastState) update(lastState);
   };
+
+  dateClear.addEventListener("click", () => {
+    if (!activeDate) return;
+    activeDate = "";
+    dateInput.value = "";
+    if (lastState) update(lastState);
+  });
 
   const setActiveFilter = (next: HistoryFilter) => {
     if (activeFilter === next) return;
@@ -411,6 +450,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
     const canReuse =
       qRaw === cachedQuery &&
+      activeDate === cachedDate &&
       cachedFriendsRef === state.friends &&
       cachedGroupsRef === state.groups &&
       cachedBoardsRef === state.boards &&
@@ -524,6 +564,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     const historyCounts = { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 };
     const hasHistoryQuery = tokenSets.length > 0 || Boolean(filters.from) || filters.hashtags.length > 0;
     if (hasHistoryQuery) {
+      const dateRange = parseDateRange(activeDate);
       for (const [key, msgs] of Object.entries(state.conversations || {})) {
         if (!Array.isArray(msgs) || !msgs.length) continue;
         let target: TargetRef | null = null;
@@ -543,6 +584,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         const start = Math.max(0, msgs.length - HISTORY_SCAN_LIMIT);
         for (let idx = msgs.length - 1; idx >= start; idx -= 1) {
           const msg = msgs[idx];
+          const ts = Number(msg?.ts || 0);
+          if (dateRange && (ts < dateRange.start || ts >= dateRange.end)) continue;
           const text = String(msg?.text || "");
           const attachmentName = msg?.attachment?.kind === "file" ? String(msg.attachment.name || "") : "";
           const haystack = buildHaystack([text, attachmentName]);
@@ -557,7 +600,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           if (snippet) subParts.push(snippet);
           const sub = subParts.join(" · ");
           const flags = classifyHistoryMessage(msg);
-          historyMatches.push({ target, idx, title, sub, ts: Number(msg?.ts || 0), flags });
+          historyMatches.push({ target, idx, title, sub, ts, flags });
           historyCounts.all += 1;
           if (flags.media) historyCounts.media += 1;
           if (flags.files) historyCounts.files += 1;
@@ -572,6 +615,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     }
 
     cachedQuery = qRaw;
+    cachedDate = activeDate;
     cachedFriendsRef = state.friends;
     cachedGroupsRef = state.groups;
     cachedBoardsRef = state.boards;
@@ -612,6 +656,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     applyLegacyIdMask(input);
     actions.onQueryChange(input.value);
   });
+  dateInput.addEventListener("input", () => {
+    activeDate = String(dateInput.value || "");
+    if (lastState) update(lastState);
+  });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -635,6 +683,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       clearSelection();
       lastQueryKey = qRaw;
     }
+    if (activeDate !== lastDateKey) {
+      clearSelection();
+      lastDateKey = activeDate;
+    }
 
     if (!q) {
       activeFilter = "all";
@@ -642,6 +694,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       tabsWrap.classList.add("hidden");
       tabsBar.replaceChildren();
       filterBar.classList.add("hidden");
+      dateBar.classList.add("hidden");
+      dateBar.replaceChildren(dateLabel, dateInput, dateClear);
       selectionBar.classList.add("hidden");
       selectionBar.replaceChildren();
       clearSelection();
@@ -749,6 +803,14 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     } else {
       filterBar.classList.add("hidden");
       filterBar.replaceChildren();
+    }
+    const showDateBar = showHistory && (local.historyCounts.all > 0 || Boolean(activeDate));
+    if (showDateBar) {
+      dateBar.classList.remove("hidden");
+      dateInput.value = activeDate;
+    } else {
+      dateBar.classList.add("hidden");
+      dateInput.value = "";
     }
 
     const historySelectable = showHistory && local.history.length > 0;
