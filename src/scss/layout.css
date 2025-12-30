@@ -72,11 +72,45 @@ body.has-right-col {
   min-width: 0;
   background: var(--right-column-bg);
   border-left: var(--right-column-border-width) solid var(--right-column-border-color);
+  overflow: hidden;
 }
 
 body.has-right-col .right-col {
   display: flex;
   flex-direction: column;
+}
+
+.right-col-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.right-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--right-column-border-width) solid var(--right-column-border-color);
+  background: var(--right-column-bg);
+}
+
+.right-col-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.right-col-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .chat-col > .chat {

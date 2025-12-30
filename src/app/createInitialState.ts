@@ -94,6 +94,7 @@ export function createInitialState(): AppState {
     chatSearchPos: 0,
     chatSearchCounts: { all: 0, media: 0, files: 0, links: 0, audio: 0 },
     page: "main",
+    rightPanel: null,
     userViewId: null,
     groupViewId: null,
     boardViewId: null,

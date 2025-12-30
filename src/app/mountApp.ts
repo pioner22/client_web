@@ -69,6 +69,7 @@ import {
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
 import { applyMessageView, normalizeMessageView, storeMessageView } from "../helpers/ui/messageView";
+import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { loadLastActiveTarget, saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
 import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
@@ -1760,9 +1761,20 @@ export function mountApp(root: HTMLElement) {
       const st = store.get();
       if (!st.selected) return;
       e.preventDefault();
-      if (st.selected.kind === "dm") openUserPage(st.selected.id);
-      else if (st.selected.kind === "group") openGroupPage(st.selected.id);
-      else if (st.selected.kind === "board") openBoardPage(st.selected.id);
+      const mobileUi = isMobileLikeUi();
+      if (!mobileUi && st.page === "main") {
+        const active = Boolean(
+          st.rightPanel && st.rightPanel.kind === st.selected.kind && st.rightPanel.id === st.selected.id
+        );
+        if (active) closeRightPanel();
+        else openRightPanel(st.selected);
+      } else if (st.selected.kind === "dm") {
+        openUserPage(st.selected.id);
+      } else if (st.selected.kind === "group") {
+        openGroupPage(st.selected.id);
+      } else if (st.selected.kind === "board") {
+        openBoardPage(st.selected.id);
+      }
       return;
     }
 
@@ -2987,6 +2999,7 @@ export function mountApp(root: HTMLElement) {
       ...(page !== "user" ? { userViewId: null } : {}),
       ...(page !== "group" ? { groupViewId: null } : {}),
       ...(page !== "board" ? { boardViewId: null } : {}),
+      ...(page !== "main" ? { rightPanel: null } : {}),
       ...(page !== "main" ? { mobileSidebarTab: "menu" as MobileSidebarTab } : {}),
       ...(page !== "main"
         ? { chatSearchOpen: false, chatSearchQuery: "", chatSearchFilter: "all", chatSearchHits: [], chatSearchPos: 0, chatSearchCounts: createChatSearchCounts() }
@@ -3025,6 +3038,23 @@ export function mountApp(root: HTMLElement) {
     if (st.authed && st.conn === "connected") {
       gateway.send({ type: "board_info", board_id: bid });
     }
+  }
+
+  function openRightPanel(target: TargetRef) {
+    const kind = target.kind;
+    const id = String(target.id || "").trim();
+    if (!id) return;
+    store.set({ rightPanel: { kind, id } });
+    const st = store.get();
+    if (st.authed && st.conn === "connected") {
+      if (kind === "dm") gateway.send({ type: "profile_get", id });
+      else if (kind === "group") gateway.send({ type: "group_info", group_id: id });
+      else if (kind === "board") gateway.send({ type: "board_info", board_id: id });
+    }
+  }
+
+  function closeRightPanel() {
+    store.set({ rightPanel: null });
   }
 
   layout.footer.addEventListener("click", (e) => {
@@ -3253,10 +3283,12 @@ export function mountApp(root: HTMLElement) {
     const nextText = nextDrafts[nextKey] ?? "";
     store.set((p) => {
       const trimmed = nextKey ? applyConversationLimits(p, nextKey) : null;
+      const nextRightPanel = p.rightPanel ? { kind: t.kind, id: t.id } : p.rightPanel;
       return {
         ...p,
         selected: t,
         page: "main",
+        rightPanel: nextRightPanel,
         drafts: nextDrafts,
         input: nextText,
         editing: leavingEdit ? null : p.editing,
@@ -8549,6 +8581,11 @@ export function mountApp(root: HTMLElement) {
         closeChatSearch();
         return;
       }
+      if (st.rightPanel) {
+        e.preventDefault();
+        closeRightPanel();
+        return;
+      }
       if (st.page !== "main") {
         e.preventDefault();
         setPage("main");
@@ -9272,6 +9309,7 @@ export function mountApp(root: HTMLElement) {
   const actions = {
     onSelectTarget: (t: TargetRef) => selectTarget(t),
     onOpenUser: (id: string) => openUserPage(id),
+    onCloseRightPanel: () => closeRightPanel(),
     onOpenActionModal: (payload: ActionModalPayload) => openActionModal(payload),
     onOpenHelp: () => setPage("help"),
     onOpenGroupCreate: () => openGroupCreateModal(),

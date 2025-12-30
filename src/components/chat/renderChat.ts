@@ -946,16 +946,23 @@ export function renderChat(layout: Layout, state: AppState) {
   }
   const titleChildren: Array<string | HTMLElement> = [...chatTitleNodes(state)];
   if (state.selected) {
+    const infoActive = Boolean(
+      state.page === "main" &&
+        state.rightPanel &&
+        state.rightPanel.kind === state.selected.kind &&
+        state.rightPanel.id === state.selected.id
+    );
     titleChildren.push(el("span", { class: "chat-title-spacer", "aria-hidden": "true" }, [""]));
     titleChildren.push(
       el(
         "button",
         {
-          class: "btn chat-info-btn",
+          class: infoActive ? "btn chat-info-btn btn-active" : "btn chat-info-btn",
           type: "button",
           "data-action": "chat-profile-open",
-          title: "Профиль чата",
-          "aria-label": "Профиль чата",
+          title: infoActive ? "Закрыть профиль чата" : "Профиль чата",
+          "aria-label": infoActive ? "Закрыть профиль чата" : "Профиль чата",
+          "aria-pressed": infoActive ? "true" : "false",
         },
         ["ℹ︎"]
       )

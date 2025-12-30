@@ -33,6 +33,12 @@ let helpPage: HelpPage | null = null;
 let groupCreatePage: CreateGroupPage | null = null;
 let boardCreatePage: CreateBoardPage | null = null;
 let lastPage: PageKind | null = null;
+let rightUserPage: UserPage | null = null;
+let rightGroupPage: RoomPage | null = null;
+let rightBoardPage: RoomPage | null = null;
+let rightPanelShell: HTMLElement | null = null;
+let rightPanelTitleEl: HTMLElement | null = null;
+let rightPanelBodyEl: HTMLElement | null = null;
 
 function formatDatetimeLocal(ms: number): string {
   const d = new Date(ms);
@@ -65,6 +71,31 @@ function mountChat(layout: Layout, node: HTMLElement) {
   layout.chatHost.replaceChildren(node);
 }
 
+function mountRightCol(layout: Layout, node: HTMLElement) {
+  if (layout.rightCol.childNodes.length === 1 && layout.rightCol.firstChild === node) return;
+  layout.rightCol.replaceChildren(node);
+}
+
+function ensureRightPanelShell(actions: RenderActions): { shell: HTMLElement; title: HTMLElement; body: HTMLElement } {
+  if (rightPanelShell && rightPanelTitleEl && rightPanelBodyEl) {
+    return { shell: rightPanelShell, title: rightPanelTitleEl, body: rightPanelBodyEl };
+  }
+  const title = el("div", { class: "right-col-title" }, [""]);
+  const closeBtn = el(
+    "button",
+    { class: "btn right-col-close", type: "button", "aria-label": "Закрыть панель", "data-action": "right-col-close" },
+    ["×"]
+  ) as HTMLButtonElement;
+  closeBtn.addEventListener("click", () => actions.onCloseRightPanel());
+  const head = el("div", { class: "right-col-head" }, [title, closeBtn]);
+  const body = el("div", { class: "right-col-body" }, []);
+  const shell = el("div", { class: "right-col-shell" }, [head, body]);
+  rightPanelShell = shell;
+  rightPanelTitleEl = title;
+  rightPanelBodyEl = body;
+  return { shell, title, body };
+}
+
 export interface RenderActions {
   onSelectTarget: (t: TargetRef) => void;
   onOpenUser: (id: string) => void;
@@ -75,6 +106,7 @@ export interface RenderActions {
   onRoomInfoSave: (kind: TargetRef["kind"], roomId: string, description: string, rules: string) => void;
   onRoomLeave: (kind: TargetRef["kind"], roomId: string) => void;
   onRoomDisband: (kind: TargetRef["kind"], roomId: string) => void;
+  onCloseRightPanel: () => void;
   onOpenActionModal: (payload: ActionModalPayload) => void;
   onOpenHelp: () => void;
   onOpenGroupCreate: () => void;
@@ -146,6 +178,13 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   // Composer показываем только когда выбран чат/контакт/доска (как в tweb).
   const chatInputVisible = state.page === "main" && Boolean(state.selected) && (!state.modal || state.modal.kind === "context_menu");
   const mobileUi = isMobileLikeUi();
+  const rightTarget = state.rightPanel;
+  const showRightPanel = Boolean(rightTarget && state.page === "main" && !mobileUi);
+  if (typeof document !== "undefined") {
+    document.body.classList.toggle("has-right-col", showRightPanel);
+  }
+  layout.rightCol.classList.toggle("hidden", !showRightPanel);
+  layout.rightCol.setAttribute("aria-hidden", showRightPanel ? "false" : "true");
   layout.inputWrap.classList.toggle("hidden", !chatInputVisible);
   layout.inputWrap.classList.toggle("input-wrap-no-composer", !chatInputVisible);
 
@@ -581,6 +620,63 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     mountChat(layout, filesPage.root);
     filesPage.update(state);
     if (pageChanged) filesPage.focus();
+  }
+
+  if (showRightPanel && rightTarget) {
+    const { shell, title, body } = ensureRightPanelShell(actions);
+    if (rightTarget.kind === "dm") {
+      if (!rightUserPage) {
+        rightUserPage = createUserPage({
+          onBack: actions.onCloseRightPanel,
+          onOpenChat: (id: string) => actions.onSelectTarget({ kind: "dm", id }),
+        });
+      }
+      title.textContent = "Контакт";
+      const viewState = { ...state, userViewId: rightTarget.id, groupViewId: null, boardViewId: null };
+      rightUserPage.update(viewState);
+      body.replaceChildren(rightUserPage.root);
+    } else if (rightTarget.kind === "group") {
+      if (!rightGroupPage) {
+        rightGroupPage = createRoomPage("group", {
+          onBack: actions.onCloseRightPanel,
+          onOpenChat: (id: string) => actions.onSelectTarget({ kind: "group", id }),
+          onOpenUser: (id: string) => actions.onOpenUser(id),
+          onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
+          onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
+          onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
+          onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
+          onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
+          onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
+          onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
+        });
+      }
+      title.textContent = "Чат";
+      const viewState = { ...state, groupViewId: rightTarget.id, userViewId: null, boardViewId: null };
+      rightGroupPage.update(viewState);
+      body.replaceChildren(rightGroupPage.root);
+    } else if (rightTarget.kind === "board") {
+      if (!rightBoardPage) {
+        rightBoardPage = createRoomPage("board", {
+          onBack: actions.onCloseRightPanel,
+          onOpenChat: (id: string) => actions.onSelectTarget({ kind: "board", id }),
+          onOpenUser: (id: string) => actions.onOpenUser(id),
+          onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
+          onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
+          onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
+          onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
+          onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
+          onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
+          onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
+        });
+      }
+      title.textContent = "Доска";
+      const viewState = { ...state, boardViewId: rightTarget.id, userViewId: null, groupViewId: null };
+      rightBoardPage.update(viewState);
+      body.replaceChildren(rightBoardPage.root);
+    }
+    mountRightCol(layout, shell);
+  } else {
+    layout.rightCol.replaceChildren();
   }
 
   renderFooter(layout.footer, state);

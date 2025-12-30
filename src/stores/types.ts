@@ -399,6 +399,7 @@ export interface AppState {
   chatSearchCounts: import("../helpers/chat/chatSearch").ChatSearchCounts;
 
   page: PageKind;
+  rightPanel: TargetRef | null;
   userViewId: string | null;
   groupViewId: string | null;
   boardViewId: string | null;
