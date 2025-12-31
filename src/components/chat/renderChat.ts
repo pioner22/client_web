@@ -190,11 +190,25 @@ function renderMessageRef(
     headerChildren.push(avatarNode);
   }
   headerChildren.push(el("div", { class: "msg-ref-title" }, [title]));
-  const cls = `msg-ref msg-ref-${kind}${isReply ? " msg-ref-quote" : ""}`;
-  return el("div", { class: cls }, [
-    el("div", { class: "msg-ref-header" }, headerChildren),
-    el("div", { class: "msg-ref-text" }, [refPreview(ref)]),
-  ]);
+  const header = el("div", { class: "msg-ref-header" }, headerChildren);
+  const text = el("div", { class: "msg-ref-text" }, [refPreview(ref)]);
+  let mediaNode: HTMLElement | null = null;
+  if (ref.attachment?.kind === "file") {
+    const name = String(ref.attachment.name || "файл");
+    const badge = fileBadge(name, ref.attachment.mime);
+    mediaNode = el(
+      "div",
+      { class: `msg-ref-media msg-ref-media-${badge.kind}`, style: `--msg-ref-media-hue: ${badge.hue};`, "aria-hidden": "true" },
+      [badge.label]
+    );
+  }
+  const hasMedia = Boolean(mediaNode);
+  const cls = `msg-ref msg-ref-${kind}${isReply ? " msg-ref-quote" : ""}${hasMedia ? " msg-ref-with-media" : ""}`;
+  if (hasMedia && mediaNode) {
+    const body = el("div", { class: "msg-ref-body" }, [header, text]);
+    return el("div", { class: cls }, [mediaNode, body]);
+  }
+  return el("div", { class: cls }, [header, text]);
 }
 
 function searchResultPreview(m: ChatMessage): string {
