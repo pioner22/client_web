@@ -967,30 +967,35 @@
 .chat-selection-bar {
   position: relative;
   z-index: 5;
-  padding: 8px 12px;
-  background: var(--surface-color, var(--panel2));
-  border-top: 1px solid color-mix(in srgb, var(--line), transparent 20%);
+  padding: 8px 0;
+  background: transparent;
+  border-top: 0;
 }
 
 .chat-selection-inner {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  max-width: min(680px, 100%);
+  width: 28.75rem;
+  max-width: calc(100% - (var(--chat-pad) * 2));
   margin: 0 auto;
+  padding: 6px 10px;
+  background: var(--surface-color, var(--panel2));
+  border: 1px solid color-mix(in srgb, var(--line), transparent 20%);
+  border-radius: 12px;
 }
 
 .chat-selection-count {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
 }
 
 .btn.chat-selection-cancel {
-  min-width: 32px;
-  height: 32px;
+  min-width: 42px;
+  height: 42px;
   padding: 0 10px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--sel), transparent 25%);
   border: 1px solid color-mix(in srgb, var(--line), transparent 20%);
   color: var(--text);
