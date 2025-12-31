@@ -132,6 +132,11 @@
   transform: translateY(1px);
 }
 
+.hk-btn.hdr-search:active,
+.nav-toggle:active {
+  transform: none;
+}
+
 .pane-title {
   color: var(--pane-title-color);
   margin-bottom: var(--pane-title-mb);

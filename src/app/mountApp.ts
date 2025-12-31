@@ -2765,8 +2765,17 @@ export function mountApp(root: HTMLElement) {
     syncNavOverlay();
     if (shouldOpen) {
       queueMicrotask(() => {
-        const closeBtn = layout.sidebar.querySelector("button[data-action='sidebar-close']") as HTMLButtonElement | null;
-        closeBtn?.focus();
+        const searchInput = layout.sidebar.querySelector(".sidebar-search-input") as HTMLInputElement | null;
+        if (searchInput && !searchInput.disabled) {
+          searchInput.focus();
+          return;
+        }
+        const tabBtn = layout.sidebar.querySelector(".sidebar-tabs button") as HTMLButtonElement | null;
+        if (tabBtn) {
+          tabBtn.focus();
+          return;
+        }
+        layout.sidebarBody?.focus?.();
       });
     } else if (restoreKey) {
       scrollChatToBottom(restoreKey);

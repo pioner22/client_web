@@ -321,7 +321,7 @@
   --msg-in-border-color: var(--line);
   --msg-in-border-width: var(--border-width);
   --msg-in-radius: 15px;
-  --msg-in-cont-corner: 10px;
+  --msg-in-cont-corner: 5px;
   --msg-in-pad-y: 4px;
   --msg-in-pad-x: 8px;
   --msg-in-pad-bottom: 5px;
@@ -330,7 +330,7 @@
   --msg-out-border-color: var(--line);
   --msg-out-border-width: var(--border-width);
   --msg-out-radius: 15px;
-  --msg-out-cont-corner: 10px;
+  --msg-out-cont-corner: 5px;
   --msg-out-pad-y: 4px;
   --msg-out-pad-x: 8px;
   --msg-out-pad-bottom: 5px;

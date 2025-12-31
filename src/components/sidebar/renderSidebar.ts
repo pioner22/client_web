@@ -630,15 +630,8 @@ export function renderSidebar(
     const topTitle =
       activeTab === "contacts" ? "Контакты" : activeTab === "boards" ? "Доски" : activeTab === "menu" ? "Меню" : "Чаты";
 
-    const canCloseSidebar = Boolean(state.page === "main" && state.selected);
     const top = el("div", { class: "sidebar-mobile-top" }, [
-      canCloseSidebar
-        ? el(
-            "button",
-            { class: "btn sidebar-close", type: "button", "data-action": "sidebar-close", title: "Назад", "aria-label": "Назад" },
-            ["←"]
-          )
-        : el("div", { class: "sidebar-close sidebar-close-spacer", "aria-hidden": "true" }, [""]),
+      el("div", { class: "sidebar-close sidebar-close-spacer", "aria-hidden": "true" }, [""]),
       el("div", { class: "sidebar-mobile-title" }, [topTitle]),
     ]);
 
