@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.326",
+    date: "2025-12-31",
+    improved: ["Чаты: last-read обновляется по видимым сообщениям (не только внизу)"],
+    fixed: ["Чаты: unread-разделитель исчезает после чтения (по видимой зоне)"],
+  },
+  {
     version: "0.1.325",
     date: "2025-12-31",
     fixed: ["Чаты: подгрузка истории удерживает позицию и не прыгает"],

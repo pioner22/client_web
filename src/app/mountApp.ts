@@ -1204,15 +1204,14 @@ export function mountApp(root: HTMLElement) {
     lastUserInputAt = Date.now();
   };
 
-  const maybeRecordLastRead = (key: string) => {
+  const recordRoomLastReadEntry = (key: string, msg: ChatMessage | null) => {
     const k = String(key || "").trim();
     if (!k || !k.startsWith("room:")) return;
+    if (!msg) return;
     const st = store.get();
     if (!st.selfId) return;
-    const conv = st.conversations[k] || [];
-    const last = conv.length ? conv[conv.length - 1] : null;
-    const ts = Number(last?.ts ?? 0);
-    const id = Number(last?.id ?? 0);
+    const ts = Number(msg.ts ?? 0);
+    const id = Number(msg.id ?? 0);
     const prevEntry = st.lastRead?.[k] || {};
     const nextEntry = { ...prevEntry };
     let changed = false;
@@ -1236,6 +1235,15 @@ export function mountApp(root: HTMLElement) {
     if (roomId && nextEntry.id) {
       maybeSendRoomRead(roomId, nextEntry.id);
     }
+  };
+
+  const maybeRecordLastRead = (key: string) => {
+    const k = String(key || "").trim();
+    if (!k || !k.startsWith("room:")) return;
+    const st = store.get();
+    const conv = st.conversations[k] || [];
+    const last = conv.length ? conv[conv.length - 1] : null;
+    recordRoomLastReadEntry(k, last);
   };
   // PWA auto-update: treat any pointer interaction as “activity” so we don’t reload while the user clicks/opens menus.
   window.addEventListener("pointerdown", markUserActivity, { capture: true, passive: true });
@@ -1573,6 +1581,71 @@ export function mountApp(root: HTMLElement) {
     }));
   }
 
+  const findLastVisibleMessageIndex = (host: HTMLElement): number | null => {
+    const linesEl = host.querySelector(".chat-lines");
+    if (!(linesEl instanceof HTMLElement)) return null;
+    const children = Array.from(linesEl.children);
+    if (!children.length) return null;
+    const hostRect = host.getBoundingClientRect();
+    const topEdge = hostRect.top + 4;
+    const bottomEdge = hostRect.bottom - 4;
+    for (let i = children.length - 1; i >= 0; i -= 1) {
+      const child = children[i];
+      if (!(child instanceof HTMLElement)) continue;
+      const rawIdx = child.getAttribute("data-msg-idx");
+      if (!rawIdx) continue;
+      const rect = child.getBoundingClientRect();
+      if (rect.bottom <= topEdge) break;
+      if (rect.top >= bottomEdge) continue;
+      const idx = Number(rawIdx);
+      if (Number.isFinite(idx)) return idx;
+    }
+    return null;
+  };
+
+  const recordVisibleRead = () => {
+    const st = store.get();
+    if (st.page !== "main") return;
+    if (!st.selected) return;
+    if (st.chatSearchOpen && st.chatSearchQuery.trim()) return;
+    const key = conversationKey(st.selected);
+    if (!key) return;
+    const msgIdx = findLastVisibleMessageIndex(layout.chatHost);
+    if (msgIdx === null) return;
+    const msgs = st.conversations[key] || [];
+    let idx = msgIdx;
+    let msg = msgs[idx];
+    while (msg && msg.kind === "sys" && idx > 0) {
+      idx -= 1;
+      msg = msgs[idx];
+    }
+    if (!msg || msg.kind === "sys") return;
+    if (key.startsWith("room:")) {
+      recordRoomLastReadEntry(key, msg);
+      return;
+    }
+    if (key.startsWith("dm:")) {
+      const msgId = Number(msg.id ?? 0);
+      if (!Number.isFinite(msgId) || msgId <= 0) return;
+      const peerId = key.slice("dm:".length);
+      if (!peerId) return;
+      maybeSendMessageRead(peerId, msgId);
+    }
+  };
+
+  let viewportReadRaf: number | null = null;
+  let lastViewportReadAt = 0;
+  const scheduleViewportReadUpdate = () => {
+    if (viewportReadRaf !== null) return;
+    viewportReadRaf = window.requestAnimationFrame(() => {
+      viewportReadRaf = null;
+      const now = Date.now();
+      if (now - lastViewportReadAt < 160) return;
+      lastViewportReadAt = now;
+      recordVisibleRead();
+    });
+  };
+
   layout.chatHost.addEventListener(
     "scroll",
     () => {
@@ -1603,6 +1676,7 @@ export function mountApp(root: HTMLElement) {
       scheduleChatJumpVisibility();
       maybeAutoLoadMoreHistory(scrollTop, scrollingUp);
       maybeUpdateVirtualWindow(scrollTop);
+      scheduleViewportReadUpdate();
       if (atBottom) maybeRecordLastRead(key);
     },
     { passive: true }
@@ -1632,6 +1706,7 @@ export function mountApp(root: HTMLElement) {
       st.at = Date.now();
       host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
       maybeRecordLastRead(key);
+      scheduleViewportReadUpdate();
       scheduleChatJumpVisibility();
     });
   };
@@ -3492,7 +3567,7 @@ export function mountApp(root: HTMLElement) {
     const peer = String(peerId || "").trim();
     if (!peer) return;
     const unread = st.friends.find((f) => f.id === peer)?.unread ?? 0;
-    const hasUpTo = typeof upToId === "number" && Number.isFinite(upToId);
+    const hasUpTo = typeof upToId === "number" && Number.isFinite(upToId) && upToId > 0;
     if (unread <= 0 && !hasUpTo) return;
 
     const now = Date.now();
@@ -3502,7 +3577,22 @@ export function mountApp(root: HTMLElement) {
     lastReadSentAt.set(throttleKey, now);
 
     gateway.send({ type: "message_read", peer, ...(hasUpTo ? { up_to_id: upToId } : {}) });
-    if (unread > 0) {
+    let shouldClearUnread = unread > 0;
+    if (hasUpTo && unread > 0) {
+      const conv = st.conversations?.[dmKey(peer)] || [];
+      let lastInboundId = 0;
+      for (let i = conv.length - 1; i >= 0; i -= 1) {
+        const msg = conv[i];
+        if (!msg || msg.kind !== "in") continue;
+        const msgId = Number(msg.id ?? 0);
+        if (Number.isFinite(msgId) && msgId > 0) {
+          lastInboundId = msgId;
+          break;
+        }
+      }
+      shouldClearUnread = lastInboundId > 0 && upToId >= lastInboundId;
+    }
+    if (shouldClearUnread) {
       store.set((prev) => ({
         ...prev,
         friends: prev.friends.map((f) => (f.id === peer ? { ...f, unread: 0 } : f)),
