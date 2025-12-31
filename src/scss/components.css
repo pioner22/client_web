@@ -3091,6 +3091,47 @@
   --msg-ref-accent: var(--focus);
 }
 
+.msg-ref-quote {
+  position: relative;
+  overflow: hidden;
+  border-left: 0;
+  padding-left: 10px;
+  background-color: color-mix(in srgb, var(--msg-ref-accent), transparent 88%);
+}
+
+.msg-ref-quote::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--msg-ref-accent);
+  z-index: 0;
+}
+
+.msg-ref-quote::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 85% 35%, color-mix(in srgb, var(--msg-ref-accent), transparent 80%) 0 10px, transparent 11px),
+    radial-gradient(circle at 25% 75%, color-mix(in srgb, var(--msg-ref-accent), transparent 85%) 0 7px, transparent 8px),
+    radial-gradient(circle at 60% 10%, color-mix(in srgb, var(--msg-ref-accent), transparent 88%) 0 6px, transparent 7px);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.msg-ref-quote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.msg-ref-quote .msg-ref-title {
+  color: var(--msg-ref-accent);
+}
+
 .msg-ref-header {
   display: flex;
   align-items: center;

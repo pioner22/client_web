@@ -180,6 +180,7 @@ function renderMessageRef(
   const fromId = String(ref.from || "").trim();
   const sender = fromId ? resolveUserLabel(state, fromId, friendLabels) : "";
   const isForward = kind === "forward";
+  const isReply = kind === "reply";
   const titleBase = isForward ? "Переслано" : "Ответ";
   const title = sender ? (isForward ? `Переслано от ${sender}` : `Ответ: ${sender}`) : titleBase;
   const headerChildren: HTMLElement[] = [];
@@ -189,7 +190,8 @@ function renderMessageRef(
     headerChildren.push(avatarNode);
   }
   headerChildren.push(el("div", { class: "msg-ref-title" }, [title]));
-  return el("div", { class: `msg-ref msg-ref-${kind}` }, [
+  const cls = `msg-ref msg-ref-${kind}${isReply ? " msg-ref-quote" : ""}`;
+  return el("div", { class: cls }, [
     el("div", { class: "msg-ref-header" }, headerChildren),
     el("div", { class: "msg-ref-text" }, [refPreview(ref)]),
   ]);

@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.310",
+    date: "2025-12-31",
+    improved: ["Чаты: reply‑превью в сообщениях оформлено как цитата с emoji‑pattern (tweb parity, best‑effort)"],
+  },
+  {
     version: "0.1.309",
     date: "2025-12-31",
     improved: ["Чаты: заголовок пересланного сообщения теперь с аватаром отправителя (tweb parity, best-effort)"],
