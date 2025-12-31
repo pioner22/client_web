@@ -120,8 +120,20 @@
     top: 0;
     z-index: 2;
     background: var(--sidebar-bg);
-    padding-bottom: var(--sp-2);
-    margin-bottom: var(--sp-2);
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+
+  .sidebar-searchbar {
+    margin-bottom: 0;
+  }
+
+  .sidebar-contact-sort {
+    margin-bottom: 0;
+  }
+
+  .sidebar-contact-sort.search-filters {
+    margin-top: 0;
   }
 
   .sidebar-mobile-bottom {

@@ -1010,15 +1010,23 @@ export function renderSidebar(
       }
       const topPeerRows = contactSortMode === "top" ? buildTopPeerRows() : [];
       const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
-      mountMobile([
-        ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
-        ...(topPeerRows.length ? [el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows] : []),
-        ...(compactUnknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows] : []),
-        el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
-        ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
-        el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
-        ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])])
-      ]);
+      const contactRows: HTMLElement[] = [];
+      if (pinnedContactRowsCompact.length) {
+        contactRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+      }
+      if (topPeerRows.length) {
+        contactRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
+      }
+      if (compactUnknownAttnRows.length) {
+        contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
+      }
+      if (onlineRows.length) {
+        contactRows.push(el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]), ...onlineRows);
+      }
+      if (offlineRows.length) {
+        contactRows.push(...offlineRows);
+      }
+      mountMobile(contactRows);
       return;
     }
 
@@ -1483,14 +1491,20 @@ export function renderSidebar(
         })
       );
 
-      mountPwa([
-        ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
-        ...(unknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows] : []),
-        el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
-        ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
-        el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
-        ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
-      ]);
+      const contactRows: HTMLElement[] = [];
+      if (pinnedContactRowsCompact.length) {
+        contactRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+      }
+      if (unknownAttnRows.length) {
+        contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
+      }
+      if (onlineRows.length) {
+        contactRows.push(el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]), ...onlineRows);
+      }
+      if (offlineRows.length) {
+        contactRows.push(...offlineRows);
+      }
+      mountPwa(contactRows);
       return;
     }
 
@@ -1924,12 +1938,18 @@ export function renderSidebar(
 
   const topPeerRows = contactSortMode === "top" ? buildTopPeerRows() : [];
   const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
-  mountDesktop([
-    ...(compactUnknownAttnRows.length ? [el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows] : []),
-    ...(topPeerRows.length ? [el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows] : []),
-    el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]),
-    ...(onlineRows.length ? onlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
-    el("div", { class: "pane-section" }, [`Оффлайн (${offlineRows.length})`]),
-    ...(offlineRows.length ? offlineRows : [el("div", { class: "pane-section" }, ["(нет)"])]),
-  ]);
+  const contactRows: HTMLElement[] = [];
+  if (compactUnknownAttnRows.length) {
+    contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
+  }
+  if (topPeerRows.length) {
+    contactRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
+  }
+  if (onlineRows.length) {
+    contactRows.push(el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]), ...onlineRows);
+  }
+  if (offlineRows.length) {
+    contactRows.push(...offlineRows);
+  }
+  mountDesktop(contactRows);
 }
