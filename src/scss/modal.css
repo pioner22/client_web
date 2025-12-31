@@ -30,11 +30,17 @@
 }
 
 .overlay.overlay-viewer {
-  background: rgba(0, 0, 0, 0.92);
+  background: rgba(0, 0, 0, 0.88);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   place-items: stretch;
   padding: 0;
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer {
+    background: #000;
+  }
 }
 
 .hidden {

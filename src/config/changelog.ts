@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.318",
+    date: "2025-12-31",
+    improved: ["Медиа: фон viewer выровнен под tweb (desktop rgba(0,0,0,.88), mobile #000)"],
+  },
+  {
     version: "0.1.317",
     date: "2025-12-31",
     improved: ["Чаты: long-press на touch включает выбор сообщений (selection overlay)"],
