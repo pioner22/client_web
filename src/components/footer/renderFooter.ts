@@ -51,7 +51,12 @@ export function renderFooter(target: HTMLElement, state: AppState) {
     state.pendingGroupJoinRequests.length +
     state.pendingBoardInvites.length +
     state.fileOffersIn.length;
-  const line = `Онлайн: ${online} | Оффлайн: ${offline} | Ожидают: ${pending} — ${viewTitle(state)}`;
+  const statusParts: string[] = [];
+  if (online > 0) {
+    statusParts.push(`Онлайн: ${online}`, `Оффлайн: ${offline}`, `Ожидают: ${pending}`);
+  }
+  const statusPrefix = statusParts.length ? `${statusParts.join(" | ")} — ` : "";
+  const line = `${statusPrefix}${viewTitle(state)}`;
 
   const tabMain = el(
     "button",

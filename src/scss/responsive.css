@@ -138,6 +138,10 @@
     margin-bottom: 0;
   }
 
+  .sidebar-body > .pane-section:first-child {
+    margin-top: 0;
+  }
+
   .sidebar-contact-sort {
     margin-bottom: 0;
   }
