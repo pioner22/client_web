@@ -122,6 +122,9 @@ body.has-right-col .right-col {
 .sidebar {
   --avatar-size: 54px;
   --avatar-font-size: 20px;
+  --row-min-h: 72px;
+  --row-pad-y: 9px;
+  --row-pad-x: 16px;
   background: var(--sidebar-bg);
   border-right: var(--sidebar-border-width) solid var(--sidebar-border-color);
   padding: var(--sidebar-pad);
@@ -132,6 +135,10 @@ body.has-right-col .right-col {
   position: relative;
   display: flex;
   flex-direction: column;
+}
+
+.sidebar .row {
+  padding-inline-end: 12px;
 }
 
 .sidebar.sidebar-collapsed {
