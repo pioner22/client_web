@@ -91,6 +91,7 @@ export function createInitialState(): AppState {
     editing: null,
     replyDraft: null,
     forwardDraft: null,
+    chatSelection: null,
     boardComposerOpen: false,
     boardScheduledPosts: [],
     chatSearchOpen: false,

@@ -233,6 +233,11 @@ export interface MessageHelperDraft extends ChatMessageRef {
   preview: string;
 }
 
+export interface ChatSelectionState {
+  key: string;
+  ids: string[];
+}
+
 export interface ChatMessage {
   ts: number;
   from: string;
@@ -417,6 +422,7 @@ export interface AppState {
   editing: EditingMessageState | null;
   replyDraft: MessageHelperDraft | null;
   forwardDraft: MessageHelperDraft | null;
+  chatSelection: ChatSelectionState | null;
   boardComposerOpen: boolean;
   boardScheduledPosts: BoardScheduledPost[];
 

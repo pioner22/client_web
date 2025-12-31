@@ -10,6 +10,7 @@ export interface Layout {
   chatTop: HTMLElement;
   chatSearchResults: HTMLElement;
   chatSearchFooter: HTMLElement;
+  chatSelectionBar: HTMLElement;
   chatHost: HTMLElement;
   chatJump: HTMLButtonElement;
   chatJumpBadge: HTMLElement;
