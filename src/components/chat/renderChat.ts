@@ -147,6 +147,12 @@ function resolveUserLabel(state: AppState, id: string, friendLabels?: Map<string
   return fromFriends || pid;
 }
 
+function normalizeHandle(value: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return raw.startsWith("@") ? raw : `@${raw}`;
+}
+
 function refPreview(ref: ChatMessageRef): string {
   const rawText = String(ref?.text || "")
     .replace(/\s+/g, " ")
@@ -182,14 +188,25 @@ function renderMessageRef(
   const isForward = kind === "forward";
   const isReply = kind === "reply";
   const titleBase = isForward ? "Переслано" : "Ответ";
-  const title = sender ? (isForward ? `Переслано от ${sender}` : `Ответ: ${sender}`) : titleBase;
+  const viaBot = normalizeHandle(String(ref.via_bot || (ref as any).viaBot || ""));
+  const postAuthor = String(ref.post_author || (ref as any).postAuthor || "").trim();
+  const hiddenProfile = Boolean(ref.hidden_profile ?? (ref as any).hiddenProfile ?? false);
+  const canShowSender = Boolean(sender) && !(isForward && hiddenProfile);
+  const title = canShowSender ? (isForward ? `Переслано от ${sender}` : `Ответ: ${sender}`) : titleBase;
+  const metaParts: string[] = [];
+  if (hiddenProfile) metaParts.push("Скрытый профиль");
+  if (viaBot) metaParts.push(`через ${viaBot}`);
+  if (postAuthor) metaParts.push(`Автор: ${postAuthor}`);
+  const meta = metaParts.join(" · ");
   const headerChildren: HTMLElement[] = [];
-  if (isForward && fromId) {
+  if (isForward && fromId && !hiddenProfile) {
     const avatarNode = avatar("dm", fromId);
     avatarNode.classList.add("msg-ref-avatar");
     headerChildren.push(avatarNode);
   }
-  headerChildren.push(el("div", { class: "msg-ref-title" }, [title]));
+  const titleWrap = el("div", { class: "msg-ref-title-wrap" }, [el("div", { class: "msg-ref-title" }, [title])]);
+  if (meta) titleWrap.appendChild(el("div", { class: "msg-ref-meta" }, [meta]));
+  headerChildren.push(titleWrap);
   const header = el("div", { class: "msg-ref-header" }, headerChildren);
   const text = el("div", { class: "msg-ref-text" }, [refPreview(ref)]);
   let mediaNode: HTMLElement | null = null;

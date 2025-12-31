@@ -223,6 +223,9 @@ export interface ChatMessageRef {
   from?: string;
   text?: string;
   attachment?: ChatAttachment | null;
+  via_bot?: string;
+  post_author?: string;
+  hidden_profile?: boolean;
 }
 
 export interface MessageHelperDraft extends ChatMessageRef {

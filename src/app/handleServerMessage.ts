@@ -8,6 +8,7 @@ import type {
 	  BoardEntry,
 	  ChatAttachment,
 	  ChatMessage,
+    ChatMessageRef,
 	  FriendEntry,
 	  GroupEntry,
     MessageReactions,
@@ -144,6 +145,31 @@ function parseAttachment(raw: any): ChatAttachment | null {
   const mimeRaw = (raw as any).mime;
   const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw) : null;
   return { kind: "file", fileId, name, size, mime };
+}
+
+function parseMessageRef(raw: any): ChatMessageRef | null {
+  if (!raw || typeof raw !== "object") return null;
+  const ref: ChatMessageRef = {};
+  const idRaw = (raw as any).id ?? (raw as any).msg_id ?? null;
+  const id = typeof idRaw === "number" && Number.isFinite(idRaw) ? Math.trunc(idRaw) : Math.trunc(Number(idRaw) || 0);
+  if (id > 0) ref.id = id;
+  const localIdRaw = (raw as any).localId ?? (raw as any).local_id ?? null;
+  if (typeof localIdRaw === "string" && localIdRaw.trim()) ref.localId = localIdRaw.trim();
+  const fromRaw = (raw as any).from;
+  if (typeof fromRaw === "string" && fromRaw.trim()) ref.from = fromRaw.trim();
+  const textRaw = (raw as any).text;
+  if (typeof textRaw === "string" && textRaw.trim()) ref.text = textRaw;
+  const attachment = parseAttachment((raw as any).attachment);
+  if (attachment) ref.attachment = attachment;
+  const viaBotRaw = (raw as any).via_bot ?? (raw as any).viaBot ?? null;
+  if (typeof viaBotRaw === "string" && viaBotRaw.trim()) ref.via_bot = viaBotRaw.trim();
+  const postAuthorRaw = (raw as any).post_author ?? (raw as any).postAuthor ?? null;
+  if (typeof postAuthorRaw === "string" && postAuthorRaw.trim()) ref.post_author = postAuthorRaw.trim();
+  const hiddenRaw = (raw as any).hidden_profile ?? (raw as any).hiddenProfile ?? null;
+  const hidden_profile =
+    hiddenRaw === true || hiddenRaw === 1 || hiddenRaw === "1" || hiddenRaw === "true" || hiddenRaw === "yes";
+  if (hidden_profile) ref.hidden_profile = true;
+  return Object.keys(ref).length ? ref : null;
 }
 
 function parseReactions(raw: any): MessageReactions | null {
@@ -1860,6 +1886,8 @@ export function handleServerMessage(
     if (!key || key.endsWith(":")) return;
     const kind = from === state.selfId ? "out" : "in";
     const attachment = parseAttachment(msg?.attachment);
+    const reply = parseMessageRef((msg as any)?.reply);
+    const forward = parseMessageRef((msg as any)?.forward);
     if (kind === "in") {
       const hidden = isDocHidden();
       const viewingSame =
@@ -1897,6 +1925,8 @@ export function handleServerMessage(
         ts,
         id: msg?.id ?? null,
         attachment,
+        ...(reply ? { reply } : {}),
+        ...(forward ? { forward } : {}),
         ...(edited ? { edited: true } : {}),
         ...(edited && edited_ts ? { edited_ts } : {}),
       })
@@ -2209,6 +2239,8 @@ export function handleServerMessage(
       const status: ChatMessage["status"] | undefined =
         !room && kind === "out" && hasId ? (read ? "read" : delivered ? "delivered" : "queued") : undefined;
       const attachment = parseAttachment(r?.attachment);
+      const reply = parseMessageRef((r as any)?.reply);
+      const forward = parseMessageRef((r as any)?.forward);
       const reactions = parseReactions((r as any)?.reactions);
       incoming.push({
         kind,
@@ -2219,6 +2251,8 @@ export function handleServerMessage(
         ts,
         id,
         attachment,
+        ...(reply ? { reply } : {}),
+        ...(forward ? { forward } : {}),
         ...(reactions ? { reactions } : {}),
         ...(status ? { status } : {}),
         ...(edited ? { edited: true } : {}),

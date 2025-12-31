@@ -3164,8 +3164,15 @@
 
 .msg-ref-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
+}
+
+.msg-ref-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .msg-ref-avatar {
@@ -3177,6 +3184,14 @@
 .msg-ref-title {
   font-weight: 600;
   color: var(--text);
+}
+
+.msg-ref-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .msg-ref-text {
