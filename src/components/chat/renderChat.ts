@@ -179,10 +179,18 @@ function renderMessageRef(
   if (!ref) return null;
   const fromId = String(ref.from || "").trim();
   const sender = fromId ? resolveUserLabel(state, fromId, friendLabels) : "";
-  const titleBase = kind === "reply" ? "Ответ" : "Переслано";
-  const title = sender ? `${titleBase}: ${sender}` : titleBase;
+  const isForward = kind === "forward";
+  const titleBase = isForward ? "Переслано" : "Ответ";
+  const title = sender ? (isForward ? `Переслано от ${sender}` : `Ответ: ${sender}`) : titleBase;
+  const headerChildren: HTMLElement[] = [];
+  if (isForward && fromId) {
+    const avatarNode = avatar("dm", fromId);
+    avatarNode.classList.add("msg-ref-avatar");
+    headerChildren.push(avatarNode);
+  }
+  headerChildren.push(el("div", { class: "msg-ref-title" }, [title]));
   return el("div", { class: `msg-ref msg-ref-${kind}` }, [
-    el("div", { class: "msg-ref-title" }, [title]),
+    el("div", { class: "msg-ref-header" }, headerChildren),
     el("div", { class: "msg-ref-text" }, [refPreview(ref)]),
   ]);
 }

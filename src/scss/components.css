@@ -3091,6 +3091,18 @@
   --msg-ref-accent: var(--focus);
 }
 
+.msg-ref-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.msg-ref-avatar {
+  --avatar-size: 20px;
+  --avatar-font-size: 9px;
+  --avatar-radius: 999px;
+}
+
 .msg-ref-title {
   font-weight: 600;
   color: var(--text);
