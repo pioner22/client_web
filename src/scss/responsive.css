@@ -131,7 +131,7 @@
   .sidebar-tabs.sidebar-tabs-mobile {
     --sidebar-tabs-count: 4;
     padding: 0 var(--sidebar-list-pad);
-    margin: 0 0 var(--sp-2);
+    margin: 0;
   }
 
   .sidebar-searchbar {
@@ -511,6 +511,10 @@
     font-size: 12px;
     line-height: 1.25;
     opacity: 0.9;
+  }
+
+  .hdr {
+    padding-bottom: 0;
   }
 
   /* На тач-устройствах горячие клавиши не нужны — освобождаем место. */

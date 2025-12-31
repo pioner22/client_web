@@ -1096,6 +1096,7 @@ export function renderChat(layout: Layout, state: AppState) {
     }
   }
   const titleChildren: Array<string | HTMLElement> = [...chatTitleNodes(state)];
+  const chatSearchEnabled = !mobileUi;
   if (state.selected) {
     const infoActive = Boolean(
       state.page === "main" &&
@@ -1118,23 +1119,25 @@ export function renderChat(layout: Layout, state: AppState) {
         ["ℹ︎"]
       )
     );
-    titleChildren.push(
-      el(
-        "button",
-        {
-          class: state.chatSearchOpen ? "btn chat-search-toggle btn-active" : "btn chat-search-toggle",
-          type: "button",
-          "data-action": state.chatSearchOpen ? "chat-search-close" : "chat-search-open",
-          title: mobileUi ? "Поиск в чате" : "Поиск в чате (Ctrl+F)",
-          "aria-label": "Поиск в чате",
-        },
-        [state.chatSearchOpen ? "Закрыть поиск" : "Поиск"]
-      )
-    );
+    if (chatSearchEnabled) {
+      titleChildren.push(
+        el(
+          "button",
+          {
+            class: state.chatSearchOpen ? "btn chat-search-toggle btn-active" : "btn chat-search-toggle",
+            type: "button",
+            "data-action": state.chatSearchOpen ? "chat-search-close" : "chat-search-open",
+            title: "Поиск в чате (Ctrl+F)",
+            "aria-label": "Поиск в чате",
+          },
+          [state.chatSearchOpen ? "Закрыть поиск" : "Поиск"]
+        )
+      );
+    }
   }
 
   let searchBar: HTMLElement | null = null;
-  if (state.selected && state.chatSearchOpen) {
+  if (state.selected && state.chatSearchOpen && chatSearchEnabled) {
     const input = el("input", {
       class: "modal-input chat-search-input",
       id: "chat-search-input",
