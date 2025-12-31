@@ -50,7 +50,8 @@ body {
 
 html.has-auth-pages,
 body.has-auth-pages {
-  background: var(--panel);
+  background: var(--surface-color);
+  --safe-area-bg: var(--surface-color);
 }
 
 button {
