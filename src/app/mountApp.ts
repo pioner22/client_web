@@ -9697,6 +9697,119 @@ export function mountApp(root: HTMLElement) {
     }
   };
 
+  let msgSwipeRow: HTMLElement | null = null;
+  let msgSwipeIdx = -1;
+  let msgSwipeKey = "";
+  let msgSwipePointerId: number | null = null;
+  let msgSwipeStartX = 0;
+  let msgSwipeStartY = 0;
+  let msgSwipeActive = false;
+  const MSG_SWIPE_ACTIVATE = 10;
+  const MSG_SWIPE_TRIGGER = 56;
+  const MSG_SWIPE_MAX = 84;
+  const resetMsgSwipe = () => {
+    if (msgSwipeRow) {
+      msgSwipeRow.style.setProperty("--msg-swipe-x", "0px");
+      msgSwipeRow.style.setProperty("--msg-swipe-alpha", "0");
+      msgSwipeRow.removeAttribute("data-reply-swipe");
+    }
+    msgSwipeRow = null;
+    msgSwipeIdx = -1;
+    msgSwipeKey = "";
+    msgSwipePointerId = null;
+    msgSwipeActive = false;
+  };
+  const applyMsgSwipe = (dx: number) => {
+    if (!msgSwipeRow) return;
+    const clamped = Math.max(0, Math.min(MSG_SWIPE_MAX, dx));
+    const alpha = Math.max(0, Math.min(1, clamped / MSG_SWIPE_TRIGGER));
+    msgSwipeRow.style.setProperty("--msg-swipe-x", `${clamped}px`);
+    msgSwipeRow.style.setProperty("--msg-swipe-alpha", String(alpha));
+    msgSwipeRow.setAttribute("data-reply-swipe", "1");
+  };
+
+  layout.chat.addEventListener("pointerdown", (e) => {
+    const st = store.get();
+    if (st.modal) return;
+    if (!st.selected) return;
+    if (st.editing) return;
+    if (Date.now() < suppressChatClickUntil) return;
+    const ev = e as PointerEvent;
+    if (ev.pointerType === "mouse") return;
+    if (ev.button !== 0) return;
+    const target = ev.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest("button, a, input, textarea, [contenteditable='true']")) return;
+    const row = target.closest("[data-msg-idx]") as HTMLElement | null;
+    if (!row) return;
+    const idx = Math.trunc(Number(row.getAttribute("data-msg-idx") || ""));
+    if (!Number.isFinite(idx) || idx < 0) return;
+    const key = conversationKey(st.selected);
+    if (!key) return;
+    const conv = st.conversations[key] || null;
+    const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+    if (!msg || msg.kind === "sys") return;
+    msgSwipeRow = row;
+    msgSwipeIdx = idx;
+    msgSwipeKey = key;
+    msgSwipePointerId = ev.pointerId;
+    msgSwipeStartX = ev.clientX;
+    msgSwipeStartY = ev.clientY;
+    msgSwipeActive = false;
+  });
+
+  layout.chat.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!msgSwipeRow || msgSwipePointerId === null) return;
+      const ev = e as PointerEvent;
+      if (ev.pointerId !== msgSwipePointerId) return;
+      const dx = ev.clientX - msgSwipeStartX;
+      const dy = ev.clientY - msgSwipeStartY;
+      if (!msgSwipeActive) {
+        if (dx < MSG_SWIPE_ACTIVATE) return;
+        if (Math.abs(dx) < Math.abs(dy) + 12) return;
+        msgSwipeActive = true;
+        clearMsgLongPress();
+      }
+      if (dx <= 0) {
+        applyMsgSwipe(0);
+        return;
+      }
+      applyMsgSwipe(dx);
+      ev.preventDefault();
+    },
+    { passive: false }
+  );
+
+  layout.chat.addEventListener("pointerup", (e) => {
+    if (!msgSwipeRow || msgSwipePointerId === null) return;
+    const ev = e as PointerEvent;
+    if (ev.pointerId !== msgSwipePointerId) return;
+    const dx = ev.clientX - msgSwipeStartX;
+    const shouldReply = msgSwipeActive && dx >= MSG_SWIPE_TRIGGER;
+    if (shouldReply) {
+      const st = store.get();
+      if (!st.editing && st.selected && msgSwipeKey) {
+        const key = conversationKey(st.selected);
+        if (key && key === msgSwipeKey) {
+          const conv = st.conversations[key] || null;
+          const msg = conv && msgSwipeIdx >= 0 && msgSwipeIdx < conv.length ? conv[msgSwipeIdx] : null;
+          const draft = msg ? buildHelperDraft(st, key, msg) : null;
+          if (draft) {
+            suppressChatClickUntil = Date.now() + 800;
+            store.set({ replyDraft: draft, forwardDraft: null });
+            scheduleFocusComposer();
+          }
+        }
+      }
+    }
+    resetMsgSwipe();
+  });
+
+  layout.chat.addEventListener("pointercancel", () => resetMsgSwipe());
+  layout.chatHost.addEventListener("scroll", () => resetMsgSwipe(), { passive: true });
+
   layout.chat.addEventListener("pointerdown", (e) => {
     const st = store.get();
     if (st.modal) return;

@@ -1434,6 +1434,26 @@
   display: grid;
   gap: var(--sp-1);
   max-width: var(--msg-body-max-width);
+  position: relative;
+  transform: translateX(var(--msg-swipe-x, 0px));
+  transition: transform 160ms ease;
+}
+
+.msg[data-reply-swipe="1"] .msg-body {
+  transition: none;
+}
+
+.msg-body::before {
+  content: "↩";
+  position: absolute;
+  left: -22px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  line-height: 1;
+  opacity: var(--msg-swipe-alpha, 0);
+  color: color-mix(in srgb, var(--msg-meta-color), var(--msg-text-in-color) 35%);
+  pointer-events: none;
 }
 
 .msg-in {
