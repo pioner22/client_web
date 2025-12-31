@@ -148,7 +148,7 @@
   --sidebar-width-min: 308px;
   --sidebar-width-max: 420px;
   --sidebar-collapsed-width: 80px;
-  --sidebar-width: clamp(var(--sidebar-width-min), var(--current-sidebar-left-width, var(--sidebar-width-max)), var(--sidebar-width-max));
+  --sidebar-width: var(--current-sidebar-left-width, var(--sidebar-width-max));
 
   --chat-bg: var(--bg);
   --chat-pad: 13px;
