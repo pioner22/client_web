@@ -2762,6 +2762,7 @@ export function mountApp(root: HTMLElement) {
 
     mobileSidebarOpen = shouldOpen;
     layout.sidebar.classList.toggle("sidebar-mobile-open", shouldOpen);
+    document.documentElement.classList.toggle("sidebar-mobile-open", shouldOpen);
     syncNavOverlay();
     if (shouldOpen) {
       queueMicrotask(() => {
