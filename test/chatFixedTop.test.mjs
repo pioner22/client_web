@@ -213,12 +213,14 @@ test("renderChat: закреп/поиск рендерятся в chatTop (не 
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
       chat.className = "chat";
       chatTop.className = "chat-top";
       chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
 
       // Pretend we are already inside this chat and scrolled up (not at bottom).
       chatHost.setAttribute("data-chat-key", "dm:123-456-789");
@@ -226,7 +228,7 @@ test("renderChat: закреп/поиск рендерятся в chatTop (не 
       chatHost.clientHeight = 120;
       chatHost.scrollHeight = 2000;
 
-      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump };
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
       const state = {
         selected: { kind: "dm", id: "123-456-789" },
         conversations: {
@@ -282,18 +284,20 @@ test("renderChat: без выбранного чата область чата �
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
       chat.className = "chat";
       chatTop.className = "chat-top";
       chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump";
+      chatSelectionBar.className = "chat-selection-bar hidden";
 
       chatTop.replaceChildren({ nodeType: 3, textContent: "seed-top" });
       chatHost.replaceChildren({ nodeType: 3, textContent: "seed-host" });
 
       helper.renderChat(
-        { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump },
+        { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar },
         {
           selected: null,
         }
@@ -318,12 +322,14 @@ test("renderChat: сохраняет scrollTop если replaceChildren сбра
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
       chat.className = "chat";
       chatTop.className = "chat-top";
       chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
 
       chatHost.setAttribute("data-chat-key", "dm:123-456-789");
       chatHost.scrollTop = 420;
@@ -337,7 +343,7 @@ test("renderChat: сохраняет scrollTop если replaceChildren сбра
         chatHost.scrollTop = 0;
       };
 
-      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump };
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
       const state = {
         selected: { kind: "dm", id: "123-456-789" },
         conversations: {

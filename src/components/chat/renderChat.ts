@@ -1033,6 +1033,8 @@ export function renderChat(layout: Layout, state: AppState) {
           if (selected) line.classList.add("msg-selected");
         }
         line.setAttribute("data-msg-idx", String(group[group.length - 1].idx));
+        const groupMsgId = Number(group[group.length - 1].msg.id ?? NaN);
+        if (Number.isFinite(groupMsgId)) line.setAttribute("data-msg-id", String(groupMsgId));
         if (hit) line.classList.add("msg-hit");
         if (active) line.classList.add("msg-hit-active");
         lineItems.push(line);
@@ -1045,6 +1047,8 @@ export function renderChat(layout: Layout, state: AppState) {
     const line = messageLine(state, m, friendLabels, { mobileUi, boardUi, msgIdx });
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
     line.setAttribute("data-msg-idx", String(msgIdx));
+    const msgId = Number(m.id ?? NaN);
+    if (Number.isFinite(msgId)) line.setAttribute("data-msg-id", String(msgId));
     if (selectionSet) {
       const selKey = messageSelectionKey(m);
       if (selKey && selectionSet.has(selKey)) line.classList.add("msg-selected");

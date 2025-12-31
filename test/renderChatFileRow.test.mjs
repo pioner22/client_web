@@ -217,16 +217,18 @@ test("renderChat: file-attachment рендерит preview первым, ико�
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
       chat.className = "chat";
       chatTop.className = "chat-top";
       chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
       chatHost.clientHeight = 120;
       chatHost.scrollHeight = 2000;
 
-      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump };
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
       const state = {
         selected: { kind: "dm", id: "123-456-789" },
         conversations: {
@@ -286,16 +288,18 @@ test("renderChat: sys action message рендерит кнопки действ�
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
       chat.className = "chat";
       chatTop.className = "chat-top";
       chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
       chatHost.clientHeight = 120;
       chatHost.scrollHeight = 2000;
 
-      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump };
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
       const state = {
         selected: { kind: "dm", id: "111-111-111" },
         conversations: {
@@ -348,16 +352,18 @@ test("renderChat: video file-attachment рендерит video preview button", 
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
       chat.className = "chat";
       chatTop.className = "chat-top";
       chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
       chatHost.clientHeight = 120;
       chatHost.scrollHeight = 2000;
 
-      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump };
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
       const state = {
         selected: { kind: "dm", id: "123-456-789" },
         conversations: {
@@ -432,16 +438,18 @@ test("renderChat: audio file-attachment рендерит inline <audio> controls
       const chatSearchFooter = document.createElement("div");
       const chatHost = document.createElement("div");
       const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
       chat.className = "chat";
       chatTop.className = "chat-top";
       chatSearchResults.className = "chat-search-results";
       chatSearchFooter.className = "chat-search-footer";
       chatHost.className = "chat-host";
       chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
       chatHost.clientHeight = 120;
       chatHost.scrollHeight = 2000;
 
-      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump };
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
       const state = {
         selected: { kind: "dm", id: "123-456-789" },
         conversations: {

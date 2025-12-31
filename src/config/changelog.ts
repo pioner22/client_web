@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.325",
+    date: "2025-12-31",
+    fixed: ["Чаты: подгрузка истории удерживает позицию и не прыгает"],
+  },
+  {
     version: "0.1.324",
     date: "2025-12-31",
     improved: ["Авторизация: фон и safe-area используют --surface-color (tweb parity)"],

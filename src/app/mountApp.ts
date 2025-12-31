@@ -3415,7 +3415,46 @@ export function mountApp(root: HTMLElement) {
     historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 200);
   }
 
-  let historyPrependAnchor: { key: string; scrollHeight: number; scrollTop: number } | null = null;
+  type HistoryPrependAnchor = {
+    key: string;
+    msgId?: number;
+    rectBottom?: number;
+    scrollHeight: number;
+    scrollTop: number;
+  };
+
+  let historyPrependAnchor: HistoryPrependAnchor | null = null;
+
+  function findHistoryAnchorElement(): { element: HTMLElement; rect: DOMRect } | null {
+    const host = layout.chatHost;
+    const lines = host.firstElementChild as HTMLElement | null;
+    if (!lines) return null;
+    const hostRect = host.getBoundingClientRect();
+    const children = Array.from(lines.children) as HTMLElement[];
+    let fallback: HTMLElement | null = null;
+    for (const child of children) {
+      if (!child.classList.contains("msg")) continue;
+      if (!fallback) fallback = child;
+      const rect = child.getBoundingClientRect();
+      if (rect.bottom >= hostRect.top && rect.top <= hostRect.bottom) {
+        return { element: child, rect };
+      }
+      if (rect.top > hostRect.bottom) break;
+    }
+    if (fallback) return { element: fallback, rect: fallback.getBoundingClientRect() };
+    return null;
+  }
+
+  function makeHistoryPrependAnchor(key: string): HistoryPrependAnchor {
+    const host = layout.chatHost;
+    const base: HistoryPrependAnchor = { key, scrollHeight: host.scrollHeight, scrollTop: host.scrollTop };
+    const anchor = findHistoryAnchorElement();
+    if (!anchor) return base;
+    const rawMsgId = anchor.element.getAttribute("data-msg-id");
+    const msgId = rawMsgId ? Number(rawMsgId) : NaN;
+    if (!Number.isFinite(msgId)) return base;
+    return { ...base, msgId, rectBottom: anchor.rect.bottom };
+  }
 
   function requestMoreHistory() {
     const st = store.get();
@@ -3436,7 +3475,7 @@ export function mountApp(root: HTMLElement) {
     const before = st.historyCursor[key];
     if (!before || !Number.isFinite(before) || before <= 0) return;
 
-    historyPrependAnchor = { key, scrollHeight: layout.chatHost.scrollHeight, scrollTop: layout.chatHost.scrollTop };
+    historyPrependAnchor = makeHistoryPrependAnchor(key);
     historyRequested.add(key);
     store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
     if (st.selected.kind === "dm") {
@@ -10671,11 +10710,28 @@ export function mountApp(root: HTMLElement) {
       if (st.page !== "main" || !selectedKey || selectedKey !== anchorKey) {
         historyPrependAnchor = null;
       } else if (!st.historyLoading[anchorKey]) {
-        const delta = layout.chatHost.scrollHeight - historyPrependAnchor.scrollHeight;
-        if (Number.isFinite(delta) && delta !== 0) {
-          // Не даём автозагрузчику истории сработать сразу после "компенсации" скролла.
-          historyAutoBlockUntil = Date.now() + 350;
-          layout.chatHost.scrollTop = historyPrependAnchor.scrollTop + delta;
+        let applied = false;
+        if (historyPrependAnchor.msgId && historyPrependAnchor.rectBottom !== undefined) {
+          const selector = `.msg[data-msg-id="${historyPrependAnchor.msgId}"]`;
+          const anchor = layout.chatHost.querySelector(selector) as HTMLElement | null;
+          if (anchor) {
+            const rect = anchor.getBoundingClientRect();
+            const delta = rect.bottom - historyPrependAnchor.rectBottom;
+            if (Number.isFinite(delta) && delta !== 0) {
+              // Не даём автозагрузчику истории сработать сразу после "компенсации" скролла.
+              historyAutoBlockUntil = Date.now() + 350;
+              layout.chatHost.scrollTop += delta;
+            }
+            applied = true;
+          }
+        }
+        if (!applied) {
+          const delta = layout.chatHost.scrollHeight - historyPrependAnchor.scrollHeight;
+          if (Number.isFinite(delta) && delta !== 0) {
+            // Не даём автозагрузчику истории сработать сразу после "компенсации" скролла.
+            historyAutoBlockUntil = Date.now() + 350;
+            layout.chatHost.scrollTop = historyPrependAnchor.scrollTop + delta;
+          }
         }
         historyPrependAnchor = null;
       }
