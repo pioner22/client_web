@@ -2274,6 +2274,28 @@ export function mountApp(root: HTMLElement) {
     }
   });
 
+  layout.chat.addEventListener("dblclick", (e) => {
+    const st = store.get();
+    if (coarsePointerMq.matches && !anyFinePointerMq.matches) return;
+    if (st.editing) return;
+    if (Date.now() < suppressChatClickUntil) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest("button, a, input, textarea, [contenteditable='true']")) return;
+    const row = target.closest("[data-msg-idx]") as HTMLElement | null;
+    if (!row) return;
+    const idx = Math.trunc(Number(row.getAttribute("data-msg-idx") || ""));
+    const key = st.selected ? conversationKey(st.selected) : "";
+    if (!key || !Number.isFinite(idx) || idx < 0) return;
+    const conv = st.conversations[key] || null;
+    const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+    const draft = msg ? buildHelperDraft(st, key, msg) : null;
+    if (!draft) return;
+    e.preventDefault();
+    store.set({ replyDraft: draft, forwardDraft: null });
+    scheduleFocusComposer();
+  });
+
   layout.chat.addEventListener("input", (e) => {
     const t = e.target as HTMLElement | null;
     if (!t || !(t instanceof HTMLInputElement)) return;
