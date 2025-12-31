@@ -699,7 +699,11 @@
     background: var(--row-bg-hover);
   }
 
-  .sidebar .row-sel {
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel {
+    background: var(--row-bg);
+  }
+
+  .sidebar[data-sidebar-tab="menu"] .row-sel {
     background: var(--row-bg-selected);
   }
 
