@@ -682,7 +682,7 @@
 }
 
 .sidebar-tabs.sidebar-tabs-desktop {
-  --sidebar-tabs-count: 3;
+  --sidebar-tabs-count: 4;
   margin: 0;
   border-radius: 16px;
   padding: 4px;
@@ -716,6 +716,13 @@
   background: var(--sidebar-bg);
   flex: 0 0 auto;
   position: relative;
+}
+
+.sidebar-header-title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  width: 100%;
 }
 
 .sidebar-header-stack {

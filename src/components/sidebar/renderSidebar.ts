@@ -1572,13 +1572,14 @@ export function renderSidebar(
     return;
   }
 
-  // Desktop (browser): separate tabs (Контакты/Доски/Чаты) like on mobile/PWA,
-  // and remove the redundant sidebar "Меню" (desktop already has header/footer nav).
-  type DesktopTab = "contacts" | "boards" | "chats";
+  // Desktop (browser): tabs like on mobile/PWA (Контакты/Доски/Чаты/Меню).
+  type DesktopTab = "contacts" | "boards" | "chats" | "menu";
+  const showMenuTab = true;
   const defaultDesktopTab: DesktopTab = unknownAttnPeers.length ? "contacts" : "chats";
   const rawDesktopTab = state.mobileSidebarTab;
-  const activeDesktopTab: DesktopTab =
-    rawDesktopTab === "contacts" || rawDesktopTab === "boards" ? rawDesktopTab : defaultDesktopTab;
+  let activeDesktopTab: DesktopTab =
+    rawDesktopTab === "contacts" || rawDesktopTab === "boards" || rawDesktopTab === "menu" ? rawDesktopTab : defaultDesktopTab;
+  if (!showMenuTab && activeDesktopTab === "menu") activeDesktopTab = defaultDesktopTab;
 
   const desktopTabContacts = el(
     "button",
@@ -1613,17 +1614,32 @@ export function renderSidebar(
     },
     ["Чаты"]
   ) as HTMLButtonElement;
+  const desktopTabMenu = showMenuTab
+    ? (el(
+        "button",
+        {
+          class: activeDesktopTab === "menu" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+          type: "button",
+          role: "tab",
+          "aria-selected": String(activeDesktopTab === "menu"),
+          title: "Меню",
+        },
+        ["Меню"]
+      ) as HTMLButtonElement)
+    : null;
 
   desktopTabChats.addEventListener("click", () => onSetMobileSidebarTab("chats"));
   desktopTabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
   desktopTabBoards.addEventListener("click", () => onSetMobileSidebarTab("boards"));
+  if (desktopTabMenu) desktopTabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
 
   const desktopTabs = el("div", { class: "sidebar-tabs sidebar-tabs-desktop", role: "tablist", "aria-label": "Раздел" }, [
     desktopTabContacts,
     desktopTabBoards,
     desktopTabChats,
+    ...(desktopTabMenu ? [desktopTabMenu] : []),
   ]);
-  const desktopTabsList = [desktopTabContacts, desktopTabBoards, desktopTabChats];
+  const desktopTabsList = [desktopTabContacts, desktopTabBoards, desktopTabChats, ...(desktopTabMenu ? [desktopTabMenu] : [])];
   desktopTabs.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     const dir = e.key === "ArrowRight" ? 1 : -1;
@@ -1679,7 +1695,10 @@ export function renderSidebar(
   })();
   const contactSortBar = activeDesktopTab === "contacts" ? buildContactSortBar() : null;
   const headerStack = contactSortBar ? el("div", { class: "sidebar-header-stack" }, [searchBar, contactSortBar]) : searchBar;
-  const header = el("div", { class: "sidebar-header" }, [headerStack]);
+  const header =
+    activeDesktopTab === "menu"
+      ? el("div", { class: "sidebar-header" }, [el("div", { class: "sidebar-header-title" }, ["Меню"])])
+      : el("div", { class: "sidebar-header" }, [headerStack]);
 
   const lastTsForKey = (key: string): number => {
     const conv = state.conversations[key] || [];
@@ -1796,6 +1815,80 @@ export function renderSidebar(
       // ignore
     }
   };
+
+  if (activeDesktopTab === "menu") {
+    const searchRow = roomRow("⌕", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
+      sub: "Найти по ID или @handle",
+      time: null,
+      hasDraft: false,
+    });
+    searchRow.setAttribute("title", "Поиск пользователей по ID или @handle");
+    const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
+      sub: "Имя, @handle, аватар",
+      time: null,
+      hasDraft: false,
+    });
+    profileRow.setAttribute("title", "Настройки профиля и интерфейса");
+    const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
+      sub: "История и загрузки",
+      time: null,
+      hasDraft: false,
+    });
+    filesRow.setAttribute("title", "Передача файлов и история");
+    const navRows: HTMLElement[] = [searchRow, profileRow, filesRow];
+
+    const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
+      sub: "Групповой чат и приглашения",
+      time: null,
+      hasDraft: false,
+    });
+    createGroupRow.setAttribute("title", "Создать новый групповой чат");
+    const createBoardRow = roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard(), undefined, {
+      sub: "Доска (чтение всем, запись владельцу)",
+      time: null,
+      hasDraft: false,
+    });
+    createBoardRow.setAttribute("title", "Создать новую доску");
+    const createRows: HTMLElement[] = [createGroupRow, createBoardRow];
+
+    const infoRow = roomRow("?", "Info", state.page === "help", () => onSetPage("help"), undefined, {
+      sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
+      time: null,
+      hasDraft: false,
+    });
+    infoRow.setAttribute("title", mobileUi ? "Справка и журнал обновлений" : "Подсказки по клавишам и журнал обновлений");
+
+    const accountRows: HTMLElement[] = [];
+    if (state.conn === "connected" && !state.authed) {
+      const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
+        sub: "Вход или регистрация",
+        time: null,
+        hasDraft: false,
+      });
+      loginRow.setAttribute("title", "Войти или зарегистрироваться");
+      accountRows.push(loginRow);
+    } else if (state.authed) {
+      const logoutIcon = mobileUi ? "⏻" : "⎋";
+      const logoutRow = roomRow(logoutIcon, mobileUi ? "Выход" : "Выход (F10)", false, () => onAuthLogout(), undefined, {
+        sub: "Завершить сессию",
+        time: null,
+        hasDraft: false,
+      });
+      logoutRow.setAttribute("title", mobileUi ? "Выйти из аккаунта" : "Выйти из аккаунта (F10)");
+      accountRows.push(logoutRow);
+    }
+
+    mountDesktop([
+      el("div", { class: "pane-section" }, ["Навигация"]),
+      ...navRows,
+      ...(accountRows.length ? [el("div", { class: "pane-section" }, ["Аккаунт"]), ...accountRows] : []),
+      el("div", { class: "pane-section" }, ["Создание"]),
+      ...createRows,
+      el("div", { class: "pane-section" }, ["Справка"]),
+      infoRow,
+    ]);
+    return;
+  }
 
   if (activeDesktopTab === "chats") {
     const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
