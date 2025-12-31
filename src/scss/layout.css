@@ -315,6 +315,7 @@ body.has-right-col .right-col {
 }
 
 .input-wrap > .composer-edit,
+.input-wrap > .composer-helper,
 .input-wrap > .board-editor,
 .input-wrap > .composer-row,
 .input-wrap > .composer-meta {
@@ -438,7 +439,8 @@ body.has-right-col .right-col {
 
 .input-wrap.input-wrap-no-composer .composer-field,
 .input-wrap.input-wrap-no-composer .composer-meta,
-.input-wrap.input-wrap-no-composer .composer-edit {
+.input-wrap.input-wrap-no-composer .composer-edit,
+.input-wrap.input-wrap-no-composer .composer-helper {
   display: none;
 }
 

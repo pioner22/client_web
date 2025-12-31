@@ -78,6 +78,24 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
       ["×"]
     ),
   ]);
+  const helperBar = el("div", { class: "composer-helper hidden", id: "composer-helper", role: "status", "aria-live": "polite" }, [
+    el("div", { class: "composer-helper-icon", id: "composer-helper-icon", "aria-hidden": "true" }, ["↩"]),
+    el("div", { class: "composer-helper-body" }, [
+      el("div", { class: "composer-helper-title", id: "composer-helper-title" }, ["Ответ"]),
+      el("div", { class: "composer-helper-text", id: "composer-helper-text" }, [""]),
+    ]),
+    el(
+      "button",
+      {
+        class: "btn composer-helper-cancel",
+        type: "button",
+        "data-action": "composer-helper-cancel",
+        title: "Отменить",
+        "aria-label": "Отменить",
+      },
+      ["×"]
+    ),
+  ]);
   const composerMeta = el("div", { class: "composer-meta" }, [
     el("span", { class: "composer-hint", "aria-hidden": "true" }, ["Shift+Enter — новая строка"]),
     el("span", { class: "composer-count", "aria-hidden": "true" }, ["0/4000"]),
@@ -186,7 +204,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     // Telegram-like: ✏️ стоит рядом со скрепкой (особенно важно на mobile, где смайлы скрыты).
     el("div", { class: "composer-field" }, [attachBtn, boardEditorBtn, emojiBtn, input]),
   ]);
-  const inputWrap = el("div", { class: "input-wrap" }, [editBar, boardEditorWrap, composerRow, composerMeta]);
+  const inputWrap = el("div", { class: "input-wrap" }, [editBar, helperBar, boardEditorWrap, composerRow, composerMeta]);
 
   const footer = el("footer", { class: "footer" });
   const toastHost = el("div", { class: "toast-host hidden", "aria-live": "polite", "aria-atomic": "true" });

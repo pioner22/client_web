@@ -2,7 +2,7 @@ import { el } from "../../helpers/dom/el";
 import { formatTime } from "../../helpers/time";
 import { conversationKey } from "../../helpers/chat/conversationKey";
 import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
-import type { AppState, ChatMessage, FileOfferIn, FileTransferEntry } from "../../stores/types";
+import type { AppState, ChatMessage, ChatMessageRef, FileOfferIn, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { fileBadge } from "../../helpers/files/fileBadge";
 import { safeUrl } from "../../helpers/security/safeUrl";
@@ -145,6 +145,46 @@ function resolveUserLabel(state: AppState, id: string, friendLabels?: Map<string
   if (p) return formatUserLabel(p.display_name || "", p.handle || "", pid);
   const fromFriends = friendLabels?.get(pid);
   return fromFriends || pid;
+}
+
+function refPreview(ref: ChatMessageRef): string {
+  const rawText = String(ref?.text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const text = rawText && !rawText.startsWith("[file]") ? rawText : "";
+  if (text) return text;
+  const attachment = ref?.attachment;
+  if (attachment?.kind === "file") {
+    const name = String(attachment.name || "файл");
+    const badge = fileBadge(name, attachment.mime);
+    let kindLabel = "Файл";
+    if (badge.kind === "image") kindLabel = "Фото";
+    else if (badge.kind === "video") kindLabel = "Видео";
+    else if (badge.kind === "audio") kindLabel = "Аудио";
+    else if (badge.kind === "archive") kindLabel = "Архив";
+    else if (badge.kind === "doc") kindLabel = "Документ";
+    else if (badge.kind === "pdf") kindLabel = "PDF";
+    return name ? `${kindLabel}: ${name}` : kindLabel;
+  }
+  if (attachment?.kind === "action") return "Действие";
+  return "Сообщение";
+}
+
+function renderMessageRef(
+  state: AppState,
+  ref: ChatMessageRef | null | undefined,
+  kind: "reply" | "forward",
+  friendLabels?: Map<string, string>
+): HTMLElement | null {
+  if (!ref) return null;
+  const fromId = String(ref.from || "").trim();
+  const sender = fromId ? resolveUserLabel(state, fromId, friendLabels) : "";
+  const titleBase = kind === "reply" ? "Ответ" : "Переслано";
+  const title = sender ? `${titleBase}: ${sender}` : titleBase;
+  return el("div", { class: `msg-ref msg-ref-${kind}` }, [
+    el("div", { class: "msg-ref-title" }, [title]),
+    el("div", { class: "msg-ref-text" }, [refPreview(ref)]),
+  ]);
 }
 
 function searchResultPreview(m: ChatMessage): string {
@@ -593,6 +633,12 @@ function messageLine(
   } else if (isPlainView && m.kind === "out") {
     bodyChildren.push(el("div", { class: "msg-from msg-from-self" }, ["Я"]));
   }
+  const ref = m.reply || m.forward;
+  if (ref) {
+    const kind = m.reply ? "reply" : "forward";
+    const refNode = renderMessageRef(state, ref, kind, friendLabels);
+    if (refNode) bodyChildren.push(refNode);
+  }
   const info = getFileAttachmentInfo(state, m, opts);
   if (info) {
     const name = info.name;
@@ -741,6 +787,12 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
     bodyChildren.push(node);
   } else if (isPlainView && first.msg.kind === "out") {
     bodyChildren.push(el("div", { class: "msg-from msg-from-self" }, ["Я"]));
+  }
+  const ref = first.msg.reply || first.msg.forward;
+  if (ref) {
+    const kind = first.msg.reply ? "reply" : "forward";
+    const refNode = renderMessageRef(state, ref, kind, friendLabels);
+    if (refNode) bodyChildren.push(refNode);
   }
 
   const gridItems: HTMLElement[] = [];

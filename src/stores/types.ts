@@ -217,6 +217,19 @@ export interface MessageReactions {
   mine?: string | null;
 }
 
+export interface ChatMessageRef {
+  id?: number | null;
+  localId?: string | null;
+  from?: string;
+  text?: string;
+  attachment?: ChatAttachment | null;
+}
+
+export interface MessageHelperDraft extends ChatMessageRef {
+  key: string;
+  preview: string;
+}
+
 export interface ChatMessage {
   ts: number;
   from: string;
@@ -230,6 +243,8 @@ export interface ChatMessage {
   edited_ts?: number;
   kind: "in" | "out" | "sys";
   attachment?: ChatAttachment | null;
+  reply?: ChatMessageRef | null;
+  forward?: ChatMessageRef | null;
   reactions?: MessageReactions | null;
 }
 
@@ -397,6 +412,8 @@ export interface AppState {
   drafts: Record<string, string>;
   input: string;
   editing: EditingMessageState | null;
+  replyDraft: MessageHelperDraft | null;
+  forwardDraft: MessageHelperDraft | null;
   boardComposerOpen: boolean;
   boardScheduledPosts: BoardScheduledPost[];
 

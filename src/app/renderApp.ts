@@ -76,6 +76,20 @@ function parseDatetimeLocal(value: string): number | null {
   return Number.isFinite(ts) ? ts : null;
 }
 
+function formatSenderLabel(state: AppState, senderId: string): string {
+  const id = String(senderId || "").trim();
+  if (!id) return "";
+  if (String(state.selfId || "") === id) return "Я";
+  const friend = state.friends.find((f) => f.id === id);
+  const profile = state.profiles?.[id];
+  const displayName = String(friend?.display_name || profile?.display_name || "").trim();
+  const handleRaw = String(friend?.handle || profile?.handle || "").trim();
+  const handle = handleRaw ? (handleRaw.startsWith("@") ? handleRaw : `@${handleRaw}`) : "";
+  if (displayName) return displayName;
+  if (handle) return handle;
+  return id;
+}
+
 function mountChat(layout: Layout, node: HTMLElement) {
   if (layout.chatHost.childNodes.length === 1 && layout.chatHost.firstChild === node) return;
   layout.chatHost.replaceChildren(node);
@@ -218,6 +232,10 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const sel = state.selected;
   const selectedKey = sel ? conversationKey(sel) : "";
   const editing = state.editing && state.editing.key === selectedKey ? state.editing : null;
+  const replyDraft = !editing && state.replyDraft && state.replyDraft.key === selectedKey ? state.replyDraft : null;
+  const forwardDraft = !editing && state.forwardDraft && state.forwardDraft.key === selectedKey ? state.forwardDraft : null;
+  const helperDraft = replyDraft || forwardDraft;
+  const helperKind = replyDraft ? "reply" : forwardDraft ? "forward" : null;
   const isBoardReadOnly = (() => {
     if (!chatInputVisible) return false;
     if (!sel || sel.kind !== "board") return false;
@@ -342,6 +360,22 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     } else if (editText) {
       editText.textContent = "";
     }
+  }
+
+  const helperBar = layout.inputWrap.querySelector("#composer-helper") as HTMLElement | null;
+  const helperIcon = layout.inputWrap.querySelector("#composer-helper-icon") as HTMLElement | null;
+  const helperTitle = layout.inputWrap.querySelector("#composer-helper-title") as HTMLElement | null;
+  const helperText = layout.inputWrap.querySelector("#composer-helper-text") as HTMLElement | null;
+  if (helperBar) {
+    helperBar.classList.toggle("hidden", !helperDraft);
+    helperBar.classList.toggle("composer-helper-forward", helperKind === "forward");
+    if (helperIcon) helperIcon.textContent = helperKind === "forward" ? "↪" : "↩";
+    if (helperTitle) {
+      const sender = helperDraft?.from ? formatSenderLabel(state, helperDraft.from) : "";
+      const titleBase = helperKind === "forward" ? "Переслано" : "Ответ";
+      helperTitle.textContent = sender ? `${titleBase}: ${sender}` : titleBase;
+    }
+    if (helperText) helperText.textContent = helperDraft?.preview || "";
   }
 
   renderHeader(layout, state);

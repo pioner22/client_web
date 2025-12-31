@@ -89,6 +89,8 @@ export function createInitialState(): AppState {
     drafts: {},
     input: "",
     editing: null,
+    replyDraft: null,
+    forwardDraft: null,
     boardComposerOpen: false,
     boardScheduledPosts: [],
     chatSearchOpen: false,

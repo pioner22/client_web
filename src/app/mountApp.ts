@@ -8,6 +8,7 @@ import type {
   ActionModalPayload,
   AppState,
   ChatMessage,
+  MessageHelperDraft,
   ContactSortMode,
   ConnStatus,
   ConfirmAction,
@@ -3455,6 +3456,8 @@ export function mountApp(root: HTMLElement) {
     store.set((p) => {
       const trimmed = nextKey ? applyConversationLimits(p, nextKey) : null;
       const nextRightPanel = p.rightPanel ? { kind: t.kind, id: t.id } : p.rightPanel;
+      const nextReplyDraft = p.replyDraft && p.replyDraft.key === nextKey ? p.replyDraft : null;
+      const nextForwardDraft = p.forwardDraft && p.forwardDraft.key === nextKey ? p.forwardDraft : null;
       return {
         ...p,
         selected: t,
@@ -3463,6 +3466,8 @@ export function mountApp(root: HTMLElement) {
         drafts: nextDrafts,
         input: nextText,
         editing: leavingEdit ? null : p.editing,
+        replyDraft: nextReplyDraft,
+        forwardDraft: nextForwardDraft,
         boardComposerOpen: t.kind === "board" ? p.boardComposerOpen : false,
         chatSearchOpen: false,
         chatSearchResultsOpen: false,
@@ -6469,10 +6474,68 @@ export function mountApp(root: HTMLElement) {
     scheduleSaveDrafts(store);
   }
 
+  function clearComposerHelper() {
+    const st = store.get();
+    if (!st.replyDraft && !st.forwardDraft) return;
+    store.set({ replyDraft: null, forwardDraft: null });
+  }
+
+  function helperPreviewFromMessage(msg: ChatMessage): string {
+    const rawText = String(msg.text || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const text = rawText && !rawText.startsWith("[file]") ? rawText : "";
+    if (text) return text;
+    const attachment = msg.attachment;
+    if (attachment?.kind === "file") {
+      const name = String(attachment.name || "файл");
+      const badge = fileBadge(name, attachment.mime);
+      let kindLabel = "Файл";
+      if (badge.kind === "image") kindLabel = "Фото";
+      else if (badge.kind === "video") kindLabel = "Видео";
+      else if (badge.kind === "audio") kindLabel = "Аудио";
+      else if (badge.kind === "archive") kindLabel = "Архив";
+      else if (badge.kind === "doc") kindLabel = "Документ";
+      else if (badge.kind === "pdf") kindLabel = "PDF";
+      return name ? `${kindLabel}: ${name}` : kindLabel;
+    }
+    if (attachment?.kind === "action") return "Действие";
+    return "Сообщение";
+  }
+
+  function buildHelperDraft(st: AppState, key: string, msg: ChatMessage): MessageHelperDraft | null {
+    const k = String(key || "").trim();
+    if (!k) return null;
+    if (!msg || msg.kind === "sys") return null;
+    const preview = helperPreviewFromMessage(msg);
+    const from = String(msg.from || "").trim();
+    const rawText = String(msg.text || "").trim();
+    const text = rawText && !rawText.startsWith("[file]") ? rawText : "";
+    const attachment = msg.attachment ?? null;
+    const id = typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
+    const localId = typeof msg.localId === "string" && msg.localId.trim() ? msg.localId.trim() : null;
+    return {
+      key: k,
+      preview,
+      ...(from ? { from } : {}),
+      ...(text ? { text } : {}),
+      ...(attachment ? { attachment } : {}),
+      ...(id !== null ? { id } : {}),
+      ...(localId ? { localId } : {}),
+    };
+  }
+
+  function helperDraftToRef(draft: MessageHelperDraft | null): ChatMessage["reply"] {
+    if (!draft) return null;
+    const { key, preview, ...rest } = draft;
+    return rest;
+  }
+
   function beginEditingMessage(key: string, msgId: number, text: string) {
     const k = String(key || "").trim();
     const id = Number.isFinite(Number(msgId)) ? Math.trunc(Number(msgId)) : 0;
     if (!k || id <= 0) return;
+    clearComposerHelper();
     const body = String(text ?? "");
     const prevDraft = layout.input.value || "";
     store.set((prev) => ({ ...prev, editing: { key: k, id, prevDraft }, input: body }));
@@ -6494,6 +6557,8 @@ export function mountApp(root: HTMLElement) {
     const sel = st.selected;
     const key = sel ? conversationKey(sel) : "";
     const editing = st.editing && key && st.editing.key === key ? st.editing : null;
+    const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
+    const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
     if (!text) return;
     if (text.length > APP_MSG_MAX_LEN) {
       store.set({ status: `Слишком длинное сообщение (${text.length}/${APP_MSG_MAX_LEN})` });
@@ -6558,6 +6623,8 @@ export function mountApp(root: HTMLElement) {
     const payload = sel.kind === "dm" ? { type: "send" as const, to: sel.id, text } : { type: "send" as const, room: sel.id, text };
     const sent = st.conn === "connected" ? gateway.send(payload) : false;
     const initialStatus = sent ? ("sending" as const) : ("queued" as const);
+    const replyRef = replyDraft ? helperDraftToRef(replyDraft) : null;
+    const forwardRef = forwardDraft ? helperDraftToRef(forwardDraft) : null;
 
     const localMsg = {
       kind: "out" as const,
@@ -6569,6 +6636,8 @@ export function mountApp(root: HTMLElement) {
       localId,
       id: null,
       status: initialStatus,
+      ...(replyRef ? { reply: replyRef } : {}),
+      ...(forwardRef ? { forward: forwardRef } : {}),
     };
 
     store.set((prev) => {
@@ -6592,7 +6661,7 @@ export function mountApp(root: HTMLElement) {
     scheduleBoardEditorPreview();
     store.set((prev) => {
       const drafts = updateDraftMap(prev.drafts, convKey, "");
-      return { ...prev, input: "", drafts };
+      return { ...prev, input: "", drafts, replyDraft: null, forwardDraft: null };
     });
     scheduleSaveDrafts(store);
 
@@ -7436,6 +7505,12 @@ export function mountApp(root: HTMLElement) {
         cancelEditing();
         return;
       }
+      if (st.replyDraft || st.forwardDraft) {
+        e.preventDefault();
+        e.stopPropagation();
+        clearComposerHelper();
+        return;
+      }
       if (boardEditorOpen) {
         e.preventDefault();
         e.stopPropagation();
@@ -7453,6 +7528,13 @@ export function mountApp(root: HTMLElement) {
     if (btn) {
       e.preventDefault();
       cancelEditing();
+      return;
+    }
+
+    const helperBtn = target?.closest("button[data-action='composer-helper-cancel']") as HTMLButtonElement | null;
+    if (helperBtn) {
+      e.preventDefault();
+      clearComposerHelper();
       return;
     }
 
@@ -8026,9 +8108,13 @@ export function mountApp(root: HTMLElement) {
           : "Скопировать текст";
       const canEdit = Boolean(canPin && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
       const canDeleteForAll = Boolean(canPin && canAct && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
+      const canReply = Boolean(msg && msg.kind !== "sys");
+      const helperBlocked = Boolean(st.editing);
       const primary: ContextMenuItem[] = [];
       if (fromId) primary.push(makeItem("msg_profile", "Профиль отправителя", "👤", { disabled: !canAct }));
       primary.push(makeItem("msg_copy", copyLabel, "📋", { disabled: !msg }));
+      primary.push(makeItem("msg_reply", "Ответить", "↩", { disabled: !canReply || helperBlocked }));
+      primary.push(makeItem("msg_forward", "Переслать", "↪", { disabled: !canReply || helperBlocked }));
       addGroup(primary);
 
       const editGroup: ContextMenuItem[] = [
@@ -8239,6 +8325,26 @@ export function mountApp(root: HTMLElement) {
         store.set({ pinnedMessages: next, pinnedMessageActive: nextActive });
         if (st.selfId) savePinnedMessagesForUser(st.selfId, next);
         showToast(wasPinned ? "Откреплено" : "Закреплено", { kind: "success" });
+        close();
+        return;
+      }
+
+      if (itemId === "msg_reply" || itemId === "msg_forward") {
+        if (!selKey || !msg) {
+          close();
+          return;
+        }
+        const draft = buildHelperDraft(st, selKey, msg);
+        if (!draft) {
+          close();
+          return;
+        }
+        if (itemId === "msg_reply") {
+          store.set({ replyDraft: draft, forwardDraft: null });
+        } else {
+          store.set({ forwardDraft: draft, replyDraft: null });
+        }
+        scheduleFocusComposer();
         close();
         return;
       }
