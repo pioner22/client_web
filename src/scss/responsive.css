@@ -128,6 +128,12 @@
     margin-bottom: 0;
   }
 
+  .sidebar-tabs.sidebar-tabs-mobile {
+    --sidebar-tabs-count: 4;
+    padding: 0 var(--sidebar-list-pad);
+    margin: 0 0 var(--sp-2);
+  }
+
   .sidebar-searchbar {
     margin-bottom: 0;
   }

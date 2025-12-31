@@ -675,7 +675,7 @@ export function renderSidebar(
     tabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
     tabBoards.addEventListener("click", () => onSetMobileSidebarTab("boards"));
     tabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
-    const tabs = el("div", { class: "sidebar-tabs sidebar-tabs-bottom", role: "tablist", "aria-label": "Раздел" }, [
+    const tabs = el("div", { class: "sidebar-tabs sidebar-tabs-mobile", role: "tablist", "aria-label": "Раздел" }, [
       tabContacts,
       tabBoards,
       tabChats,
@@ -727,10 +727,10 @@ export function renderSidebar(
     const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
 
     const sticky = el("div", { class: "sidebar-mobile-sticky" }, [
+      tabs,
       ...(searchBar ? [searchBar] : []),
       ...(contactSortBar ? [contactSortBar] : []),
     ]);
-    const bottom = el("div", { class: "sidebar-mobile-bottom" }, [tabs]);
     const takeScrollSnapshot = (): SidebarScrollSnapshot => {
       const scrollTop = body.scrollTop || 0;
       try {
@@ -773,7 +773,7 @@ export function renderSidebar(
     const mountMobile = (children: HTMLElement[]) => {
       const snap = isSameTab ? takeScrollSnapshot() : initialSnap;
       body.replaceChildren(...children);
-      target.replaceChildren(sticky, body, bottom);
+      target.replaceChildren(sticky, body);
       bindHeaderScroll(sticky);
       restoreScrollSnapshot(snap);
       try {
