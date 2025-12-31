@@ -298,6 +298,10 @@
     calc(var(--messages-container-width) - (var(--chat-pad) * 2))
   );
   --msg-body-max-width: min(85%, var(--messages-container-width));
+  --message-handhelds-margin: 5.5625rem;
+  --message-beside-button-size: 2.375rem;
+  --message-beside-button-margin: calc((var(--message-beside-button-size) + 0.5rem) * -1);
+  --message-time-background: rgba(0, 0, 0, 0.35);
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-end;
   --msg-sys-justify: flex-start;
