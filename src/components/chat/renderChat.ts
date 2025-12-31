@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { formatTime } from "../../helpers/time";
 import { conversationKey } from "../../helpers/chat/conversationKey";
+import { messageSelectionKey } from "../../helpers/chat/chatSelection";
 import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import type { AppState, ChatMessage, ChatMessageRef, FileOfferIn, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
@@ -33,6 +34,16 @@ function formatDayLabel(ts: number): string {
   } catch {
     return dayKey(ts) || "—";
   }
+}
+
+function formatSelectionCount(count: number): string {
+  const n = Math.max(0, Math.trunc(count));
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  let word = "сообщений";
+  if (mod10 === 1 && mod100 !== 11) word = "сообщение";
+  else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) word = "сообщения";
+  return `${n} ${word}`;
 }
 
 function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement {
@@ -877,6 +888,10 @@ export function renderChat(layout: Layout, state: AppState) {
   const scrollHost = layout.chatHost;
   const hostState = scrollHost as any;
   const key = state.selected ? conversationKey(state.selected) : "";
+  const selectionState = state.chatSelection && state.chatSelection.key === key ? state.chatSelection : null;
+  const selectionSet =
+    selectionState && Array.isArray(selectionState.ids) && selectionState.ids.length ? new Set(selectionState.ids) : null;
+  const selectionCount = selectionSet ? selectionSet.size : 0;
   layout.chat.classList.toggle("chat-board", Boolean(state.selected && state.selected.kind === "board"));
   const prevKey = String(scrollHost.getAttribute("data-chat-key") || "");
   const keyChanged = key !== prevKey;
@@ -911,6 +926,8 @@ export function renderChat(layout: Layout, state: AppState) {
     layout.chatSearchResults.replaceChildren();
     layout.chatSearchFooter.classList.add("hidden");
     layout.chatSearchFooter.replaceChildren();
+    layout.chatSelectionBar.classList.add("hidden");
+    layout.chatSelectionBar.replaceChildren();
     return;
   }
 
@@ -1008,6 +1025,13 @@ export function renderChat(layout: Layout, state: AppState) {
         if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
         const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
         const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
+        if (selectionSet) {
+          const selected = group.some((item) => {
+            const selKey = messageSelectionKey(item.msg);
+            return selKey ? selectionSet.has(selKey) : false;
+          });
+          if (selected) line.classList.add("msg-selected");
+        }
         line.setAttribute("data-msg-idx", String(group[group.length - 1].idx));
         if (hit) line.classList.add("msg-hit");
         if (active) line.classList.add("msg-hit-active");
@@ -1021,6 +1045,10 @@ export function renderChat(layout: Layout, state: AppState) {
     const line = messageLine(state, m, friendLabels, { mobileUi, boardUi, msgIdx });
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
     line.setAttribute("data-msg-idx", String(msgIdx));
+    if (selectionSet) {
+      const selKey = messageSelectionKey(m);
+      if (selKey && selectionSet.has(selKey)) line.classList.add("msg-selected");
+    }
     if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");
     if (activeMsgIdx === msgIdx) line.classList.add("msg-hit-active");
     lineItems.push(line);
@@ -1316,6 +1344,26 @@ export function renderChat(layout: Layout, state: AppState) {
   } else {
     layout.chatSearchFooter.classList.add("hidden");
     layout.chatSearchFooter.replaceChildren();
+  }
+  if (selectionCount > 0) {
+    const cancelBtn = el(
+      "button",
+      {
+        class: "btn chat-selection-cancel",
+        type: "button",
+        "data-action": "chat-selection-cancel",
+        "aria-label": "Отменить выбор",
+        title: "Отменить выбор",
+      },
+      ["×"]
+    );
+    const countNode = el("div", { class: "chat-selection-count" }, [formatSelectionCount(selectionCount)]);
+    const inner = el("div", { class: "chat-selection-inner" }, [cancelBtn, countNode]);
+    layout.chatSelectionBar.classList.remove("hidden");
+    layout.chatSelectionBar.replaceChildren(inner);
+  } else {
+    layout.chatSelectionBar.classList.add("hidden");
+    layout.chatSelectionBar.replaceChildren();
   }
   scrollHost.replaceChildren(el("div", { class: "chat-lines" }, lines));
 

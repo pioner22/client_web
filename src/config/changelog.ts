@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.316",
+    date: "2025-12-31",
+    improved: ["Чаты: selection overlay — выбор сообщений + панель со счётчиком и отменой (MVP)"],
+  },
+  {
     version: "0.1.315",
     date: "2025-12-31",
     improved: ["Чаты: подготовка selection overlay (состояние + место в лейауте)"],

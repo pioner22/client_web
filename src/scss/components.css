@@ -964,6 +964,48 @@
   margin-bottom: var(--sp-2);
 }
 
+.chat-selection-bar {
+  position: relative;
+  z-index: 5;
+  padding: 8px 12px;
+  background: var(--surface-color, var(--panel2));
+  border-top: 1px solid color-mix(in srgb, var(--line), transparent 20%);
+}
+
+.chat-selection-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: min(680px, 100%);
+  margin: 0 auto;
+}
+
+.chat-selection-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.btn.chat-selection-cancel {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sel), transparent 25%);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 20%);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn.chat-selection-cancel:hover {
+  background: color-mix(in srgb, var(--sel), transparent 5%);
+}
+
+.btn.chat-selection-cancel:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
 .chat-title .avatar {
   width: var(--chat-title-avatar-size, 20px);
   height: var(--chat-title-avatar-size, 20px);
@@ -1951,6 +1993,10 @@
 .msg-attach .msg-text.msg-caption {
   padding: 10px 12px 10px;
   border-top: 1px solid color-mix(in srgb, var(--line), transparent 65%);
+}
+
+.msg-selected .msg-body {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus), transparent 30%);
 }
 
 .msg-attach .msg-meta {

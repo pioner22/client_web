@@ -24,6 +24,7 @@ import type {
   MessageViewMode,
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
+import { messageSelectionKey } from "../helpers/chat/chatSelection";
 import { newestServerMessageId } from "../helpers/chat/historySync";
 import {
   HISTORY_VIRTUAL_OVERSCAN,
@@ -476,6 +477,29 @@ export function mountApp(root: HTMLElement) {
       return { ...prev, input: nextTrimmed, drafts };
     });
     scheduleSaveDrafts(store);
+  }
+
+  function clearChatSelection() {
+    const st = store.get();
+    if (!st.chatSelection) return;
+    store.set({ chatSelection: null });
+  }
+
+  function toggleChatSelection(key: string, msg: ChatMessage) {
+    if (!key) return;
+    if (!msg || msg.kind === "sys") return;
+    const selId = messageSelectionKey(msg);
+    if (!selId) return;
+    store.set((prev) => {
+      const current = prev.chatSelection;
+      if (!current || current.key !== key) {
+        return { ...prev, chatSelection: { key, ids: [selId] } };
+      }
+      const ids = new Set(current.ids || []);
+      if (ids.has(selId)) ids.delete(selId);
+      else ids.add(selId);
+      return { ...prev, chatSelection: ids.size ? { key, ids: Array.from(ids) } : null };
+    });
   }
 
   function formatSearchServerShareLine(st: AppState, entry: SearchResultEntry): string {
@@ -1819,6 +1843,28 @@ export function mountApp(root: HTMLElement) {
       }
     }
 
+    const stForSelection = store.get();
+    const selectionKey = stForSelection.selected ? conversationKey(stForSelection.selected) : "";
+    const selectionActive =
+      Boolean(selectionKey) &&
+      Boolean(stForSelection.chatSelection && stForSelection.chatSelection.key === selectionKey) &&
+      Boolean(stForSelection.chatSelection?.ids?.length);
+    if (selectionActive) {
+      if (target?.closest("button, a, input, textarea, [contenteditable='true']")) return;
+      const row = target?.closest("[data-msg-idx]") as HTMLElement | null;
+      if (row) {
+        const idx = Math.trunc(Number(row.getAttribute("data-msg-idx") || ""));
+        const conv = selectionKey ? stForSelection.conversations[selectionKey] : null;
+        const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+        if (msg) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleChatSelection(selectionKey, msg);
+          return;
+        }
+      }
+    }
+
     const reactBtn = target?.closest("button[data-action='msg-react'][data-emoji]") as HTMLButtonElement | null;
     if (reactBtn) {
       const st = store.get();
@@ -1882,6 +1928,13 @@ export function mountApp(root: HTMLElement) {
     if (historyMoreBtn) {
       e.preventDefault();
       requestMoreHistory();
+      return;
+    }
+
+    const selectionCancelBtn = target?.closest("button[data-action='chat-selection-cancel']") as HTMLButtonElement | null;
+    if (selectionCancelBtn) {
+      e.preventDefault();
+      clearChatSelection();
       return;
     }
 
@@ -3490,6 +3543,7 @@ export function mountApp(root: HTMLElement) {
         editing: leavingEdit ? null : p.editing,
         replyDraft: nextReplyDraft,
         forwardDraft: nextForwardDraft,
+        chatSelection: null,
         boardComposerOpen: t.kind === "board" ? p.boardComposerOpen : false,
         chatSearchOpen: false,
         chatSearchResultsOpen: false,
@@ -8109,6 +8163,10 @@ export function mountApp(root: HTMLElement) {
       const conv = selKey ? st.conversations[selKey] : null;
       const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
       const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
+      const selectionId = msg ? messageSelectionKey(msg) : null;
+      const selectionActive = Boolean(st.chatSelection && st.chatSelection.key === selKey);
+      const selectionSelected = Boolean(selectionActive && selectionId && st.chatSelection?.ids?.includes(selectionId));
+      const canSelect = Boolean(selectionId && msg?.kind !== "sys");
       const canPin = Boolean(selKey && msgId !== null && msgId > 0);
       const isPinned = Boolean(canPin && msgId !== null && isPinnedMessage(st.pinnedMessages, selKey, msgId));
       const mine = typeof msg?.reactions?.mine === "string" ? msg.reactions.mine : null;
@@ -8134,6 +8192,14 @@ export function mountApp(root: HTMLElement) {
       const helperBlocked = Boolean(st.editing);
       const primary: ContextMenuItem[] = [];
       if (fromId) primary.push(makeItem("msg_profile", "Профиль отправителя", "👤", { disabled: !canAct }));
+      primary.push(
+        makeItem(
+          "msg_select_toggle",
+          selectionSelected ? "Снять выбор" : "Выбрать",
+          selectionSelected ? "☑️" : "✅",
+          { disabled: !canSelect }
+        )
+      );
       primary.push(makeItem("msg_copy", copyLabel, "📋", { disabled: !msg }));
       primary.push(makeItem("msg_reply", "Ответить", "↩", { disabled: !canReply || helperBlocked }));
       primary.push(makeItem("msg_forward", "Переслать", "↪", { disabled: !canReply || helperBlocked }));
@@ -8325,6 +8391,16 @@ export function mountApp(root: HTMLElement) {
           msg?.attachment?.kind === "file" ? (caption || String(msg.attachment.name || "файл")) : String(msg?.text || "");
         const ok = await copyText(text);
         showToast(ok ? "Скопировано" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
+        close();
+        return;
+      }
+
+      if (itemId === "msg_select_toggle") {
+        if (!selKey || !msg) {
+          close();
+          return;
+        }
+        toggleChatSelection(selKey, msg);
         close();
         return;
       }
