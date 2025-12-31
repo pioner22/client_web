@@ -405,6 +405,10 @@
   white-space: nowrap;
 }
 
+.sidebar .row-sub {
+  font-size: 12px;
+}
+
 .row-sub-draft {
   color: color-mix(in srgb, var(--warn), #ffffff 10%);
 }
