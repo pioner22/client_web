@@ -52,21 +52,7 @@ export function renderHeader(layout: Layout, state: AppState) {
     }
   }
 
-  const canChatSearch = state.page === "main" && Boolean(state.selected) && !state.modal;
-  const chatSearchBtn = canChatSearch
-    ? el(
-        "button",
-        {
-          class: state.chatSearchOpen ? "hk-btn hdr-search btn-active" : "hk-btn hdr-search",
-          type: "button",
-          "data-action": state.chatSearchOpen ? "chat-search-close" : "chat-search-open",
-          title: "Поиск в чате",
-          "aria-label": state.chatSearchOpen ? "Закрыть поиск в чате" : "Поиск в чате",
-        },
-        []
-      )
-    : null;
-
+  const chatSearchBtn = null;
   const navBackToMain = state.page !== "main";
   const navShowsBack = navBackToMain || (state.page === "main" && Boolean(state.selected));
   const navAction = navBackToMain ? "nav-back" : "sidebar-toggle";
@@ -91,8 +77,7 @@ export function renderHeader(layout: Layout, state: AppState) {
     "  ",
     el("span", { class: "hdr-ver", title: verTitle || undefined }, [`v${webBuild.version || "—"}`]),
     el("span", { class: "hdr-sep" }, [" | "]),
-    el("span", { class: "hdr-title" }, [title]),
-    ...(chatSearchBtn ? [" ", chatSearchBtn] : [])
+    el("span", { class: "hdr-title" }, [title])
   );
   layout.headerRight.textContent = state.status || "";
 

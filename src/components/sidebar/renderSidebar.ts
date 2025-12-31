@@ -627,14 +627,6 @@ export function renderSidebar(
       }
     }
     if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
-    const topTitle =
-      activeTab === "contacts" ? "Контакты" : activeTab === "boards" ? "Доски" : activeTab === "menu" ? "Меню" : "Чаты";
-
-    const top = el("div", { class: "sidebar-mobile-top" }, [
-      el("div", { class: "sidebar-close sidebar-close-spacer", "aria-hidden": "true" }, [""]),
-      el("div", { class: "sidebar-mobile-title" }, [topTitle]),
-    ]);
-
     const tabContacts = el(
       "button",
       {
@@ -735,7 +727,6 @@ export function renderSidebar(
     const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
 
     const sticky = el("div", { class: "sidebar-mobile-sticky" }, [
-      top,
       ...(searchBar ? [searchBar] : []),
       ...(contactSortBar ? [contactSortBar] : []),
     ]);
