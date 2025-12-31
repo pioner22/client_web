@@ -9890,6 +9890,7 @@ export function mountApp(root: HTMLElement) {
     const st = store.get();
     if (st.modal) return;
     if (!st.selected) return;
+    if (st.chatSelection && st.selected && st.chatSelection.key === conversationKey(st.selected)) return;
     const ev = e as PointerEvent;
     // Only long-press for touch/pen (mouse has right click).
     if (ev.pointerType === "mouse") return;
@@ -9907,7 +9908,16 @@ export function mountApp(root: HTMLElement) {
       msgLongPressTimer = null;
       // После long-press обычно прилетает "click" — глушим его, чтобы не открывать вложения/не прыгать.
       suppressChatClickUntil = Date.now() + 1200;
-      openContextMenu({ kind: "message", id: msgLongPressIdx }, msgLongPressStartX, msgLongPressStartY);
+      const stSnapshot = store.get();
+      if (!stSnapshot.selected) return;
+      const selKey = conversationKey(stSnapshot.selected);
+      if (!selKey) return;
+      const idxNum = Math.trunc(Number(msgLongPressIdx));
+      if (!Number.isFinite(idxNum) || idxNum < 0) return;
+      const conv = stSnapshot.conversations[selKey] || null;
+      const msg = conv && idxNum >= 0 && idxNum < conv.length ? conv[idxNum] : null;
+      if (!msg || msg.kind === "sys") return;
+      toggleChatSelection(selKey, msg);
     }, 520);
   });
 
