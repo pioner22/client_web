@@ -401,9 +401,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onAuthLogout,
     layout.sidebarDock
   );
-  const shouldResetSidebarScroll = layout.sidebarBody.dataset.sidebarResetScroll === "1";
+  const shouldResetSidebarScroll =
+    layout.sidebarBody.dataset.sidebarResetScroll === "1" || layout.sidebar.dataset.sidebarResetScroll === "1";
   if (shouldResetSidebarScroll) {
     delete layout.sidebarBody.dataset.sidebarResetScroll;
+    delete layout.sidebar.dataset.sidebarResetScroll;
     layout.sidebarBody.scrollTop = 0;
     layout.sidebarBody.scrollLeft = 0;
   } else {

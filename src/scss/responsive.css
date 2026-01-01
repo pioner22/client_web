@@ -941,6 +941,20 @@
   }
 }
 
+html.is-standalone {
+  --app-outer-pad: 0px;
+  --app-max-width: 100%;
+  --app-border-width: 0px;
+  --app-radius: 0px;
+  --app-shadow: none;
+  --app-overflow: hidden;
+}
+
+html.is-standalone .hdr-label,
+html.is-standalone .hdr-id,
+html.is-standalone .hdr-ver,
+html.is-standalone .hdr-sep,
+html.is-standalone .hotkeys,
 html.is-standalone .footer {
   display: none;
 }

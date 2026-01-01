@@ -2735,6 +2735,7 @@ export function mountApp(root: HTMLElement) {
 
   const markSidebarResetScroll = () => {
     try {
+      layout.sidebar.dataset.sidebarResetScroll = "1";
       layout.sidebarBody.dataset.sidebarResetScroll = "1";
     } catch {
       // ignore
@@ -2785,10 +2786,11 @@ export function mountApp(root: HTMLElement) {
       if (store.get().mobileSidebarTab === "contacts") {
         markSidebarResetScroll();
       }
+      const resetScroll = () => {
+        if (store.get().mobileSidebarTab === "contacts") resetSidebarScrollTop();
+      };
       queueMicrotask(() => {
-        if (store.get().mobileSidebarTab === "contacts") {
-          resetSidebarScrollTop();
-        }
+        resetScroll();
         const searchInput = layout.sidebar.querySelector(".sidebar-search-input") as HTMLInputElement | null;
         if (searchInput && !searchInput.disabled) {
           searchInput.focus();
@@ -2801,6 +2803,13 @@ export function mountApp(root: HTMLElement) {
         }
         layout.sidebarBody?.focus?.();
       });
+      try {
+        if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(() => resetScroll());
+        }
+      } catch {
+        // ignore
+      }
     } else if (restoreKey) {
       scrollChatToBottom(restoreKey);
     }
@@ -2839,7 +2848,15 @@ export function mountApp(root: HTMLElement) {
     syncNavOverlay();
     if (shouldOpen && store.get().mobileSidebarTab === "contacts") {
       markSidebarResetScroll();
-      queueMicrotask(() => resetSidebarScrollTop());
+      const resetScroll = () => resetSidebarScrollTop();
+      queueMicrotask(() => resetScroll());
+      try {
+        if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(() => resetScroll());
+        }
+      } catch {
+        // ignore
+      }
     }
     if (restoreKey) {
       scrollChatToBottom(restoreKey);

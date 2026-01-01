@@ -144,7 +144,11 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const innerDiff = lastStableLayout && inner ? Math.max(0, lastStableLayout - inner) : 0;
     const keyboardByInner = Boolean(iosEnv && focusLikely && innerDiff >= USE_VISUAL_VIEWPORT_DIFF_PX);
     const keyboardVisible = Boolean(keyboard || (iosEnv && (keyboardByViewport || keyboardByInner)));
-    const useVisualViewportHeight = Boolean(iosEnv && vvHeight && vvHeight > 0 && base > 0 && base - vvHeight >= USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX);
+    const allowVisualViewportHeight = Boolean(
+      iosEnv && vvHeight && vvHeight > 0 && base > 0 && base - vvHeight >= USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX
+    );
+    // iOS standalone: prefer layout height when keyboard is closed to avoid clipping header/footer.
+    const useVisualViewportHeight = Boolean(allowVisualViewportHeight && (!iosStandalone || keyboardVisible));
     const resolved = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : useVisualViewportHeight ? vvHeight : base;
     const height = Math.round(Number(resolved) || 0);
     const vhHeight = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : base;
