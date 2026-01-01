@@ -1,4 +1,5 @@
 import { normalizeSkinId } from "../skin/skin";
+import { scheduleChromeColorSync } from "../ui/chromeColors";
 
 export type ThemeMode = "light" | "dark";
 
@@ -40,4 +41,5 @@ export function applyTheme(theme: ThemeMode): void {
   } catch {
     // ignore
   }
+  scheduleChromeColorSync();
 }

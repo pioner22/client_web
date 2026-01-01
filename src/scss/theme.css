@@ -155,8 +155,8 @@
   --surface-color: var(--panel2);
 
   --composer-bg: var(--panel);
-  /* Background color for iOS safe-area (home indicator zone). Should match the bottom bar. */
-  --safe-area-bg: var(--composer-bg);
+  /* Background color for iOS safe-area (home indicator zone). */
+  --safe-area-bg: var(--app-bg);
   --composer-border-color: var(--line);
   --composer-border-width: var(--border-width);
   --composer-pad-y: 10px;

@@ -1,4 +1,5 @@
 import type { SkinInfo } from "../../stores/types";
+import { scheduleChromeColorSync } from "../ui/chromeColors";
 
 const STORAGE_KEY = "yagodka_skin";
 const LINK_ID = "yagodka-skin-css";
@@ -35,11 +36,14 @@ export function applySkin(id: string): void {
   } catch {
     // ignore
   }
+  scheduleChromeColorSync();
 
   const existing = document.getElementById(LINK_ID) as HTMLLinkElement | null;
   const href = `./skins/${encodeURIComponent(norm)}.css`;
   if (existing) {
     if ((existing.getAttribute("href") || "") !== href) existing.setAttribute("href", href);
+    existing.addEventListener("load", scheduleChromeColorSync, { once: true });
+    existing.addEventListener("error", scheduleChromeColorSync, { once: true });
     return;
   }
 
@@ -47,7 +51,10 @@ export function applySkin(id: string): void {
   link.id = LINK_ID;
   link.rel = "stylesheet";
   link.href = href;
+  link.addEventListener("load", scheduleChromeColorSync, { once: true });
+  link.addEventListener("error", scheduleChromeColorSync, { once: true });
   document.head.appendChild(link);
+  scheduleChromeColorSync();
 }
 
 export async function fetchAvailableSkins(): Promise<SkinInfo[] | null> {

@@ -129,7 +129,7 @@
   --composer-gap: var(--sp-3);
   --prompt-color: rgba(63, 233, 214, 0.75);
 
-  --footer-bg: rgba(9, 12, 22, 0.98);
+  --footer-bg: var(--bg);
   --footer-border-color: rgba(255, 91, 220, 0.16);
   --footer-border-width: 1px;
   --footer-pad-y: var(--sp-2);

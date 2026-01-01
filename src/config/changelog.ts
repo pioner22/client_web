@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.357",
+    date: "2026-01-02",
+    fixed: [
+      "iOS/PWA: цвет status bar и маски иконки синхронизирован с фоном приложения",
+      "iOS/PWA: safe-area снизу красится в цвет фона (без тёмного подвала)",
+    ],
+  },
+  {
     version: "0.1.356",
     date: "2026-01-01",
     fixed: ["Шапка: цвет совпадает с фоном приложения (включая область с «чёлкой»)"],
