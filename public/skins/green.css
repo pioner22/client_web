@@ -1,8 +1,8 @@
 /* Yagodka skin: green */
 :root {
   --bg: #06100a;
-  --panel: #071a10;
-  --panel2: #072015;
+  --panel: var(--bg);
+  --panel2: var(--bg);
   --line: #1b4d33;
   --text: #a7f3d0;
   --muted: #6ee7b7;
@@ -13,4 +13,3 @@
   --focus: #34d399;
   --overlay: rgba(0, 0, 0, 0.65);
 }
-

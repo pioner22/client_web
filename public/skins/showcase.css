@@ -12,8 +12,8 @@
 :root {
   /* ===== Core palette (базовые цвета) ===== */
   --bg: #070815;
-  --panel: #0c1224;
-  --panel2: #111b33;
+  --panel: var(--bg);
+  --panel2: var(--bg);
   --line: rgba(167, 139, 250, 0.28);
   --text: #e5e7eb;
   --muted: rgba(229, 231, 235, 0.62);

@@ -7,8 +7,8 @@
 :root {
   /* Базовые ключевые токены (остальные уже заданы в `client-web/src/scss/theme.css`). */
   --bg: #0b0f14;
-  --panel: #0f1620;
-  --panel2: #101a26;
+  --panel: var(--bg);
+  --panel2: var(--bg);
   --line: #223044;
   --text: #cbd5e1;
   --muted: #94a3b8;
@@ -19,4 +19,3 @@
   --focus: #3b82f6;
   --overlay: rgba(0, 0, 0, 0.6);
 }
-

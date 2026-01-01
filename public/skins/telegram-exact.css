@@ -8,8 +8,8 @@
 
   /* ===== Core palette ===== */
   --bg: #e6ebee;
-  --panel: #ffffff;
-  --panel2: #f5f7f8;
+  --panel: var(--bg);
+  --panel2: var(--bg);
   --line: #dfe1e5;
   --text: #000000;
   --muted: #707579;
@@ -190,8 +190,8 @@
 
   /* ===== Core palette ===== */
   --bg: #0e1621;
-  --panel: #17212b;
-  --panel2: #1b2735;
+  --panel: var(--bg);
+  --panel2: var(--bg);
   --line: rgba(255, 255, 255, 0.06);
   --text: #e6e9ee;
   --muted: #8b9bb0;

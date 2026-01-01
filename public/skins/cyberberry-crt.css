@@ -11,8 +11,8 @@
 
   /* ===== Core palette ===== */
   --bg: #05060a;
-  --panel: #0b0f1a;
-  --panel2: #10182b;
+  --panel: var(--bg);
+  --panel2: var(--bg);
   --line: rgba(255, 91, 220, 0.24);
   --text: #e7edf7;
   --muted: rgba(231, 237, 247, 0.6);

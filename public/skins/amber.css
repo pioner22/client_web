@@ -1,8 +1,8 @@
 /* Yagodka skin: amber */
 :root {
   --bg: #0b0a06;
-  --panel: #131107;
-  --panel2: #17140a;
+  --panel: var(--bg);
+  --panel2: var(--bg);
   --line: #3b2a0a;
   --text: #fde68a;
   --muted: #fbbf24;
@@ -13,4 +13,3 @@
   --focus: #f59e0b;
   --overlay: rgba(0, 0, 0, 0.7);
 }
-
