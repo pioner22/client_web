@@ -218,7 +218,7 @@ test("mobile sidebar: Контакты не содержат пункты мен
         helper.renderSidebar(target, mkState("contacts"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         assert.equal(hasText(target, "Поиск"), false);
         assert.equal(hasText(target, "Создать чат"), false);
-        assert.equal(hasText(target, "Онлайн"), true);
+        assert.equal(hasText(target, "Онлайн"), false);
       },
       { isMobile: true }
     );

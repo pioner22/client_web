@@ -101,6 +101,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     } catch {
       // ignore
     }
+    if (safeBottomRaw > 0 && gapBottom > safeBottomRaw) gapBottom = safeBottomRaw;
     // Fallback: if screen.height is not available (tests/odd environments), reuse safe-area inset as the "gap".
     // On real iOS devices screen.height exists; we avoid treating safe-area as gap when there is no evidence.
     if (iosStandalone && !screenMax && !gapBottom && safeBottomRaw > 0 && safeBottomRaw <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = safeBottomRaw;

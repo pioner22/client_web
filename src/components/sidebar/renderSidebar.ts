@@ -5,12 +5,10 @@ import { formatTime } from "../../helpers/time";
 import { focusElement } from "../../helpers/ui/focus";
 import { isIOS, isStandaloneDisplayMode } from "../../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
-import { normalizeContactSortMode } from "../../helpers/ui/contactSort";
 import type {
   ActionModalPayload,
   AppState,
   ChatMessage,
-  ContactSortMode,
   ContextMenuTargetKind,
   FriendEntry,
   MobileSidebarTab,
@@ -343,7 +341,6 @@ export function renderSidebar(
   onCreateBoard: () => void,
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void,
   onSetSidebarQuery: (query: string) => void,
-  onContactSortChange: (mode: ContactSortMode) => void,
   onAuthOpen: () => void,
   onAuthLogout: () => void,
   sidebarDock?: HTMLElement | null
@@ -384,40 +381,6 @@ export function renderSidebar(
       out.push(row);
     }
     return out;
-  };
-  const contactSortOptions: Array<{ id: ContactSortMode; label: string }> = [
-    { id: "online", label: "По активности" },
-    { id: "top", label: "Топ" },
-    { id: "name", label: "По имени" },
-  ];
-  const buildContactSortBar = (): HTMLElement => {
-    const buttons = contactSortOptions.map((item) => {
-      const active = contactSortMode === item.id;
-      const btn = el(
-        "button",
-        {
-          class: `search-filter${active ? " is-active" : ""}`,
-          type: "button",
-          role: "tab",
-          "aria-selected": String(active),
-        },
-        [item.label]
-      );
-      btn.addEventListener("click", () => {
-        if (contactSortMode === item.id) return;
-        onContactSortChange(item.id);
-      });
-      return btn;
-    });
-    return el(
-      "div",
-      {
-        class: "search-filters sidebar-contact-sort",
-        role: "tablist",
-        "aria-label": "Сортировка контактов",
-      },
-      buttons
-    );
   };
   const dialogPriority = (opts: { hasDraft: boolean; unread?: number; attention?: boolean; mention?: boolean }): number => {
     let score = 0;
@@ -485,17 +448,24 @@ export function renderSidebar(
     const ts = Date.parse(String(raw));
     return Number.isFinite(ts) ? ts : 0;
   };
-  const compareFriendsByLastSeen = (a: FriendEntry, b: FriendEntry): number => {
-    const aSeen = lastSeenTs(a);
-    const bSeen = lastSeenTs(b);
-    if (aSeen !== bSeen) return bSeen - aSeen;
-    return displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
+  const lastTsForKey = (key: string): number => {
+    const conv = state.conversations[key] || [];
+    const last = conv.length ? conv[conv.length - 1] : null;
+    const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
+    return Math.max(0, ts);
   };
-  const compareFriendsByName = (a: FriendEntry, b: FriendEntry): number =>
-    displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
-  const compareFriendsByStatus = (a: FriendEntry, b: FriendEntry): number => {
-    if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
-    return compareFriendsByLastSeen(a, b);
+  const lastActivityTs = (f: FriendEntry): number => {
+    const id = String(f.id || "").trim();
+    if (!id) return 0;
+    const ts = lastTsForKey(dmKey(id));
+    if (ts) return ts;
+    return lastSeenTs(f);
+  };
+  const compareFriendsByActivity = (a: FriendEntry, b: FriendEntry): number => {
+    const aTs = lastActivityTs(a);
+    const bTs = lastActivityTs(b);
+    if (aTs !== bTs) return bTs - aTs;
+    return displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
   };
 
   const drafts = state.drafts || {};
@@ -506,20 +476,13 @@ export function renderSidebar(
   const isMuted = (id: string): boolean => mutedSet.has(String(id || "").trim());
   const selfMentionHandles = collectSelfMentionHandles(state);
   const friendIdSet = new Set((state.friends || []).map((f) => String(f.id || "").trim()).filter(Boolean));
-  const friendsById = new Map((state.friends || []).map((f) => [String(f.id || "").trim(), f]));
-  const topPeersRaw = Array.isArray(state.topPeers) ? state.topPeers : [];
-  const topPeerIds = topPeersRaw.map((p) => String(p?.id || "").trim()).filter(Boolean);
-  const topPeerSet = new Set(topPeerIds);
   const unknownAttnPeers = Array.from(attnSet).filter((id) => !friendIdSet.has(id)).sort();
-  const online = state.friends.filter((f) => f.online);
-  const offline = state.friends.filter((f) => !f.online);
   const boards = state.boards || [];
   const groups = state.groups || [];
   const sel = state.selected;
   const sidebarQueryRaw = compactOneLine(String((state as any).sidebarQuery || ""));
   const sidebarQuery = sidebarQueryRaw.toLowerCase();
   const hasSidebarQuery = Boolean(sidebarQuery);
-  const contactSortMode = normalizeContactSortMode(state.contactSortMode);
   const body = (() => {
     const existing =
       typeof (target as HTMLElement | null)?.querySelector === "function"
@@ -538,6 +501,17 @@ export function renderSidebar(
     toggleClass(sidebarDock, "sidebar-mobile-bottom", false);
     sidebarDock.replaceChildren();
   }
+  const prevPage = String((target as any)._sidebarPrevPage || "").trim();
+  const pageChanged = Boolean(prevPage && prevPage !== state.page);
+  if (pageChanged && state.page === "main") {
+    try {
+      (target as HTMLElement).dataset.sidebarResetScroll = "1";
+      body.dataset.sidebarResetScroll = "1";
+    } catch {
+      // ignore
+    }
+  }
+  (target as any)._sidebarPrevPage = state.page;
   const forceResetScroll = (() => {
     try {
       return (
@@ -585,19 +559,6 @@ export function renderSidebar(
     return matchesQuery([name, h, id].filter(Boolean).join(" "));
   };
 
-  const buildTopPeerRows = (): HTMLElement[] => {
-    const rows = topPeerIds.map((id) => {
-      const f = friendsById.get(id);
-      if (!f) return null;
-      if (pinnedSet.has(dmKey(id))) return null;
-      if (!matchesFriend(f)) return null;
-      const k = dmKey(id);
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attnSet.has(id));
-    });
-    return markCompactAvatarRows(rows);
-  };
-
   const hasActiveDialogForFriend = (f: FriendEntry): boolean => {
     const id = String(f.id || "").trim();
     if (!id) return false;
@@ -614,29 +575,15 @@ export function renderSidebar(
     const rawTab = state.mobileSidebarTab;
     const activeTab: MobileSidebarTab =
       rawTab === "contacts" || rawTab === "menu" || rawTab === "boards" ? rawTab : "chats";
-    type SidebarScrollAnchor = { kind: string; id: string; offset: number };
-    type SidebarScrollSnapshot = { scrollTop: number; anchor: SidebarScrollAnchor | null };
-    const scrollMemory: Record<string, SidebarScrollSnapshot | undefined> = ((target as any)._mobileSidebarScrollMemory ||= {});
     const prevTab = String((target as any)._mobileSidebarPrevTab || "").trim();
-    const isSameTab = Boolean(prevTab && prevTab === activeTab);
-    const forceTopTab = Boolean(forceResetScroll || (prevTab && !isSameTab));
-    if (prevTab && prevTab !== activeTab) {
+    const didSwitchTab = Boolean(prevTab && prevTab !== activeTab);
+    const forceTopTab = Boolean(forceResetScroll || !prevTab || didSwitchTab);
+    if (forceTopTab && !forceResetScroll) {
       try {
-        const hostRect = body.getBoundingClientRect();
-        const rows = Array.from(body.querySelectorAll<HTMLElement>('.row[data-ctx-kind][data-ctx-id]'));
-        const anchorRow = rows.find((row) => {
-          const r = row.getBoundingClientRect();
-          return r.bottom > hostRect.top + 1;
-        });
-        const anchorKind = anchorRow?.getAttribute("data-ctx-kind") || "";
-        const anchorId = anchorRow?.getAttribute("data-ctx-id") || "";
-        const anchor =
-          anchorRow && anchorKind && anchorId
-            ? ({ kind: anchorKind, id: anchorId, offset: anchorRow.getBoundingClientRect().top - hostRect.top } satisfies SidebarScrollAnchor)
-            : null;
-        scrollMemory[prevTab] = { scrollTop: body.scrollTop || 0, anchor };
+        (target as HTMLElement).dataset.sidebarResetScroll = "1";
+        body.dataset.sidebarResetScroll = "1";
       } catch {
-        scrollMemory[prevTab] = { scrollTop: body.scrollTop || 0, anchor: null };
+        // ignore
       }
     }
     if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
@@ -737,68 +684,34 @@ export function renderSidebar(
             });
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
-    const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
-
     const sticky = el("div", { class: "sidebar-mobile-sticky" }, [
       tabs,
       ...(searchBar ? [searchBar] : []),
-      ...(contactSortBar ? [contactSortBar] : []),
     ]);
-    const takeScrollSnapshot = (): SidebarScrollSnapshot => {
-      const scrollTop = body.scrollTop || 0;
-      try {
-        const hostRect = body.getBoundingClientRect();
-        const rows = Array.from(body.querySelectorAll<HTMLElement>('.row[data-ctx-kind][data-ctx-id]'));
-        const anchorRow = rows.find((row) => {
-          const r = row.getBoundingClientRect();
-          return r.bottom > hostRect.top + 1;
-        });
-        const anchorKind = anchorRow?.getAttribute("data-ctx-kind") || "";
-        const anchorId = anchorRow?.getAttribute("data-ctx-id") || "";
-        const anchor =
-          anchorRow && anchorKind && anchorId
-            ? ({ kind: anchorKind, id: anchorId, offset: anchorRow.getBoundingClientRect().top - hostRect.top } satisfies SidebarScrollAnchor)
-            : null;
-        return { scrollTop, anchor };
-      } catch {
-        return { scrollTop, anchor: null };
-      }
-    };
-    const restoreScrollSnapshot = (snap: SidebarScrollSnapshot): void => {
-      try {
-        if (!snap.anchor) {
-          body.scrollTop = snap.scrollTop || 0;
-          return;
-        }
-        const selector = `.row[data-ctx-kind="${snap.anchor.kind}"][data-ctx-id="${snap.anchor.id}"]`;
-        const row = body.querySelector(selector) as HTMLElement | null;
-        if (!row) {
-          body.scrollTop = snap.scrollTop || 0;
-          return;
-        }
-        const next = Math.max(0, Math.round(row.offsetTop - snap.anchor.offset));
-        body.scrollTop = next;
-      } catch {
-        body.scrollTop = snap.scrollTop || 0;
-      }
-    };
-    const initialSnap = forceTopTab
-      ? { scrollTop: 0, anchor: null }
-      : isSameTab
-        ? takeScrollSnapshot()
-        : scrollMemory[activeTab] || { scrollTop: 0, anchor: null };
     const mountMobile = (children: HTMLElement[]) => {
-      const snap = forceTopTab ? initialSnap : isSameTab ? takeScrollSnapshot() : initialSnap;
       body.replaceChildren(...children);
       target.replaceChildren(sticky, body);
       bindHeaderScroll(sticky);
-      restoreScrollSnapshot(snap);
+      (target as any)._mobileSidebarPrevTab = activeTab;
+      if (!forceTopTab) return;
       try {
-        window.requestAnimationFrame(() => restoreScrollSnapshot(snap));
+        body.scrollTop = 0;
+        body.scrollLeft = 0;
       } catch {
         // ignore
       }
-      (target as any)._mobileSidebarPrevTab = activeTab;
+      try {
+        window.requestAnimationFrame(() => {
+          try {
+            body.scrollTop = 0;
+            body.scrollLeft = 0;
+          } catch {
+            // ignore
+          }
+        });
+      } catch {
+        // ignore
+      }
     };
 
     const mentionForKey = (key: string): boolean => {
@@ -870,13 +783,6 @@ export function renderSidebar(
 
     const restBoards = boards.filter((b) => !pinnedSet.has(roomKey(b.id)));
     const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
-
-    const lastTsForKey = (key: string): number => {
-      const conv = state.conversations[key] || [];
-      const last = conv.length ? conv[conv.length - 1] : null;
-      const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
-      return Math.max(0, ts);
-    };
 
     if (activeTab === "chats") {
       const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
@@ -971,30 +877,6 @@ export function renderSidebar(
       return;
     }
 
-    const skipTop = contactSortMode === "top";
-    const onlineRows = markCompactAvatarRows(
-      [...online]
-      .filter((f) => matchesFriend(f) && !(skipTop && topPeerSet.has(String(f.id || "").trim())))
-      .sort(compareFriendsByLastSeen)
-      .map((f) => {
-        const k = dmKey(f.id);
-        if (pinnedSet.has(k)) return null;
-        const meta = previewForConversation(state, k, "dm", drafts[k]);
-        return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-      })
-    );
-    const offlineRows = markCompactAvatarRows(
-      [...offline]
-      .filter((f) => matchesFriend(f) && !(skipTop && topPeerSet.has(String(f.id || "").trim())))
-      .sort(compareFriendsByLastSeen)
-      .map((f) => {
-        const k = dmKey(f.id);
-        if (pinnedSet.has(k)) return null;
-        const meta = previewForConversation(state, k, "dm", drafts[k]);
-        return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-      })
-    );
-
     const unknownAttnRows = unknownAttnPeers
       .filter((id) => (hasSidebarQuery ? matchesQuery(id) : true))
       .map((id) => {
@@ -1008,15 +890,18 @@ export function renderSidebar(
 
     if (activeTab === "contacts") {
       const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
+      const contactRowsSorted = markCompactAvatarRows(
+        (state.friends || [])
+          .filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)))
+          .sort(compareFriendsByActivity)
+          .map((f) => {
+            const k = dmKey(f.id);
+            const meta = previewForConversation(state, k, "dm", drafts[k]);
+            return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+          })
+      );
       if (hasSidebarQuery) {
-        const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
-        allFriends.sort(compareFriendsByStatus);
-        const rows = allFriends.map((f) => {
-          const k = dmKey(f.id);
-          const meta = previewForConversation(state, k, "dm", drafts[k]);
-          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-        });
-        const allRows = markCompactAvatarRows([...unknownAttnRows, ...rows]);
+        const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
         mountMobile([
           ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
           ...(allRows.length
@@ -1025,24 +910,15 @@ export function renderSidebar(
         ]);
         return;
       }
-      const topPeerRows = contactSortMode === "top" ? buildTopPeerRows() : [];
       const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
       const contactRows: HTMLElement[] = [];
       if (pinnedContactRowsCompact.length) {
         contactRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
       }
-      if (topPeerRows.length) {
-        contactRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
-      }
       if (compactUnknownAttnRows.length) {
         contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
       }
-      if (onlineRows.length) {
-        contactRows.push(el("div", { class: "pane-section" }, [`Онлайн (${onlineRows.length})`]), ...onlineRows);
-      }
-      if (offlineRows.length) {
-        contactRows.push(...offlineRows);
-      }
+      if (contactRowsSorted.length) contactRows.push(...contactRowsSorted);
       mountMobile(contactRows);
       return;
     }
@@ -1134,29 +1010,15 @@ export function renderSidebar(
     let activeTab: MobileSidebarTab =
       rawTab === "contacts" || rawTab === "boards" || (showMenuTab && rawTab === "menu") ? rawTab : defaultTab;
     if (!showMenuTab && activeTab === "menu") activeTab = defaultTab;
-    type SidebarScrollAnchor = { kind: string; id: string; offset: number };
-    type SidebarScrollSnapshot = { scrollTop: number; anchor: SidebarScrollAnchor | null };
-    const scrollMemory: Record<string, SidebarScrollSnapshot | undefined> = ((target as any)._pwaSidebarScrollMemory ||= {});
     const prevTab = String((target as any)._pwaSidebarPrevTab || "").trim();
-    const isSameTab = Boolean(prevTab && prevTab === activeTab);
-    const forceTopTab = Boolean(forceResetScroll || (prevTab && !isSameTab));
-    if (prevTab && prevTab !== activeTab) {
+    const didSwitchTab = Boolean(prevTab && prevTab !== activeTab);
+    const forceTopTab = Boolean(forceResetScroll || !prevTab || didSwitchTab);
+    if (forceTopTab && !forceResetScroll) {
       try {
-        const hostRect = body.getBoundingClientRect();
-        const rows = Array.from(body.querySelectorAll<HTMLElement>('.row[data-ctx-kind][data-ctx-id]'));
-        const anchorRow = rows.find((row) => {
-          const r = row.getBoundingClientRect();
-          return r.bottom > hostRect.top + 1;
-        });
-        const anchorKind = anchorRow?.getAttribute("data-ctx-kind") || "";
-        const anchorId = anchorRow?.getAttribute("data-ctx-id") || "";
-        const anchor =
-          anchorRow && anchorKind && anchorId
-            ? ({ kind: anchorKind, id: anchorId, offset: anchorRow.getBoundingClientRect().top - hostRect.top } satisfies SidebarScrollAnchor)
-            : null;
-        scrollMemory[prevTab] = { scrollTop: body.scrollTop || 0, anchor };
+        (target as HTMLElement).dataset.sidebarResetScroll = "1";
+        body.dataset.sidebarResetScroll = "1";
       } catch {
-        scrollMemory[prevTab] = { scrollTop: body.scrollTop || 0, anchor: null };
+        // ignore
       }
     }
 
@@ -1275,11 +1137,10 @@ export function renderSidebar(
             });
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
-    const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
     const headerStack = el("div", { class: "sidebar-header-stack" }, [
       ...(activeTab === "menu"
         ? [el("div", { class: "sidebar-header-title" }, ["Меню"])]
-        : [...(searchBar ? [searchBar] : []), ...(contactSortBar ? [contactSortBar] : [])]),
+        : [...(searchBar ? [searchBar] : [])]),
     ]);
     const header = el("div", { class: "sidebar-header" }, [headerStack]);
 
@@ -1349,71 +1210,33 @@ export function renderSidebar(
       }
     }
 
-    const lastTsForKey = (key: string): number => {
-      const conv = state.conversations[key] || [];
-      const last = conv.length ? conv[conv.length - 1] : null;
-      const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
-      return Math.max(0, ts);
-    };
-
-    const takeScrollSnapshot = (): SidebarScrollSnapshot => {
-      const scrollTop = body.scrollTop || 0;
-      try {
-        const hostRect = body.getBoundingClientRect();
-        const rows = Array.from(body.querySelectorAll<HTMLElement>('.row[data-ctx-kind][data-ctx-id]'));
-        const anchorRow = rows.find((row) => {
-          const r = row.getBoundingClientRect();
-          return r.bottom > hostRect.top + 1;
-        });
-        const anchorKind = anchorRow?.getAttribute("data-ctx-kind") || "";
-        const anchorId = anchorRow?.getAttribute("data-ctx-id") || "";
-        const anchor =
-          anchorRow && anchorKind && anchorId
-            ? ({ kind: anchorKind, id: anchorId, offset: anchorRow.getBoundingClientRect().top - hostRect.top } satisfies SidebarScrollAnchor)
-            : null;
-        return { scrollTop, anchor };
-      } catch {
-        return { scrollTop, anchor: null };
-      }
-    };
-    const restoreScrollSnapshot = (snap: SidebarScrollSnapshot): void => {
-      try {
-        if (!snap.anchor) {
-          body.scrollTop = snap.scrollTop || 0;
-          return;
-        }
-        const selector = `.row[data-ctx-kind="${snap.anchor.kind}"][data-ctx-id="${snap.anchor.id}"]`;
-        const row = body.querySelector(selector) as HTMLElement | null;
-        if (!row) {
-          body.scrollTop = snap.scrollTop || 0;
-          return;
-        }
-        const next = Math.max(0, Math.round(row.offsetTop - snap.anchor.offset));
-        body.scrollTop = next;
-      } catch {
-        body.scrollTop = snap.scrollTop || 0;
-      }
-    };
-    const initialSnap = forceTopTab
-      ? { scrollTop: 0, anchor: null }
-      : isSameTab
-        ? takeScrollSnapshot()
-        : scrollMemory[activeTab] || { scrollTop: 0, anchor: null };
     const mountPwa = (children: HTMLElement[]) => {
-      const snap = forceTopTab ? initialSnap : isSameTab ? takeScrollSnapshot() : initialSnap;
       body.replaceChildren(tabs, ...children);
       const nodes: HTMLElement[] = [];
       if (header) nodes.push(header);
       nodes.push(body);
       target.replaceChildren(...nodes);
       bindHeaderScroll(header);
-      restoreScrollSnapshot(snap);
+      (target as any)._pwaSidebarPrevTab = activeTab;
+      if (!forceTopTab) return;
       try {
-        window.requestAnimationFrame(() => restoreScrollSnapshot(snap));
+        body.scrollTop = 0;
+        body.scrollLeft = 0;
       } catch {
         // ignore
       }
-      (target as any)._pwaSidebarPrevTab = activeTab;
+      try {
+        window.requestAnimationFrame(() => {
+          try {
+            body.scrollTop = 0;
+            body.scrollLeft = 0;
+          } catch {
+            // ignore
+          }
+        });
+      } catch {
+        // ignore
+      }
     };
 
     if (activeTab === "chats") {
@@ -1512,18 +1335,18 @@ export function renderSidebar(
 
     if (activeTab === "contacts") {
       const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
-      const contactSortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByStatus;
-      const contactQuerySortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByStatus;
-      const skipTop = contactSortMode === "top";
+      const contactRowsSorted = markCompactAvatarRows(
+        (state.friends || [])
+          .filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)))
+          .sort(compareFriendsByActivity)
+          .map((f) => {
+            const k = dmKey(f.id);
+            const meta = previewForConversation(state, k, "dm", drafts[k]);
+            return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+          })
+      );
 
       if (hasSidebarQuery) {
-        const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
-        allFriends.sort(contactQuerySortFn);
-        const rows = allFriends.map((f) => {
-          const k = dmKey(f.id);
-          const meta = previewForConversation(state, k, "dm", drafts[k]);
-          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-        });
         const unknownAttnRows = unknownAttnPeers
           .filter((id) => matchesQuery(id))
           .map((id) => {
@@ -1534,7 +1357,7 @@ export function renderSidebar(
             const pseudo: FriendEntry = { id, online: false, unread: 0 };
             return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
           });
-        const allRows = markCompactAvatarRows([...unknownAttnRows, ...rows]);
+        const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
         mountPwa([
           ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
           ...(allRows.length
@@ -1544,18 +1367,6 @@ export function renderSidebar(
         return;
       }
 
-      const baseFriends = (state.friends || [])
-        .filter((f) => matchesFriend(f))
-        .filter((f) => !pinnedSet.has(dmKey(f.id)))
-        .filter((f) => !(skipTop && topPeerSet.has(String(f.id || "").trim())))
-        .sort(contactSortFn);
-      const contactRowsSorted = markCompactAvatarRows(
-        baseFriends.map((f) => {
-          const k = dmKey(f.id);
-          const meta = previewForConversation(state, k, "dm", drafts[k]);
-          return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-        })
-      );
       const unknownAttnRows = markCompactAvatarRows(
         unknownAttnPeers
         .map((id) => {
@@ -1567,7 +1378,6 @@ export function renderSidebar(
           return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
         })
       );
-      const topPeerRows = contactSortMode === "top" ? buildTopPeerRows() : [];
 
       const contactRows: HTMLElement[] = [];
       if (pinnedContactRowsCompact.length) {
@@ -1575,9 +1385,6 @@ export function renderSidebar(
       }
       if (unknownAttnRows.length) {
         contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
-      }
-      if (topPeerRows.length) {
-        contactRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
       }
       if (contactRowsSorted.length) {
         contactRows.push(...contactRowsSorted);
@@ -1774,21 +1581,14 @@ export function renderSidebar(
     });
     return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
   })();
-  const contactSortBar = activeDesktopTab === "contacts" ? buildContactSortBar() : null;
   const headerStack = el("div", { class: "sidebar-header-stack" }, [
     desktopTabs,
     ...(activeDesktopTab === "menu"
       ? [el("div", { class: "sidebar-header-title" }, ["Меню"])]
-      : [searchBar, ...(contactSortBar ? [contactSortBar] : [])]),
+      : [searchBar]),
   ]);
   const header = el("div", { class: "sidebar-header" }, [headerStack]);
 
-  const lastTsForKey = (key: string): number => {
-    const conv = state.conversations[key] || [];
-    const last = conv.length ? conv[conv.length - 1] : null;
-    const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
-    return Math.max(0, ts);
-  };
   const mentionForKey = (key: string): boolean => {
     if (!selfMentionHandles.size) return false;
     const conv = state.conversations[key] || [];
@@ -1867,14 +1667,15 @@ export function renderSidebar(
   // Keep per-tab scroll positions to avoid "random" scroll jumps on tab switch.
   const prevTab = String((target as any)._desktopSidebarPrevTab || "").trim();
   const didSwitchTab = Boolean(prevTab && prevTab !== activeDesktopTab);
-  const scrollMemory: Record<string, number | undefined> = ((target as any)._desktopSidebarScrollMemory ||= {});
-  const forceTopTab = Boolean(forceResetScroll || didSwitchTab);
-  if (didSwitchTab) scrollMemory[prevTab] = Number((body as any).scrollTop || 0) || 0;
-  const desiredScrollTop = forceTopTab
-    ? 0
-    : didSwitchTab
-      ? Number(scrollMemory[activeDesktopTab] || 0) || 0
-      : Number((body as any).scrollTop || 0) || 0;
+  const forceTopTab = Boolean(forceResetScroll || !prevTab || didSwitchTab);
+  if (forceTopTab && !forceResetScroll) {
+    try {
+      (target as HTMLElement).dataset.sidebarResetScroll = "1";
+      body.dataset.sidebarResetScroll = "1";
+    } catch {
+      // ignore
+    }
+  }
 
   const mountDesktop = (children: HTMLElement[]) => {
     body.replaceChildren(...children);
@@ -1883,18 +1684,18 @@ export function renderSidebar(
     target.replaceChildren(...nodes);
     bindHeaderScroll(header);
     (target as any)._desktopSidebarPrevTab = activeDesktopTab;
-
-    if (!didSwitchTab && !forceTopTab) return;
-    const nextScrollTop = forceTopTab ? 0 : desiredScrollTop;
+    if (!forceTopTab) return;
     try {
-      (body as any).scrollTop = nextScrollTop;
+      body.scrollTop = 0;
+      body.scrollLeft = 0;
     } catch {
       // ignore
     }
     try {
       window.requestAnimationFrame(() => {
         try {
-          (body as any).scrollTop = nextScrollTop;
+          body.scrollTop = 0;
+          body.scrollLeft = 0;
         } catch {
           // ignore
         }
@@ -2067,30 +1868,19 @@ export function renderSidebar(
   }
 
   // Contacts tab.
-  const contactSortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByStatus;
-  const contactQuerySortFn = contactSortMode === "name" ? compareFriendsByName : compareFriendsByStatus;
-  const skipTop = contactSortMode === "top";
-  const baseFriends = (state.friends || [])
-    .filter((f) => matchesFriend(f))
-    .filter((f) => !(skipTop && topPeerSet.has(String(f.id || "").trim())))
-    .sort(contactSortFn);
   const contactRowsSorted = markCompactAvatarRows(
-    baseFriends.map((f) => {
-      const k = dmKey(f.id);
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-    })
+    (state.friends || [])
+      .filter((f) => matchesFriend(f))
+      .sort(compareFriendsByActivity)
+      .map((f) => {
+        const k = dmKey(f.id);
+        const meta = previewForConversation(state, k, "dm", drafts[k]);
+        return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+      })
   );
 
   if (hasSidebarQuery) {
-    const allFriends = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
-    allFriends.sort(contactQuerySortFn);
-    const rows = allFriends.map((f) => {
-      const k = dmKey(f.id);
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-    });
-    const allRows = markCompactAvatarRows([...unknownAttnRows, ...rows]);
+    const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
     mountDesktop([
       ...(allRows.length
         ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
@@ -2099,14 +1889,10 @@ export function renderSidebar(
     return;
   }
 
-  const topPeerRows = contactSortMode === "top" ? buildTopPeerRows() : [];
   const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
   const contactRows: HTMLElement[] = [];
   if (compactUnknownAttnRows.length) {
     contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
-  }
-  if (topPeerRows.length) {
-    contactRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
   }
   if (contactRowsSorted.length) {
     contactRows.push(...contactRowsSorted);

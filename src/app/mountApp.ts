@@ -9,7 +9,6 @@ import type {
   AppState,
   ChatMessage,
   MessageHelperDraft,
-  ContactSortMode,
   ConnStatus,
   ConfirmAction,
   ContextMenuItem,
@@ -73,7 +72,6 @@ import {
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
 import { applyMessageView, normalizeMessageView, storeMessageView } from "../helpers/ui/messageView";
-import { normalizeContactSortMode, storeContactSortMode } from "../helpers/ui/contactSort";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { loadLastActiveTarget, saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
 import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
@@ -3185,14 +3183,6 @@ export function mountApp(root: HTMLElement) {
     store.set({ messageView: mode, status: `Отображение сообщений: ${label}` });
     storeMessageView(mode);
     applyMessageView(mode);
-  }
-
-  function setContactSortMode(mode: ContactSortMode | string) {
-    const next = normalizeContactSortMode(mode);
-    if (store.get().contactSortMode === next) return;
-    const label = next === "name" ? "по имени" : next === "top" ? "топ" : "по активности";
-    store.set({ contactSortMode: next, status: `Контакты: сортировка ${label}` });
-    storeContactSortMode(next);
   }
 
   const gateway = new GatewayClient(
@@ -6804,15 +6794,18 @@ export function mountApp(root: HTMLElement) {
 
   function sendChat() {
     const st = store.get();
-    const text = (layout.input.value || "").trimEnd();
+    const rawText = String(layout.input.value || "");
+    const text = rawText.trimEnd();
     const sel = st.selected;
     const key = sel ? conversationKey(sel) : "";
     const editing = st.editing && key && st.editing.key === key ? st.editing : null;
     const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
     const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
-    if (!text) return;
-    if (text.length > APP_MSG_MAX_LEN) {
-      store.set({ status: `Слишком длинное сообщение (${text.length}/${APP_MSG_MAX_LEN})` });
+    const forwardFallback = !text && forwardDraft ? String(forwardDraft.text || forwardDraft.preview || "") : "";
+    const finalText = text || forwardFallback;
+    if (!finalText) return;
+    if (finalText.length > APP_MSG_MAX_LEN) {
+      store.set({ status: `Слишком длинное сообщение (${finalText.length}/${APP_MSG_MAX_LEN})` });
       return;
     }
     if (!st.authed) {
@@ -6871,7 +6864,9 @@ export function mountApp(root: HTMLElement) {
     const localId = makeOutboxLocalId();
     const ts = nowTs();
     const nowMs = Date.now();
-    const payload = sel.kind === "dm" ? { type: "send" as const, to: sel.id, text } : { type: "send" as const, room: sel.id, text };
+    const payload = sel.kind === "dm"
+      ? { type: "send" as const, to: sel.id, text: finalText }
+      : { type: "send" as const, room: sel.id, text: finalText };
     const sent = st.conn === "connected" ? gateway.send(payload) : false;
     const initialStatus = sent ? ("sending" as const) : ("queued" as const);
     const replyRef = replyDraft ? helperDraftToRef(replyDraft) : null;
@@ -6882,7 +6877,7 @@ export function mountApp(root: HTMLElement) {
       from: st.selfId || "",
       to: sel.kind === "dm" ? sel.id : undefined,
       room: sel.kind === "dm" ? undefined : sel.id,
-      text,
+      text: finalText,
       ts,
       localId,
       id: null,
@@ -6896,7 +6891,7 @@ export function mountApp(root: HTMLElement) {
       const outbox = addOutboxEntry(next.outbox, convKey, {
         localId,
         ts,
-        text,
+        text: finalText,
         ...(sel.kind === "dm" ? { to: sel.id } : { room: sel.id }),
         status: sent ? "sending" : "queued",
         attempts: sent ? 1 : 0,
@@ -10296,7 +10291,6 @@ export function mountApp(root: HTMLElement) {
       if (store.get().sidebarQuery === q) return;
       store.set({ sidebarQuery: q });
     },
-    onContactSortChange: (mode: ContactSortMode) => setContactSortMode(mode),
     onAuthOpen: () =>
       store.set((prev) => ({
         ...prev,

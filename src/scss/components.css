@@ -765,18 +765,6 @@
   flex: 1 1 auto;
 }
 
-.sidebar-contact-sort {
-  margin: 0 0 var(--sp-3);
-}
-
-.sidebar-contact-sort.search-filters {
-  margin-top: 0;
-}
-
-.sidebar-header .sidebar-contact-sort {
-  margin-bottom: 0;
-}
-
 .sidebar-mobile-sticky,
 .sidebar-mobile-bottom {
   flex: 0 0 auto;
@@ -1429,6 +1417,9 @@
   width: 100%;
   max-width: var(--chat-bubbles-max-width);
   margin: 0 auto;
+  min-height: 100%;
+  align-content: flex-end;
+  box-sizing: content-box;
 }
 
 .chat-virtual-spacer {

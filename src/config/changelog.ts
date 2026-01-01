@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.352",
+    date: "2026-01-01",
+    improved: [
+      "Контакты: сортировка по последней активности (без режимов «Топ/По имени»)",
+      "История: ширина пузырей привязана к контейнеру сообщений (tweb‑like)",
+    ],
+    fixed: [
+      "Пересылка: сообщения без текста (forward‑only) отправляются корректно",
+      "Сайдбар: список не обрезается снизу на mobile/PWA (safe‑area padding)",
+      "Сайдбар: при возврате на главный экран список стартует с начала",
+    ],
+  },
+  {
     version: "0.1.350",
     date: "2026-01-01",
     fixed: ["Откат: возвращено поведение до 0.1.349 (mobile footer tabs скрыты, без reset списка)"],
