@@ -927,4 +927,12 @@
     --app-shadow: none;
     --app-overflow: hidden;
   }
+
+  .footer {
+    display: none;
+  }
+}
+
+html.is-standalone .footer {
+  display: none;
 }

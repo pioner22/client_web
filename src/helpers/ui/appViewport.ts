@@ -5,9 +5,32 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let lastHeight = 0;
   let lastLayout = 0;
   let lastStableLayout = 0;
+  let lastEditableFocusTs = 0;
+  let lastEditablePointerTs = 0;
   const isIos = isIOS();
   const iosStandalone = isIos && isStandaloneDisplayMode();
   const docEl = typeof document !== "undefined" ? document.documentElement : null;
+  const EDITABLE_INTENT_MS = 1200;
+
+  const isEditableElement = (el: unknown): boolean => {
+    if (!el || typeof el !== "object") return false;
+    const anyEl = el as HTMLElement & { isContentEditable?: boolean };
+    const tag = typeof anyEl.tagName === "string" ? anyEl.tagName.toLowerCase() : "";
+    if (tag === "input" || tag === "textarea") return true;
+    return Boolean(anyEl.isContentEditable);
+  };
+
+  const markEditableFocus = (target: EventTarget | null) => {
+    if (isEditableElement(target)) lastEditableFocusTs = Date.now();
+  };
+
+  const clearEditableFocus = (target: EventTarget | null) => {
+    if (isEditableElement(target)) lastEditableFocusTs = 0;
+  };
+
+  const markEditablePointer = (target: EventTarget | null) => {
+    if (isEditableElement(target)) lastEditablePointerTs = Date.now();
+  };
 
   try {
     if (isIos && docEl?.classList) docEl.classList.add("is-ios");
@@ -107,16 +130,19 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     let activeEditable = false;
     try {
       const ae = typeof document !== "undefined" ? (document as any).activeElement : null;
-      const tag = ae && typeof ae.tagName === "string" ? String(ae.tagName).toLowerCase() : "";
-      activeEditable = Boolean(ae && (tag === "input" || tag === "textarea" || Boolean((ae as any).isContentEditable)));
+      activeEditable = Boolean(ae && isEditableElement(ae));
     } catch {
       activeEditable = false;
     }
+    const now = Date.now();
+    const recentFocus = Boolean(lastEditableFocusTs && now - lastEditableFocusTs <= EDITABLE_INTENT_MS);
+    const recentPointer = Boolean(lastEditablePointerTs && now - lastEditablePointerTs <= EDITABLE_INTENT_MS);
+    const focusLikely = Boolean(activeEditable || (iosEnv && (recentFocus || recentPointer)));
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
-    const keyboardByViewport = Boolean(vvHeight && layout && coveredBottom >= USE_VISUAL_VIEWPORT_DIFF_PX);
+    const keyboardByViewport = Boolean(focusLikely && vvHeight && layout && coveredBottom >= USE_VISUAL_VIEWPORT_DIFF_PX);
     const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
     const innerDiff = lastStableLayout && inner ? Math.max(0, lastStableLayout - inner) : 0;
-    const keyboardByInner = Boolean(iosEnv && innerDiff >= USE_VISUAL_VIEWPORT_DIFF_PX);
+    const keyboardByInner = Boolean(iosEnv && focusLikely && innerDiff >= USE_VISUAL_VIEWPORT_DIFF_PX);
     const keyboardVisible = Boolean(keyboard || (iosEnv && (keyboardByViewport || keyboardByInner)));
     const useVisualViewportHeight = Boolean(iosEnv && vvHeight && vvHeight > 0 && base > 0 && base - vvHeight >= USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX);
     const resolved = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : useVisualViewportHeight ? vvHeight : base;
@@ -205,10 +231,26 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   vv?.addEventListener("resize", onResize, { passive: true });
   vv?.addEventListener("scroll", onResize, { passive: true });
   const doc = typeof document !== "undefined" ? (document as any) : null;
+  let onFocusIn: ((ev: Event) => void) | null = null;
+  let onFocusOut: ((ev: Event) => void) | null = null;
+  let onPointer: ((ev: Event) => void) | null = null;
   const canFocusEvents = Boolean(doc && typeof doc.addEventListener === "function" && typeof doc.removeEventListener === "function");
   if (canFocusEvents) {
-    doc.addEventListener("focusin", onResize, { passive: true });
-    doc.addEventListener("focusout", onResize, { passive: true });
+    onFocusIn = (ev: Event) => {
+      markEditableFocus((ev as Event & { target: EventTarget | null }).target);
+      onResize();
+    };
+    onFocusOut = (ev: Event) => {
+      clearEditableFocus((ev as Event & { target: EventTarget | null }).target);
+      onResize();
+    };
+    onPointer = (ev: Event) => {
+      markEditablePointer((ev as Event & { target: EventTarget | null }).target);
+    };
+    doc.addEventListener("focusin", onFocusIn, { passive: true });
+    doc.addEventListener("focusout", onFocusOut, { passive: true });
+    doc.addEventListener("pointerdown", onPointer, { passive: true });
+    doc.addEventListener("touchstart", onPointer, { passive: true });
     doc.addEventListener("visibilitychange", onVisibility, { passive: true });
   }
 
@@ -223,8 +265,10 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     vv?.removeEventListener("resize", onResize);
     vv?.removeEventListener("scroll", onResize);
     if (canFocusEvents) {
-      doc.removeEventListener("focusin", onResize);
-      doc.removeEventListener("focusout", onResize);
+      if (onFocusIn) doc.removeEventListener("focusin", onFocusIn);
+      if (onFocusOut) doc.removeEventListener("focusout", onFocusOut);
+      if (onPointer) doc.removeEventListener("pointerdown", onPointer);
+      if (onPointer) doc.removeEventListener("touchstart", onPointer);
       doc.removeEventListener("visibilitychange", onVisibility);
     }
     try {

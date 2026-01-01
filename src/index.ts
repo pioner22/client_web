@@ -4,7 +4,6 @@ import { applySkin, getStoredSkinId } from "./helpers/skin/skin";
 import { applyTheme, resolveInitialTheme } from "./helpers/theme/theme";
 import { installAppViewportHeightVar } from "./helpers/ui/appViewport";
 import { installFancyCaret } from "./helpers/ui/fancyCaret";
-import { mountApp } from "./app/mountApp";
 
 const root = document.getElementById("app");
 if (!root) {
@@ -16,5 +15,7 @@ applyTheme(resolveInitialTheme(storedSkin));
 applySkin(storedSkin);
 installAppViewportHeightVar(root);
 installFancyCaret();
-mountApp(root);
-registerServiceWorker();
+void import("./app/mountApp").then(({ mountApp }) => {
+  mountApp(root);
+  registerServiceWorker();
+});
