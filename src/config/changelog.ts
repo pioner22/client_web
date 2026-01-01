@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.346",
+    date: "2026-01-01",
+    improved: ["PWA: вкладка «Меню» показывается и в standalone режиме"],
+  },
+  {
     version: "0.1.345",
     date: "2026-01-01",
     improved: ["Desktop: в сайдбаре возвращена строка «Меню» для быстрого доступа"],
