@@ -7,6 +7,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
 
+const HAS_SPACE_RE = /\s/;
+
 async function removeSpaceNamedFilesRec(dir) {
   let items = [];
   try {
@@ -16,6 +18,14 @@ async function removeSpaceNamedFilesRec(dir) {
   }
   for (const it of items) {
     const abs = path.join(dir, it.name);
+    if (HAS_SPACE_RE.test(it.name)) {
+      if (it.isFile()) {
+        try {
+          await fs.unlink(abs);
+        } catch {}
+      }
+      continue;
+    }
     if (it.isDirectory()) {
       await removeSpaceNamedFilesRec(abs);
       continue;
@@ -35,6 +45,7 @@ async function listFilesRec(dir, baseDir) {
   const items = await fs.readdir(dir, { withFileTypes: true });
   for (const it of items) {
     const abs = path.join(dir, it.name);
+    if (HAS_SPACE_RE.test(it.name)) continue;
     if (it.isDirectory()) {
       out.push(...(await listFilesRec(abs, baseDir)));
       continue;
@@ -50,6 +61,30 @@ async function readJson(p) {
   return JSON.parse(raw);
 }
 
+async function readText(p) {
+  return await fs.readFile(p, "utf8");
+}
+
+async function collectFilesFromDir(relDir) {
+  const absDir = path.join(distDir, relDir);
+  try {
+    const stat = await fs.stat(absDir);
+    if (!stat.isDirectory()) return [];
+  } catch {
+    return [];
+  }
+  return await listFilesRec(absDir, distDir);
+}
+
+async function fileExists(rel) {
+  try {
+    const stat = await fs.stat(path.join(distDir, rel));
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const pkg = await readJson(path.join(rootDir, "package.json"));
   const version = String(pkg?.version ?? "0.0.0").trim() || "0.0.0";
@@ -57,14 +92,28 @@ async function main() {
   // Clean up conflict copies / junk files in dist (can appear on synced filesystems).
   await removeSpaceNamedFilesRec(distDir);
 
-  const relFiles = (await listFilesRec(distDir, distDir))
-    .map((p) => p.split(path.sep).join("/"))
-    .filter(Boolean);
+  const entryFiles = new Set(["index.html", "boot.js", "manifest.webmanifest"]);
+  const precacheSet = new Set(entryFiles);
 
-  const precacheFiles = relFiles
-    .filter((p) => p !== "sw.js")
-    .filter((p) => !p.endsWith(".map"))
-    .filter((p) => !p.startsWith(".vite/"));
+  const indexHtml = await readText(path.join(distDir, "index.html"));
+  const assetRe = /\.?\/assets\/[^"')\s]+/g;
+  for (const match of indexHtml.matchAll(assetRe)) {
+    const rel = match[0].replace(/^\.?\//, "");
+    if (rel) precacheSet.add(rel);
+  }
+
+  for (const relDir of ["icons", "skins"]) {
+    const files = await collectFilesFromDir(relDir);
+    for (const rel of files) precacheSet.add(rel);
+  }
+
+  const precacheFiles = [];
+  for (const rel of precacheSet) {
+    if (!rel || rel === "sw.js") continue;
+    if (rel.endsWith(".map")) continue;
+    if (rel.startsWith(".vite/")) continue;
+    if (await fileExists(rel)) precacheFiles.push(rel);
+  }
 
   precacheFiles.sort();
 

@@ -124,6 +124,7 @@
     top: 0;
     z-index: 2;
     background: var(--sidebar-bg);
+    padding: 0;
     padding-bottom: 0;
     margin-bottom: 0;
   }
@@ -163,8 +164,8 @@
 
   .sidebar-mobile-top {
     display: flex;
-    padding-bottom: var(--sp-2);
-    margin-bottom: var(--sp-2);
+    padding-bottom: 0;
+    margin-bottom: 0;
   }
 
   .sidebar-desktop-bottom {
@@ -322,9 +323,9 @@
     --font-size: 16px;
     --font-weight: 450;
 
-    --header-pad-y: var(--sp-2);
+    --header-pad-y: 0px;
     --header-pad-x: var(--sp-3);
-    --header-gap-y: var(--sp-1);
+    --header-gap-y: 0px;
     --header-gap-x: var(--sp-3);
 
     --sidebar-pad: 0px;
@@ -360,7 +361,7 @@
     --avatar-size: 40px;
     --avatar-font-size: 14px;
 
-    --pane-section-mt: var(--sp-3);
+    --pane-section-mt: 0px;
     --pane-section-mb: var(--sp-2);
 
     --composer-pad-y: var(--sp-1);

@@ -53,7 +53,9 @@ export function renderFooter(target: HTMLElement, state: AppState) {
     state.fileOffersIn.length;
   const statusParts: string[] = [];
   if (online > 0) {
-    statusParts.push(`Онлайн: ${online}`, `Оффлайн: ${offline}`, `Ожидают: ${pending}`);
+    statusParts.push(`Онлайн: ${online}`);
+    if (offline > 0) statusParts.push(`Оффлайн: ${offline}`);
+    if (pending > 0) statusParts.push(`Ожидают: ${pending}`);
   }
   const statusPrefix = statusParts.length ? `${statusParts.join(" | ")} — ` : "";
   const line = `${statusPrefix}${viewTitle(state)}`;
@@ -68,17 +70,6 @@ export function renderFooter(target: HTMLElement, state: AppState) {
       "data-action": "nav-main",
     },
     ["Сообщения"]
-  );
-  const tabSearch = el(
-    "button",
-    {
-      class: state.page === "search" ? "footer-tab footer-tab-active" : "footer-tab",
-      type: "button",
-      role: "tab",
-      "aria-selected": String(state.page === "search"),
-      "data-action": "nav-search",
-    },
-    ["Поиск"]
   );
   const tabProfile = el(
     "button",
@@ -105,6 +96,6 @@ export function renderFooter(target: HTMLElement, state: AppState) {
 
   target.replaceChildren(
     el("div", { class: "footer-line" }, [line]),
-    el("div", { class: "footer-nav", role: "tablist" }, [tabMain, tabSearch, tabProfile, tabFiles])
+    el("div", { class: "footer-nav", role: "tablist" }, [tabMain, tabProfile, tabFiles])
   );
 }

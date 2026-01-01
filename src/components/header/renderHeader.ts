@@ -89,7 +89,6 @@ export function renderHeader(layout: Layout, state: AppState) {
       ...[
         ["F1", "info"],
         ["F2", "профиль"],
-        ["F3", "поиск"],
         ["F5", "чат+"],
         ["F6", "доска+"],
         ["F7", "файлы"],

@@ -654,16 +654,18 @@
 
 .sidebar-tabs {
   --sidebar-tabs-count: 3;
-  display: grid;
-  grid-template-columns: repeat(var(--sidebar-tabs-count), minmax(0, 1fr));
+  display: flex;
+  align-items: center;
   gap: 0;
-  padding: 0;
+  padding: 0 var(--sidebar-list-pad);
   border-radius: 0;
   border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 45%);
   background: transparent;
   margin-bottom: var(--sp-3);
   position: relative;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .sidebar-tabs::before,
@@ -675,19 +677,19 @@
 .sidebar-tabs.sidebar-tabs-bottom {
   --sidebar-tabs-count: 4;
   margin: 0;
-  border-radius: 16px;
-  padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--line), transparent 35%);
-  background: color-mix(in srgb, var(--panel2), transparent 25%);
+  padding: 0 var(--sidebar-list-pad);
+  border-radius: 0;
+  border: 0;
+  background: transparent;
 }
 
 .sidebar-tabs.sidebar-tabs-desktop {
   --sidebar-tabs-count: 4;
   margin: 0;
-  border-radius: 16px;
-  padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--line), transparent 35%);
-  background: color-mix(in srgb, var(--panel2), transparent 25%);
+  padding: 0 var(--sidebar-list-pad);
+  border-radius: 0;
+  border: 0;
+  background: transparent;
 }
 
 .sidebar-tabs.sidebar-tabs-pwa {
@@ -903,33 +905,47 @@
 }
 
 .sidebar-tab {
-  min-height: 44px;
+  min-height: 40px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   background: transparent;
   color: var(--muted);
   font-family: var(--font-family);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 12px;
   cursor: pointer;
+  position: relative;
   transition:
-    background 160ms ease,
-    color 160ms ease,
-    transform 80ms ease;
+    color 160ms ease;
+}
+
+.sidebar-tab::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  background: var(--focus);
+  opacity: 0;
+  transition: opacity 160ms ease;
 }
 
 .sidebar-tab:hover {
-  background: color-mix(in srgb, var(--sel), transparent 45%);
   color: var(--text);
 }
 
 .sidebar-tab:active {
-  transform: translateY(1px);
+  transform: none;
 }
 
 .sidebar-tab.sidebar-tab-active {
-  background: var(--sel);
   color: var(--text);
+}
+
+.sidebar-tab.sidebar-tab-active::after {
+  opacity: 1;
 }
 
 .sidebar-tab:focus-visible {

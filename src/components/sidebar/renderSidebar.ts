@@ -533,8 +533,8 @@ export function renderSidebar(
   if (!(target as any)._sidebarBody) (target as any)._sidebarBody = body;
   toggleClass(body, "sidebar-mobile-body", isMobile);
   if (sidebarDock) {
-    toggleClass(sidebarDock, "hidden", isMobile);
-    if (isMobile) sidebarDock.replaceChildren();
+    toggleClass(sidebarDock, "hidden", true);
+    sidebarDock.replaceChildren();
   }
   const bindHeaderScroll = (header: HTMLElement | null) => {
     const prev = (body as any)._sidebarHeaderScrollHandler as (() => void) | undefined;
@@ -1031,12 +1031,6 @@ export function renderSidebar(
     }
 
     // Menu tab: действия и навигация.
-    const searchRow = roomRow("⌕", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
-      sub: "Найти по ID или @handle",
-      time: null,
-      hasDraft: false,
-    });
-    searchRow.setAttribute("title", "Поиск пользователей по ID или @handle");
     const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
       sub: "Имя, @handle, аватар",
       time: null,
@@ -1049,7 +1043,7 @@ export function renderSidebar(
       hasDraft: false,
     });
     filesRow.setAttribute("title", "Передача файлов и история");
-    const navRows: HTMLElement[] = [searchRow, profileRow, filesRow];
+    const navRows: HTMLElement[] = [profileRow, filesRow];
 
     const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
       sub: "Групповой чат и приглашения",
@@ -1096,7 +1090,6 @@ export function renderSidebar(
       el("div", { class: "sidebar-tips-body" }, [
         el("div", { class: "sidebar-tip" }, ["ПКМ/долгий тап по контакту — меню действий."]),
         el("div", { class: "sidebar-tip" }, ["«Чаты» — активные диалоги и группы, «Контакты» — список пользователей."]),
-        el("div", { class: "sidebar-tip" }, ["Новые контакты удобнее добавлять через «Поиск»."]),
       ]),
     ]);
 
@@ -1196,10 +1189,6 @@ export function renderSidebar(
       tabsList[next]?.focus();
     });
 
-    const useDock = Boolean(sidebarDock);
-    if (useDock && sidebarDock) sidebarDock.replaceChildren(tabs);
-    const desktopBottom = useDock ? null : el("div", { class: "sidebar-desktop-bottom" }, [tabs]);
-
     const searchBar =
       showMenuTab && activeTab === "menu"
         ? null
@@ -1243,8 +1232,13 @@ export function renderSidebar(
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
     const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
-    const headerStack = contactSortBar ? el("div", { class: "sidebar-header-stack" }, [searchBar!, contactSortBar]) : searchBar;
-    const header = headerStack ? el("div", { class: "sidebar-header" }, [headerStack]) : null;
+    const headerStack = el("div", { class: "sidebar-header-stack" }, [
+      tabs,
+      ...(activeTab === "menu"
+        ? [el("div", { class: "sidebar-header-title" }, ["Меню"])]
+        : [...(searchBar ? [searchBar] : []), ...(contactSortBar ? [contactSortBar] : [])]),
+    ]);
+    const header = el("div", { class: "sidebar-header" }, [headerStack]);
 
     const mentionForKey = (key: string): boolean => {
       if (!selfMentionHandles.size) return false;
@@ -1324,8 +1318,6 @@ export function renderSidebar(
       const nodes: HTMLElement[] = [];
       if (header) nodes.push(header);
       nodes.push(body);
-      if (useDock && sidebarDock) nodes.push(sidebarDock);
-      else if (desktopBottom) nodes.push(desktopBottom);
       target.replaceChildren(...nodes);
       bindHeaderScroll(header);
     };
@@ -1509,12 +1501,6 @@ export function renderSidebar(
     }
 
     // Menu tab (PWA): actions/navigation.
-    const searchRow = roomRow("⌕", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
-      sub: "Найти по ID или @handle",
-      time: null,
-      hasDraft: false,
-    });
-    searchRow.setAttribute("title", "Поиск пользователей по ID или @handle");
     const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
       sub: "Имя, @handle, аватар",
       time: null,
@@ -1527,7 +1513,7 @@ export function renderSidebar(
       hasDraft: false,
     });
     filesRow.setAttribute("title", "Передача файлов и история");
-    const navRows: HTMLElement[] = [searchRow, profileRow, filesRow];
+    const navRows: HTMLElement[] = [profileRow, filesRow];
 
     const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
       sub: "Групповой чат и приглашения",
@@ -1649,10 +1635,6 @@ export function renderSidebar(
     desktopTabsList[next]?.focus();
   });
 
-  const useDock = Boolean(sidebarDock && !isMobile);
-  if (useDock && sidebarDock) sidebarDock.replaceChildren(desktopTabs);
-  const desktopBottom = useDock ? null : el("div", { class: "sidebar-desktop-bottom" }, [desktopTabs]);
-
   const searchBar = (() => {
     const input = el("input", {
       class: "sidebar-search-input",
@@ -1694,11 +1676,13 @@ export function renderSidebar(
     return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
   })();
   const contactSortBar = activeDesktopTab === "contacts" ? buildContactSortBar() : null;
-  const headerStack = contactSortBar ? el("div", { class: "sidebar-header-stack" }, [searchBar, contactSortBar]) : searchBar;
-  const header =
-    activeDesktopTab === "menu"
-      ? el("div", { class: "sidebar-header" }, [el("div", { class: "sidebar-header-title" }, ["Меню"])])
-      : el("div", { class: "sidebar-header" }, [headerStack]);
+  const headerStack = el("div", { class: "sidebar-header-stack" }, [
+    desktopTabs,
+    ...(activeDesktopTab === "menu"
+      ? [el("div", { class: "sidebar-header-title" }, ["Меню"])]
+      : [searchBar, ...(contactSortBar ? [contactSortBar] : [])]),
+  ]);
+  const header = el("div", { class: "sidebar-header" }, [headerStack]);
 
   const lastTsForKey = (key: string): number => {
     const conv = state.conversations[key] || [];
@@ -1790,10 +1774,7 @@ export function renderSidebar(
 
   const mountDesktop = (children: HTMLElement[]) => {
     body.replaceChildren(...children);
-    const nodes: HTMLElement[] = [header, body];
-    if (useDock && sidebarDock) nodes.push(sidebarDock);
-    else if (desktopBottom) nodes.push(desktopBottom);
-    target.replaceChildren(...nodes);
+    target.replaceChildren(header, body);
     bindHeaderScroll(header);
     (target as any)._desktopSidebarPrevTab = activeDesktopTab;
 
@@ -1817,12 +1798,6 @@ export function renderSidebar(
   };
 
   if (activeDesktopTab === "menu") {
-    const searchRow = roomRow("⌕", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
-      sub: "Найти по ID или @handle",
-      time: null,
-      hasDraft: false,
-    });
-    searchRow.setAttribute("title", "Поиск пользователей по ID или @handle");
     const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
       sub: "Имя, @handle, аватар",
       time: null,
@@ -1835,7 +1810,7 @@ export function renderSidebar(
       hasDraft: false,
     });
     filesRow.setAttribute("title", "Передача файлов и история");
-    const navRows: HTMLElement[] = [searchRow, profileRow, filesRow];
+    const navRows: HTMLElement[] = [profileRow, filesRow];
 
     const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
       sub: "Групповой чат и приглашения",

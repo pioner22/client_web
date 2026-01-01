@@ -1097,6 +1097,7 @@ export function renderChat(layout: Layout, state: AppState) {
   }
   const titleChildren: Array<string | HTMLElement> = [...chatTitleNodes(state)];
   const chatSearchEnabled = !mobileUi;
+  const showChatSearchToggle = false;
   if (state.selected) {
     const infoActive = Boolean(
       state.page === "main" &&
@@ -1119,7 +1120,7 @@ export function renderChat(layout: Layout, state: AppState) {
         ["ℹ︎"]
       )
     );
-    if (chatSearchEnabled) {
+    if (chatSearchEnabled && showChatSearchToggle) {
       titleChildren.push(
         el(
           "button",
