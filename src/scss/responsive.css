@@ -928,6 +928,14 @@
     --app-overflow: hidden;
   }
 
+  .hdr-label,
+  .hdr-id,
+  .hdr-ver,
+  .hdr-sep,
+  .hotkeys {
+    display: none;
+  }
+
   .footer {
     display: none;
   }

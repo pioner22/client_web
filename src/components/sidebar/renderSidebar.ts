@@ -1197,7 +1197,9 @@ export function renderSidebar(
     const tabs = el(
       "div",
       {
-        class: showMenuTab ? "sidebar-tabs sidebar-tabs-desktop sidebar-tabs-pwa" : "sidebar-tabs sidebar-tabs-desktop",
+        class: showMenuTab
+          ? "sidebar-tabs sidebar-tabs-desktop sidebar-tabs-pwa sidebar-tabs-standalone"
+          : "sidebar-tabs sidebar-tabs-desktop sidebar-tabs-standalone",
         role: "tablist",
         "aria-label": "Раздел",
       },
@@ -1257,7 +1259,6 @@ export function renderSidebar(
           })();
     const contactSortBar = activeTab === "contacts" && searchBar ? buildContactSortBar() : null;
     const headerStack = el("div", { class: "sidebar-header-stack" }, [
-      tabs,
       ...(activeTab === "menu"
         ? [el("div", { class: "sidebar-header-title" }, ["Меню"])]
         : [...(searchBar ? [searchBar] : []), ...(contactSortBar ? [contactSortBar] : [])]),
@@ -1378,7 +1379,7 @@ export function renderSidebar(
     const initialSnap = isSameTab ? takeScrollSnapshot() : scrollMemory[activeTab] || { scrollTop: 0, anchor: null };
     const mountPwa = (children: HTMLElement[]) => {
       const snap = isSameTab ? takeScrollSnapshot() : initialSnap;
-      body.replaceChildren(...children);
+      body.replaceChildren(tabs, ...children);
       const nodes: HTMLElement[] = [];
       if (header) nodes.push(header);
       nodes.push(body);

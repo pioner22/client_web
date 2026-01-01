@@ -147,6 +147,11 @@
   margin: var(--pane-section-mt) 0 var(--pane-section-mb);
 }
 
+.sidebar .pane-section {
+  padding-inline: var(--row-pad-x);
+  font-weight: var(--font-weight-bold);
+}
+
 .row {
   width: 100%;
   text-align: left;
@@ -694,6 +699,18 @@
 
 .sidebar-tabs.sidebar-tabs-pwa {
   --sidebar-tabs-count: 4;
+}
+
+.sidebar-tabs.sidebar-tabs-standalone {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--sidebar-bg);
+  padding-inline: 0;
+}
+
+.sidebar-tabs.sidebar-tabs-standalone + .pane-section {
+  margin-top: 0;
 }
 
 .sidebar-mobile-bottom {
