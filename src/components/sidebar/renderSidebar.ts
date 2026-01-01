@@ -534,6 +534,8 @@ export function renderSidebar(
   toggleClass(body, "sidebar-mobile-body", isMobile);
   if (sidebarDock) {
     toggleClass(sidebarDock, "hidden", true);
+    toggleClass(sidebarDock, "sidebar-desktop-bottom", false);
+    toggleClass(sidebarDock, "sidebar-mobile-bottom", false);
     sidebarDock.replaceChildren();
   }
   const forceResetScroll = (() => {
@@ -1650,6 +1652,19 @@ export function renderSidebar(
   let activeDesktopTab: DesktopTab =
     rawDesktopTab === "contacts" || rawDesktopTab === "boards" || rawDesktopTab === "menu" ? rawDesktopTab : defaultDesktopTab;
   if (!showMenuTab && activeDesktopTab === "menu") activeDesktopTab = defaultDesktopTab;
+  const desktopMenuDockRow = showMenuTab
+    ? (() => {
+        const row = roomRow("☰", "Меню", activeDesktopTab === "menu", () => onSetMobileSidebarTab("menu"));
+        row.setAttribute("title", "Меню");
+        return row;
+      })()
+    : null;
+  const shouldShowDesktopDock = Boolean(sidebarDock && desktopMenuDockRow);
+  if (sidebarDock) {
+    toggleClass(sidebarDock, "hidden", !desktopMenuDockRow);
+    toggleClass(sidebarDock, "sidebar-desktop-bottom", Boolean(desktopMenuDockRow));
+    if (desktopMenuDockRow) sidebarDock.replaceChildren(desktopMenuDockRow);
+  }
 
   const desktopTabContacts = el(
     "button",
@@ -1863,7 +1878,9 @@ export function renderSidebar(
 
   const mountDesktop = (children: HTMLElement[]) => {
     body.replaceChildren(...children);
-    target.replaceChildren(header, body);
+    const nodes: HTMLElement[] = [header, body];
+    if (shouldShowDesktopDock && sidebarDock) nodes.push(sidebarDock);
+    target.replaceChildren(...nodes);
     bindHeaderScroll(header);
     (target as any)._desktopSidebarPrevTab = activeDesktopTab;
 
