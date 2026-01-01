@@ -2733,6 +2733,23 @@ export function mountApp(root: HTMLElement) {
     layout.navOverlay.setAttribute("aria-hidden", show ? "false" : "true");
   }
 
+  const markSidebarResetScroll = () => {
+    try {
+      layout.sidebarBody.dataset.sidebarResetScroll = "1";
+    } catch {
+      // ignore
+    }
+  };
+
+  const resetSidebarScrollTop = (behavior: ScrollBehavior = "auto") => {
+    try {
+      layout.sidebarBody.scrollTo({ top: 0, left: 0, behavior });
+    } catch {
+      layout.sidebarBody.scrollTop = 0;
+      layout.sidebarBody.scrollLeft = 0;
+    }
+  };
+
   function setMobileSidebarOpen(open: boolean) {
     const st = store.get();
     const forcedOpen = Boolean(mobileSidebarMq.matches && st.page === "main" && !st.selected && !st.modal);
@@ -2765,7 +2782,13 @@ export function mountApp(root: HTMLElement) {
     document.documentElement.classList.toggle("sidebar-mobile-open", shouldOpen);
     syncNavOverlay();
     if (shouldOpen) {
+      if (store.get().mobileSidebarTab === "contacts") {
+        markSidebarResetScroll();
+      }
       queueMicrotask(() => {
+        if (store.get().mobileSidebarTab === "contacts") {
+          resetSidebarScrollTop();
+        }
         const searchInput = layout.sidebar.querySelector(".sidebar-search-input") as HTMLInputElement | null;
         if (searchInput && !searchInput.disabled) {
           searchInput.focus();
@@ -2814,6 +2837,10 @@ export function mountApp(root: HTMLElement) {
     layout.sidebar.classList.toggle("sidebar-float-open", shouldOpen);
     document.documentElement.classList.toggle("floating-sidebar-open", shouldOpen);
     syncNavOverlay();
+    if (shouldOpen && store.get().mobileSidebarTab === "contacts") {
+      markSidebarResetScroll();
+      queueMicrotask(() => resetSidebarScrollTop());
+    }
     if (restoreKey) {
       scrollChatToBottom(restoreKey);
     }
@@ -2837,13 +2864,11 @@ export function mountApp(root: HTMLElement) {
     const next: MobileSidebarTab = tab === "contacts" || tab === "menu" || tab === "boards" ? tab : "chats";
     // Telegram-like: tap on the active tab scrolls the list to top.
     if (store.get().mobileSidebarTab === next) {
-      try {
-        layout.sidebarBody.scrollTo({ top: 0, left: 0, behavior: "smooth" });
-      } catch {
-        layout.sidebarBody.scrollTop = 0;
-        layout.sidebarBody.scrollLeft = 0;
-      }
+      resetSidebarScrollTop("smooth");
       return;
+    }
+    if (next === "contacts") {
+      markSidebarResetScroll();
     }
     store.set({ mobileSidebarTab: next });
   }

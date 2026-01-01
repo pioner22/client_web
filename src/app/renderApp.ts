@@ -401,8 +401,15 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onAuthLogout,
     layout.sidebarDock
   );
-  if (layout.sidebarBody.scrollTop !== sidebarScrollTop) layout.sidebarBody.scrollTop = sidebarScrollTop;
-  if (layout.sidebarBody.scrollLeft !== sidebarScrollLeft) layout.sidebarBody.scrollLeft = sidebarScrollLeft;
+  const shouldResetSidebarScroll = layout.sidebarBody.dataset.sidebarResetScroll === "1";
+  if (shouldResetSidebarScroll) {
+    delete layout.sidebarBody.dataset.sidebarResetScroll;
+    layout.sidebarBody.scrollTop = 0;
+    layout.sidebarBody.scrollLeft = 0;
+  } else {
+    if (layout.sidebarBody.scrollTop !== sidebarScrollTop) layout.sidebarBody.scrollTop = sidebarScrollTop;
+    if (layout.sidebarBody.scrollLeft !== sidebarScrollLeft) layout.sidebarBody.scrollLeft = sidebarScrollLeft;
+  }
   if (sidebarSearchHadFocus) {
     const nextSidebarSearch = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
     if (nextSidebarSearch) {

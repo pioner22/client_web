@@ -536,6 +536,16 @@ export function renderSidebar(
     toggleClass(sidebarDock, "hidden", true);
     sidebarDock.replaceChildren();
   }
+  const forceResetScroll = (() => {
+    try {
+      return (
+        (target as HTMLElement).dataset.sidebarResetScroll === "1" ||
+        body.dataset.sidebarResetScroll === "1"
+      );
+    } catch {
+      return false;
+    }
+  })();
   const bindHeaderScroll = (header: HTMLElement | null) => {
     const prev = (body as any)._sidebarHeaderScrollHandler as (() => void) | undefined;
     if (prev) body.removeEventListener("scroll", prev);
@@ -607,6 +617,7 @@ export function renderSidebar(
     const scrollMemory: Record<string, SidebarScrollSnapshot | undefined> = ((target as any)._mobileSidebarScrollMemory ||= {});
     const prevTab = String((target as any)._mobileSidebarPrevTab || "").trim();
     const isSameTab = Boolean(prevTab && prevTab === activeTab);
+    const forceTopContacts = forceResetScroll && activeTab === "contacts";
     if (prevTab && prevTab !== activeTab) {
       try {
         const hostRect = body.getBoundingClientRect();
@@ -769,9 +780,13 @@ export function renderSidebar(
         body.scrollTop = snap.scrollTop || 0;
       }
     };
-    const initialSnap = isSameTab ? takeScrollSnapshot() : scrollMemory[activeTab] || { scrollTop: 0, anchor: null };
+    const initialSnap = forceTopContacts
+      ? { scrollTop: 0, anchor: null }
+      : isSameTab
+        ? takeScrollSnapshot()
+        : scrollMemory[activeTab] || { scrollTop: 0, anchor: null };
     const mountMobile = (children: HTMLElement[]) => {
-      const snap = isSameTab ? takeScrollSnapshot() : initialSnap;
+      const snap = forceTopContacts ? initialSnap : isSameTab ? takeScrollSnapshot() : initialSnap;
       body.replaceChildren(...children);
       target.replaceChildren(sticky, body);
       bindHeaderScroll(sticky);
@@ -1122,6 +1137,7 @@ export function renderSidebar(
     const scrollMemory: Record<string, SidebarScrollSnapshot | undefined> = ((target as any)._pwaSidebarScrollMemory ||= {});
     const prevTab = String((target as any)._pwaSidebarPrevTab || "").trim();
     const isSameTab = Boolean(prevTab && prevTab === activeTab);
+    const forceTopContacts = forceResetScroll && activeTab === "contacts";
     if (prevTab && prevTab !== activeTab) {
       try {
         const hostRect = body.getBoundingClientRect();
@@ -1376,9 +1392,13 @@ export function renderSidebar(
         body.scrollTop = snap.scrollTop || 0;
       }
     };
-    const initialSnap = isSameTab ? takeScrollSnapshot() : scrollMemory[activeTab] || { scrollTop: 0, anchor: null };
+    const initialSnap = forceTopContacts
+      ? { scrollTop: 0, anchor: null }
+      : isSameTab
+        ? takeScrollSnapshot()
+        : scrollMemory[activeTab] || { scrollTop: 0, anchor: null };
     const mountPwa = (children: HTMLElement[]) => {
-      const snap = isSameTab ? takeScrollSnapshot() : initialSnap;
+      const snap = forceTopContacts ? initialSnap : isSameTab ? takeScrollSnapshot() : initialSnap;
       body.replaceChildren(tabs, ...children);
       const nodes: HTMLElement[] = [];
       if (header) nodes.push(header);
@@ -1833,8 +1853,13 @@ export function renderSidebar(
   const prevTab = String((target as any)._desktopSidebarPrevTab || "").trim();
   const didSwitchTab = Boolean(prevTab && prevTab !== activeDesktopTab);
   const scrollMemory: Record<string, number | undefined> = ((target as any)._desktopSidebarScrollMemory ||= {});
+  const forceTopContacts = forceResetScroll && activeDesktopTab === "contacts";
   if (didSwitchTab) scrollMemory[prevTab] = Number((body as any).scrollTop || 0) || 0;
-  const desiredScrollTop = didSwitchTab ? Number(scrollMemory[activeDesktopTab] || 0) || 0 : Number((body as any).scrollTop || 0) || 0;
+  const desiredScrollTop = forceTopContacts
+    ? 0
+    : didSwitchTab
+      ? Number(scrollMemory[activeDesktopTab] || 0) || 0
+      : Number((body as any).scrollTop || 0) || 0;
 
   const mountDesktop = (children: HTMLElement[]) => {
     body.replaceChildren(...children);
@@ -1842,16 +1867,17 @@ export function renderSidebar(
     bindHeaderScroll(header);
     (target as any)._desktopSidebarPrevTab = activeDesktopTab;
 
-    if (!didSwitchTab) return;
+    if (!didSwitchTab && !forceTopContacts) return;
+    const nextScrollTop = forceTopContacts ? 0 : desiredScrollTop;
     try {
-      (body as any).scrollTop = desiredScrollTop;
+      (body as any).scrollTop = nextScrollTop;
     } catch {
       // ignore
     }
     try {
       window.requestAnimationFrame(() => {
         try {
-          (body as any).scrollTop = desiredScrollTop;
+          (body as any).scrollTop = nextScrollTop;
         } catch {
           // ignore
         }
