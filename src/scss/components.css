@@ -718,6 +718,8 @@
 
 .sidebar-tabs.sidebar-tabs-standalone + .pane-section {
   margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
 }
 
 .sidebar-mobile-bottom {

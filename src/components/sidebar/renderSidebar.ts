@@ -619,7 +619,7 @@ export function renderSidebar(
     const scrollMemory: Record<string, SidebarScrollSnapshot | undefined> = ((target as any)._mobileSidebarScrollMemory ||= {});
     const prevTab = String((target as any)._mobileSidebarPrevTab || "").trim();
     const isSameTab = Boolean(prevTab && prevTab === activeTab);
-    const forceTopContacts = forceResetScroll && activeTab === "contacts";
+    const forceTopContacts = activeTab === "contacts" && (forceResetScroll || (prevTab && !isSameTab));
     if (prevTab && prevTab !== activeTab) {
       try {
         const hostRect = body.getBoundingClientRect();
@@ -1139,7 +1139,7 @@ export function renderSidebar(
     const scrollMemory: Record<string, SidebarScrollSnapshot | undefined> = ((target as any)._pwaSidebarScrollMemory ||= {});
     const prevTab = String((target as any)._pwaSidebarPrevTab || "").trim();
     const isSameTab = Boolean(prevTab && prevTab === activeTab);
-    const forceTopContacts = forceResetScroll && activeTab === "contacts";
+    const forceTopContacts = activeTab === "contacts" && (forceResetScroll || (prevTab && !isSameTab));
     if (prevTab && prevTab !== activeTab) {
       try {
         const hostRect = body.getBoundingClientRect();
@@ -1868,7 +1868,7 @@ export function renderSidebar(
   const prevTab = String((target as any)._desktopSidebarPrevTab || "").trim();
   const didSwitchTab = Boolean(prevTab && prevTab !== activeDesktopTab);
   const scrollMemory: Record<string, number | undefined> = ((target as any)._desktopSidebarScrollMemory ||= {});
-  const forceTopContacts = forceResetScroll && activeDesktopTab === "contacts";
+  const forceTopContacts = activeDesktopTab === "contacts" && (forceResetScroll || didSwitchTab);
   if (didSwitchTab) scrollMemory[prevTab] = Number((body as any).scrollTop || 0) || 0;
   const desiredScrollTop = forceTopContacts
     ? 0
