@@ -511,7 +511,30 @@ export function renderSidebar(
       // ignore
     }
   }
+  const currentSelectedKey = (() => {
+    if (state.page !== "main") return "";
+    const sel = state.selected;
+    if (!sel) return "";
+    const id = String((sel as any).id || "").trim();
+    if (!id) return "";
+    if (sel.kind === "dm") return dmKey(id);
+    if (sel.kind === "group" || sel.kind === "board") return roomKey(id);
+    return "";
+  })();
+  const prevSelectedKey = String((target as any)._sidebarPrevSelectedKey || "").trim();
+  const shouldResetOnReturn = Boolean(
+    (isMobile || isStandaloneDisplayMode()) && prevSelectedKey && !currentSelectedKey && state.page === "main"
+  );
+  if (shouldResetOnReturn) {
+    try {
+      (target as HTMLElement).dataset.sidebarResetScroll = "1";
+      body.dataset.sidebarResetScroll = "1";
+    } catch {
+      // ignore
+    }
+  }
   (target as any)._sidebarPrevPage = state.page;
+  (target as any)._sidebarPrevSelectedKey = currentSelectedKey;
   const forceResetScroll = (() => {
     try {
       return (
