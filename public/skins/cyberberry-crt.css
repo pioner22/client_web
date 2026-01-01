@@ -79,7 +79,7 @@
   --grid-gap: 0px;
 
   /* ===== Header ===== */
-  --header-bg: linear-gradient(90deg, rgba(9, 12, 22, 0.98), rgba(12, 18, 32, 0.98));
+  --header-bg: var(--bg);
   --header-border-color: rgba(255, 91, 220, 0.28);
   --header-border-width: 1px;
   --header-pad-y: var(--sp-3);

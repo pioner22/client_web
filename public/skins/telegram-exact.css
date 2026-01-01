@@ -47,7 +47,7 @@
   --app-overflow: hidden;
 
   /* ===== Header ===== */
-  --header-bg: var(--panel);
+  --header-bg: var(--bg);
   --header-border-color: var(--line);
   --header-border-width: 1px;
   --header-pad-y: 10px;

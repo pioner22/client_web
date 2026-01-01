@@ -121,7 +121,7 @@
   --right-column-border-color: var(--line);
   --right-column-border-width: var(--border-width);
 
-  --header-bg: var(--panel);
+  --header-bg: var(--bg);
   --header-border-color: var(--line);
   --header-border-width: var(--border-width);
   --header-pad-y: 10px;
