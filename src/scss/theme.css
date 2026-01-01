@@ -10,8 +10,8 @@
 :root {
   /* ===== Core palette (legacy базовые токены) ===== */
   --bg: #0b0f14;
-  --panel: #0f1620;
-  --panel2: #101a26;
+  --panel: var(--bg);
+  --panel2: var(--bg);
   --line: #223044;
   --text: #cbd5e1;
   --muted: #94a3b8;

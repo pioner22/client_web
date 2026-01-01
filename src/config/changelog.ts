@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.354",
+    date: "2026-01-01",
+    improved: ["Тема: панели интерфейса совпадают с цветом фона (один тон)"],
+  },
+  {
     version: "0.1.353",
     date: "2026-01-01",
     improved: ["Сайдбар: плотность строк диалогов выровнена под tweb (min-height/padding)"],
