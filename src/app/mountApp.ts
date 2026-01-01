@@ -2783,12 +2783,8 @@ export function mountApp(root: HTMLElement) {
     document.documentElement.classList.toggle("sidebar-mobile-open", shouldOpen);
     syncNavOverlay();
     if (shouldOpen) {
-      if (store.get().mobileSidebarTab === "contacts") {
-        markSidebarResetScroll();
-      }
-      const resetScroll = () => {
-        if (store.get().mobileSidebarTab === "contacts") resetSidebarScrollTop();
-      };
+      markSidebarResetScroll();
+      const resetScroll = () => resetSidebarScrollTop();
       queueMicrotask(() => {
         resetScroll();
         const searchInput = layout.sidebar.querySelector(".sidebar-search-input") as HTMLInputElement | null;
@@ -2846,7 +2842,7 @@ export function mountApp(root: HTMLElement) {
     layout.sidebar.classList.toggle("sidebar-float-open", shouldOpen);
     document.documentElement.classList.toggle("floating-sidebar-open", shouldOpen);
     syncNavOverlay();
-    if (shouldOpen && store.get().mobileSidebarTab === "contacts") {
+    if (shouldOpen) {
       markSidebarResetScroll();
       const resetScroll = () => resetSidebarScrollTop();
       queueMicrotask(() => resetScroll());
@@ -2884,9 +2880,7 @@ export function mountApp(root: HTMLElement) {
       resetSidebarScrollTop("smooth");
       return;
     }
-    if (next === "contacts") {
-      markSidebarResetScroll();
-    }
+    markSidebarResetScroll();
     store.set({ mobileSidebarTab: next });
   }
 
