@@ -49,7 +49,6 @@ let rightBoardPage: RoomPage | null = null;
 let rightPanelShell: HTMLElement | null = null;
 let rightPanelTitleEl: HTMLElement | null = null;
 let rightPanelBodyEl: HTMLElement | null = null;
-let lastSidebarViewKey: string | null = null;
 
 function formatDatetimeLocal(ms: number): string {
   const d = new Date(ms);
@@ -380,16 +379,6 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   }
 
   renderHeader(layout, state);
-  if (mobileUi) {
-    const sidebarViewKey = `${state.page}|${state.mobileSidebarTab}`;
-    if (sidebarViewKey !== lastSidebarViewKey) {
-      layout.sidebar.dataset.sidebarResetScroll = "1";
-      layout.sidebarBody.dataset.sidebarResetScroll = "1";
-    }
-    lastSidebarViewKey = sidebarViewKey;
-  } else {
-    lastSidebarViewKey = null;
-  }
   const sidebarScrollTop = layout.sidebarBody.scrollTop;
   const sidebarScrollLeft = layout.sidebarBody.scrollLeft;
   const prevSidebarSearch = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;

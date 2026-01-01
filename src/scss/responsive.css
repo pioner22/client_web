@@ -29,7 +29,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --app-row-footer: auto;
+    --app-row-footer: 0px;
     margin: 0;
     border: 0;
     border-radius: 0;
@@ -44,7 +44,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --app-row-footer: auto;
+    --app-row-footer: 0px;
   }
 
   .grid {
@@ -217,23 +217,9 @@
     min-height: auto;
   }
 
-  /* Mobile: нижняя навигация как в tweb/iOS. */
+  /* Mobile: нижние tab-кнопки убраны (навигация живёт в «Меню» / Контакты). */
   .footer {
-    display: block;
-  }
-
-  .footer-line {
     display: none;
-  }
-
-  .footer-nav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--sp-2);
-    padding: var(--sp-1);
-    background: color-mix(in srgb, var(--panel), transparent 12%);
-    border: 1px solid color-mix(in srgb, var(--line), transparent 45%);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   }
 
   .toast-host {
@@ -946,10 +932,10 @@
   .hdr-id,
   .hdr-ver,
   .hdr-sep,
-  .hotkeys {
+  .hotkeys,
+  .footer {
     display: none;
   }
-
 }
 
 html.is-standalone {
@@ -965,6 +951,7 @@ html.is-standalone .hdr-label,
 html.is-standalone .hdr-id,
 html.is-standalone .hdr-ver,
 html.is-standalone .hdr-sep,
-html.is-standalone .hotkeys {
+html.is-standalone .hotkeys,
+html.is-standalone .footer {
   display: none;
 }

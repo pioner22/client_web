@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.350",
+    date: "2026-01-01",
+    fixed: ["Откат: возвращено поведение до 0.1.349 (mobile footer tabs скрыты, без reset списка)"],
+  },
+  {
     version: "0.1.349",
     date: "2026-01-01",
     improved: ["Mobile/PWA: нижняя навигация снова видна (footer tabs, tweb/iOS‑like)", "PWA: standalone больше не скрывает footer"],
