@@ -11,7 +11,7 @@ export interface ChangelogEntry {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     version: "0.1.383",
-    date: "2026-01-02",
+    date: "2026-01-03",
     improved: ["Сайдбар: фильтр чатов «Все/Непрочитанные» с бейджем непрочитанных (tweb-like)"],
   },
   {
