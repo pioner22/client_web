@@ -343,6 +343,7 @@ export function renderSidebar(
   onSetSidebarQuery: (query: string) => void,
   onAuthOpen: () => void,
   onAuthLogout: () => void,
+  onOpenSidebarToolsMenu: (x: number, y: number) => void,
   sidebarDock?: HTMLElement | null
 ) {
   const isMobile =
@@ -401,7 +402,16 @@ export function renderSidebar(
       },
       ["☰"]
     ) as HTMLButtonElement;
-    menuBtn.addEventListener("click", () => onSetMobileSidebarTab("menu"));
+    menuBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof onOpenSidebarToolsMenu === "function") {
+        const rect = menuBtn.getBoundingClientRect();
+        onOpenSidebarToolsMenu(rect.right, rect.bottom);
+        return;
+      }
+      onSetMobileSidebarTab("menu");
+    });
 
     const isBoardTab = activeTab === "boards";
     const createLabel = isBoardTab ? "Создать доску" : "Создать чат";

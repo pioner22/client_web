@@ -8556,7 +8556,25 @@ export function mountApp(root: HTMLElement) {
       ...opts,
     });
 
-    if (target.kind === "dm") {
+    if (target.kind === "sidebar_tools") {
+      title = "Меню";
+      const statusLabel = st.conn === "connected" ? "Подключено" : "Нет соединения";
+      addGroup([makeItem("sidebar_status", statusLabel, st.conn === "connected" ? "●" : "○", { disabled: true })]);
+      addGroup([
+        makeItem("sidebar_profile", "Профиль", "☺", { disabled: !canAct }),
+        makeItem("sidebar_files", "Файлы", "▦", { disabled: !canAct }),
+        makeItem("sidebar_info", "Info", "?", { disabled: false }),
+      ]);
+      addGroup([
+        makeItem("sidebar_create_chat", "Создать чат", "+", { disabled: !canAct }),
+        makeItem("sidebar_create_board", "Создать доску", "+", { disabled: !canAct }),
+      ]);
+      if (st.conn === "connected" && !st.authed) {
+        addGroup([makeItem("sidebar_login", "Войти", "→")]);
+      } else if (st.authed) {
+        addGroup([makeItem("sidebar_logout", "Выход", "⎋", { danger: true })]);
+      }
+    } else if (target.kind === "dm") {
       title = `Контакт: ${target.id}`;
       const pinKey = dmKey(target.id);
       const unread = st.friends.find((f) => f.id === target.id)?.unread ?? 0;
@@ -8785,6 +8803,50 @@ export function mountApp(root: HTMLElement) {
     if (itemId === "composer_send_schedule") {
       close();
       openSendScheduleModal();
+      return;
+    }
+
+    if (itemId === "sidebar_profile") {
+      close();
+      setPage("profile");
+      const stSnapshot = store.get();
+      if (stSnapshot.authed && stSnapshot.conn === "connected") {
+        gateway.send({ type: "profile_get" });
+      }
+      return;
+    }
+    if (itemId === "sidebar_files") {
+      close();
+      setPage("files");
+      return;
+    }
+    if (itemId === "sidebar_info") {
+      close();
+      setPage("help");
+      return;
+    }
+    if (itemId === "sidebar_create_chat") {
+      close();
+      openGroupCreateModal();
+      return;
+    }
+    if (itemId === "sidebar_create_board") {
+      close();
+      openBoardCreateModal();
+      return;
+    }
+    if (itemId === "sidebar_login") {
+      close();
+      store.set((prev) => ({
+        ...prev,
+        authMode: prev.authRememberedId ? "login" : "register",
+        modal: { kind: "auth" },
+      }));
+      return;
+    }
+    if (itemId === "sidebar_logout") {
+      close();
+      logout();
       return;
     }
 
@@ -10491,6 +10553,7 @@ export function mountApp(root: HTMLElement) {
         gateway.send({ type: "board_info", board_id: st.boardViewId });
       }
     },
+    onOpenSidebarToolsMenu: (x: number, y: number) => openContextMenu({ kind: "sidebar_tools", id: "main" }, x, y),
     onRoomMemberRemove: (kind: TargetRef["kind"], roomId: string, memberId: string) => {
       const st = store.get();
       const rid = String(roomId || "").trim();

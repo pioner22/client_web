@@ -143,6 +143,7 @@ export interface RenderActions {
   onAuthModeChange: (mode: "register" | "login") => void;
   onAuthOpen: () => void;
   onAuthLogout: () => void;
+  onOpenSidebarToolsMenu: (x: number, y: number) => void;
   onCloseModal: () => void;
   onConfirmModal: () => void;
   onDismissUpdate: () => void;
@@ -419,6 +420,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onSetSidebarQuery,
     actions.onAuthOpen,
     actions.onAuthLogout,
+    actions.onOpenSidebarToolsMenu,
     layout.sidebarDock
   );
   const shouldResetSidebarScroll =

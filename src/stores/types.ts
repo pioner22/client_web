@@ -73,7 +73,15 @@ export type ActionModalPayload =
   | ActionModalBoardInvite
   | ActionModalFileOffer;
 
-export type ContextMenuTargetKind = "dm" | "group" | "board" | "auth_in" | "auth_out" | "message" | "composer_send";
+export type ContextMenuTargetKind =
+  | "dm"
+  | "group"
+  | "board"
+  | "auth_in"
+  | "auth_out"
+  | "message"
+  | "composer_send"
+  | "sidebar_tools";
 
 export interface ContextMenuTarget {
   kind: ContextMenuTargetKind;
