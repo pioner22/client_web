@@ -161,7 +161,7 @@
   --composer-border-width: var(--border-width);
   --composer-pad-y: 10px;
   --composer-pad-x: 12px;
-  --composer-gap: 10px;
+  --composer-gap: var(--sp-1);
   --prompt-color: var(--muted);
 
   --footer-bg: var(--panel);
@@ -204,6 +204,8 @@
   --composer-input-letter-spacing: 0em;
   --composer-input-pad-y: 5px;
   --composer-btn-size: 54px;
+  --composer-icon-btn-size: 34px;
+  --composer-send-gap: 4px;
 
   /* Send button icon (brand berry) */
   --send-berry-glint: rgba(255, 255, 255, 0.78);

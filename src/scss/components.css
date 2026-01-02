@@ -2729,9 +2729,9 @@
 }
 
 .btn.composer-attach {
-  min-width: var(--composer-btn-size);
-  width: var(--composer-btn-size);
-  height: var(--composer-btn-size);
+  min-width: var(--composer-icon-btn-size);
+  width: var(--composer-icon-btn-size);
+  height: var(--composer-icon-btn-size);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
@@ -2744,9 +2744,9 @@
 }
 
 .btn.composer-emoji {
-  min-width: var(--composer-btn-size);
-  width: var(--composer-btn-size);
-  height: var(--composer-btn-size);
+  min-width: var(--composer-icon-btn-size);
+  width: var(--composer-icon-btn-size);
+  height: var(--composer-icon-btn-size);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
@@ -2759,9 +2759,9 @@
 }
 
 .btn.composer-board-editor {
-  min-width: var(--composer-btn-size);
-  width: var(--composer-btn-size);
-  height: var(--composer-btn-size);
+  min-width: var(--composer-icon-btn-size);
+  width: var(--composer-icon-btn-size);
+  height: var(--composer-icon-btn-size);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
@@ -2777,6 +2777,7 @@
   min-width: var(--composer-btn-size);
   width: var(--composer-btn-size);
   height: var(--composer-btn-size);
+  margin-left: var(--composer-send-gap);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
