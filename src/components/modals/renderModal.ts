@@ -14,6 +14,7 @@ import { renderInviteUserModal } from "./renderInviteUserModal";
 import { renderActionModal } from "./renderActionModal";
 import { renderContextMenu } from "./renderContextMenu";
 import { renderBoardPostModal } from "./renderBoardPostModal";
+import { renderSendScheduleModal } from "./renderSendScheduleModal";
 
 export interface ModalActions {
   onAuthLogin: () => void;
@@ -29,6 +30,7 @@ export interface ModalActions {
   onMembersAdd: () => void;
   onMembersRemove: () => void;
   onRename: () => void;
+  onSendSchedule: () => void;
   onInviteUser: () => void;
   onFileSendConfirm: (captionText: string) => void;
   onAuthAccept: (peer: string) => void;
@@ -75,6 +77,12 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     return renderPwaUpdateModal(state.clientVersion, {
       onDismiss: actions.onClose,
       onApply: actions.onApplyPwaUpdate,
+    });
+  }
+  if (kind === "send_schedule") {
+    return renderSendScheduleModal(modal.text, modal.suggestedAt, modal.message, {
+      onSchedule: actions.onSendSchedule,
+      onCancel: actions.onClose,
     });
   }
   if (kind === "board_post") {

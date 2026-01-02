@@ -36,6 +36,12 @@ function normalizeTs(raw: unknown): number | null {
   return n;
 }
 
+function normalizeScheduleAt(raw: unknown): number | null {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.trunc(n);
+}
+
 function sanitizeEntry(raw: any, key: string): OutboxEntry | null {
   if (!raw || typeof raw !== "object") return null;
   const localId = normalizeId(raw.localId);
@@ -55,6 +61,8 @@ function sanitizeEntry(raw: any, key: string): OutboxEntry | null {
   const lastAttemptAtRaw = raw.lastAttemptAt;
   const lastAttemptAt = Number.isFinite(lastAttemptAtRaw) ? Math.max(0, Math.trunc(lastAttemptAtRaw)) : undefined;
   const whenOnline = Boolean(raw.whenOnline);
+  const silent = Boolean(raw.silent);
+  const scheduleAt = normalizeScheduleAt(raw.scheduleAt);
 
   return {
     localId,
@@ -66,6 +74,8 @@ function sanitizeEntry(raw: any, key: string): OutboxEntry | null {
     ...(attempts !== undefined ? { attempts } : {}),
     ...(lastAttemptAt !== undefined ? { lastAttemptAt } : {}),
     ...(whenOnline ? { whenOnline: true } : {}),
+    ...(silent ? { silent: true } : {}),
+    ...(scheduleAt !== null ? { scheduleAt } : {}),
   };
 }
 

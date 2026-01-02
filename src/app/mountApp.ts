@@ -4926,6 +4926,41 @@ export function mountApp(root: HTMLElement) {
     store.set({ modal: { ...modal, message: "Сохраняем…" }, status: "Переименование…" });
   }
 
+  function sendScheduleSubmit() {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "send_schedule") return;
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    const rawWhen = (document.getElementById("send-schedule-at") as HTMLInputElement | null)?.value ?? "";
+    const when = parseDatetimeLocal(rawWhen);
+    if (!when) {
+      store.set({ modal: { ...modal, message: "Выберите дату/время" } });
+      return;
+    }
+    const now = Date.now();
+    const maxAt = now + maxBoardScheduleDelayMs();
+    if (when <= now) {
+      store.set({ modal: { ...modal, message: "Время уже прошло — выберите будущее" } });
+      return;
+    }
+    if (when > maxAt) {
+      store.set({ modal: { ...modal, message: "Максимум — 7 дней вперёд" } });
+      return;
+    }
+    store.set({ modal: null });
+    sendChat({
+      mode: "schedule",
+      scheduleAt: when,
+      target: modal.target,
+      text: modal.text,
+      replyDraft: modal.replyDraft ?? null,
+      forwardDraft: modal.forwardDraft ?? null,
+    });
+  }
+
   function saveRoomInfo(kind: TargetRef["kind"], roomId: string, description: string, rules: string) {
     const st = store.get();
     const rid = String(roomId || "").trim();
@@ -6831,18 +6866,44 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
-  function sendChat(opts?: { mode?: "now" | "when_online" }) {
+  function sendChat(opts?: {
+    mode?: "now" | "when_online" | "schedule";
+    scheduleAt?: number;
+    silent?: boolean;
+    target?: TargetRef;
+    text?: string;
+    replyDraft?: MessageHelperDraft | null;
+    forwardDraft?: MessageHelperDraft | null;
+  }) {
     const st = store.get();
-    const rawText = String(layout.input.value || "");
+    const rawText = typeof opts?.text === "string" ? opts.text : String(layout.input.value || "");
     const text = rawText.trimEnd();
-    const sel = st.selected;
+    const sel = opts?.target ?? st.selected;
     const key = sel ? conversationKey(sel) : "";
     const editing = st.editing && key && st.editing.key === key ? st.editing : null;
-    const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
-    const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
+    const replyDraft =
+      opts?.replyDraft !== undefined
+        ? opts.replyDraft && opts.replyDraft.key === key
+          ? opts.replyDraft
+          : null
+        : st.replyDraft && st.replyDraft.key === key
+          ? st.replyDraft
+          : null;
+    const forwardDraft =
+      opts?.forwardDraft !== undefined
+        ? opts.forwardDraft && opts.forwardDraft.key === key
+          ? opts.forwardDraft
+          : null
+        : st.forwardDraft && st.forwardDraft.key === key
+          ? st.forwardDraft
+          : null;
     const forwardFallback = !text && forwardDraft ? String(forwardDraft.text || forwardDraft.preview || "") : "";
     const finalText = text || forwardFallback;
-    const mode = opts?.mode === "when_online" ? "when_online" : "now";
+    const mode = opts?.mode === "when_online" ? "when_online" : opts?.mode === "schedule" ? "schedule" : "now";
+    const silent = Boolean(opts?.silent);
+    const scheduleAtRaw = mode === "schedule" ? opts?.scheduleAt : undefined;
+    const scheduleAt =
+      typeof scheduleAtRaw === "number" && Number.isFinite(scheduleAtRaw) && scheduleAtRaw > 0 ? Math.trunc(scheduleAtRaw) : 0;
     if (!finalText) return;
     if (finalText.length > APP_MSG_MAX_LEN) {
       store.set({ status: `Слишком длинное сообщение (${finalText.length}/${APP_MSG_MAX_LEN})` });
@@ -6870,6 +6931,10 @@ export function mountApp(root: HTMLElement) {
     }
 
     const whenOnline = mode === "when_online" && sel.kind === "dm";
+    if (mode === "schedule" && scheduleAt <= 0) {
+      store.set({ status: "Некорректная дата отправки" });
+      return;
+    }
     if (editing) {
       if (st.conn !== "connected") {
         store.set({ status: "Нет соединения: нельзя изменить сообщение" });
@@ -6906,9 +6971,10 @@ export function mountApp(root: HTMLElement) {
     const ts = nowTs();
     const nowMs = Date.now();
     const payload = sel.kind === "dm"
-      ? { type: "send" as const, to: sel.id, text: finalText }
-      : { type: "send" as const, room: sel.id, text: finalText };
-    const sent = st.conn === "connected" && !whenOnline ? gateway.send(payload) : false;
+      ? { type: "send" as const, to: sel.id, text: finalText, ...(silent ? { silent: true } : {}) }
+      : { type: "send" as const, room: sel.id, text: finalText, ...(silent ? { silent: true } : {}) };
+    const scheduled = mode === "schedule" && scheduleAt > 0;
+    const sent = st.conn === "connected" && !whenOnline && !scheduled ? gateway.send(payload) : false;
     const initialStatus = sent ? ("sending" as const) : ("queued" as const);
     const replyRef = replyDraft ? helperDraftToRef(replyDraft) : null;
     const forwardRef = forwardDraft ? helperDraftToRef(forwardDraft) : null;
@@ -6925,6 +6991,8 @@ export function mountApp(root: HTMLElement) {
       status: initialStatus,
       ...(replyRef ? { reply: replyRef } : {}),
       ...(forwardRef ? { forward: forwardRef } : {}),
+      ...(whenOnline ? { whenOnline: true } : {}),
+      ...(scheduled ? { scheduleAt } : {}),
     };
 
     store.set((prev) => {
@@ -6935,6 +7003,8 @@ export function mountApp(root: HTMLElement) {
         text: finalText,
         ...(sel.kind === "dm" ? { to: sel.id } : { room: sel.id }),
         ...(whenOnline ? { whenOnline: true } : {}),
+        ...(silent ? { silent: true } : {}),
+        ...(scheduled ? { scheduleAt } : {}),
         status: sent ? "sending" : "queued",
         attempts: sent ? 1 : 0,
         lastAttemptAt: sent ? nowMs : 0,
@@ -6953,6 +7023,11 @@ export function mountApp(root: HTMLElement) {
     });
     scheduleSaveDrafts(store);
 
+    if (scheduled) {
+      store.set({ status: "Сообщение запланировано" });
+      drainOutbox();
+      return;
+    }
     if (whenOnline) {
       store.set({ status: "Сообщение будет отправлено, когда контакт в сети" });
       drainOutbox();
@@ -7067,16 +7142,56 @@ export function mountApp(root: HTMLElement) {
 
   const OUTBOX_RETRY_MIN_MS = 900;
   const OUTBOX_DRAIN_MAX = 12;
+  const OUTBOX_SCHEDULE_GRACE_MS = 1200;
+  let outboxScheduleTimer: number | null = null;
+  let outboxScheduleNextAt = 0;
+
+  function clearOutboxScheduleTimer() {
+    if (outboxScheduleTimer !== null) {
+      window.clearTimeout(outboxScheduleTimer);
+      outboxScheduleTimer = null;
+    }
+    outboxScheduleNextAt = 0;
+  }
+
+  function armOutboxScheduleTimer(nextAt: number) {
+    if (!Number.isFinite(nextAt) || nextAt <= 0) {
+      clearOutboxScheduleTimer();
+      return;
+    }
+    if (outboxScheduleTimer !== null && outboxScheduleNextAt === nextAt) return;
+    clearOutboxScheduleTimer();
+    outboxScheduleNextAt = nextAt;
+    const delay = Math.max(0, nextAt - Date.now());
+    outboxScheduleTimer = window.setTimeout(() => {
+      outboxScheduleTimer = null;
+      outboxScheduleNextAt = 0;
+      drainOutbox();
+    }, delay);
+  }
 
   function drainOutbox(limit = OUTBOX_DRAIN_MAX) {
     const st = store.get();
-    if (st.conn !== "connected") return;
-    if (!st.authed || !st.selfId) return;
     const entries = Object.entries(st.outbox || {});
-    if (!entries.length) return;
+    if (!entries.length) {
+      clearOutboxScheduleTimer();
+      return;
+    }
 
     const nowMs = Date.now();
-    const flat: Array<{ key: string; localId: string; to?: string; room?: string; text: string; ts: number; lastAttemptAt: number; whenOnline?: boolean }> = [];
+    let nextScheduleAt = 0;
+    const flat: Array<{
+      key: string;
+      localId: string;
+      to?: string;
+      room?: string;
+      text: string;
+      ts: number;
+      lastAttemptAt: number;
+      whenOnline?: boolean;
+      silent?: boolean;
+      scheduleAt?: number;
+    }> = [];
     for (const [k, list] of entries) {
       const arr = Array.isArray(list) ? list : [];
       for (const e of arr) {
@@ -7094,10 +7209,33 @@ export function mountApp(root: HTMLElement) {
             ? Math.max(0, Math.trunc(lastAttemptAtRaw))
             : 0;
         const whenOnline = Boolean(e?.whenOnline);
-        flat.push({ key: k, localId: lid, to, room, text, ts, lastAttemptAt, ...(whenOnline ? { whenOnline: true } : {}) });
+        const silent = Boolean(e?.silent);
+        const scheduleAtRaw = e?.scheduleAt;
+        const scheduleAt =
+          typeof scheduleAtRaw === "number" && Number.isFinite(scheduleAtRaw) && scheduleAtRaw > 0 ? Math.trunc(scheduleAtRaw) : 0;
+        if (scheduleAt && scheduleAt > nowMs + OUTBOX_SCHEDULE_GRACE_MS) {
+          if (!nextScheduleAt || scheduleAt < nextScheduleAt) nextScheduleAt = scheduleAt;
+          continue;
+        }
+        flat.push({
+          key: k,
+          localId: lid,
+          to,
+          room,
+          text,
+          ts,
+          lastAttemptAt,
+          ...(whenOnline ? { whenOnline: true } : {}),
+          ...(silent ? { silent: true } : {}),
+          ...(scheduleAt ? { scheduleAt } : {}),
+        });
       }
     }
+    if (nextScheduleAt) armOutboxScheduleTimer(nextScheduleAt);
+    else clearOutboxScheduleTimer();
     if (!flat.length) return;
+    if (st.conn !== "connected") return;
+    if (!st.authed || !st.selfId) return;
     flat.sort((a, b) => a.ts - b.ts);
 
     const onlineById = new Map<string, boolean>();
@@ -7112,7 +7250,11 @@ export function mountApp(root: HTMLElement) {
       if (sent.length >= limit) break;
       if (it.lastAttemptAt && nowMs - it.lastAttemptAt < OUTBOX_RETRY_MIN_MS) continue;
       if (it.whenOnline && it.to && !onlineById.get(it.to)) continue;
-      const ok = gateway.send(it.to ? { type: "send", to: it.to, text: it.text } : { type: "send", room: it.room, text: it.text });
+      const ok = gateway.send(
+        it.to
+          ? { type: "send", to: it.to, text: it.text, ...(it.silent ? { silent: true } : {}) }
+          : { type: "send", room: it.room, text: it.text, ...(it.silent ? { silent: true } : {}) }
+      );
       if (!ok) break;
       sent.push({ key: it.key, localId: it.localId });
     }
@@ -7845,6 +7987,21 @@ export function mountApp(root: HTMLElement) {
     return text || forwardFallback;
   };
 
+  const parseDatetimeLocal = (value: string): number | null => {
+    const v = String(value || "").trim();
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!m) return null;
+    const y = Number(m[1]);
+    const mon = Number(m[2]);
+    const day = Number(m[3]);
+    const h = Number(m[4]);
+    const min = Number(m[5]);
+    if (!Number.isFinite(y) || !Number.isFinite(mon) || !Number.isFinite(day) || !Number.isFinite(h) || !Number.isFinite(min)) return null;
+    const d = new Date(y, mon - 1, day, h, min, 0, 0);
+    const ts = d.getTime();
+    return Number.isFinite(ts) ? ts : null;
+  };
+
   const openSendMenu = (x: number, y: number) => {
     const st = store.get();
     if (st.modal) return;
@@ -7859,10 +8016,11 @@ export function mountApp(root: HTMLElement) {
     const friend = sel.kind === "dm" ? st.friends.find((f) => f.id === sel.id) : null;
     const friendOnline = Boolean(friend?.online);
     const canSend = Boolean(getComposerFinalText(st));
+    const canSendNow = canSend && !editing;
     const whenOnlineAllowed = sel.kind === "dm" && !friendOnline && !editing;
     const items: ContextMenuItem[] = [
-      { id: "composer_send_silent", label: "Отправить без звука", icon: "🔕", disabled: true },
-      { id: "composer_send_schedule", label: "Запланировать", icon: "🗓", disabled: true },
+      { id: "composer_send_silent", label: "Отправить без звука", icon: "🔕", disabled: !canSendNow },
+      { id: "composer_send_schedule", label: "Запланировать", icon: "🗓", disabled: !canSendNow },
       { id: "composer_send_when_online", label: "Когда будет онлайн", icon: "🕓", disabled: !canSend || !whenOnlineAllowed },
     ];
     store.set({
@@ -7875,6 +8033,43 @@ export function mountApp(root: HTMLElement) {
           target: { kind: "composer_send", id: sel.id },
           items,
         },
+      },
+    });
+  };
+
+  const openSendScheduleModal = () => {
+    const st = store.get();
+    if (st.modal) return;
+    const sel = st.selected;
+    if (!sel) {
+      store.set({ status: "Выберите контакт или чат слева" });
+      return;
+    }
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    const key = conversationKey(sel);
+    const editing = st.editing && key && st.editing.key === key ? st.editing : null;
+    if (editing) {
+      store.set({ status: "Сначала завершите редактирование" });
+      return;
+    }
+    const text = getComposerFinalText(st);
+    if (!text) {
+      store.set({ status: "Введите сообщение" });
+      return;
+    }
+    const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
+    const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
+    store.set({
+      modal: {
+        kind: "send_schedule",
+        target: sel,
+        text,
+        replyDraft,
+        forwardDraft,
+        suggestedAt: Date.now() + 60 * 60 * 1000,
       },
     });
   };
@@ -8582,9 +8777,14 @@ export function mountApp(root: HTMLElement) {
       sendChat({ mode: "when_online" });
       return;
     }
-    if (itemId === "composer_send_silent" || itemId === "composer_send_schedule") {
-      store.set({ status: "Опция отправки пока недоступна" });
+    if (itemId === "composer_send_silent") {
       close();
+      sendChat({ silent: true });
+      return;
+    }
+    if (itemId === "composer_send_schedule") {
+      close();
+      openSendScheduleModal();
       return;
     }
 
@@ -10482,6 +10682,7 @@ export function mountApp(root: HTMLElement) {
     onMembersAdd: () => membersAddSubmit(),
     onMembersRemove: () => membersRemoveSubmit(),
     onRename: () => renameSubmit(),
+    onSendSchedule: () => sendScheduleSubmit(),
     onInviteUser: () => inviteUserSubmit(),
     onAuthRequest: (peer: string) => requestAuth(peer),
     onAuthAccept: (peer: string) => acceptAuth(peer),
@@ -10907,19 +11108,21 @@ export function mountApp(root: HTMLElement) {
 	          if (!out.length) continue;
 	          const prevConv = next[k] ?? [];
 	          const has = new Set(prevConv.map((m) => (typeof m.localId === "string" ? m.localId : "")).filter(Boolean));
-	          const add = out
-	            .filter((e) => !has.has(e.localId))
-	            .map((e) => ({
-	              kind: "out" as const,
-	              from: st.selfId || "",
-	              to: e.to,
-	              room: e.room,
-	              text: e.text,
-	              ts: e.ts,
-	              localId: e.localId,
-	              id: null,
-	              status: "queued" as const,
-	            }));
+          const add = out
+            .filter((e) => !has.has(e.localId))
+            .map((e) => ({
+              kind: "out" as const,
+              from: st.selfId || "",
+              to: e.to,
+              room: e.room,
+              text: e.text,
+              ts: e.ts,
+              localId: e.localId,
+              id: null,
+              status: "queued" as const,
+              ...(e.whenOnline ? { whenOnline: true } : {}),
+              ...(typeof e.scheduleAt === "number" && Number.isFinite(e.scheduleAt) ? { scheduleAt: e.scheduleAt } : {}),
+            }));
 	          if (!add.length) continue;
 	          changed = true;
 	          next[k] = [...prevConv, ...add].sort((a, b) => {
@@ -10971,10 +11174,11 @@ export function mountApp(root: HTMLElement) {
 	          // ignore
 	        }
 	      }
-	      scheduleSaveOutbox(store);
+      scheduleSaveOutbox(store);
         armBoardScheduleTimer();
-	      return;
-	    }
+        drainOutbox();
+      return;
+    }
 
     if (st.page === "main" && st.chatSearchOpen && st.selected) {
       const q = st.chatSearchQuery || "";

@@ -156,6 +156,7 @@ export interface RenderActions {
   onMembersAdd: () => void;
   onMembersRemove: () => void;
   onRename: () => void;
+  onSendSchedule: () => void;
   onInviteUser: () => void;
   onAuthRequest: (peer: string) => void;
   onAuthAccept: (peer: string) => void;
@@ -500,6 +501,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     onMembersAdd: actions.onMembersAdd,
     onMembersRemove: actions.onMembersRemove,
     onRename: actions.onRename,
+    onSendSchedule: actions.onSendSchedule,
     onInviteUser: actions.onInviteUser,
     onAuthAccept: actions.onAuthAccept,
     onAuthDecline: actions.onAuthDecline,

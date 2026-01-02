@@ -6,6 +6,7 @@ export type ModalKind =
   | "logout"
   | "update"
   | "pwa_update"
+  | "send_schedule"
   | "members_add"
   | "members_remove"
   | "rename"
@@ -148,6 +149,15 @@ export type ModalState =
   | { kind: "logout" }
   | { kind: "update" }
   | { kind: "pwa_update" }
+  | {
+      kind: "send_schedule";
+      target: TargetRef;
+      text: string;
+      replyDraft?: MessageHelperDraft | null;
+      forwardDraft?: MessageHelperDraft | null;
+      suggestedAt?: number;
+      message?: string;
+    }
   | { kind: "board_post"; boardId: string }
   | { kind: "members_add"; targetKind: "group" | "board"; targetId: string; title: string; message?: string }
   | { kind: "members_remove"; targetKind: "group" | "board"; targetId: string; title: string; message?: string }
@@ -258,6 +268,8 @@ export interface ChatMessage {
   reply?: ChatMessageRef | null;
   forward?: ChatMessageRef | null;
   reactions?: MessageReactions | null;
+  whenOnline?: boolean;
+  scheduleAt?: number; // ms timestamp
 }
 
 export interface OutboxEntry {
@@ -270,6 +282,8 @@ export interface OutboxEntry {
   attempts?: number;
   lastAttemptAt?: number;
   whenOnline?: boolean;
+  silent?: boolean;
+  scheduleAt?: number; // ms timestamp
 }
 
 export interface BoardScheduledPost {

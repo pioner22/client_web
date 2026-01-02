@@ -132,9 +132,18 @@ function statusLabel(m: ChatMessage): string {
 function statusTitle(m: ChatMessage): string {
   const status = m.status;
   if (!status) return "";
+  const scheduleAt = typeof m.scheduleAt === "number" && Number.isFinite(m.scheduleAt) ? m.scheduleAt : 0;
+  if (status === "queued" && scheduleAt > Date.now()) {
+    try {
+      const when = new Date(scheduleAt).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+      return when ? `Запланировано на ${when}` : "Запланировано";
+    } catch {
+      return "Запланировано";
+    }
+  }
   const hasServerId = typeof m.id === "number" && Number.isFinite(m.id) && m.id > 0;
   if (status === "sending") return "Отправляется…";
-  if (status === "queued") return hasServerId ? "В очереди (адресат оффлайн)" : "В очереди (нет соединения)";
+  if (status === "queued") return m.whenOnline || hasServerId ? "В очереди (адресат оффлайн)" : "В очереди (нет соединения)";
   if (status === "delivered") return "Доставлено";
   if (status === "read") return "Прочитано";
   if (status === "error") return "Ошибка отправки";

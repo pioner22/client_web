@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.380",
+    date: "2026-01-02",
+    improved: ["Композер: send‑menu — «без звука» и «запланировать» (tweb‑like)"],
+    fixed: ["Статусы отправки: «когда онлайн» и «запланировано» различимы в очереди"],
+  },
+  {
     version: "0.1.379",
     date: "2026-01-02",
     improved: ["Композер: меню отправки с режимом «когда онлайн» (tweb‑like)"],
