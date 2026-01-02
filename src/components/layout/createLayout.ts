@@ -51,6 +51,11 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const emojiBtn = el("button", { class: "btn composer-emoji", type: "button", title: "Эмодзи", "aria-label": "Открыть эмодзи" }, [
     "☺︎",
   ]) as HTMLButtonElement;
+  const sendBtn = el(
+    "button",
+    { class: "btn composer-send", type: "button", title: "Отправить", "aria-label": "Отправить", "data-action": "composer-send" },
+    ["→"]
+  ) as HTMLButtonElement;
   const boardEditorBtn = el(
     "button",
     {
@@ -203,7 +208,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   ]);
   const composerRow = el("div", { class: "composer-row" }, [
     // Telegram-like: ✏️ стоит рядом со скрепкой (особенно важно на mobile, где смайлы скрыты).
-    el("div", { class: "composer-field" }, [attachBtn, boardEditorBtn, emojiBtn, input]),
+    el("div", { class: "composer-field" }, [attachBtn, boardEditorBtn, emojiBtn, input, sendBtn]),
   ]);
   const inputWrap = el("div", { class: "input-wrap" }, [editBar, helperBar, boardEditorWrap, composerRow, composerMeta]);
 
@@ -245,6 +250,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     input,
     attachBtn,
     emojiBtn,
+    sendBtn,
     boardEditorBtn,
     boardEditorWrap,
     boardEditorToolbar,

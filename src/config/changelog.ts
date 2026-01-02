@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.364",
+    date: "2026-01-02",
+    improved: ["Композер: добавлена кнопка отправки (маленькая стрелка)"],
+    fixed: ["Статус соединения обновляется без лишних перерисовок (меньше миганий офлайн)"],
+  },
+  {
     version: "0.1.363",
     date: "2026-01-02",
     fixed: ["Auth: при выходе/неавторизованном состоянии показывается только окно входа"],

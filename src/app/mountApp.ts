@@ -3230,7 +3230,11 @@ export function mountApp(root: HTMLElement) {
           : conn === "connecting"
             ? "Подключение…"
             : "Нет соединения";
-      store.set({ conn, status: detail ? `${base}: ${detail}` : base });
+      const nextStatus = detail ? `${base}: ${detail}` : base;
+      store.set((prev) => {
+        if (prev.conn === conn && prev.status === nextStatus) return prev;
+        return { ...prev, conn, status: nextStatus };
+      });
 
       const prevConn = lastConn;
       lastConn = conn;
@@ -7769,6 +7773,13 @@ export function mountApp(root: HTMLElement) {
   layout.boardPublishBtn.addEventListener("click", () => sendChat());
   layout.inputWrap.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
+
+    const sendBtn = target?.closest("button[data-action='composer-send']") as HTMLButtonElement | null;
+    if (sendBtn) {
+      e.preventDefault();
+      if (!sendBtn.disabled) sendChat();
+      return;
+    }
 
     const btn = target?.closest("button[data-action='composer-edit-cancel']") as HTMLButtonElement | null;
     if (btn) {

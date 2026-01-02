@@ -343,6 +343,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
 
   const canSendNow = composerEnabled && Boolean(sel);
   const composerText = sendText.trim();
+  const canSendText = Boolean(composerText) && !tooLong && !boardEditorOpen;
+  layout.sendBtn.disabled = !canSendNow || !canSendText;
+  layout.sendBtn.classList.toggle("btn-active", canSendNow && canSendText);
   layout.boardPublishBtn.disabled = !boardEditorOpen || !canSendNow || !composerText || tooLong;
   layout.attachBtn.disabled = !canSendNow || !sel || isBoardReadOnly || Boolean(editing);
   layout.emojiBtn.disabled = !canSendNow || !sel || isBoardReadOnly;

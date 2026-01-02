@@ -2669,6 +2669,21 @@
   place-items: center;
 }
 
+.btn.composer-send {
+  min-width: var(--composer-btn-size);
+  width: var(--composer-btn-size);
+  height: var(--composer-btn-size);
+  padding: 0;
+  border-radius: 12px;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--btn-bg), transparent 12%);
+  color: var(--accent);
+  font-size: 0;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
 .btn.composer-emoji::before {
   content: "";
   width: 20px;
@@ -2678,6 +2693,18 @@
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm4-7c-.67 1.33-2.17 2.5-4 2.5s-3.33-1.17-4-2.5h8ZM9.5 11A1.5 1.5 0 1 0 9.5 8a1.5 1.5 0 0 0 0 3Zm5 0A1.5 1.5 0 1 0 14.5 8a1.5 1.5 0 0 0 0 3Z'/%3E%3C/svg%3E")
     no-repeat center / contain;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm4-7c-.67 1.33-2.17 2.5-4 2.5s-3.33-1.17-4-2.5h8ZM9.5 11A1.5 1.5 0 1 0 9.5 8a1.5 1.5 0 0 0 0 3Zm5 0A1.5 1.5 0 1 0 14.5 8a1.5 1.5 0 0 0 0 3Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
+.btn.composer-send::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  opacity: 0.95;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M2 21L23 12 2 3 2 10 17 12 2 14z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M2 21L23 12 2 3 2 10 17 12 2 14z'/%3E%3C/svg%3E")
     no-repeat center / contain;
 }
 
@@ -2717,6 +2744,12 @@
   color: var(--btn-text-hover);
 }
 
+.btn.composer-send:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-hover), transparent 18%);
+  border-color: transparent;
+  color: var(--accent);
+}
+
 .btn.composer-board-editor:hover:not(:disabled),
 .btn.composer-board-editor.btn-active:not(:disabled) {
   background: color-mix(in srgb, var(--btn-bg-hover), transparent 25%);
@@ -2731,6 +2764,11 @@
 
 .btn.composer-emoji:active:not(:disabled) {
   background: color-mix(in srgb, var(--btn-bg-active), transparent 18%);
+  transform: translateY(1px);
+}
+
+.btn.composer-send:active:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-active), transparent 12%);
   transform: translateY(1px);
 }
 
@@ -2749,13 +2787,19 @@
   cursor: not-allowed;
 }
 
+.btn.composer-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn.composer-board-editor:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
 .btn.composer-attach:focus-visible,
-.btn.composer-emoji:focus-visible {
+.btn.composer-emoji:focus-visible,
+.btn.composer-send:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: 2px;
 }
