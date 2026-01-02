@@ -703,6 +703,7 @@ export function renderSidebar(
       makeBtn("unread", "Непрочитанные", badgeText || undefined),
     ]);
   };
+  const wrapChatlist = (children: HTMLElement[]): HTMLElement => el("div", { class: "chatlist virtual-chatlist" }, children);
 
 
   if (isMobile) {
@@ -973,12 +974,12 @@ export function renderSidebar(
       const dialogRows = dialogItems.map((x) => x.row);
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
-      mountMobile([
-        ...(chatFiltersRow ? [chatFiltersRow] : []),
+      const chatList = wrapChatlist([
         ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
         ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])])
       ]);
+      mountMobile([...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
       return;
     }
 
@@ -1005,11 +1006,12 @@ export function renderSidebar(
       boardItems.sort((a, b) => b.sortTs - a.sortTs);
       const boardRows = boardItems.map((x) => x.row);
 
-      mountMobile([
+      const boardList = wrapChatlist([
         ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
         ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])])
       ]);
+      mountMobile([boardList]);
       return;
     }
 
@@ -1038,12 +1040,13 @@ export function renderSidebar(
       );
       if (hasSidebarQuery) {
         const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
-        mountMobile([
+        const contactList = wrapChatlist([
           ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
           ...(allRows.length
             ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
             : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])])
         ]);
+        mountMobile([contactList]);
         return;
       }
       const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
@@ -1055,7 +1058,7 @@ export function renderSidebar(
         contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
       }
       if (contactRowsSorted.length) contactRows.push(...contactRowsSorted);
-      mountMobile(contactRows);
+      mountMobile([wrapChatlist(contactRows)]);
       return;
     }
 
@@ -1434,12 +1437,12 @@ export function renderSidebar(
       const dialogRows = dialogItems.map((x) => x.row);
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
-      mountPwa([
-        ...(chatFiltersRow ? [chatFiltersRow] : []),
+      const chatList = wrapChatlist([
         ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
         ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
       ]);
+      mountPwa([...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
       return;
     }
 
@@ -1467,11 +1470,12 @@ export function renderSidebar(
       boardItems.sort((a, b) => b.sortTs - a.sortTs);
       const boardRows = boardItems.map((x) => x.row);
 
-      mountPwa([
+      const boardList = wrapChatlist([
         ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
         ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])]),
       ]);
+      mountPwa([boardList]);
       return;
     }
 
@@ -1500,12 +1504,13 @@ export function renderSidebar(
             return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
           });
         const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
-        mountPwa([
+        const contactList = wrapChatlist([
           ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
           ...(allRows.length
             ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
             : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]),
         ]);
+        mountPwa([contactList]);
         return;
       }
 
@@ -1531,7 +1536,7 @@ export function renderSidebar(
       if (contactRowsSorted.length) {
         contactRows.push(...contactRowsSorted);
       }
-      mountPwa(contactRows);
+      mountPwa([wrapChatlist(contactRows)]);
       return;
     }
 
@@ -1981,12 +1986,12 @@ export function renderSidebar(
     const dialogRows = dialogItems.map((x) => x.row);
     const pinnedDialogRows = [...pinnedDmRows, ...pinnedChatRows];
 
-    mountDesktop([
-      ...(chatFiltersRow ? [chatFiltersRow] : []),
+    const chatList = wrapChatlist([
       ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
       el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
       ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
     ]);
+    mountDesktop([...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
     return;
   }
 
@@ -2014,11 +2019,12 @@ export function renderSidebar(
     boardItems.sort((a, b) => b.sortTs - a.sortTs);
     const boardRows = boardItems.map((x) => x.row);
 
-    mountDesktop([
+    const boardList = wrapChatlist([
       ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
       el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
       ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])]),
     ]);
+    mountDesktop([boardList]);
     return;
   }
 
@@ -2036,11 +2042,12 @@ export function renderSidebar(
 
   if (hasSidebarQuery) {
     const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
-    mountDesktop([
-      ...(allRows.length
+    const contactList = wrapChatlist(
+      allRows.length
         ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
-        : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]),
-    ]);
+        : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]
+    );
+    mountDesktop([contactList]);
     return;
   }
 
@@ -2052,5 +2059,5 @@ export function renderSidebar(
   if (contactRowsSorted.length) {
     contactRows.push(...contactRowsSorted);
   }
-  mountDesktop(contactRows);
+  mountDesktop([wrapChatlist(contactRows)]);
 }
