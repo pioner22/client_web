@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.369",
+    date: "2026-01-02",
+    fixed: ["Сайдбар: учтён app-gap-bottom, чтобы список не обрезался снизу в iOS/PWA"],
+  },
+  {
     version: "0.1.368",
     date: "2026-01-02",
     fixed: ["Шапка: на mobile убран лишний зазор под статусом (Connected)"],
