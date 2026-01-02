@@ -1348,9 +1348,10 @@ export function renderSidebar(
     }
 
     const mountPwa = (children: HTMLElement[]) => {
-      body.replaceChildren(tabs, ...children);
+      body.replaceChildren(...children);
       const nodes: HTMLElement[] = [];
       if (header) nodes.push(header);
+      nodes.push(tabs);
       nodes.push(body);
       target.replaceChildren(...nodes);
       bindHeaderScroll(header);
