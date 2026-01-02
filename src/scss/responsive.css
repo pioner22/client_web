@@ -176,6 +176,15 @@
     font-weight: 600;
   }
 
+  .hdr {
+    grid-template-rows: auto;
+    row-gap: 0;
+  }
+
+  .hotkeys {
+    display: none;
+  }
+
   .page {
     padding: var(--sp-4);
     padding-bottom: calc(var(--sp-4) + var(--safe-bottom-layout-pad));
