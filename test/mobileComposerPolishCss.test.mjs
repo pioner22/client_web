@@ -8,6 +8,5 @@ test("mobile composer: Telegram-like бар (blur) и более плотный 
   assert.match(css, /@media\s*\(max-width:\s*600px\)\s+and\s+\(pointer:\s*coarse\)\s*\{/);
   assert.match(css, /--composer-input-font-weight:\s*500\s*;/);
   assert.match(css, /\.input-wrap\s*\{[\s\S]*?backdrop-filter:\s*blur\(10px\)\s*;/);
-  assert.match(css, /\.composer-field\s*\.input\s*\{[\s\S]*?padding:\s*6px\s+0\s*;/);
+  assert.match(css, /\.composer-field\s*\.input\s*\{[\s\S]*?padding:\s*var\(--composer-input-pad-y\)\s+0\s*;/);
 });
-

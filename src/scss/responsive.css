@@ -623,11 +623,11 @@
   }
 
   .composer-field {
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+    box-shadow: var(--composer-field-shadow);
   }
 
   .composer-field .input {
-    padding: 6px 0;
+    padding: var(--composer-input-pad-y) 0;
   }
 
   .btn.composer-attach {
