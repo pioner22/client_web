@@ -29,7 +29,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --app-row-footer: 0px;
+    --app-row-footer: auto;
     margin: 0;
     border: 0;
     border-radius: 0;
@@ -44,7 +44,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --app-row-footer: 0px;
+    --app-row-footer: auto;
   }
 
   .grid {
@@ -207,11 +207,6 @@
 
   .chat.chat-page .page.page-create {
     min-height: auto;
-  }
-
-  /* Mobile: нижние tab-кнопки убраны (навигация живёт в «Меню» / Контакты). */
-  .footer {
-    display: none;
   }
 
   .toast-host {
@@ -925,8 +920,7 @@
   .hdr-id,
   .hdr-ver,
   .hdr-sep,
-  .hotkeys,
-  .footer {
+  .hotkeys {
     display: none;
   }
 }
@@ -945,7 +939,6 @@ html.is-standalone .hdr-label,
 html.is-standalone .hdr-id,
 html.is-standalone .hdr-ver,
 html.is-standalone .hdr-sep,
-html.is-standalone .hotkeys,
-html.is-standalone .footer {
+html.is-standalone .hotkeys {
   display: none;
 }
