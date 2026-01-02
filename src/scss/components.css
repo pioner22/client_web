@@ -1495,9 +1495,14 @@
 
 .msg-date {
   position: sticky;
-  top: 8px;
+  top: 3px;
   z-index: 2;
   pointer-events: none;
+}
+
+.msg-date::before,
+.msg-date::after {
+  display: none;
 }
 
 .msg-unread {
@@ -1541,6 +1546,11 @@
   border: 1px solid color-mix(in srgb, var(--msg-sep-color), transparent 70%);
   border-radius: 999px;
   background: color-mix(in srgb, var(--panel), transparent 35%);
+}
+
+.msg-date .msg-sep-text {
+  border: 0;
+  background: color-mix(in srgb, var(--panel2), transparent 35%);
 }
 
 .msg {
