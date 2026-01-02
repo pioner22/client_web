@@ -755,6 +755,7 @@ body.has-right-col .right-col {
 }
 
 .footer {
+  display: none;
   padding: var(--footer-pad-y) var(--footer-pad-x);
   padding-bottom: calc(var(--footer-pad-y) + var(--safe-bottom-layout-pad));
   border-top: var(--footer-border-width) solid var(--footer-border-color);
