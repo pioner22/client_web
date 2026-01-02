@@ -1443,6 +1443,12 @@ export function renderSidebar(
       hasDraft: false,
     });
     createBoardRow.setAttribute("title", "Создать новую доску");
+    const infoRow = roomRow("?", "Info", state.page === "help", () => onSetPage("help"), undefined, {
+      sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
+      time: null,
+      hasDraft: false,
+    });
+    infoRow.setAttribute("title", mobileUi ? "Справка и журнал обновлений" : "Подсказки по клавишам и журнал обновлений");
 
     const accountRows: HTMLElement[] = [];
     if (state.conn === "connected" && !state.authed) {
@@ -1470,6 +1476,8 @@ export function renderSidebar(
       el("div", { class: "pane-section" }, ["Создание"]),
       createGroupRow,
       createBoardRow,
+      el("div", { class: "pane-section" }, ["Справка"]),
+      infoRow,
     ]);
     return;
   }
