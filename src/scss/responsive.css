@@ -609,9 +609,7 @@
   }
 
   .composer-row {
-    width: 84%;
-    margin-left: auto;
-    margin-right: auto;
+    width: 100%;
   }
 
   .sidebar-bottom-dock {
