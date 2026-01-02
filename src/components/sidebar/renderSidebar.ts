@@ -708,6 +708,109 @@ export function renderSidebar(
     ]);
   };
   const wrapChatlist = (children: HTMLElement[]): HTMLElement => el("div", { class: "chatlist virtual-chatlist" }, children);
+  const VIRTUAL_CHATLIST_MIN_ROWS = 80;
+  const VIRTUAL_CHATLIST_OVERSCAN = 6;
+  const clearVirtualChatlist = () => {
+    const prev = (body as any)._virtualChatlistCleanup as (() => void) | undefined;
+    if (prev) prev();
+    delete (body as any)._virtualChatlistCleanup;
+  };
+  const buildVirtualChatlistBlock = (rows: HTMLElement[]): HTMLElement => {
+    const topSpacer = el("div", { class: "chatlist-virtual-spacer", "aria-hidden": "true" });
+    const bottomSpacer = el("div", { class: "chatlist-virtual-spacer", "aria-hidden": "true" });
+    const items = el("div", { class: "chatlist-virtual-items" });
+    const block = el("div", { class: "chatlist-virtual-block" }, [topSpacer, items, bottomSpacer]);
+    const state = {
+      active: true,
+      start: -1,
+      end: -1,
+      raf: 0 as number | 0,
+    };
+    const readRowHeight = (): number => {
+      try {
+        const raw = getComputedStyle(body).getPropertyValue("--row-min-h").trim();
+        const parsed = parseFloat(raw);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+      } catch {
+        // ignore
+      }
+      return 56;
+    };
+    const readBlockOffset = (): number => {
+      try {
+        const bodyRect = body.getBoundingClientRect();
+        const blockRect = block.getBoundingClientRect();
+        const offset = blockRect.top - bodyRect.top + body.scrollTop;
+        if (Number.isFinite(offset)) return offset;
+      } catch {
+        // ignore
+      }
+      return block.offsetTop || 0;
+    };
+    const update = () => {
+      if (!state.active) return;
+      const rowHeight = readRowHeight();
+      const viewportHeight = body.clientHeight || 0;
+      const offset = readBlockOffset();
+      const virtualScrollTop = Math.max(0, body.scrollTop - offset);
+      const start = Math.max(0, Math.floor(virtualScrollTop / rowHeight) - VIRTUAL_CHATLIST_OVERSCAN);
+      const end = Math.min(rows.length, Math.ceil((virtualScrollTop + viewportHeight) / rowHeight) + VIRTUAL_CHATLIST_OVERSCAN);
+      if (start === state.start && end === state.end) return;
+      state.start = start;
+      state.end = end;
+      items.replaceChildren(...rows.slice(start, end));
+      topSpacer.style.height = `${start * rowHeight}px`;
+      bottomSpacer.style.height = `${(rows.length - end) * rowHeight}px`;
+    };
+    const onScroll = () => {
+      if (state.raf) return;
+      try {
+        state.raf = window.requestAnimationFrame(() => {
+          state.raf = 0;
+          update();
+        });
+      } catch {
+        state.raf = 0;
+        update();
+      }
+    };
+    body.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    try {
+      window.requestAnimationFrame(update);
+    } catch {
+      update();
+    }
+    (body as any)._virtualChatlistCleanup = () => {
+      state.active = false;
+      body.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (state.raf) {
+        try {
+          window.cancelAnimationFrame(state.raf);
+        } catch {
+          // ignore
+        }
+      }
+    };
+    return block;
+  };
+  const buildChatlist = (
+    fixedRows: HTMLElement[],
+    rows: HTMLElement[],
+    emptyLabel?: string
+  ): HTMLElement => {
+    const children: HTMLElement[] = [...fixedRows];
+    if (!rows.length) {
+      if (emptyLabel) children.push(el("div", { class: "pane-section" }, [emptyLabel]));
+      return wrapChatlist(children);
+    }
+    if (rows.length < VIRTUAL_CHATLIST_MIN_ROWS) return wrapChatlist([...children, ...rows]);
+    const block = buildVirtualChatlistBlock(rows);
+    children.push(block);
+    return wrapChatlist(children);
+  };
+  clearVirtualChatlist();
 
 
   if (isMobile) {
@@ -979,11 +1082,16 @@ export function renderSidebar(
       const dialogRows = dialogItems.map((x) => x.row);
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
-      const chatList = wrapChatlist([
-        ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
-        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
-        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])])
-      ]);
+      const chatFixedRows: HTMLElement[] = [];
+      if (pinnedDialogRows.length) {
+        chatFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows);
+      }
+      chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
+      const chatList = buildChatlist(
+        chatFixedRows,
+        dialogRows,
+        hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"
+      );
       mountMobile([...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
       return;
     }
@@ -1011,11 +1119,16 @@ export function renderSidebar(
       boardItems.sort((a, b) => b.sortTs - a.sortTs);
       const boardRows = boardItems.map((x) => x.row);
 
-      const boardList = wrapChatlist([
-        ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
-        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
-        ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])])
-      ]);
+      const boardFixedRows: HTMLElement[] = [];
+      if (pinnedBoardRows.length) {
+        boardFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows);
+      }
+      boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
+      const boardList = buildChatlist(
+        boardFixedRows,
+        boardRows,
+        hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"
+      );
       mountMobile([boardList]);
       return;
     }
@@ -1045,25 +1158,27 @@ export function renderSidebar(
       );
       if (hasSidebarQuery) {
         const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
-        const contactList = wrapChatlist([
-          ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
-          ...(allRows.length
-            ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
-            : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])])
-        ]);
+        const contactFixedRows: HTMLElement[] = [];
+        if (pinnedContactRowsCompact.length) {
+          contactFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+        }
+        if (allRows.length) {
+          contactFixedRows.push(el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]));
+        }
+        const contactList = buildChatlist(contactFixedRows, allRows, "(ничего не найдено)");
         mountMobile([contactList]);
         return;
       }
       const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
-      const contactRows: HTMLElement[] = [];
+      const contactFixedRows: HTMLElement[] = [];
       if (pinnedContactRowsCompact.length) {
-        contactRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+        contactFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
       }
       if (compactUnknownAttnRows.length) {
-        contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
+        contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
       }
-      if (contactRowsSorted.length) contactRows.push(...contactRowsSorted);
-      mountMobile([wrapChatlist(contactRows)]);
+      const contactList = buildChatlist(contactFixedRows, contactRowsSorted);
+      mountMobile([contactList]);
       return;
     }
 
@@ -1443,11 +1558,16 @@ export function renderSidebar(
       const dialogRows = dialogItems.map((x) => x.row);
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
-      const chatList = wrapChatlist([
-        ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
-        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
-        ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
-      ]);
+      const chatFixedRows: HTMLElement[] = [];
+      if (pinnedDialogRows.length) {
+        chatFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows);
+      }
+      chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
+      const chatList = buildChatlist(
+        chatFixedRows,
+        dialogRows,
+        hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"
+      );
       mountPwa([...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
       return;
     }
@@ -1476,11 +1596,16 @@ export function renderSidebar(
       boardItems.sort((a, b) => b.sortTs - a.sortTs);
       const boardRows = boardItems.map((x) => x.row);
 
-      const boardList = wrapChatlist([
-        ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
-        el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
-        ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])]),
-      ]);
+      const boardFixedRows: HTMLElement[] = [];
+      if (pinnedBoardRows.length) {
+        boardFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows);
+      }
+      boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
+      const boardList = buildChatlist(
+        boardFixedRows,
+        boardRows,
+        hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"
+      );
       mountPwa([boardList]);
       return;
     }
@@ -1510,12 +1635,14 @@ export function renderSidebar(
             return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
           });
         const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
-        const contactList = wrapChatlist([
-          ...(pinnedContactRowsCompact.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact] : []),
-          ...(allRows.length
-            ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
-            : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]),
-        ]);
+        const contactFixedRows: HTMLElement[] = [];
+        if (pinnedContactRowsCompact.length) {
+          contactFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+        }
+        if (allRows.length) {
+          contactFixedRows.push(el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]));
+        }
+        const contactList = buildChatlist(contactFixedRows, allRows, "(ничего не найдено)");
         mountPwa([contactList]);
         return;
       }
@@ -1532,17 +1659,15 @@ export function renderSidebar(
         })
       );
 
-      const contactRows: HTMLElement[] = [];
+      const contactFixedRows: HTMLElement[] = [];
       if (pinnedContactRowsCompact.length) {
-        contactRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+        contactFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
       }
       if (unknownAttnRows.length) {
-        contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
+        contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
       }
-      if (contactRowsSorted.length) {
-        contactRows.push(...contactRowsSorted);
-      }
-      mountPwa([wrapChatlist(contactRows)]);
+      const contactList = buildChatlist(contactFixedRows, contactRowsSorted);
+      mountPwa([contactList]);
       return;
     }
 
@@ -1993,11 +2118,16 @@ export function renderSidebar(
     const dialogRows = dialogItems.map((x) => x.row);
     const pinnedDialogRows = [...pinnedDmRows, ...pinnedChatRows];
 
-    const chatList = wrapChatlist([
-      ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
-      el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
-      ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
-    ]);
+    const chatFixedRows: HTMLElement[] = [];
+    if (pinnedDialogRows.length) {
+      chatFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows);
+    }
+    chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
+    const chatList = buildChatlist(
+      chatFixedRows,
+      dialogRows,
+      hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"
+    );
     mountDesktop([...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
     return;
   }
@@ -2026,11 +2156,16 @@ export function renderSidebar(
     boardItems.sort((a, b) => b.sortTs - a.sortTs);
     const boardRows = boardItems.map((x) => x.row);
 
-    const boardList = wrapChatlist([
-      ...(pinnedBoardRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows] : []),
-      el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]),
-      ...(boardRows.length ? boardRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"])]),
-    ]);
+    const boardFixedRows: HTMLElement[] = [];
+    if (pinnedBoardRows.length) {
+      boardFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows);
+    }
+    boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
+    const boardList = buildChatlist(
+      boardFixedRows,
+      boardRows,
+      hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)"
+    );
     mountDesktop([boardList]);
     return;
   }
@@ -2049,22 +2184,20 @@ export function renderSidebar(
 
   if (hasSidebarQuery) {
     const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
-    const contactList = wrapChatlist(
-      allRows.length
-        ? [el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]), ...allRows]
-        : [el("div", { class: "pane-section" }, ["(ничего не найдено)"])]
-    );
+    const contactFixedRows: HTMLElement[] = [];
+    if (allRows.length) {
+      contactFixedRows.push(el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]));
+    }
+    const contactList = buildChatlist(contactFixedRows, allRows, "(ничего не найдено)");
     mountDesktop([contactList]);
     return;
   }
 
   const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
-  const contactRows: HTMLElement[] = [];
+  const contactFixedRows: HTMLElement[] = [];
   if (compactUnknownAttnRows.length) {
-    contactRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
+    contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
   }
-  if (contactRowsSorted.length) {
-    contactRows.push(...contactRowsSorted);
-  }
-  mountDesktop([wrapChatlist(contactRows)]);
+  const contactList = buildChatlist(contactFixedRows, contactRowsSorted);
+  mountDesktop([contactList]);
 }

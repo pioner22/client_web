@@ -171,6 +171,22 @@
   position: relative;
 }
 
+.chatlist-virtual-block {
+  width: 100%;
+}
+
+.chatlist-virtual-spacer {
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+}
+
+.chatlist-virtual-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
 .row {
   width: 100%;
   text-align: left;
