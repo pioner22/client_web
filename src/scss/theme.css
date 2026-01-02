@@ -318,6 +318,7 @@
   --msg-in-border-color: var(--line);
   --msg-in-border-width: var(--border-width);
   --msg-in-radius: 15px;
+  --msg-in-radius-tail: 5px;
   --msg-in-cont-corner: 5px;
   --msg-in-pad-y: 4px;
   --msg-in-pad-x: 8px;
@@ -327,6 +328,7 @@
   --msg-out-border-color: var(--line);
   --msg-out-border-width: var(--border-width);
   --msg-out-radius: 15px;
+  --msg-out-radius-tail: 5px;
   --msg-out-cont-corner: 5px;
   --msg-out-pad-y: 4px;
   --msg-out-pad-x: 8px;
@@ -399,6 +401,10 @@
   --msg-body-max-width: min(100%, var(--messages-container-width));
   --msg-in-radius: 0;
   --msg-out-radius: 0;
+  --msg-in-radius-tail: 0;
+  --msg-out-radius-tail: 0;
+  --msg-in-cont-corner: 0;
+  --msg-out-cont-corner: 0;
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-start;
   --msg-avatar-size: 0px;

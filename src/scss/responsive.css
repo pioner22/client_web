@@ -345,9 +345,9 @@
     --msg-in-bg: color-mix(in srgb, var(--panel), transparent 0%);
     --msg-out-bg: color-mix(in srgb, var(--focus), var(--panel2) 88%);
     --msg-in-radius: 15px;
-    --msg-in-cont-corner: 12px;
+    --msg-in-cont-corner: 5px;
     --msg-out-radius: 15px;
-    --msg-out-cont-corner: 12px;
+    --msg-out-cont-corner: 5px;
     --msg-in-pad-y: 4px;
     --msg-in-pad-x: 8px;
     --msg-in-pad-bottom: 5px;

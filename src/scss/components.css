@@ -1571,11 +1571,11 @@
 }
 
 .msg.msg-cont.msg-in .msg-body {
-  border-top-left-radius: var(--msg-in-cont-corner);
+  border-start-start-radius: var(--msg-in-cont-corner);
 }
 
 .msg.msg-cont.msg-out .msg-body {
-  border-top-right-radius: var(--msg-out-cont-corner);
+  border-start-end-radius: var(--msg-out-cont-corner);
 }
 
 .msg-avatar {
@@ -2073,14 +2073,20 @@
 .msg-in .msg-body {
   background: var(--msg-in-bg);
   border: var(--msg-in-border-width) solid var(--msg-in-border-color);
-  border-radius: var(--msg-in-radius);
+  border-start-start-radius: var(--msg-in-radius-tail);
+  border-start-end-radius: var(--msg-in-radius);
+  border-end-end-radius: var(--msg-in-radius);
+  border-end-start-radius: var(--msg-in-radius-tail);
   padding: var(--msg-in-pad-y) var(--msg-in-pad-x) var(--msg-in-pad-bottom);
 }
 
 .msg-out .msg-body {
   background: var(--msg-out-bg);
   border: var(--msg-out-border-width) solid var(--msg-out-border-color);
-  border-radius: var(--msg-out-radius);
+  border-start-start-radius: var(--msg-out-radius);
+  border-start-end-radius: var(--msg-out-radius-tail);
+  border-end-end-radius: var(--msg-out-radius-tail);
+  border-end-start-radius: var(--msg-out-radius);
   padding: var(--msg-out-pad-y) var(--msg-out-pad-x) var(--msg-out-pad-bottom);
 }
 
@@ -2091,14 +2097,20 @@
 .msg-attach.msg-in .msg-body {
   background: var(--msg-in-bg);
   border: 1px solid color-mix(in srgb, var(--msg-in-border-color), transparent 25%);
-  border-radius: var(--msg-in-radius);
+  border-start-start-radius: var(--msg-in-radius-tail);
+  border-start-end-radius: var(--msg-in-radius);
+  border-end-end-radius: var(--msg-in-radius);
+  border-end-start-radius: var(--msg-in-radius-tail);
   padding: 1px;
 }
 
 .msg-attach.msg-out .msg-body {
   background: var(--msg-out-bg);
   border: 1px solid color-mix(in srgb, var(--msg-out-border-color), transparent 25%);
-  border-radius: var(--msg-out-radius);
+  border-start-start-radius: var(--msg-out-radius);
+  border-start-end-radius: var(--msg-out-radius-tail);
+  border-end-end-radius: var(--msg-out-radius-tail);
+  border-end-start-radius: var(--msg-out-radius);
   padding: 1px;
 }
 
