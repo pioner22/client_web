@@ -663,6 +663,17 @@
     --row-text-selected-muted-hover: var(--row-text-selected-muted);
   }
 
+  .sidebar:not([data-sidebar-tab="menu"]) {
+    --row-bg-selected: var(--row-bg);
+    --row-bg-selected-hover: var(--row-bg);
+    --row-text-selected: var(--row-text);
+    --row-text-selected-hover: var(--row-text);
+    --row-text-selected-muted: var(--muted);
+    --row-text-selected-muted-hover: var(--muted);
+    --row-unread-selected-bg: color-mix(in srgb, var(--focus), transparent 12%);
+    --row-unread-selected-text: #fff;
+  }
+
   .sidebar .row {
     border-radius: 0;
     background: transparent;
@@ -733,6 +744,18 @@
 
   .sidebar:not([data-sidebar-tab="menu"]) .row-sel {
     background: var(--row-bg);
+  }
+
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-unread,
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-mention,
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-reaction {
+    background: color-mix(in srgb, var(--focus), transparent 12%);
+    color: #fff;
+    box-shadow: 0 10px 22px color-mix(in srgb, var(--focus), transparent 78%);
+  }
+
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-pin {
+    color: var(--row-pin-color);
   }
 
   .sidebar[data-sidebar-tab="menu"] .row-sel {
