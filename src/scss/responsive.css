@@ -129,6 +129,10 @@
     margin-bottom: 0;
   }
 
+  .sidebar-tabs {
+    --sidebar-tabs-side-pad: 0.1875rem;
+  }
+
   .sidebar-tabs.sidebar-tabs-mobile {
     --sidebar-tabs-count: 4;
     padding: 0 var(--sidebar-list-pad);
