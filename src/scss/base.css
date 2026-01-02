@@ -54,6 +54,18 @@ body.has-auth-pages {
   --safe-area-bg: var(--surface-color);
 }
 
+body.has-auth-pages .hdr,
+body.has-auth-pages .grid,
+body.has-auth-pages .footer,
+body.has-auth-pages .nav-overlay,
+body.has-auth-pages .toast-host {
+  display: none;
+}
+
+body.has-auth-pages .modal-auth .auth-close {
+  display: none;
+}
+
 button {
   touch-action: manipulation;
 }

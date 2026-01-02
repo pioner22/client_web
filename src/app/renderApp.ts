@@ -15,6 +15,7 @@ import { renderSidebar } from "../components/sidebar/renderSidebar";
 import { renderChat } from "../components/chat/renderChat";
 import { renderFooter } from "../components/footer/renderFooter";
 import { renderModal } from "../components/modals/renderModal";
+import { renderAuthModal } from "../components/modals/renderAuthModal";
 import { renderToast } from "../components/toast/renderToast";
 import { el } from "../helpers/dom/el";
 import { conversationKey } from "../helpers/chat/conversationKey";
@@ -199,17 +200,20 @@ export interface RenderActions {
 export function renderApp(layout: Layout, state: AppState, actions: RenderActions) {
   const pageChanged = state.page !== lastPage;
   lastPage = state.page;
+  const authOnly = !state.authed;
 
   // Контекстное меню не должно "ломать" макет и прятать composer.
   // Composer показываем только когда выбран чат/контакт/доска (как в tweb).
-  const chatInputVisible = state.page === "main" && Boolean(state.selected) && (!state.modal || state.modal.kind === "context_menu");
+  const chatInputVisible =
+    !authOnly && state.page === "main" && Boolean(state.selected) && (!state.modal || state.modal.kind === "context_menu");
   const mobileUi = isMobileLikeUi();
   const rightTarget = state.rightPanel;
-  const showRightPanel = Boolean(rightTarget && state.page === "main" && !mobileUi);
+  const showRightPanel = !authOnly && Boolean(rightTarget && state.page === "main" && !mobileUi);
+  const authModalVisible = authOnly || state.modal?.kind === "auth";
   if (typeof document !== "undefined") {
     document.body.classList.toggle("has-right-col", showRightPanel);
-    document.body.classList.toggle("has-auth-pages", !state.authed);
-    document.documentElement.classList.toggle("has-auth-pages", !state.authed);
+    document.body.classList.toggle("has-auth-pages", authOnly);
+    document.documentElement.classList.toggle("has-auth-pages", authOnly);
   }
   layout.rightCol.classList.toggle("hidden", !showRightPanel);
   layout.rightCol.setAttribute("aria-hidden", showRightPanel ? "false" : "true");
@@ -435,11 +439,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const sidebarSearchNow = layout.sidebar.querySelector("input.sidebar-search-input") as HTMLInputElement | null;
   if (sidebarSearchNow) sidebarSearchNow.disabled = disableSidebarSearchForIosKbdNav;
 
-  const prevAuthIdInput = state.modal?.kind === "auth" ? (document.getElementById("auth-id") as HTMLInputElement | null) : null;
-  const prevAuthPwInput = state.modal?.kind === "auth" ? (document.getElementById("auth-pw") as HTMLInputElement | null) : null;
-  const prevAuthPw1Input = state.modal?.kind === "auth" ? (document.getElementById("auth-pw1") as HTMLInputElement | null) : null;
-  const prevAuthPw2Input = state.modal?.kind === "auth" ? (document.getElementById("auth-pw2") as HTMLInputElement | null) : null;
-  const prevAuthSkinSelect = state.modal?.kind === "auth" ? (document.getElementById("auth-skin") as HTMLSelectElement | null) : null;
+  const prevAuthIdInput = authModalVisible ? (document.getElementById("auth-id") as HTMLInputElement | null) : null;
+  const prevAuthPwInput = authModalVisible ? (document.getElementById("auth-pw") as HTMLInputElement | null) : null;
+  const prevAuthPw1Input = authModalVisible ? (document.getElementById("auth-pw1") as HTMLInputElement | null) : null;
+  const prevAuthPw2Input = authModalVisible ? (document.getElementById("auth-pw2") as HTMLInputElement | null) : null;
+  const prevAuthSkinSelect = authModalVisible ? (document.getElementById("auth-skin") as HTMLSelectElement | null) : null;
   const prevFileSendCaptionInput =
     state.modal?.kind === "file_send" ? (document.getElementById("file-send-caption") as HTMLTextAreaElement | null) : null;
   const prevBoardPostInput =
@@ -464,44 +468,59 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const prevMembersRemove = prevMembersRemoveInput?.value ?? "";
   const prevRename = prevRenameInput?.value ?? "";
 
-  const modalNode = state.modal
-    ? renderModal(state, {
-        onAuthLogin: actions.onAuthLogin,
-        onAuthRegister: actions.onAuthRegister,
-        onAuthModeChange: actions.onAuthModeChange,
-        onClose: actions.onCloseModal,
-        onConfirm: actions.onConfirmModal,
-        onBoardPostPublish: actions.onBoardPostPublish,
-        onDismissUpdate: actions.onDismissUpdate,
-        onReloadUpdate: actions.onReloadUpdate,
-        onApplyPwaUpdate: actions.onApplyPwaUpdate,
+  const modalActions = {
+    onAuthLogin: actions.onAuthLogin,
+    onAuthRegister: actions.onAuthRegister,
+    onAuthModeChange: actions.onAuthModeChange,
+    onClose: actions.onCloseModal,
+    onConfirm: actions.onConfirmModal,
+    onBoardPostPublish: actions.onBoardPostPublish,
+    onDismissUpdate: actions.onDismissUpdate,
+    onReloadUpdate: actions.onReloadUpdate,
+    onApplyPwaUpdate: actions.onApplyPwaUpdate,
+    onSkinChange: actions.onSkinChange,
+    onMembersAdd: actions.onMembersAdd,
+    onMembersRemove: actions.onMembersRemove,
+    onRename: actions.onRename,
+    onInviteUser: actions.onInviteUser,
+    onAuthAccept: actions.onAuthAccept,
+    onAuthDecline: actions.onAuthDecline,
+    onAuthCancel: actions.onAuthCancel,
+    onGroupInviteAccept: actions.onGroupInviteAccept,
+    onGroupInviteDecline: actions.onGroupInviteDecline,
+    onGroupJoinAccept: actions.onGroupJoinAccept,
+    onGroupJoinDecline: actions.onGroupJoinDecline,
+    onBoardInviteJoin: actions.onBoardInviteJoin,
+    onBoardInviteDecline: actions.onBoardInviteDecline,
+    onFileOfferAccept: actions.onFileOfferAccept,
+    onFileOfferReject: actions.onFileOfferReject,
+    onFileSendConfirm: actions.onFileSendConfirm,
+    onFileViewerNavigate: actions.onFileViewerNavigate,
+    onContextMenuAction: actions.onContextMenuAction,
+  };
+  const authMessage = state.modal?.kind === "auth" ? state.modal.message : undefined;
+  const authModalNode = authModalVisible
+    ? renderAuthModal(state.authMode, state.authRememberedId, authMessage, state.skins, state.skin, {
+        onLogin: actions.onAuthLogin,
+        onRegister: actions.onAuthRegister,
+        onModeChange: actions.onAuthModeChange,
         onSkinChange: actions.onSkinChange,
-        onMembersAdd: actions.onMembersAdd,
-        onMembersRemove: actions.onMembersRemove,
-        onRename: actions.onRename,
-        onInviteUser: actions.onInviteUser,
-        onAuthAccept: actions.onAuthAccept,
-        onAuthDecline: actions.onAuthDecline,
-        onAuthCancel: actions.onAuthCancel,
-        onGroupInviteAccept: actions.onGroupInviteAccept,
-        onGroupInviteDecline: actions.onGroupInviteDecline,
-        onGroupJoinAccept: actions.onGroupJoinAccept,
-        onGroupJoinDecline: actions.onGroupJoinDecline,
-        onBoardInviteJoin: actions.onBoardInviteJoin,
-        onBoardInviteDecline: actions.onBoardInviteDecline,
-        onFileOfferAccept: actions.onFileOfferAccept,
-      onFileOfferReject: actions.onFileOfferReject,
-      onFileSendConfirm: actions.onFileSendConfirm,
-      onFileViewerNavigate: actions.onFileViewerNavigate,
-      onContextMenuAction: actions.onContextMenuAction,
-    })
+        onClose: actions.onCloseModal,
+      })
     : null;
+  const modalNode = authOnly
+    ? authModalNode
+    : state.modal
+      ? state.modal.kind === "auth"
+        ? authModalNode
+        : renderModal(state, modalActions)
+      : null;
 
   // Большинство модалок рендерим inline (в теле чата), чтобы не перекрывать всё приложение.
   // Исключения:
   // - context_menu: всегда поверх (overlay) из-за позиционирования по курсору/тапу
   // - file_viewer: поверх (overlay) как fullscreen viewer (Telegram‑паттерн)
-  const inlineModal = Boolean(state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer");
+  const inlineModal = Boolean(!authOnly && state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer");
   layout.chat.classList.toggle("chat-page", state.page !== "main" || inlineModal);
   const showChatTop = state.page === "main" && !inlineModal && Boolean(state.selected);
   layout.chatTop.classList.toggle("hidden", !showChatTop);
@@ -742,15 +761,24 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   renderFooter(layout.footer, state);
   renderToast(layout.toastHost, state.toast);
 
-  if (state.modal?.kind === "file_viewer" && modalNode) {
+  if (authOnly && authModalNode) {
+    layout.overlay.classList.remove("hidden");
+    layout.overlay.classList.remove("overlay-context");
+    layout.overlay.classList.remove("overlay-context-sheet");
+    layout.overlay.classList.remove("overlay-viewer");
+    layout.overlay.classList.add("overlay-auth");
+    layout.overlay.replaceChildren(authModalNode);
+  } else if (state.modal?.kind === "file_viewer" && modalNode) {
     layout.overlay.classList.remove("hidden");
     layout.overlay.classList.remove("overlay-context");
     layout.overlay.classList.remove("overlay-context-sheet");
     layout.overlay.classList.add("overlay-viewer");
+    layout.overlay.classList.remove("overlay-auth");
     layout.overlay.replaceChildren(modalNode);
   } else if (state.modal?.kind === "context_menu" && modalNode) {
     layout.overlay.classList.remove("hidden");
     layout.overlay.classList.remove("overlay-viewer");
+    layout.overlay.classList.remove("overlay-auth");
     layout.overlay.classList.add("overlay-context");
     layout.overlay.classList.toggle("overlay-context-sheet", modalNode.classList.contains("ctx-menu-sheet"));
     layout.overlay.replaceChildren(modalNode);
@@ -759,10 +787,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.overlay.classList.remove("overlay-context");
     layout.overlay.classList.remove("overlay-context-sheet");
     layout.overlay.classList.remove("overlay-viewer");
+    layout.overlay.classList.remove("overlay-auth");
     layout.overlay.replaceChildren();
   }
 
-  if (state.modal?.kind === "auth") {
+  if (authModalVisible) {
     // Preserve typed credentials across re-renders (e.g. connection status updates, skin list load).
     const idEl = document.getElementById("auth-id") as HTMLInputElement | null;
     const pwEl = document.getElementById("auth-pw") as HTMLInputElement | null;

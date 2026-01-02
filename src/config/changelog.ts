@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.363",
+    date: "2026-01-02",
+    fixed: ["Auth: при выходе/неавторизованном состоянии показывается только окно входа"],
+  },
+  {
     version: "0.1.362",
     date: "2026-01-02",
     fixed: ["Шапка: иконка меню всегда ☰ при открытии бокового списка"],
