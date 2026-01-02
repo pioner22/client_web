@@ -390,6 +390,41 @@ export function renderSidebar(
     if (opts.attention) score += 1;
     return score;
   };
+  const buildSidebarHeaderToolbar = (activeTab: "contacts" | "boards" | "chats" | "menu"): HTMLElement => {
+    const menuBtn = el(
+      "button",
+      {
+        class: activeTab === "menu" ? "btn sidebar-header-btn sidebar-header-btn-active" : "btn sidebar-header-btn",
+        type: "button",
+        title: "Меню",
+        "aria-label": "Меню",
+      },
+      ["☰"]
+    ) as HTMLButtonElement;
+    menuBtn.addEventListener("click", () => onSetMobileSidebarTab("menu"));
+
+    const isBoardTab = activeTab === "boards";
+    const createLabel = isBoardTab ? "Создать доску" : "Создать чат";
+    const createBtn = el(
+      "button",
+      {
+        class: "btn sidebar-header-btn sidebar-header-btn-primary",
+        type: "button",
+        title: createLabel,
+        "aria-label": createLabel,
+      },
+      ["+"]
+    ) as HTMLButtonElement;
+    createBtn.addEventListener("click", () => {
+      if (isBoardTab) {
+        onCreateBoard();
+        return;
+      }
+      onCreateGroup();
+    });
+
+    return el("div", { class: "sidebar-header-toolbar" }, [menuBtn, createBtn]);
+  };
 
   const roomUnreadCache = new Map<string, number>();
   const computeRoomUnread = (key: string): number => {
@@ -1033,6 +1068,7 @@ export function renderSidebar(
     let activeTab: MobileSidebarTab =
       rawTab === "contacts" || rawTab === "boards" || (showMenuTab && rawTab === "menu") ? rawTab : defaultTab;
     if (!showMenuTab && activeTab === "menu") activeTab = defaultTab;
+    if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
     const prevTab = String((target as any)._pwaSidebarPrevTab || "").trim();
     const didSwitchTab = Boolean(prevTab && prevTab !== activeTab);
     const forceTopTab = Boolean(forceResetScroll || !prevTab || didSwitchTab);
@@ -1160,7 +1196,9 @@ export function renderSidebar(
             });
             return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
           })();
+    const headerToolbar = buildSidebarHeaderToolbar(activeTab);
     const headerStack = el("div", { class: "sidebar-header-stack" }, [
+      headerToolbar,
       ...(activeTab === "menu"
         ? [el("div", { class: "sidebar-header-title" }, ["Меню"])]
         : [...(searchBar ? [searchBar] : [])]),
@@ -1490,6 +1528,7 @@ export function renderSidebar(
   let activeDesktopTab: DesktopTab =
     rawDesktopTab === "contacts" || rawDesktopTab === "boards" || rawDesktopTab === "menu" ? rawDesktopTab : defaultDesktopTab;
   if (!showMenuTab && activeDesktopTab === "menu") activeDesktopTab = defaultDesktopTab;
+  if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeDesktopTab;
   const desktopMenuDockRow = showMenuTab
     ? (() => {
         const row = roomRow("☰", "Меню", activeDesktopTab === "menu", () => onSetMobileSidebarTab("menu"));
@@ -1612,7 +1651,9 @@ export function renderSidebar(
     });
     return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
   })();
+  const headerToolbar = buildSidebarHeaderToolbar(activeDesktopTab);
   const headerStack = el("div", { class: "sidebar-header-stack" }, [
+    headerToolbar,
     desktopTabs,
     ...(activeDesktopTab === "menu"
       ? [el("div", { class: "sidebar-header-title" }, ["Меню"])]

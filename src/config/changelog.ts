@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.381",
+    date: "2026-01-02",
+    improved: ["Сайдбар: в шапке добавлены кнопки «Меню» и «Создать» (tweb-like)"],
+    fixed: ["PWA/desktop: вкладка «Меню» снова получает свои стили (Info видно)"],
+  },
+  {
     version: "0.1.380",
     date: "2026-01-02",
     improved: ["Композер: send‑menu — «без звука» и «запланировать» (tweb‑like)"],

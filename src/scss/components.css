@@ -793,6 +793,55 @@
   position: relative;
 }
 
+.sidebar-header-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+.sidebar-header-btn {
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 30%);
+  background: color-mix(in srgb, var(--panel2), transparent 35%);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sidebar-header-btn-primary {
+  border-color: color-mix(in srgb, var(--focus), transparent 55%);
+  color: var(--focus);
+  background: color-mix(in srgb, var(--focus), transparent 88%);
+}
+
+.sidebar-header-btn-active {
+  border-color: color-mix(in srgb, var(--focus), transparent 55%);
+  color: var(--focus);
+  background: color-mix(in srgb, var(--focus), transparent 80%);
+}
+
+.sidebar-header-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-hover), transparent 20%);
+}
+
+.sidebar-header-btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-active), transparent 20%);
+  transform: translateY(1px);
+}
+
+.sidebar-header-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
 .sidebar-header-title {
   color: var(--text);
   font-size: 16px;
