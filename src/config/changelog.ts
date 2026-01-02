@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.361",
+    date: "2026-01-02",
+    improved: ["Композер: ширина -16% и ниже к safe-area (mobile/PWA)"],
+  },
+  {
     version: "0.1.360",
     date: "2026-01-02",
     fixed: ["Mobile/PWA: убран нижний footer‑панель, экран снова полноразмерный"],
