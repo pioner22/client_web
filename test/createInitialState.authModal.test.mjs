@@ -35,13 +35,12 @@ async function loadCreateInitialState() {
   }
 }
 
-test("createInitialState: не открывает auth-модалку автоматически", async () => {
+test("createInitialState: показывает welcome-экран", async () => {
   const { createInitialState, cleanup } = await loadCreateInitialState();
   try {
     const st = createInitialState();
-    assert.equal(st.modal, null);
+    assert.deepEqual(st.modal, { kind: "welcome" });
   } finally {
     await cleanup();
   }
 });
-

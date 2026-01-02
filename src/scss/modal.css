@@ -64,6 +64,66 @@
   box-shadow: var(--modal-shadow);
 }
 
+.modal-screen {
+  display: grid;
+  gap: var(--sp-3);
+  text-align: center;
+  padding: calc(var(--modal-pad) + var(--sp-3));
+}
+
+.modal-screen .screen-brand {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+
+.modal-screen .screen-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--modal-title-color);
+}
+
+.modal-screen .screen-sub {
+  color: var(--modal-line-color);
+}
+
+.modal-screen .screen-bar {
+  width: min(280px, 70vw);
+  height: 2px;
+  background: color-mix(in srgb, var(--modal-border-color), transparent 60%);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+  margin: 2px auto 0;
+}
+
+.modal-screen .screen-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-60%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--focus), transparent 20%), transparent);
+  animation: screen-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes screen-slide {
+  0% {
+    transform: translateX(-60%);
+  }
+  50% {
+    transform: translateX(60%);
+  }
+  100% {
+    transform: translateX(160%);
+  }
+}
+
+.modal-screen .modal-actions {
+  justify-content: center;
+  margin-top: var(--sp-2);
+}
+
 .modal-sub {
   margin-top: -2px;
   font-size: 12px;

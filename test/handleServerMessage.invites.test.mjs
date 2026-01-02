@@ -126,7 +126,7 @@ test("handleServerMessage: board_invite парсится из payload.board", as
   }
 });
 
-test("handleServerMessage: update_required не открывает модалку сам", async () => {
+test("handleServerMessage: update_required открывает экран обновления", async () => {
   const { handleServerMessage, cleanup } = await loadHandleServerMessage();
   try {
     const { getState, patch } = createPatchHarness({
@@ -140,7 +140,7 @@ test("handleServerMessage: update_required не открывает модалк�
 
     const st = getState();
     assert.equal(st.updateLatest, "0.9.9");
-    assert.equal(st.modal, null);
+    assert.deepEqual(st.modal, { kind: "update" });
     assert.ok(String(st.status || "").includes("Ctrl+U"));
   } finally {
     await cleanup();

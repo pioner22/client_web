@@ -2,6 +2,8 @@ import type { AppState } from "../../stores/types";
 import { renderAuthModal } from "./renderAuthModal";
 import { renderUpdateModal } from "./renderUpdateModal";
 import { renderPwaUpdateModal } from "./renderPwaUpdateModal";
+import { renderWelcomeModal } from "./renderWelcomeModal";
+import { renderLogoutModal } from "./renderLogoutModal";
 import { renderMembersAddModal } from "./renderMembersAddModal";
 import { renderMembersRemoveModal } from "./renderMembersRemoveModal";
 import { renderRenameModal } from "./renderRenameModal";
@@ -56,6 +58,12 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       onSkinChange: actions.onSkinChange,
       onClose: actions.onClose,
     });
+  }
+  if (kind === "welcome") {
+    return renderWelcomeModal(state.status);
+  }
+  if (kind === "logout") {
+    return renderLogoutModal(state.status, { onClose: actions.onClose });
   }
   if (kind === "update") {
     return renderUpdateModal(state.clientVersion, state.updateLatest ?? "", {

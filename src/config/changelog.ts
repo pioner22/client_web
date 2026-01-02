@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.365",
+    date: "2026-01-02",
+    added: ["Экраны: приветствие, обновление и выход (полноэкранные)"],
+    improved: ["Навигация: базовый экран — вкладки Контакты/Доски/Чаты/Меню (без автооткрытия последнего чата)"],
+  },
+  {
     version: "0.1.364",
     date: "2026-01-02",
     improved: ["Композер: добавлена кнопка отправки (маленькая стрелка)"],

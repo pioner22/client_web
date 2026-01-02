@@ -2358,9 +2358,8 @@ export function handleServerMessage(
     const latest = String(msg?.latest ?? "").trim();
     if (!latest) return;
     if (state.updateDismissedLatest && state.updateDismissedLatest === latest) return;
-    // “В тишине”: без модалки, только статус + хоткей.
     const hint = isMobileLikeUi() ? "" : " (Ctrl+U — применить)";
-    patch({ updateLatest: latest, status: `Доступно обновление до v${latest}${hint}` });
+    patch({ updateLatest: latest, status: `Доступно обновление до v${latest}${hint}`, modal: { kind: "update" } });
     return;
   }
   if (t === "error") {

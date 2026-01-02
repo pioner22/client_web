@@ -73,7 +73,7 @@ import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "..
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
 import { applyMessageView, normalizeMessageView, storeMessageView } from "../helpers/ui/messageView";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
-import { loadLastActiveTarget, saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
+import { saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
 import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { clearStoredSessionToken, getStoredSessionToken, isSessionAutoAuthBlocked, storeAuthId } from "../helpers/auth/session";
 import { nowTs } from "../helpers/time";
@@ -3232,8 +3232,14 @@ export function mountApp(root: HTMLElement) {
             : "Нет соединения";
       const nextStatus = detail ? `${base}: ${detail}` : base;
       store.set((prev) => {
-        if (prev.conn === conn && prev.status === nextStatus) return prev;
-        return { ...prev, conn, status: nextStatus };
+        const clearWelcome = conn === "connected" && prev.modal?.kind === "welcome";
+        if (!clearWelcome && prev.conn === conn && prev.status === nextStatus) return prev;
+        return {
+          ...prev,
+          conn,
+          status: nextStatus,
+          ...(clearWelcome ? { modal: null } : {}),
+        };
       });
 
       const prevConn = lastConn;
@@ -6592,7 +6598,6 @@ export function mountApp(root: HTMLElement) {
       }
     }
 
-    const showAuthOnLogout = Boolean(mobileSidebarMq.matches);
     store.set((prev) => ({
       ...prev,
       authed: false,
@@ -6639,10 +6644,10 @@ export function mountApp(root: HTMLElement) {
       profileDraftHandle: "",
       toast: null,
       page: "main",
-      modal: showAuthOnLogout ? { kind: "auth" } : null,
+      modal: { kind: "logout" },
       authMode: rememberedId ? "login" : "register",
       authRememberedId: rememberedId,
-      status: showAuthOnLogout ? "Вы вышли. Войдите снова." : "Вы вышли. Нажмите «Войти», чтобы войти снова.",
+      status: "Вы вышли из мессенджера. Нажмите «Войти», чтобы вернуться.",
     }));
     draftsLoadedForUser = null;
     pinsLoadedForUser = null;
@@ -10617,7 +10622,6 @@ export function mountApp(root: HTMLElement) {
       userViewId: restored.userViewId ?? prev.userViewId,
       groupViewId: restored.groupViewId ?? prev.groupViewId,
       boardViewId: restored.boardViewId ?? prev.boardViewId,
-      ...(restored.selected ? { selected: restored.selected } : {}),
       input: restored.input ?? prev.input,
 	      drafts: restored.drafts ?? prev.drafts,
 	      pinned: restored.pinned ?? prev.pinned,
@@ -10641,7 +10645,6 @@ export function mountApp(root: HTMLElement) {
   }
 
   let prevAuthed = store.get().authed;
-  let lastAutoOpenedForUser: string | null = null;
   let prevEditing: { key: string; id: number } | null = (() => {
     const e = store.get().editing;
     return e ? { key: e.key, id: e.id } : null;
@@ -10911,26 +10914,6 @@ export function mountApp(root: HTMLElement) {
       scheduleAutoApplyPwaUpdate();
     }
     if (st.authed && !prevAuthed) {
-      if (st.page === "main" && !st.modal && !st.selected && st.selfId && lastAutoOpenedForUser !== st.selfId) {
-        lastAutoOpenedForUser = st.selfId;
-        const remembered = loadLastActiveTarget(st.selfId);
-        if (remembered) {
-          const schedule = (fn: () => void) => {
-            try {
-              if (typeof queueMicrotask === "function") queueMicrotask(fn);
-              else Promise.resolve().then(fn);
-            } catch {
-              window.setTimeout(fn, 0);
-            }
-          };
-          schedule(() => {
-            const cur = store.get();
-            if (!cur.authed || cur.selfId !== st.selfId) return;
-            if (cur.page !== "main" || cur.modal || cur.selected) return;
-            selectTarget(remembered);
-          });
-        }
-      }
       if (st.selected) {
         requestHistory(st.selected, { force: true, deltaLimit: 2000 });
         if (st.selected.kind === "dm") {

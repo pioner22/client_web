@@ -115,7 +115,7 @@ export function createInitialState(): AppState {
     profileDraftStatus: "",
     // “В тишине”: auth-модалку открываем только по явному действию пользователя («Войти»).
     toast: null,
-    modal: null,
+    modal: { kind: "welcome" },
     updateLatest: null,
     updateDismissedLatest: null,
     pwaUpdateAvailable: false,

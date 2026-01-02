@@ -201,19 +201,34 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const pageChanged = state.page !== lastPage;
   lastPage = state.page;
   const authOnly = !state.authed;
+  const modalKind = state.modal?.kind ?? null;
+  const fullScreenKind =
+    modalKind === "welcome" ||
+    modalKind === "logout" ||
+    modalKind === "update" ||
+    modalKind === "pwa_update" ||
+    modalKind === "auth"
+      ? modalKind
+      : authOnly
+        ? "auth"
+        : null;
+  const fullScreenActive = Boolean(fullScreenKind);
 
   // Контекстное меню не должно "ломать" макет и прятать composer.
   // Composer показываем только когда выбран чат/контакт/доска (как в tweb).
   const chatInputVisible =
-    !authOnly && state.page === "main" && Boolean(state.selected) && (!state.modal || state.modal.kind === "context_menu");
+    !fullScreenActive &&
+    state.page === "main" &&
+    Boolean(state.selected) &&
+    (!state.modal || state.modal.kind === "context_menu");
   const mobileUi = isMobileLikeUi();
   const rightTarget = state.rightPanel;
-  const showRightPanel = !authOnly && Boolean(rightTarget && state.page === "main" && !mobileUi);
-  const authModalVisible = authOnly || state.modal?.kind === "auth";
+  const showRightPanel = !fullScreenActive && Boolean(rightTarget && state.page === "main" && !mobileUi);
+  const authModalVisible = fullScreenKind === "auth";
   if (typeof document !== "undefined") {
     document.body.classList.toggle("has-right-col", showRightPanel);
-    document.body.classList.toggle("has-auth-pages", authOnly);
-    document.documentElement.classList.toggle("has-auth-pages", authOnly);
+    document.body.classList.toggle("has-auth-pages", fullScreenActive);
+    document.documentElement.classList.toggle("has-auth-pages", fullScreenActive);
   }
   layout.rightCol.classList.toggle("hidden", !showRightPanel);
   layout.rightCol.setAttribute("aria-hidden", showRightPanel ? "false" : "true");
@@ -511,8 +526,12 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onClose: actions.onCloseModal,
       })
     : null;
-  const modalNode = authOnly
-    ? authModalNode
+  const modalNode = fullScreenKind
+    ? fullScreenKind === "auth"
+      ? authModalNode
+      : state.modal
+        ? renderModal(state, modalActions)
+        : null
     : state.modal
       ? state.modal.kind === "auth"
         ? authModalNode
@@ -523,7 +542,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   // Исключения:
   // - context_menu: всегда поверх (overlay) из-за позиционирования по курсору/тапу
   // - file_viewer: поверх (overlay) как fullscreen viewer (Telegram‑паттерн)
-  const inlineModal = Boolean(!authOnly && state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer");
+  const inlineModal = Boolean(!fullScreenActive && state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer");
   layout.chat.classList.toggle("chat-page", state.page !== "main" || inlineModal);
   const showChatTop = state.page === "main" && !inlineModal && Boolean(state.selected);
   layout.chatTop.classList.toggle("hidden", !showChatTop);
@@ -764,13 +783,13 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   renderFooter(layout.footer, state);
   renderToast(layout.toastHost, state.toast);
 
-  if (authOnly && authModalNode) {
+  if (fullScreenKind && modalNode) {
     layout.overlay.classList.remove("hidden");
     layout.overlay.classList.remove("overlay-context");
     layout.overlay.classList.remove("overlay-context-sheet");
     layout.overlay.classList.remove("overlay-viewer");
     layout.overlay.classList.add("overlay-auth");
-    layout.overlay.replaceChildren(authModalNode);
+    layout.overlay.replaceChildren(modalNode);
   } else if (state.modal?.kind === "file_viewer" && modalNode) {
     layout.overlay.classList.remove("hidden");
     layout.overlay.classList.remove("overlay-context");

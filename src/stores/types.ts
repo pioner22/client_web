@@ -2,6 +2,8 @@ export type ConnStatus = "connecting" | "connected" | "disconnected";
 
 export type ModalKind =
   | "auth"
+  | "welcome"
+  | "logout"
   | "update"
   | "pwa_update"
   | "members_add"
@@ -142,6 +144,8 @@ export interface FileTransferEntry {
 
 export type ModalState =
   | { kind: "auth"; message?: string }
+  | { kind: "welcome" }
+  | { kind: "logout" }
   | { kind: "update" }
   | { kind: "pwa_update" }
   | { kind: "board_post"; boardId: string }
