@@ -984,6 +984,17 @@ export function renderChat(layout: Layout, state: AppState) {
       prevMsg = prev.kind === "sys" ? null : prev;
     }
   }
+  const isGroupTail = (idx: number, msg: ChatMessage) => {
+    const nextIdx = idx + 1;
+    if (nextIdx >= msgs.length) return true;
+    if (nextIdx === unreadIdx) return true;
+    const nextMsg = msgs[nextIdx];
+    if (!nextMsg || nextMsg.kind === "sys") return true;
+    const curDay = dayKey(msg.ts);
+    const nextDay = dayKey(nextMsg.ts);
+    if (curDay && nextDay && curDay !== nextDay) return true;
+    return !isMessageContinuation(msg, nextMsg);
+  };
   const albumMin = 3;
   const albumMax = 12;
   const albumGapSeconds = 3 * 60;
@@ -1023,6 +1034,8 @@ export function renderChat(layout: Layout, state: AppState) {
       if (group.length >= albumMin) {
         const line = renderAlbumLine(state, group, friendLabels);
         if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
+        const lastItem = group[group.length - 1];
+        if (lastItem?.msg?.kind !== "sys" && isGroupTail(lastItem.idx, lastItem.msg)) line.classList.add("msg-tail");
         const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
         const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
         if (selectionSet) {
@@ -1046,6 +1059,7 @@ export function renderChat(layout: Layout, state: AppState) {
 
     const line = messageLine(state, m, friendLabels, { mobileUi, boardUi, msgIdx });
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
+    if (m.kind !== "sys" && isGroupTail(msgIdx, m)) line.classList.add("msg-tail");
     line.setAttribute("data-msg-idx", String(msgIdx));
     const msgId = Number(m.id ?? NaN);
     if (Number.isFinite(msgId)) line.setAttribute("data-msg-id", String(msgId));

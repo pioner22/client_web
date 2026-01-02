@@ -333,6 +333,9 @@
   --msg-out-pad-y: 4px;
   --msg-out-pad-x: 8px;
   --msg-out-pad-bottom: 5px;
+  --msg-tail-size: 10px;
+  --msg-tail-offset: 6px;
+  --msg-tail-radius: 2px;
 
   /* ===== Modals ===== */
   --overlay-bg: var(--overlay);
@@ -383,6 +386,8 @@
   --msg-body-max-width: min(100%, var(--messages-container-width));
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-start;
+  --msg-tail-size: 0px;
+  --msg-tail-offset: 0px;
 }
 
 :root[data-msg-view="compact"] {
@@ -409,6 +414,8 @@
   --msg-out-justify: flex-start;
   --msg-avatar-size: 0px;
   --msg-avatar-font-size: 0px;
+  --msg-tail-size: 0px;
+  --msg-tail-offset: 0px;
 }
 
 :root[data-theme="light"] {

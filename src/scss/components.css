@@ -1615,6 +1615,31 @@
   pointer-events: none;
 }
 
+.msg-tail:not(.msg-attach) .msg-body::after {
+  content: "";
+  position: absolute;
+  width: var(--msg-tail-size);
+  height: var(--msg-tail-size);
+  bottom: var(--msg-tail-offset);
+  border-radius: var(--msg-tail-radius);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.msg-tail.msg-in:not(.msg-attach) .msg-body::after {
+  inset-inline-start: calc(var(--msg-tail-size) * -0.45);
+  background: var(--msg-in-bg);
+  border-inline-start: var(--msg-in-border-width) solid var(--msg-in-border-color);
+  border-bottom: var(--msg-in-border-width) solid var(--msg-in-border-color);
+}
+
+.msg-tail.msg-out:not(.msg-attach) .msg-body::after {
+  inset-inline-end: calc(var(--msg-tail-size) * -0.45);
+  background: var(--msg-out-bg);
+  border-inline-end: var(--msg-out-border-width) solid var(--msg-out-border-color);
+  border-bottom: var(--msg-out-border-width) solid var(--msg-out-border-color);
+}
+
 .msg-in {
   justify-content: var(--msg-in-justify);
   color: var(--msg-in-color);
