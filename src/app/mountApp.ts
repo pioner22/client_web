@@ -1185,6 +1185,33 @@ export function mountApp(root: HTMLElement) {
       enqueueHistoryPreview({ kind: "board", id });
     }
   });
+
+  const friendOnlineSignature = (friends: Array<{ id?: string; online?: boolean }>) =>
+    friends
+      .map((f) => {
+        const id = String(f?.id || "").trim();
+        if (!id) return "";
+        return `${id}:${f?.online ? "1" : "0"}`;
+      })
+      .filter(Boolean)
+      .join("|");
+  let prevFriendOnlineSig = friendOnlineSignature(store.get().friends || []);
+  const hasWhenOnlineOutbox = (outbox: Record<string, Array<{ whenOnline?: boolean }>>) => {
+    for (const list of Object.values(outbox || {})) {
+      const arr = Array.isArray(list) ? list : [];
+      if (arr.some((e) => Boolean(e?.whenOnline))) return true;
+    }
+    return false;
+  };
+  store.subscribe(() => {
+    const st = store.get();
+    const nextSig = friendOnlineSignature(st.friends || []);
+    if (nextSig === prevFriendOnlineSig) return;
+    prevFriendOnlineSig = nextSig;
+    if (!st.authed || st.conn !== "connected") return;
+    if (!hasWhenOnlineOutbox(st.outbox)) return;
+    drainOutbox();
+  });
   const historyRequested = new Set<string>();
   const historyDeltaRequestedAt = new Map<string, number>();
   const historyPreviewRequested = new Set<string>();
@@ -6804,7 +6831,7 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
-  function sendChat() {
+  function sendChat(opts?: { mode?: "now" | "when_online" }) {
     const st = store.get();
     const rawText = String(layout.input.value || "");
     const text = rawText.trimEnd();
@@ -6815,6 +6842,7 @@ export function mountApp(root: HTMLElement) {
     const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
     const forwardFallback = !text && forwardDraft ? String(forwardDraft.text || forwardDraft.preview || "") : "";
     const finalText = text || forwardFallback;
+    const mode = opts?.mode === "when_online" ? "when_online" : "now";
     if (!finalText) return;
     if (finalText.length > APP_MSG_MAX_LEN) {
       store.set({ status: `Слишком длинное сообщение (${finalText.length}/${APP_MSG_MAX_LEN})` });
@@ -6841,6 +6869,7 @@ export function mountApp(root: HTMLElement) {
       return;
     }
 
+    const whenOnline = mode === "when_online" && sel.kind === "dm";
     if (editing) {
       if (st.conn !== "connected") {
         store.set({ status: "Нет соединения: нельзя изменить сообщение" });
@@ -6879,7 +6908,7 @@ export function mountApp(root: HTMLElement) {
     const payload = sel.kind === "dm"
       ? { type: "send" as const, to: sel.id, text: finalText }
       : { type: "send" as const, room: sel.id, text: finalText };
-    const sent = st.conn === "connected" ? gateway.send(payload) : false;
+    const sent = st.conn === "connected" && !whenOnline ? gateway.send(payload) : false;
     const initialStatus = sent ? ("sending" as const) : ("queued" as const);
     const replyRef = replyDraft ? helperDraftToRef(replyDraft) : null;
     const forwardRef = forwardDraft ? helperDraftToRef(forwardDraft) : null;
@@ -6905,6 +6934,7 @@ export function mountApp(root: HTMLElement) {
         ts,
         text: finalText,
         ...(sel.kind === "dm" ? { to: sel.id } : { room: sel.id }),
+        ...(whenOnline ? { whenOnline: true } : {}),
         status: sent ? "sending" : "queued",
         attempts: sent ? 1 : 0,
         lastAttemptAt: sent ? nowMs : 0,
@@ -6923,6 +6953,11 @@ export function mountApp(root: HTMLElement) {
     });
     scheduleSaveDrafts(store);
 
+    if (whenOnline) {
+      store.set({ status: "Сообщение будет отправлено, когда контакт в сети" });
+      drainOutbox();
+      return;
+    }
     if (!sent) {
       store.set({ status: st.conn === "connected" ? "Сообщение в очереди" : "Нет соединения: сообщение в очереди" });
     }
@@ -7041,7 +7076,7 @@ export function mountApp(root: HTMLElement) {
     if (!entries.length) return;
 
     const nowMs = Date.now();
-    const flat: Array<{ key: string; localId: string; to?: string; room?: string; text: string; ts: number; lastAttemptAt: number }> = [];
+    const flat: Array<{ key: string; localId: string; to?: string; room?: string; text: string; ts: number; lastAttemptAt: number; whenOnline?: boolean }> = [];
     for (const [k, list] of entries) {
       const arr = Array.isArray(list) ? list : [];
       for (const e of arr) {
@@ -7058,16 +7093,25 @@ export function mountApp(root: HTMLElement) {
           typeof lastAttemptAtRaw === "number" && Number.isFinite(lastAttemptAtRaw)
             ? Math.max(0, Math.trunc(lastAttemptAtRaw))
             : 0;
-        flat.push({ key: k, localId: lid, to, room, text, ts, lastAttemptAt });
+        const whenOnline = Boolean(e?.whenOnline);
+        flat.push({ key: k, localId: lid, to, room, text, ts, lastAttemptAt, ...(whenOnline ? { whenOnline: true } : {}) });
       }
     }
     if (!flat.length) return;
     flat.sort((a, b) => a.ts - b.ts);
 
+    const onlineById = new Map<string, boolean>();
+    for (const f of st.friends || []) {
+      const id = String(f?.id || "").trim();
+      if (!id) continue;
+      onlineById.set(id, Boolean(f?.online));
+    }
+
     const sent: Array<{ key: string; localId: string }> = [];
     for (const it of flat) {
       if (sent.length >= limit) break;
       if (it.lastAttemptAt && nowMs - it.lastAttemptAt < OUTBOX_RETRY_MIN_MS) continue;
+      if (it.whenOnline && it.to && !onlineById.get(it.to)) continue;
       const ok = gateway.send(it.to ? { type: "send", to: it.to, text: it.text } : { type: "send", room: it.room, text: it.text });
       if (!ok) break;
       sent.push({ key: it.key, localId: it.localId });
@@ -7779,11 +7823,106 @@ export function mountApp(root: HTMLElement) {
   });
 
   layout.boardPublishBtn.addEventListener("click", () => sendChat());
+
+  let sendMenuClickSuppression: CtxClickSuppressionState = { key: null, until: 0 };
+  let sendMenuLongPressTimer: number | null = null;
+  let sendMenuLongPressStartX = 0;
+  let sendMenuLongPressStartY = 0;
+
+  const clearSendMenuLongPress = () => {
+    if (sendMenuLongPressTimer !== null) {
+      window.clearTimeout(sendMenuLongPressTimer);
+      sendMenuLongPressTimer = null;
+    }
+  };
+
+  const getComposerFinalText = (st: AppState): string => {
+    const raw = String(layout.input.value || "");
+    const text = raw.trimEnd();
+    const key = st.selected ? conversationKey(st.selected) : "";
+    const forwardDraft = st.forwardDraft && key && st.forwardDraft.key === key ? st.forwardDraft : null;
+    const forwardFallback = !text && forwardDraft ? String(forwardDraft.text || forwardDraft.preview || "") : "";
+    return text || forwardFallback;
+  };
+
+  const openSendMenu = (x: number, y: number) => {
+    const st = store.get();
+    if (st.modal) return;
+    const sel = st.selected;
+    if (!sel) {
+      store.set({ status: "Выберите контакт или чат слева" });
+      return;
+    }
+    markUserActivity();
+    const key = conversationKey(sel);
+    const editing = st.editing && key && st.editing.key === key;
+    const friend = sel.kind === "dm" ? st.friends.find((f) => f.id === sel.id) : null;
+    const friendOnline = Boolean(friend?.online);
+    const canSend = Boolean(getComposerFinalText(st));
+    const whenOnlineAllowed = sel.kind === "dm" && !friendOnline && !editing;
+    const items: ContextMenuItem[] = [
+      { id: "composer_send_silent", label: "Отправить без звука", icon: "🔕", disabled: true },
+      { id: "composer_send_schedule", label: "Запланировать", icon: "🗓", disabled: true },
+      { id: "composer_send_when_online", label: "Когда будет онлайн", icon: "🕓", disabled: !canSend || !whenOnlineAllowed },
+    ];
+    store.set({
+      modal: {
+        kind: "context_menu",
+        payload: {
+          x,
+          y,
+          title: "Отправка",
+          target: { kind: "composer_send", id: sel.id },
+          items,
+        },
+      },
+    });
+  };
+
+  layout.sendBtn.addEventListener("contextmenu", (e) => {
+    const ev = e as MouseEvent;
+    ev.preventDefault();
+    openSendMenu(ev.clientX, ev.clientY);
+  });
+
+  layout.sendBtn.addEventListener("pointerdown", (e) => {
+    const st = store.get();
+    if (st.modal) return;
+    const ev = e as PointerEvent;
+    if (ev.pointerType === "mouse") return;
+    if (ev.button !== 0) return;
+    clearSendMenuLongPress();
+    sendMenuLongPressStartX = ev.clientX;
+    sendMenuLongPressStartY = ev.clientY;
+    sendMenuLongPressTimer = window.setTimeout(() => {
+      sendMenuLongPressTimer = null;
+      sendMenuClickSuppression = armCtxClickSuppression(sendMenuClickSuppression, "composer_send", "send", 2000);
+      openSendMenu(sendMenuLongPressStartX, sendMenuLongPressStartY);
+    }, 520);
+  });
+
+  layout.sendBtn.addEventListener("pointermove", (e) => {
+    if (sendMenuLongPressTimer === null) return;
+    const ev = e as PointerEvent;
+    const dx = Math.abs(ev.clientX - sendMenuLongPressStartX);
+    const dy = Math.abs(ev.clientY - sendMenuLongPressStartY);
+    if (dx > 12 || dy > 12) clearSendMenuLongPress();
+  });
+
+  layout.sendBtn.addEventListener("pointerup", () => clearSendMenuLongPress());
+  layout.sendBtn.addEventListener("pointercancel", () => clearSendMenuLongPress());
   layout.inputWrap.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
 
     const sendBtn = target?.closest("button[data-action='composer-send']") as HTMLButtonElement | null;
     if (sendBtn) {
+      const consumed = consumeCtxClickSuppression(sendMenuClickSuppression, "composer_send", "send");
+      sendMenuClickSuppression = consumed.state;
+      if (consumed.suppressed) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       e.preventDefault();
       if (!sendBtn.disabled) sendChat();
       return;
@@ -8437,6 +8576,17 @@ export function mountApp(root: HTMLElement) {
     const t = modal.payload.target;
 
     const close = () => store.set({ modal: null });
+
+    if (itemId === "composer_send_when_online") {
+      close();
+      sendChat({ mode: "when_online" });
+      return;
+    }
+    if (itemId === "composer_send_silent" || itemId === "composer_send_schedule") {
+      store.set({ status: "Опция отправки пока недоступна" });
+      close();
+      return;
+    }
 
     if (itemId.startsWith("react:")) {
       if (t.kind !== "message") {

@@ -72,7 +72,7 @@ export type ActionModalPayload =
   | ActionModalBoardInvite
   | ActionModalFileOffer;
 
-export type ContextMenuTargetKind = "dm" | "group" | "board" | "auth_in" | "auth_out" | "message";
+export type ContextMenuTargetKind = "dm" | "group" | "board" | "auth_in" | "auth_out" | "message" | "composer_send";
 
 export interface ContextMenuTarget {
   kind: ContextMenuTargetKind;
@@ -269,6 +269,7 @@ export interface OutboxEntry {
   status?: "queued" | "sending";
   attempts?: number;
   lastAttemptAt?: number;
+  whenOnline?: boolean;
 }
 
 export interface BoardScheduledPost {

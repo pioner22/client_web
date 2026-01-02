@@ -40,7 +40,7 @@ test("outbox: sanitizeOutboxMap фильтрует мусор, дедупит и
   try {
     const raw = {
       "dm:222-222-222": [
-        { localId: "a", ts: 2, text: "hi", to: "222-222-222", status: "queued", attempts: 1, lastAttemptAt: 10 },
+        { localId: "a", ts: 2, text: "hi", to: "222-222-222", status: "queued", attempts: 1, lastAttemptAt: 10, whenOnline: true },
         { localId: "a", ts: 3, text: "dup", to: "222-222-222" },
         { localId: "", ts: 1, text: "bad", to: "222-222-222" },
         { localId: "b", ts: 1, text: "first", to: "222-222-222" },
@@ -54,6 +54,7 @@ test("outbox: sanitizeOutboxMap фильтрует мусор, дедупит и
     assert.equal(out["dm:222-222-222"].length, 2);
     assert.equal(out["dm:222-222-222"][0].localId, "b");
     assert.equal(out["dm:222-222-222"][1].localId, "a");
+    assert.equal(out["dm:222-222-222"][1].whenOnline, true);
   } finally {
     await cleanup();
   }
@@ -83,4 +84,3 @@ test("outbox: add/update/remove работают и чистят ключ, ко�
     await cleanup();
   }
 });
-

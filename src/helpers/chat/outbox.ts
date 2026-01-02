@@ -54,6 +54,7 @@ function sanitizeEntry(raw: any, key: string): OutboxEntry | null {
   const attempts = Number.isFinite(attemptsRaw) ? Math.max(0, Math.min(999, Math.trunc(attemptsRaw))) : undefined;
   const lastAttemptAtRaw = raw.lastAttemptAt;
   const lastAttemptAt = Number.isFinite(lastAttemptAtRaw) ? Math.max(0, Math.trunc(lastAttemptAtRaw)) : undefined;
+  const whenOnline = Boolean(raw.whenOnline);
 
   return {
     localId,
@@ -64,6 +65,7 @@ function sanitizeEntry(raw: any, key: string): OutboxEntry | null {
     ...(status ? { status } : {}),
     ...(attempts !== undefined ? { attempts } : {}),
     ...(lastAttemptAt !== undefined ? { lastAttemptAt } : {}),
+    ...(whenOnline ? { whenOnline: true } : {}),
   };
 }
 
