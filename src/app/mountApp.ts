@@ -2748,6 +2748,25 @@ export function mountApp(root: HTMLElement) {
       layout.sidebarBody.scrollLeft = 0;
     }
   };
+  const scheduleSidebarScrollReset = () => {
+    const resetScroll = () => resetSidebarScrollTop();
+    queueMicrotask(() => resetScroll());
+    try {
+      if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => resetScroll());
+      }
+    } catch {
+      // ignore
+    }
+    // iOS/WebKit: extra delayed pass helps avoid restored mid-scroll on open.
+    try {
+      if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+        window.setTimeout(() => resetScroll(), 120);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   function setMobileSidebarOpen(open: boolean) {
     const st = store.get();
@@ -2782,9 +2801,8 @@ export function mountApp(root: HTMLElement) {
     syncNavOverlay();
     if (shouldOpen) {
       markSidebarResetScroll();
-      const resetScroll = () => resetSidebarScrollTop();
+      scheduleSidebarScrollReset();
       queueMicrotask(() => {
-        resetScroll();
         const searchInput = layout.sidebar.querySelector(".sidebar-search-input") as HTMLInputElement | null;
         if (searchInput && !searchInput.disabled) {
           searchInput.focus();
@@ -2797,13 +2815,6 @@ export function mountApp(root: HTMLElement) {
         }
         layout.sidebarBody?.focus?.();
       });
-      try {
-        if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-          window.requestAnimationFrame(() => resetScroll());
-        }
-      } catch {
-        // ignore
-      }
     } else if (restoreKey) {
       scrollChatToBottom(restoreKey);
     }
@@ -2842,15 +2853,7 @@ export function mountApp(root: HTMLElement) {
     syncNavOverlay();
     if (shouldOpen) {
       markSidebarResetScroll();
-      const resetScroll = () => resetSidebarScrollTop();
-      queueMicrotask(() => resetScroll());
-      try {
-        if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-          window.requestAnimationFrame(() => resetScroll());
-        }
-      } catch {
-        // ignore
-      }
+      scheduleSidebarScrollReset();
     }
     if (restoreKey) {
       scrollChatToBottom(restoreKey);
