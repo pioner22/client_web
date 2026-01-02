@@ -58,6 +58,7 @@ export function renderHeader(layout: Layout, state: AppState) {
   const navAction = navBackToMain ? "nav-back" : "sidebar-toggle";
   const navTitle = navBackToMain ? "Назад" : navShowsBack ? "Список" : "Меню";
   const navAria = navBackToMain ? "Назад" : navShowsBack ? "Открыть список чатов" : "Открыть меню";
+  const navIcon = navAction === "sidebar-toggle" ? "☰" : "←";
 
   layout.headerLeft.replaceChildren(
     el(
@@ -69,7 +70,7 @@ export function renderHeader(layout: Layout, state: AppState) {
         title: navTitle,
         "aria-label": navAria,
       },
-      [navShowsBack ? "←" : "☰"]
+      [navIcon]
     ),
     " ",
     el("span", { class: "hdr-label" }, ["Ваш ID: "]),
