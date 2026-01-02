@@ -559,6 +559,10 @@ export function renderSidebar(
   })();
   if (!(target as any)._sidebarBody) (target as any)._sidebarBody = body;
   toggleClass(body, "sidebar-mobile-body", isMobile);
+  const setBodyChatlistClass = (children: HTMLElement[]) => {
+    const hasChatlist = children.some((child) => Boolean(child?.classList?.contains("chatlist")));
+    toggleClass(body, "sidebar-body-chatlist", hasChatlist);
+  };
   if (sidebarDock) {
     toggleClass(sidebarDock, "hidden", true);
     toggleClass(sidebarDock, "sidebar-desktop-bottom", false);
@@ -827,6 +831,7 @@ export function renderSidebar(
     const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount) : null;
     const filterChats = activeTab === "chats" && effectiveChatFilter === "unread";
     const mountMobile = (children: HTMLElement[]) => {
+      setBodyChatlistClass(children);
       body.replaceChildren(...children);
       target.replaceChildren(sticky, body);
       bindHeaderScroll(sticky);
@@ -1351,6 +1356,7 @@ export function renderSidebar(
     }
 
     const mountPwa = (children: HTMLElement[]) => {
+      setBodyChatlistClass(children);
       body.replaceChildren(...children);
       const nodes: HTMLElement[] = [];
       if (header) nodes.push(header);
@@ -1834,6 +1840,7 @@ export function renderSidebar(
   }
 
   const mountDesktop = (children: HTMLElement[]) => {
+    setBodyChatlistClass(children);
     body.replaceChildren(...children);
     const nodes: HTMLElement[] = [header, body];
     if (shouldShowDesktopDock && sidebarDock) nodes.push(sidebarDock);

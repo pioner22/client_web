@@ -276,6 +276,14 @@ body.has-right-col .right-col {
   touch-action: pan-y;
 }
 
+.sidebar-body.sidebar-body-chatlist {
+  padding-inline: 0;
+}
+
+.sidebar-body.sidebar-body-chatlist > .chatlist {
+  margin-inline: var(--sidebar-list-pad);
+}
+
 .chat {
   background: var(--chat-bg);
   padding: var(--chat-pad);
