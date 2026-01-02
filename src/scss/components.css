@@ -482,6 +482,51 @@
   margin-top: auto;
 }
 
+/* Chatlist rows: tweb-like grid for avatar/title/subtitle/tail. */
+.sidebar .row[data-ctx-kind] {
+  position: relative;
+  min-height: var(--row-min-h);
+  display: grid;
+  grid-template-columns: var(--avatar-size) minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  grid-template-areas: "ava title tail" "ava sub tail";
+  column-gap: var(--row-gap);
+  row-gap: 2px;
+  align-items: center;
+}
+
+.sidebar .row[data-ctx-kind] > .avatar {
+  grid-area: ava;
+  align-self: center;
+}
+
+.sidebar .row[data-ctx-kind] > .row-main {
+  display: contents;
+}
+
+.sidebar .row[data-ctx-kind] .row-title {
+  grid-area: title;
+  align-self: flex-end;
+  min-width: 0;
+}
+
+.sidebar .row[data-ctx-kind] .row-sub {
+  grid-area: sub;
+  align-self: flex-start;
+  min-width: 0;
+}
+
+.sidebar .row[data-ctx-kind] > .row-tail {
+  grid-area: tail;
+  margin-left: 0;
+  align-self: stretch;
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
 .row-tail-bottom .row-reaction {
   order: 1;
 }
