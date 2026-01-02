@@ -29,7 +29,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --app-row-footer: auto;
+    --app-row-footer: 0px;
     margin: 0;
     border: 0;
     border-radius: 0;
@@ -44,7 +44,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --app-row-footer: auto;
+    --app-row-footer: 0px;
   }
 
   .grid {
@@ -781,14 +781,7 @@
     margin-bottom: var(--sp-2);
   }
 
-  .footer {
-    display: block;
-  }
-
   .footer-nav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--sp-2);
     width: 100%;
     border-radius: 16px;
   }
