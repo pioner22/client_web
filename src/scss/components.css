@@ -902,6 +902,56 @@
   margin-bottom: var(--sp-3);
 }
 
+.sidebar-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-inline: var(--row-pad-x);
+  margin: 0 0 var(--sp-3);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sidebar-filter {
+  border: 1px solid color-mix(in srgb, var(--line), transparent 30%);
+  background: color-mix(in srgb, var(--panel2), transparent 35%);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.sidebar-filter-active {
+  border-color: color-mix(in srgb, var(--focus), transparent 55%);
+  color: var(--focus);
+  background: color-mix(in srgb, var(--focus), transparent 85%);
+}
+
+.sidebar-filter:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sidebar-filter-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--focus), transparent 12%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+
 .sidebar-searchbar::before {
   content: none;
   display: none;

@@ -6,6 +6,7 @@ import type {
   MobileSidebarTab,
   PageKind,
   SearchResultEntry,
+  SidebarChatFilter,
   TargetRef,
   ThemeMode,
 } from "../stores/types";
@@ -137,6 +138,7 @@ export interface RenderActions {
   onOpenBoardCreate: () => void;
   onSetPage: (page: PageKind) => void;
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void;
+  onSetSidebarChatFilter: (filter: SidebarChatFilter) => void;
   onSetSidebarQuery: (query: string) => void;
   onAuthLogin: () => void;
   onAuthRegister: () => void;
@@ -417,6 +419,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onOpenGroupCreate,
     actions.onOpenBoardCreate,
     actions.onSetMobileSidebarTab,
+    actions.onSetSidebarChatFilter,
     actions.onSetSidebarQuery,
     actions.onAuthOpen,
     actions.onAuthLogout,

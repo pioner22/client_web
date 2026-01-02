@@ -18,6 +18,7 @@ import type {
   MobileSidebarTab,
   PageKind,
   SearchResultEntry,
+  SidebarChatFilter,
   TargetRef,
   ThemeMode,
   MessageViewMode,
@@ -10718,6 +10719,11 @@ export function mountApp(root: HTMLElement) {
       }
     },
     onSetMobileSidebarTab: (tab: MobileSidebarTab) => setMobileSidebarTab(tab),
+    onSetSidebarChatFilter: (filter: SidebarChatFilter) => {
+      const next = filter === "unread" ? "unread" : "all";
+      if (store.get().sidebarChatFilter === next) return;
+      store.set({ sidebarChatFilter: next });
+    },
     onSetSidebarQuery: (query: string) => {
       const q = String(query ?? "");
       if (store.get().sidebarQuery === q) return;

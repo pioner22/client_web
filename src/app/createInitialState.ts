@@ -56,6 +56,7 @@ export function createInitialState(): AppState {
     theme,
     messageView,
     mobileSidebarTab: "chats",
+    sidebarChatFilter: "all",
     sidebarQuery: "",
     friends: [],
     topPeers: [],

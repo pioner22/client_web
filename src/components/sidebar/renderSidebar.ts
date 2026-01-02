@@ -13,6 +13,7 @@ import type {
   FriendEntry,
   MobileSidebarTab,
   PageKind,
+  SidebarChatFilter,
   TargetRef,
 } from "../../stores/types";
 
@@ -340,6 +341,7 @@ export function renderSidebar(
   onCreateGroup: () => void,
   onCreateBoard: () => void,
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void,
+  onSetSidebarChatFilter: (filter: SidebarChatFilter) => void,
   onSetSidebarQuery: (query: string) => void,
   onAuthOpen: () => void,
   onAuthLogout: () => void,
@@ -520,7 +522,22 @@ export function renderSidebar(
   const mutedSet = new Set((state.muted || []).map((x) => String(x || "").trim()).filter(Boolean));
   const isMuted = (id: string): boolean => mutedSet.has(String(id || "").trim());
   const selfMentionHandles = collectSelfMentionHandles(state);
-  const friendIdSet = new Set((state.friends || []).map((f) => String(f.id || "").trim()).filter(Boolean));
+  const mentionForKey = (key: string): boolean => {
+    if (!selfMentionHandles.size) return false;
+    const conv = state.conversations[key] || [];
+    const last = conv.length ? conv[conv.length - 1] : null;
+    if (!last) return false;
+    const from = String(last.from || "").trim();
+    if (from && state.selfId && from === state.selfId) return false;
+    return hasSelfMention(String(last.text || ""), selfMentionHandles);
+  };
+  const friendMap = new Map<string, FriendEntry>();
+  for (const f of state.friends || []) {
+    const id = String(f.id || "").trim();
+    if (!id) continue;
+    friendMap.set(id, f);
+  }
+  const friendIdSet = new Set(friendMap.keys());
   const unknownAttnPeers = Array.from(attnSet).filter((id) => !friendIdSet.has(id)).sort();
   const boards = state.boards || [];
   const groups = state.groups || [];
@@ -528,6 +545,8 @@ export function renderSidebar(
   const sidebarQueryRaw = compactOneLine(String((state as any).sidebarQuery || ""));
   const sidebarQuery = sidebarQueryRaw.toLowerCase();
   const hasSidebarQuery = Boolean(sidebarQuery);
+  const sidebarChatFilter: SidebarChatFilter = state.sidebarChatFilter === "unread" ? "unread" : "all";
+  const effectiveChatFilter: SidebarChatFilter = hasSidebarQuery ? "all" : sidebarChatFilter;
   const body = (() => {
     const existing =
       typeof (target as HTMLElement | null)?.querySelector === "function"
@@ -638,6 +657,53 @@ export function renderSidebar(
     const attention = attnSet.has(id);
     return hasConv || hasDraft || unread > 0 || attention;
   };
+
+  const isUnreadDialog = (opts: { unread: number; mention?: boolean; attention?: boolean }): boolean =>
+    opts.unread > 0 || Boolean(opts.mention) || Boolean(opts.attention);
+
+  const unreadDialogsCount = (() => {
+    let count = 0;
+    for (const f of friendMap.values()) {
+      const unread = Math.max(0, Number(f.unread || 0) || 0);
+      const attention = attnSet.has(String(f.id || "").trim());
+      if (isUnreadDialog({ unread, attention })) count += 1;
+    }
+    for (const g of groups) {
+      const k = roomKey(g.id);
+      const unread = computeRoomUnread(k);
+      const mention = mentionForKey(k);
+      if (isUnreadDialog({ unread, mention })) count += 1;
+    }
+    return count;
+  })();
+
+  const buildChatFilters = (active: SidebarChatFilter, unreadCount: number): HTMLElement => {
+    const makeBtn = (value: SidebarChatFilter, label: string, badge?: string) => {
+      const btn = el(
+        "button",
+        {
+          class: active === value ? "sidebar-filter sidebar-filter-active" : "sidebar-filter",
+          type: "button",
+          role: "tab",
+          "aria-selected": String(active === value),
+          "aria-label": label,
+          title: label,
+        },
+        [label]
+      ) as HTMLButtonElement;
+      if (badge) {
+        btn.append(el("span", { class: "sidebar-filter-badge", "aria-hidden": "true" }, [badge]));
+      }
+      btn.addEventListener("click", () => onSetSidebarChatFilter(value));
+      return btn;
+    };
+    const badgeText = unreadCount > 99 ? "99+" : unreadCount > 0 ? String(unreadCount) : "";
+    return el("div", { class: "sidebar-filters", role: "tablist", "aria-label": "Фильтр чатов" }, [
+      makeBtn("all", "Все"),
+      makeBtn("unread", "Непрочитанные", badgeText || undefined),
+    ]);
+  };
+
 
   if (isMobile) {
     const rawTab = state.mobileSidebarTab;
@@ -756,6 +822,9 @@ export function renderSidebar(
       tabs,
       ...(searchBar ? [searchBar] : []),
     ]);
+    const showChatFilters = activeTab === "chats" && !hasSidebarQuery;
+    const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount) : null;
+    const filterChats = activeTab === "chats" && effectiveChatFilter === "unread";
     const mountMobile = (children: HTMLElement[]) => {
       body.replaceChildren(...children);
       target.replaceChildren(sticky, body);
@@ -782,16 +851,6 @@ export function renderSidebar(
       }
     };
 
-    const mentionForKey = (key: string): boolean => {
-      if (!selfMentionHandles.size) return false;
-      const conv = state.conversations[key] || [];
-      const last = conv.length ? conv[conv.length - 1] : null;
-      if (!last) return false;
-      const from = String(last.from || "").trim();
-      if (from && state.selfId && from === state.selfId) return false;
-      return hasSelfMention(String(last.text || ""), selfMentionHandles);
-    };
-
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
     const pinnedContactRows: HTMLElement[] = [];
@@ -802,8 +861,11 @@ export function renderSidebar(
         if (!f) continue;
         if (!matchesFriend(f)) continue;
         const k = dmKey(f.id);
+        const unread = Math.max(0, Number(f.unread || 0) || 0);
+        const attention = attnSet.has(f.id);
+        if (filterChats && !isUnreadDialog({ unread, attention })) continue;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
-        const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
+        const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention);
         pinnedContactRows.push(row);
         continue;
       }
@@ -815,6 +877,8 @@ export function renderSidebar(
           const k = roomKey(g.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
           const unread = computeRoomUnread(k);
+          const mention = mentionForKey(k);
+          if (filterChats && !isUnreadDialog({ unread, mention })) continue;
           pinnedChatRows.push(
             roomRow(
               null,
@@ -823,7 +887,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
+              { mention, muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
             )
           );
           continue;
@@ -867,6 +931,7 @@ export function renderSidebar(
         const label = displayNameForFriend(state, f);
         const unread = Math.max(0, Number(f.unread || 0) || 0);
         const attention = attnSet.has(id);
+        if (filterChats && !isUnreadDialog({ unread, attention })) continue;
         dialogItems.push({
           sortTs: lastTsForKey(k),
           priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
@@ -880,10 +945,12 @@ export function renderSidebar(
         const k = roomKey(g.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
         const unread = computeRoomUnread(k);
+        const mention = mentionForKey(k);
         const label = String(g.name || g.id);
+        if (filterChats && !isUnreadDialog({ unread, mention })) continue;
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k), unread }),
+          priority: dialogPriority({ hasDraft: meta.hasDraft, mention, unread }),
           label,
           row: roomRow(
             null,
@@ -892,7 +959,7 @@ export function renderSidebar(
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
             meta,
-            { mention: mentionForKey(k), muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
+            { mention, muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
           ),
         });
       }
@@ -907,6 +974,7 @@ export function renderSidebar(
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
       mountMobile([
+        ...(chatFiltersRow ? [chatFiltersRow] : []),
         ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
         ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])])
@@ -1214,16 +1282,9 @@ export function renderSidebar(
         : [...(searchBar ? [searchBar] : [])]),
     ]);
     const header = el("div", { class: "sidebar-header" }, [headerStack]);
-
-    const mentionForKey = (key: string): boolean => {
-      if (!selfMentionHandles.size) return false;
-      const conv = state.conversations[key] || [];
-      const last = conv.length ? conv[conv.length - 1] : null;
-      if (!last) return false;
-      const from = String(last.from || "").trim();
-      if (from && state.selfId && from === state.selfId) return false;
-      return hasSelfMention(String(last.text || ""), selfMentionHandles);
-    };
+    const showChatFilters = activeTab === "chats" && !hasSidebarQuery;
+    const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount) : null;
+    const filterChats = activeTab === "chats" && effectiveChatFilter === "unread";
 
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
@@ -1235,8 +1296,11 @@ export function renderSidebar(
         if (!f) continue;
         if (!matchesFriend(f)) continue;
         const k = dmKey(f.id);
+        const unread = Math.max(0, Number(f.unread || 0) || 0);
+        const attention = attnSet.has(f.id);
+        if (filterChats && !isUnreadDialog({ unread, attention })) continue;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
-        pinnedContactRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id)));
+        pinnedContactRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention));
         continue;
       }
       if (key.startsWith("room:")) {
@@ -1247,6 +1311,8 @@ export function renderSidebar(
           const k = roomKey(g.id);
           const meta = previewForConversation(state, k, "room", drafts[k]);
           const unread = computeRoomUnread(k);
+          const mention = mentionForKey(k);
+          if (filterChats && !isUnreadDialog({ unread, mention })) continue;
           pinnedChatRows.push(
             roomRow(
               null,
@@ -1255,7 +1321,7 @@ export function renderSidebar(
               () => onSelect({ kind: "group", id: g.id }),
               { kind: "group", id: g.id },
               meta,
-              { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
+              { mention, muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
             )
           );
           continue;
@@ -1325,6 +1391,7 @@ export function renderSidebar(
         const label = displayNameForFriend(state, f);
         const unread = Math.max(0, Number(f.unread || 0) || 0);
         const attention = attnSet.has(id);
+        if (filterChats && !isUnreadDialog({ unread, attention })) continue;
         dialogItems.push({
           sortTs: lastTsForKey(k),
           priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
@@ -1338,10 +1405,12 @@ export function renderSidebar(
         const k = roomKey(g.id);
         const meta = previewForConversation(state, k, "room", drafts[k]);
         const unread = computeRoomUnread(k);
+        const mention = mentionForKey(k);
         const label = String(g.name || g.id);
+        if (filterChats && !isUnreadDialog({ unread, mention })) continue;
         dialogItems.push({
           sortTs: lastTsForKey(k),
-          priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k), unread }),
+          priority: dialogPriority({ hasDraft: meta.hasDraft, mention, unread }),
           label,
           row: roomRow(
             null,
@@ -1350,7 +1419,7 @@ export function renderSidebar(
             () => onSelect({ kind: "group", id: g.id }),
             { kind: "group", id: g.id },
             meta,
-            { mention: mentionForKey(k), muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
+            { mention, muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
           ),
         });
       }
@@ -1365,6 +1434,7 @@ export function renderSidebar(
       const pinnedDialogRows = [...pinnedContactRows, ...pinnedChatRows];
 
       mountPwa([
+        ...(chatFiltersRow ? [chatFiltersRow] : []),
         ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
         el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
         ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
@@ -1670,16 +1740,9 @@ export function renderSidebar(
       : [searchBar]),
   ]);
   const header = el("div", { class: "sidebar-header" }, [headerStack]);
-
-  const mentionForKey = (key: string): boolean => {
-    if (!selfMentionHandles.size) return false;
-    const conv = state.conversations[key] || [];
-    const last = conv.length ? conv[conv.length - 1] : null;
-    if (!last) return false;
-    const from = String(last.from || "").trim();
-    if (from && state.selfId && from === state.selfId) return false;
-    return hasSelfMention(String(last.text || ""), selfMentionHandles);
-  };
+  const showChatFilters = activeDesktopTab === "chats" && !hasSidebarQuery;
+  const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount) : null;
+  const filterChats = activeDesktopTab === "chats" && effectiveChatFilter === "unread";
 
   const pinnedDmRows: HTMLElement[] = [];
   const pinnedChatRows: HTMLElement[] = [];
@@ -1691,8 +1754,11 @@ export function renderSidebar(
       if (!f) continue;
       if (!matchesFriend(f)) continue;
       const k = dmKey(f.id);
+      const unread = Math.max(0, Number(f.unread || 0) || 0);
+      const attention = attnSet.has(f.id);
+      if (filterChats && !isUnreadDialog({ unread, attention })) continue;
       const meta = previewForConversation(state, k, "dm", drafts[k]);
-      pinnedDmRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id)));
+      pinnedDmRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention));
       continue;
     }
     if (!key.startsWith("room:")) continue;
@@ -1703,6 +1769,8 @@ export function renderSidebar(
       const k = roomKey(g.id);
       const meta = previewForConversation(state, k, "room", drafts[k]);
       const unread = computeRoomUnread(k);
+      const mention = mentionForKey(k);
+      if (filterChats && !isUnreadDialog({ unread, mention })) continue;
       pinnedChatRows.push(
         roomRow(
           null,
@@ -1711,7 +1779,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k), muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
+          { mention, muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
         )
       );
       continue;
@@ -1870,6 +1938,7 @@ export function renderSidebar(
       const label = displayNameForFriend(state, f);
       const unread = Math.max(0, Number(f.unread || 0) || 0);
       const attention = attnSet.has(id);
+      if (filterChats && !isUnreadDialog({ unread, attention })) continue;
       dialogItems.push({
         sortTs: lastTsForKey(k),
         priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
@@ -1883,10 +1952,12 @@ export function renderSidebar(
       const k = roomKey(g.id);
       const meta = previewForConversation(state, k, "room", drafts[k]);
       const unread = computeRoomUnread(k);
+      const mention = mentionForKey(k);
       const label = String(g.name || g.id);
+      if (filterChats && !isUnreadDialog({ unread, mention })) continue;
       dialogItems.push({
         sortTs: lastTsForKey(k),
-        priority: dialogPriority({ hasDraft: meta.hasDraft, mention: mentionForKey(k), unread }),
+        priority: dialogPriority({ hasDraft: meta.hasDraft, mention, unread }),
         label,
         row: roomRow(
           null,
@@ -1895,7 +1966,7 @@ export function renderSidebar(
           () => onSelect({ kind: "group", id: g.id }),
           { kind: "group", id: g.id },
           meta,
-          { mention: mentionForKey(k), muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
+          { mention, muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
         ),
       });
     }
@@ -1910,6 +1981,7 @@ export function renderSidebar(
     const pinnedDialogRows = [...pinnedDmRows, ...pinnedChatRows];
 
     mountDesktop([
+      ...(chatFiltersRow ? [chatFiltersRow] : []),
       ...(pinnedDialogRows.length ? [el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows] : []),
       el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]),
       ...(dialogRows.length ? dialogRows : [el("div", { class: "pane-section" }, [hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)"])]),
