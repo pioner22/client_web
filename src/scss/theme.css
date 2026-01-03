@@ -335,8 +335,8 @@
   --msg-out-pad-y: 4px;
   --msg-out-pad-x: 8px;
   --msg-out-pad-bottom: 5px;
-  --msg-tail-size: 10px;
-  --msg-tail-offset: 6px;
+  --msg-tail-size: 14px;
+  --msg-tail-offset: 2px;
   --msg-tail-radius: 2px;
 
   /* ===== Modals ===== */
