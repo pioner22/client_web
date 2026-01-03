@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.412",
+    date: "2026-01-03",
+    improved: ["Композер: send‑кнопка с тенью как у поля ввода (tweb‑style)"],
+  },
+  {
     version: "0.1.411",
     date: "2026-01-03",
     improved: ["Композер: кнопки attach/emoji/✏️ круглые (tweb‑style)"],

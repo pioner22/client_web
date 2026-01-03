@@ -2993,6 +2993,7 @@
   border-radius: 50%;
   border-color: transparent;
   background: var(--accent);
+  box-shadow: var(--composer-field-shadow);
   color: #fff;
   font-size: 0;
   line-height: 1;
