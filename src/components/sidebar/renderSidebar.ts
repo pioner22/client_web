@@ -1970,9 +1970,9 @@ export function renderSidebar(
       : [searchBar]),
   ]);
   const header = el("div", { class: "sidebar-header" }, [headerStack]);
-  const showChatFilters = activeDesktopTab === "chats" && !hasSidebarQuery;
-  const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount) : null;
-  const filterChats = activeDesktopTab === "chats" && effectiveChatFilter === "unread";
+  const showChatFilters = false;
+  const chatFiltersRow = null;
+  const filterChats = false;
 
   const pinnedDmRows: HTMLElement[] = [];
   const pinnedChatRows: HTMLElement[] = [];

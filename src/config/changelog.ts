@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.421",
+    date: "2026-01-03",
+    fixed: ["Desktop: в разделе «Чаты» фильтры убраны, чтобы не сжимать высоту меню"],
+  },
+  {
     version: "0.1.420",
     date: "2026-01-03",
     fixed: ["Mobile: тап по списку не запускает лишнюю swipe-анимацию (открытие чата стабильнее)"],
