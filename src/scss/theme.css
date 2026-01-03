@@ -161,7 +161,7 @@
   --composer-border-width: var(--border-width);
   --composer-pad-y: 10px;
   --composer-pad-x: 12px;
-  --composer-gap: var(--sp-1);
+  --composer-gap: 2px;
   --prompt-color: var(--muted);
 
   --footer-bg: var(--panel);
