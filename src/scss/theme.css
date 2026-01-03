@@ -159,7 +159,7 @@
   --safe-area-bg: var(--app-bg);
   --composer-border-color: var(--line);
   --composer-border-width: var(--border-width);
-  --composer-pad-y: 10px;
+  --composer-pad-y: 6px;
   --composer-pad-x: 12px;
   --composer-gap: 2px;
   --prompt-color: var(--muted);
