@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.423",
+    date: "2026-01-03",
+    improved: ["Sidebar: упрощены табы и поиск, меньше дублей обработчиков"],
+  },
+  {
     version: "0.1.422",
     date: "2026-01-03",
     fixed: ["PWA desktop: фильтры чатов скрыты, чтобы высота меню не менялась при «Чаты»"],

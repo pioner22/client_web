@@ -527,6 +527,22 @@ export function renderSidebar(
     return el("div", { class: "sidebar-header-toolbar" }, [menuBtn, createBtn]);
   };
 
+  const buildSidebarTabButton = (tab: MobileSidebarTab, activeTab: MobileSidebarTab, label: string): HTMLButtonElement => {
+    const btn = el(
+      "button",
+      {
+        class: activeTab === tab ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
+        type: "button",
+        role: "tab",
+        "aria-selected": String(activeTab === tab),
+        title: label,
+      },
+      [label]
+    ) as HTMLButtonElement;
+    btn.addEventListener("click", () => onSetMobileSidebarTab(tab));
+    return btn;
+  };
+
   const roomUnreadCache = new Map<string, number>();
   const computeRoomUnread = (key: string): number => {
     if (!key.startsWith("room:")) return 0;
@@ -795,6 +811,46 @@ export function renderSidebar(
       makeBtn("unread", "Непрочитанные", badgeText || undefined),
     ]);
   };
+
+  const buildSidebarSearchBar = (placeholder: string): HTMLElement => {
+    const input = el("input", {
+      class: "sidebar-search-input",
+      type: "search",
+      placeholder,
+      "aria-label": "Поиск",
+      "data-ios-assistant": "off",
+      autocomplete: "off",
+      autocorrect: "off",
+      autocapitalize: "off",
+      spellcheck: "false",
+      enterkeyhint: "search",
+    }) as HTMLInputElement;
+    input.value = sidebarQueryRaw;
+    input.disabled = disableSearchWhileTyping;
+    input.addEventListener("input", () => onSetSidebarQuery(input.value));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onSetSidebarQuery("");
+      }
+    });
+    const clearBtn = el(
+      "button",
+      {
+        class: sidebarQueryRaw ? "btn sidebar-search-clear" : "btn sidebar-search-clear hidden",
+        type: "button",
+        title: "Очистить",
+        "aria-label": "Очистить",
+      },
+      ["×"]
+    ) as HTMLButtonElement;
+    clearBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      onSetSidebarQuery("");
+      focusElement(input);
+    });
+    return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
+  };
   const wrapChatlist = (children: HTMLElement[]): HTMLElement => el("div", { class: "chatlist virtual-chatlist" }, children);
   const VIRTUAL_CHATLIST_MIN_ROWS = 80;
   const VIRTUAL_CHATLIST_OVERSCAN = 6;
@@ -917,54 +973,10 @@ export function renderSidebar(
       }
     }
     if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
-    const tabContacts = el(
-      "button",
-      {
-        class: activeTab === "contacts" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === "contacts"),
-        title: "Контакты",
-      },
-      ["Контакты"]
-    ) as HTMLButtonElement;
-    const tabBoards = el(
-      "button",
-      {
-        class: activeTab === "boards" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === "boards"),
-        title: "Доски",
-      },
-      ["Доски"]
-    ) as HTMLButtonElement;
-    const tabChats = el(
-      "button",
-      {
-        class: activeTab === "chats" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === "chats"),
-        title: "Чаты",
-      },
-      ["Чаты"]
-    ) as HTMLButtonElement;
-    const tabMenu = el(
-      "button",
-      {
-        class: activeTab === "menu" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === "menu"),
-        title: "Меню",
-      },
-      ["Меню"]
-    ) as HTMLButtonElement;
-    tabChats.addEventListener("click", () => onSetMobileSidebarTab("chats"));
-    tabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
-    tabBoards.addEventListener("click", () => onSetMobileSidebarTab("boards"));
-    tabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
+    const tabContacts = buildSidebarTabButton("contacts", activeTab, "Контакты");
+    const tabBoards = buildSidebarTabButton("boards", activeTab, "Доски");
+    const tabChats = buildSidebarTabButton("chats", activeTab, "Чаты");
+    const tabMenu = buildSidebarTabButton("menu", activeTab, "Меню");
     const tabs = el("div", { class: "sidebar-tabs sidebar-tabs-mobile", role: "tablist", "aria-label": "Раздел" }, [
       tabContacts,
       tabBoards,
@@ -975,45 +987,9 @@ export function renderSidebar(
     const searchBar =
       activeTab === "menu"
         ? null
-        : (() => {
-            const input = el("input", {
-              class: "sidebar-search-input",
-              type: "search",
-              placeholder: activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск",
-              "aria-label": "Поиск",
-              "data-ios-assistant": "off",
-              autocomplete: "off",
-              autocorrect: "off",
-              autocapitalize: "off",
-              spellcheck: "false",
-              enterkeyhint: "search",
-            }) as HTMLInputElement;
-            input.value = sidebarQueryRaw;
-            input.disabled = disableSearchWhileTyping;
-            input.addEventListener("input", () => onSetSidebarQuery(input.value));
-            input.addEventListener("keydown", (e) => {
-              if (e.key === "Escape") {
-                e.preventDefault();
-                onSetSidebarQuery("");
-              }
-            });
-            const clearBtn = el(
-              "button",
-              {
-                class: sidebarQueryRaw ? "btn sidebar-search-clear" : "btn sidebar-search-clear hidden",
-                type: "button",
-                title: "Очистить",
-                "aria-label": "Очистить",
-              },
-              ["×"]
-            ) as HTMLButtonElement;
-            clearBtn.addEventListener("click", (e) => {
-              e.preventDefault();
-              onSetSidebarQuery("");
-              focusElement(input);
-            });
-            return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
-          })();
+        : buildSidebarSearchBar(
+            activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск"
+          );
     const sticky = el("div", { class: "sidebar-mobile-sticky" }, [
       tabs,
       ...(searchBar ? [searchBar] : []),
@@ -1371,57 +1347,10 @@ export function renderSidebar(
       }
     }
 
-    const tabContacts = el(
-      "button",
-      {
-        class: activeTab === "contacts" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === "contacts"),
-        title: "Контакты",
-      },
-      ["Контакты"]
-    ) as HTMLButtonElement;
-    const tabBoards = el(
-      "button",
-      {
-        class: activeTab === "boards" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === "boards"),
-        title: "Доски",
-      },
-      ["Доски"]
-    ) as HTMLButtonElement;
-    const tabChats = el(
-      "button",
-      {
-        class: activeTab === "chats" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === "chats"),
-        title: "Чаты",
-      },
-      ["Чаты"]
-    ) as HTMLButtonElement;
-
-    tabChats.addEventListener("click", () => onSetMobileSidebarTab("chats"));
-    tabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
-    tabBoards.addEventListener("click", () => onSetMobileSidebarTab("boards"));
-    const tabMenu = showMenuTab
-      ? (el(
-          "button",
-          {
-            class: activeTab === "menu" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-            type: "button",
-            role: "tab",
-            "aria-selected": String(activeTab === "menu"),
-            title: "Меню",
-          },
-          ["Меню"]
-        ) as HTMLButtonElement)
-      : null;
-    if (tabMenu) tabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
+    const tabContacts = buildSidebarTabButton("contacts", activeTab, "Контакты");
+    const tabBoards = buildSidebarTabButton("boards", activeTab, "Доски");
+    const tabChats = buildSidebarTabButton("chats", activeTab, "Чаты");
+    const tabMenu = showMenuTab ? buildSidebarTabButton("menu", activeTab, "Меню") : null;
 
     const tabs = el(
       "div",
@@ -1447,45 +1376,9 @@ export function renderSidebar(
     const searchBar =
       showMenuTab && activeTab === "menu"
         ? null
-        : (() => {
-            const input = el("input", {
-              class: "sidebar-search-input",
-              type: "search",
-              placeholder: activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск",
-              "aria-label": "Поиск",
-              "data-ios-assistant": "off",
-              autocomplete: "off",
-              autocorrect: "off",
-              autocapitalize: "off",
-              spellcheck: "false",
-              enterkeyhint: "search",
-            }) as HTMLInputElement;
-            input.value = sidebarQueryRaw;
-            input.disabled = disableSearchWhileTyping;
-            input.addEventListener("input", () => onSetSidebarQuery(input.value));
-            input.addEventListener("keydown", (e) => {
-              if (e.key === "Escape") {
-                e.preventDefault();
-                onSetSidebarQuery("");
-              }
-            });
-            const clearBtn = el(
-              "button",
-              {
-                class: sidebarQueryRaw ? "btn sidebar-search-clear" : "btn sidebar-search-clear hidden",
-                type: "button",
-                title: "Очистить",
-                "aria-label": "Очистить",
-              },
-              ["×"]
-            ) as HTMLButtonElement;
-            clearBtn.addEventListener("click", (e) => {
-              e.preventDefault();
-              onSetSidebarQuery("");
-              focusElement(input);
-            });
-            return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
-          })();
+        : buildSidebarSearchBar(
+            activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск"
+          );
     const headerToolbar = buildSidebarHeaderToolbar(activeTab);
     const headerStack = el("div", { class: "sidebar-header-stack" }, [
       headerToolbar,
@@ -1853,57 +1746,10 @@ export function renderSidebar(
     if (desktopMenuDockRow) sidebarDock.replaceChildren(desktopMenuDockRow);
   }
 
-  const desktopTabContacts = el(
-    "button",
-    {
-      class: activeDesktopTab === "contacts" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-      type: "button",
-      role: "tab",
-      "aria-selected": String(activeDesktopTab === "contacts"),
-      title: "Контакты",
-    },
-    ["Контакты"]
-  ) as HTMLButtonElement;
-  const desktopTabBoards = el(
-    "button",
-    {
-      class: activeDesktopTab === "boards" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-      type: "button",
-      role: "tab",
-      "aria-selected": String(activeDesktopTab === "boards"),
-      title: "Доски",
-    },
-    ["Доски"]
-  ) as HTMLButtonElement;
-  const desktopTabChats = el(
-    "button",
-    {
-      class: activeDesktopTab === "chats" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-      type: "button",
-      role: "tab",
-      "aria-selected": String(activeDesktopTab === "chats"),
-      title: "Чаты",
-    },
-    ["Чаты"]
-  ) as HTMLButtonElement;
-  const desktopTabMenu = showMenuTab
-    ? (el(
-        "button",
-        {
-          class: activeDesktopTab === "menu" ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-          type: "button",
-          role: "tab",
-          "aria-selected": String(activeDesktopTab === "menu"),
-          title: "Меню",
-        },
-        ["Меню"]
-      ) as HTMLButtonElement)
-    : null;
-
-  desktopTabChats.addEventListener("click", () => onSetMobileSidebarTab("chats"));
-  desktopTabContacts.addEventListener("click", () => onSetMobileSidebarTab("contacts"));
-  desktopTabBoards.addEventListener("click", () => onSetMobileSidebarTab("boards"));
-  if (desktopTabMenu) desktopTabMenu.addEventListener("click", () => onSetMobileSidebarTab("menu"));
+  const desktopTabContacts = buildSidebarTabButton("contacts", activeDesktopTab, "Контакты");
+  const desktopTabBoards = buildSidebarTabButton("boards", activeDesktopTab, "Доски");
+  const desktopTabChats = buildSidebarTabButton("chats", activeDesktopTab, "Чаты");
+  const desktopTabMenu = showMenuTab ? buildSidebarTabButton("menu", activeDesktopTab, "Меню") : null;
 
   const desktopTabs = el("div", { class: "sidebar-tabs sidebar-tabs-desktop", role: "tablist", "aria-label": "Раздел" }, [
     desktopTabContacts,
@@ -1921,46 +1767,9 @@ export function renderSidebar(
     desktopTabsList[next]?.focus();
   });
 
-  const searchBar = (() => {
-    const input = el("input", {
-      class: "sidebar-search-input",
-      type: "search",
-      placeholder:
-        activeDesktopTab === "contacts" ? "Поиск контакта" : activeDesktopTab === "boards" ? "Поиск доски" : "Поиск",
-      "aria-label": "Поиск",
-      "data-ios-assistant": "off",
-      autocomplete: "off",
-      autocorrect: "off",
-      autocapitalize: "off",
-      spellcheck: "false",
-      enterkeyhint: "search",
-    }) as HTMLInputElement;
-    input.value = sidebarQueryRaw;
-    input.disabled = disableSearchWhileTyping;
-    input.addEventListener("input", () => onSetSidebarQuery(input.value));
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onSetSidebarQuery("");
-      }
-    });
-    const clearBtn = el(
-      "button",
-      {
-        class: sidebarQueryRaw ? "btn sidebar-search-clear" : "btn sidebar-search-clear hidden",
-        type: "button",
-        title: "Очистить",
-        "aria-label": "Очистить",
-      },
-      ["×"]
-    ) as HTMLButtonElement;
-    clearBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      onSetSidebarQuery("");
-      focusElement(input);
-    });
-    return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
-  })();
+  const searchBar = buildSidebarSearchBar(
+    activeDesktopTab === "contacts" ? "Поиск контакта" : activeDesktopTab === "boards" ? "Поиск доски" : "Поиск"
+  );
   const headerToolbar = buildSidebarHeaderToolbar(activeDesktopTab);
   const headerStack = el("div", { class: "sidebar-header-stack" }, [
     headerToolbar,
