@@ -1,7 +1,7 @@
 {
   "name": "yagodka-client-web",
   "private": true,
-  "version": "0.1.417",
+  "version": "0.1.418",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {

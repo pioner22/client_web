@@ -1834,7 +1834,9 @@ export function renderSidebar(
   const defaultDesktopTab: DesktopTab = unknownAttnPeers.length ? "contacts" : "chats";
   const rawDesktopTab = state.mobileSidebarTab;
   let activeDesktopTab: DesktopTab =
-    rawDesktopTab === "contacts" || rawDesktopTab === "boards" || rawDesktopTab === "menu" ? rawDesktopTab : defaultDesktopTab;
+    rawDesktopTab === "contacts" || rawDesktopTab === "boards" || rawDesktopTab === "chats" || rawDesktopTab === "menu"
+      ? rawDesktopTab
+      : defaultDesktopTab;
   if (!allowMenuTab && activeDesktopTab === "menu") activeDesktopTab = defaultDesktopTab;
   if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeDesktopTab;
   const desktopMenuDockRow = showMenuTab
