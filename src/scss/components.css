@@ -521,6 +521,7 @@
   column-gap: var(--row-gap);
   row-gap: 2px;
   align-items: center;
+  border-radius: 0;
 }
 
 .sidebar .row[data-ctx-kind] > .avatar {
