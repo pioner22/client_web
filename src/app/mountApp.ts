@@ -2836,8 +2836,9 @@ export function mountApp(root: HTMLElement) {
       markSidebarResetScroll();
       scheduleSidebarScrollReset();
       queueMicrotask(() => {
+        const autoFocusSearch = !coarsePointerMq.matches;
         const searchInput = layout.sidebar.querySelector(".sidebar-search-input") as HTMLInputElement | null;
-        if (searchInput && !searchInput.disabled) {
+        if (autoFocusSearch && searchInput && !searchInput.disabled) {
           searchInput.focus();
           return;
         }
