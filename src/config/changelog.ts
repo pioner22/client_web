@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.419",
+    date: "2026-01-03",
+    fixed: ["Desktop: высота табов/фильтров не сжимается при переключении на «Чаты»"],
+  },
+  {
     version: "0.1.418",
     date: "2026-01-03",
     fixed: ["Desktop: вкладка «Чаты» не сбрасывает состояние табов (без «плющения» меню)"],

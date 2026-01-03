@@ -791,7 +791,10 @@ html.app-typing .row-muted {
   --sidebar-tabs-count: 3;
   --sidebar-tabs-height: 3rem;
   --sidebar-tabs-side-pad: 0.6875rem;
+  box-sizing: border-box;
   height: var(--sidebar-tabs-height);
+  min-height: var(--sidebar-tabs-height);
+  flex: 0 0 var(--sidebar-tabs-height);
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -983,7 +986,10 @@ html.app-typing .row-muted {
 .sidebar-filters {
   --sidebar-filters-height: 3rem;
   --sidebar-filters-side-pad: 0.6875rem;
+  box-sizing: border-box;
   height: var(--sidebar-filters-height);
+  min-height: var(--sidebar-filters-height);
+  flex: 0 0 var(--sidebar-filters-height);
   display: flex;
   align-items: center;
   justify-content: space-around;
