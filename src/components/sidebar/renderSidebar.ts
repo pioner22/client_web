@@ -1018,9 +1018,9 @@ export function renderSidebar(
       tabs,
       ...(searchBar ? [searchBar] : []),
     ]);
-    const showChatFilters = activeTab === "chats" && !hasSidebarQuery;
+    const showChatFilters = isMobile && activeTab === "chats" && !hasSidebarQuery;
     const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount) : null;
-    const filterChats = activeTab === "chats" && effectiveChatFilter === "unread";
+    const filterChats = showChatFilters && effectiveChatFilter === "unread";
     const mountMobile = (children: HTMLElement[]) => {
       setBodyChatlistClass(children);
       body.replaceChildren(...children);
