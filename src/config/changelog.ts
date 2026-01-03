@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.401",
+    date: "2026-01-03",
+    improved: ["История: контейнер сообщений ближе к tweb (micro overflow shim для пустого чата)"],
+  },
+  {
     version: "0.1.400",
     date: "2026-01-03",
     improved: ["История: восстановление скролла при prepend учитывает anchor key (устойчивее на локальных сообщениях)"],

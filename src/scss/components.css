@@ -1655,6 +1655,13 @@
   box-sizing: content-box;
 }
 
+.chat-lines::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: var(--chat-bubble-overflow);
+}
+
 .chat-virtual-spacer {
   width: 100%;
   pointer-events: none;
