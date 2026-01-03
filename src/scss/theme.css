@@ -291,8 +291,8 @@
   /* ===== Chat messages ===== */
   --chat-title-color: var(--muted);
   --chat-title-mb: var(--sp-3);
-  --chat-line-gap: 6px;
-  --msg-pad-y: 2px;
+  --chat-line-gap: 2px;
+  --msg-pad-y: 0px;
   --msg-status-read-color: var(--focus);
   --messages-container-width: 728px;
   --chat-bubbles-max-width: min(100%, calc(var(--messages-container-width) - (var(--chat-pad) * 2)));
