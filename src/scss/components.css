@@ -2988,6 +2988,7 @@
   width: var(--composer-btn-size);
   height: var(--composer-btn-size);
   margin-left: var(--composer-send-gap);
+  margin-bottom: var(--composer-icon-offset);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;

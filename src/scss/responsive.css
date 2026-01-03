@@ -374,7 +374,7 @@
     --composer-input-font-weight: 500;
     --composer-field-pad: 4px;
     --composer-field-min-h: 46px;
-    --composer-btn-size: 46px;
+    --composer-btn-size: 40px;
   }
 
   :root[data-skin][data-msg-view="plain"] {
