@@ -331,6 +331,22 @@
     --row-unread-selected-text: var(--row-bg-selected);
   }
 
+  .sidebar .row-sel:not([data-ctx-kind]) {
+    background: var(--row-bg-hover);
+    color: var(--row-text);
+  }
+
+  .sidebar .row-sel:not([data-ctx-kind]):hover {
+    background: var(--row-bg-hover);
+  }
+
+  .sidebar .row-sel:not([data-ctx-kind]) .row-sub,
+  .sidebar .row-sel:not([data-ctx-kind]) .row-time,
+  .sidebar .row-sel:not([data-ctx-kind]) .row-prefix,
+  .sidebar .row-sel:not([data-ctx-kind]) .row-id {
+    color: var(--muted);
+  }
+
   .sidebar .row-sel[data-ctx-kind] .row-sub,
   .sidebar .row-sel[data-ctx-kind] .row-time,
   .sidebar .row-sel[data-ctx-kind] .row-prefix,
