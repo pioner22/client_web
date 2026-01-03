@@ -558,6 +558,19 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.chatTop.replaceChildren();
     layout.chatHost.removeAttribute("data-chat-key");
     layout.chatJump.classList.add("hidden");
+    const hostState = layout.chatHost as any;
+    if (hostState && hostState.__chatLinesObserver && typeof hostState.__chatLinesObserver.disconnect === "function") {
+      try {
+        hostState.__chatLinesObserver.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+    if (hostState) {
+      hostState.__chatLinesObserver = null;
+      hostState.__chatLinesObserved = null;
+      hostState.__chatRenderState = null;
+    }
     if (pageChanged) {
       try {
         layout.chatHost.scrollTop = 0;

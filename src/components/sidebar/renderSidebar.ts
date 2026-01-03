@@ -1276,6 +1276,7 @@ export function renderSidebar(
       time: null,
       hasDraft: false,
     });
+    toggleClass(profileRow, "row-settings", true);
     profileRow.setAttribute("title", "Настройки профиля и интерфейса");
     const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
       sub: "История и загрузки",
@@ -1765,6 +1766,7 @@ export function renderSidebar(
       time: null,
       hasDraft: false,
     });
+    toggleClass(profileRow, "row-settings", true);
     profileRow.setAttribute("title", "Настройки профиля и интерфейса");
     const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
       sub: "История и загрузки",
@@ -2088,6 +2090,7 @@ export function renderSidebar(
       time: null,
       hasDraft: false,
     });
+    toggleClass(profileRow, "row-settings", true);
     profileRow.setAttribute("title", "Настройки профиля и интерфейса");
     const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
       sub: "История и загрузки",

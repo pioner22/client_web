@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.416",
+    date: "2026-01-03",
+    fixed: ["Mobile: переход назад возвращает чат без остатка прошлой страницы"],
+    improved: ["Меню: кнопка настроек получила мягкую анимацию"],
+  },
+  {
     version: "0.1.415",
     date: "2026-01-03",
     fixed: [

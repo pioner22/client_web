@@ -495,6 +495,31 @@
   color: var(--row-prefix-color);
 }
 
+.row-settings .row-prefix {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: row-settings-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes row-settings-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-settings .row-prefix {
+    animation: none;
+  }
+}
+
 .row-draft {
   flex: 0 0 auto;
   font-size: 12px;
