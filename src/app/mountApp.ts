@@ -10243,7 +10243,12 @@ export function mountApp(root: HTMLElement) {
     const dx = sidebarSwipeLastX - sidebarSwipeStartX;
     const dy = sidebarSwipeLastY - sidebarSwipeStartY;
     const dt = Date.now() - sidebarSwipeStartAt;
+    const wasHorizontal = sidebarSwipeHorizontal;
     resetSidebarSwipe();
+    if (!wasHorizontal) {
+      clearSidebarSwipeFx();
+      return false;
+    }
 
     const adx = Math.abs(dx);
     const ady = Math.abs(dy);
