@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.390",
+    date: "2026-01-03",
+    improved: ["Сайдбар: фон menu-open соответствует hover (tweb‑like)"],
+  },
+  {
     version: "0.1.389",
     date: "2026-01-03",
     improved: ["Сайдбар: chatlist виртуализируется для больших списков (tweb‑style slicing)"],
