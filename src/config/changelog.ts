@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.413",
+    date: "2026-01-03",
+    fixed: [
+      "Desktop: убран лишний таб «Меню», навигация через кнопку ☰",
+      "Пересылка: forward‑черновик переносится при переключении чата/доски",
+      "Mobile: long‑press по сообщению открывает контекст‑меню",
+      "PWA: install‑prompt toast центрируется на экране",
+      "Chat: снижены лишние перерисовки верхней панели при закрепах",
+    ],
+  },
+  {
     version: "0.1.412",
     date: "2026-01-03",
     improved: ["Композер: send‑кнопка с тенью как у поля ввода (tweb‑style)"],

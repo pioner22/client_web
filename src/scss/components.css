@@ -791,7 +791,7 @@
 }
 
 .sidebar-tabs.sidebar-tabs-desktop {
-  --sidebar-tabs-count: 4;
+  --sidebar-tabs-count: 3;
   margin: 0;
   padding: 0;
 }
@@ -3689,6 +3689,12 @@
   place-items: center;
   padding: 0 12px;
   pointer-events: none;
+}
+
+.toast-host[data-toast-placement="center"] {
+  top: 0;
+  bottom: 0;
+  padding: calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px);
 }
 
 .toast {

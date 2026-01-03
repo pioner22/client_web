@@ -12,10 +12,13 @@ function toastButton(action: ToastAction): HTMLButtonElement {
 export function renderToast(host: HTMLElement, toast: ToastState | null): void {
   if (!toast) {
     host.classList.add("hidden");
+    host.removeAttribute("data-toast-placement");
     host.replaceChildren();
     return;
   }
   host.classList.remove("hidden");
+  const placement = toast.placement === "center" ? "center" : "bottom";
+  host.setAttribute("data-toast-placement", placement);
   const kind = toast.kind || "info";
   const actions = Array.isArray(toast.actions) ? toast.actions : [];
 
@@ -26,4 +29,3 @@ export function renderToast(host: HTMLElement, toast: ToastState | null): void {
 
   host.replaceChildren(box);
 }
-

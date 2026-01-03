@@ -384,6 +384,7 @@ export interface ToastState {
   message: string;
   kind?: ToastKind;
   actions?: ToastAction[];
+  placement?: "bottom" | "center";
 }
 
 export interface SkinInfo {

@@ -1737,14 +1737,15 @@ export function renderSidebar(
     return;
   }
 
-  // Desktop (browser): tabs like on mobile/PWA (Контакты/Доски/Чаты/Меню).
+  // Desktop (browser): compact tabs (Контакты/Доски/Чаты), меню через кнопку в шапке.
   type DesktopTab = "contacts" | "boards" | "chats" | "menu";
-  const showMenuTab = true;
+  const allowMenuTab = false;
+  const showMenuTab = false;
   const defaultDesktopTab: DesktopTab = unknownAttnPeers.length ? "contacts" : "chats";
   const rawDesktopTab = state.mobileSidebarTab;
   let activeDesktopTab: DesktopTab =
     rawDesktopTab === "contacts" || rawDesktopTab === "boards" || rawDesktopTab === "menu" ? rawDesktopTab : defaultDesktopTab;
-  if (!showMenuTab && activeDesktopTab === "menu") activeDesktopTab = defaultDesktopTab;
+  if (!allowMenuTab && activeDesktopTab === "menu") activeDesktopTab = defaultDesktopTab;
   if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeDesktopTab;
   const desktopMenuDockRow = showMenuTab
     ? (() => {

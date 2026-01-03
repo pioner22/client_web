@@ -2540,6 +2540,7 @@ export function mountApp(root: HTMLElement) {
       undo?: () => void;
       actions?: Array<{ id: string; label: string; primary?: boolean; onClick: () => void }>;
       timeoutMs?: number;
+      placement?: "bottom" | "center";
     }
   ) {
     const msg = String(message || "").trim();
@@ -2568,7 +2569,7 @@ export function mountApp(root: HTMLElement) {
     actions.push({ id: "dismiss", label: "×" });
     toastActionHandlers.set("dismiss", () => {});
 
-    const toast = { message: msg, kind: opts?.kind || "info", actions };
+    const toast = { message: msg, kind: opts?.kind || "info", actions, placement: opts?.placement };
     store.set({ toast });
 
     const ms = Number(opts?.timeoutMs) > 0 ? Number(opts?.timeoutMs) : defaultToastTimeoutMs(toast);
@@ -2628,6 +2629,7 @@ export function mountApp(root: HTMLElement) {
     showToast("Установить «Ягодку» как приложение?", {
       kind: "info",
       timeoutMs: 12000,
+      placement: "center",
       actions: [
         { id: "pwa-install", label: "Установить", primary: true, onClick: () => void runPwaInstallPrompt() },
         { id: "pwa-later", label: "Позже", onClick: () => markPwaInstallDismissed(localStorage, Date.now()) },
@@ -2660,6 +2662,7 @@ export function mountApp(root: HTMLElement) {
     showToast("iPhone/iPad: установить → Поделиться → «На экран Домой»", {
       kind: "info",
       timeoutMs: 14000,
+      placement: "center",
       actions: [
         { id: "pwa-ios-help", label: "Инструкция", primary: true, onClick: () => setPage("help") },
         { id: "pwa-ios-later", label: "Позже", onClick: () => markPwaInstallDismissed(localStorage, Date.now()) },
@@ -3768,7 +3771,12 @@ export function mountApp(root: HTMLElement) {
       const trimmed = nextKey ? applyConversationLimits(p, nextKey) : null;
       const nextRightPanel = p.rightPanel ? { kind: t.kind, id: t.id } : p.rightPanel;
       const nextReplyDraft = p.replyDraft && p.replyDraft.key === nextKey ? p.replyDraft : null;
-      const nextForwardDraft = p.forwardDraft && p.forwardDraft.key === nextKey ? p.forwardDraft : null;
+      const nextForwardDraft =
+        p.forwardDraft && nextKey
+          ? p.forwardDraft.key === nextKey
+            ? p.forwardDraft
+            : { ...p.forwardDraft, key: nextKey }
+          : null;
       return {
         ...p,
         selected: t,
@@ -10549,7 +10557,7 @@ export function mountApp(root: HTMLElement) {
       const conv = stSnapshot.conversations[selKey] || null;
       const msg = conv && idxNum >= 0 && idxNum < conv.length ? conv[idxNum] : null;
       if (!msg || msg.kind === "sys") return;
-      toggleChatSelection(selKey, msg);
+      openContextMenu({ kind: "message", id: msgLongPressIdx }, msgLongPressStartX, msgLongPressStartY);
     }, 520);
   });
 

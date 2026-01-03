@@ -23,6 +23,8 @@ function dayKey(ts: number): string {
   }
 }
 
+const EMPTY_CHAT: ChatMessage[] = [];
+
 function formatDayLabel(ts: number): string {
   try {
     const d = new Date(ts * 1000);
@@ -946,7 +948,7 @@ export function renderChat(layout: Layout, state: AppState) {
     friendLabels.set(String(f.id), formatUserLabel(f.display_name || "", f.handle || "", String(f.id || "")));
   }
 
-  const msgs = (key && state.conversations[key]) || [];
+  const msgs = key ? (state.conversations[key] ?? EMPTY_CHAT) : EMPTY_CHAT;
   const hasMore = Boolean(key && state.historyHasMore && state.historyHasMore[key]);
   const loadingMore = Boolean(key && state.historyLoading && state.historyLoading[key]);
   const searchActive = Boolean(state.chatSearchOpen && state.chatSearchQuery.trim());
@@ -955,6 +957,98 @@ export function renderChat(layout: Layout, state: AppState) {
   const activePos = searchActive ? Math.max(0, Math.min(hits.length ? hits.length - 1 : 0, state.chatSearchPos | 0)) : 0;
   const activeMsgIdx = searchActive && hits.length ? hits[activePos] : null;
   const searchResultsOpen = Boolean(searchActive && state.chatSearchResultsOpen);
+  const prevRender = hostState.__chatRenderState as
+    | {
+        key: string;
+        selectedKind: string;
+        selectedId: string;
+        page: string;
+        msgsRef: ChatMessage[];
+        historyLoaded: boolean;
+        historyLoading: boolean;
+        historyHasMore: boolean;
+        historyVirtualStart: number | null;
+        searchOpen: boolean;
+        searchQuery: string;
+        searchResultsOpen: boolean;
+        searchPos: number;
+        searchHitsRef: number[] | null;
+        selectionRef: AppState["chatSelection"] | null;
+        pinnedIdsRef: number[] | null;
+        pinnedActive: number | null;
+        lastRead: { id?: number; ts?: number } | null;
+        profilesRef: AppState["profiles"];
+        groupsRef: AppState["groups"];
+        boardsRef: AppState["boards"];
+        rightPanelRef: AppState["rightPanel"];
+        messageView: AppState["messageView"];
+        searchFilter: AppState["chatSearchFilter"];
+        searchDate: AppState["chatSearchDate"];
+      }
+    | null;
+  const pinnedIds = key && state.pinnedMessages ? state.pinnedMessages[key] : null;
+  const activeRaw = key && state.pinnedMessageActive ? state.pinnedMessageActive[key] : null;
+  const selectedKind = state.selected?.kind ? String(state.selected.kind) : "";
+  const selectedId = state.selected?.id ? String(state.selected.id) : "";
+  const historyVirtualStart = key && state.historyVirtualStart ? state.historyVirtualStart[key] ?? null : null;
+  const lastRead = key && state.lastRead ? state.lastRead[key] ?? null : null;
+  const selectionRef = selectionState;
+  const renderState = {
+    key,
+    selectedKind,
+    selectedId,
+    page: state.page,
+    msgsRef: msgs,
+    historyLoaded: Boolean(key && state.historyLoaded && state.historyLoaded[key]),
+    historyLoading: loadingMore,
+    historyHasMore: hasMore,
+    historyVirtualStart,
+    searchOpen: Boolean(state.chatSearchOpen),
+    searchQuery: String(state.chatSearchQuery || ""),
+    searchResultsOpen,
+    searchPos: state.chatSearchPos | 0,
+    searchHitsRef: hits,
+    selectionRef,
+    pinnedIdsRef: pinnedIds,
+    pinnedActive: typeof activeRaw === "number" ? activeRaw : null,
+    lastRead,
+    profilesRef: state.profiles,
+    groupsRef: state.groups,
+    boardsRef: state.boards,
+    rightPanelRef: state.rightPanel,
+    messageView: state.messageView,
+    searchFilter: state.chatSearchFilter,
+    searchDate: state.chatSearchDate,
+  };
+  const canSkipRender =
+    prevRender &&
+    prevRender.key === renderState.key &&
+    prevRender.selectedKind === renderState.selectedKind &&
+    prevRender.selectedId === renderState.selectedId &&
+    prevRender.page === renderState.page &&
+    prevRender.msgsRef === renderState.msgsRef &&
+    prevRender.historyLoaded === renderState.historyLoaded &&
+    prevRender.historyLoading === renderState.historyLoading &&
+    prevRender.historyHasMore === renderState.historyHasMore &&
+    prevRender.historyVirtualStart === renderState.historyVirtualStart &&
+    prevRender.searchOpen === renderState.searchOpen &&
+    prevRender.searchQuery === renderState.searchQuery &&
+    prevRender.searchResultsOpen === renderState.searchResultsOpen &&
+    prevRender.searchPos === renderState.searchPos &&
+    prevRender.searchHitsRef === renderState.searchHitsRef &&
+    prevRender.selectionRef === renderState.selectionRef &&
+    prevRender.pinnedIdsRef === renderState.pinnedIdsRef &&
+    prevRender.pinnedActive === renderState.pinnedActive &&
+    prevRender.lastRead === renderState.lastRead &&
+    prevRender.profilesRef === renderState.profilesRef &&
+    prevRender.groupsRef === renderState.groupsRef &&
+    prevRender.boardsRef === renderState.boardsRef &&
+    prevRender.rightPanelRef === renderState.rightPanelRef &&
+    prevRender.messageView === renderState.messageView &&
+    prevRender.searchFilter === renderState.searchFilter &&
+    prevRender.searchDate === renderState.searchDate;
+  if (canSkipRender) return;
+  hostState.__chatRenderState = renderState;
   const virtualEnabled = Boolean(key && shouldVirtualize(msgs.length, searchActive));
   const virtualAvgMap: Map<string, number> = hostState.__chatVirtualAvgHeights || new Map();
   hostState.__chatVirtualAvgHeights = virtualAvgMap;
@@ -1332,9 +1426,7 @@ export function renderChat(layout: Layout, state: AppState) {
   }
 
   let pinnedBar: HTMLElement | null = null;
-  const pinnedIds = key && state.pinnedMessages ? state.pinnedMessages[key] : null;
   if (Array.isArray(pinnedIds) && pinnedIds.length) {
-    const activeRaw = key && state.pinnedMessageActive ? state.pinnedMessageActive[key] : null;
     const activeId = typeof activeRaw === "number" && pinnedIds.includes(activeRaw) ? activeRaw : pinnedIds[0];
     const activeIdx = Math.max(0, pinnedIds.indexOf(activeId));
     const pinnedMsg = msgs.find((m) => typeof m.id === "number" && m.id === activeId) || null;
