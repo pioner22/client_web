@@ -192,6 +192,9 @@
   --composer-field-min-h: 54px;
   --composer-field-max-h: 120px;
   --composer-field-shadow: 0 1px 8px 1px rgb(0 0 0 / 12%);
+  --composer-helper-min-h: 45px;
+  --composer-helper-pad-y: 6px;
+  --composer-helper-pad-x: 10px;
   --composer-field-focus-border: var(--field-focus-border);
   --composer-field-placeholder: var(--field-placeholder);
   --composer-focus-ring-width: 1px;

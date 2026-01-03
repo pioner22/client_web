@@ -3446,7 +3446,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: 8px 10px;
+  padding: var(--composer-helper-pad-y) var(--composer-helper-pad-x);
+  min-height: var(--composer-helper-min-h);
   margin: 0 0 var(--sp-2);
   border-radius: var(--r-md);
   background: color-mix(in srgb, var(--panel2), transparent 18%);
@@ -3491,7 +3492,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: 8px 10px;
+  padding: var(--composer-helper-pad-y) var(--composer-helper-pad-x);
+  min-height: var(--composer-helper-min-h);
   margin: 0 0 var(--sp-2);
   border-radius: var(--r-md);
   background: color-mix(in srgb, var(--panel2), transparent 18%);
