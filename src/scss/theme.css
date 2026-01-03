@@ -296,7 +296,7 @@
   --msg-status-read-color: var(--focus);
   --messages-container-width: 728px;
   --chat-bubbles-max-width: min(100%, calc(var(--messages-container-width) - (var(--chat-pad) * 2)));
-  --msg-body-max-width: min(30rem, var(--messages-container-width));
+  --msg-body-max-width: min(85%, var(--messages-container-width));
   --message-handhelds-margin: 5.5625rem;
   --message-beside-button-size: 2.375rem;
   --message-beside-button-margin: calc((var(--message-beside-button-size) + 0.5rem) * -1);
