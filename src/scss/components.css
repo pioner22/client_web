@@ -2939,6 +2939,7 @@
   min-width: var(--composer-icon-btn-size);
   width: var(--composer-icon-btn-size);
   height: var(--composer-icon-btn-size);
+  margin-bottom: var(--composer-icon-offset);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
@@ -2954,6 +2955,7 @@
   min-width: var(--composer-icon-btn-size);
   width: var(--composer-icon-btn-size);
   height: var(--composer-icon-btn-size);
+  margin-bottom: var(--composer-icon-offset);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
@@ -2969,6 +2971,7 @@
   min-width: var(--composer-icon-btn-size);
   width: var(--composer-icon-btn-size);
   height: var(--composer-icon-btn-size);
+  margin-bottom: var(--composer-icon-offset);
   padding: 0;
   border-radius: 12px;
   border-color: transparent;
