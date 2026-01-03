@@ -2323,6 +2323,22 @@
   padding: 1px;
 }
 
+.msg:not(.msg-cont).msg-in .msg-body {
+  border-start-start-radius: var(--msg-in-radius);
+}
+
+.msg:not(.msg-cont).msg-out .msg-body {
+  border-start-end-radius: var(--msg-out-radius);
+}
+
+.msg.msg-tail.msg-in .msg-body {
+  border-end-start-radius: 0;
+}
+
+.msg.msg-tail.msg-out .msg-body {
+  border-end-end-radius: 0;
+}
+
 .msg-attach .file-row-chat {
   border: 0;
   background: transparent;
