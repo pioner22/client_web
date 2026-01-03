@@ -2060,7 +2060,7 @@ export function mountApp(root: HTMLElement) {
         delete nextPinned[key];
         delete nextActive[key];
       }
-      store.set({ pinnedMessages: nextPinned, pinnedMessageActive: nextActive, status: "Откреплено" });
+      store.set({ pinnedMessages: nextPinned, pinnedMessageActive: nextActive });
       if (st.selfId) savePinnedMessagesForUser(st.selfId, nextPinned);
       return;
     }
@@ -8936,7 +8936,6 @@ export function mountApp(root: HTMLElement) {
       const next = togglePin(st.pinned, key);
       store.set({ pinned: next });
       if (st.selfId) savePinsForUser(st.selfId, next);
-      showToast(st.pinned.includes(key) ? "Откреплено" : "Закреплено", { kind: "success" });
       close();
       return;
     }
@@ -9065,7 +9064,6 @@ export function mountApp(root: HTMLElement) {
         }
         store.set({ pinnedMessages: next, pinnedMessageActive: nextActive });
         if (st.selfId) savePinnedMessagesForUser(st.selfId, next);
-        showToast(wasPinned ? "Откреплено" : "Закреплено", { kind: "success" });
         close();
         return;
       }
