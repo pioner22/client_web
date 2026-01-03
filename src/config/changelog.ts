@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.415",
+    date: "2026-01-03",
+    fixed: [
+      "Desktop: убрано мигание значка закрепа в списке (без анимации)",
+      "Mobile: клики по списку стабильнее (локальное подавление long‑press, быстрее повторный тап)",
+    ],
+  },
+  {
     version: "0.1.414",
     date: "2026-01-03",
     fixed: [

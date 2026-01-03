@@ -7849,10 +7849,12 @@ export function mountApp(root: HTMLElement) {
     try {
       if (forceOff) {
         layout.inputWrap.classList.remove("composer-typing");
+        if (typeof document !== "undefined") document.documentElement.classList.remove("app-typing");
         return;
       }
       const active = Boolean(document.activeElement === layout.input && String(layout.input.value || "").trim());
       layout.inputWrap.classList.toggle("composer-typing", active);
+      if (typeof document !== "undefined") document.documentElement.classList.toggle("app-typing", active);
     } catch {
       // ignore
     }
@@ -10001,6 +10003,7 @@ export function mountApp(root: HTMLElement) {
   let longPressTimer: number | null = null;
   let longPressStartX = 0;
   let longPressStartY = 0;
+  const SIDEBAR_LONG_PRESS_SUPPRESS_MS = 400;
 
   const clearLongPress = () => {
     if (longPressTimer !== null) {
@@ -10286,15 +10289,11 @@ export function mountApp(root: HTMLElement) {
     longPressStartY = ev.clientY;
       longPressTimer = window.setTimeout(() => {
         longPressTimer = null;
-        const suppressUntil = Date.now() + 2400;
+        const suppressUntil = Date.now() + SIDEBAR_LONG_PRESS_SUPPRESS_MS;
         btn.setAttribute("data-ctx-suppress-until", String(suppressUntil));
-        if (typeof document !== "undefined" && document.documentElement) {
-          document.documentElement.dataset.sidebarLongPressUntil = String(suppressUntil);
-        }
-        armSidebarClickSuppression(2400);
         const prevTop = layout.sidebarBody.scrollTop;
         const prevLeft = layout.sidebarBody.scrollLeft;
-        sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, 2400);
+        sidebarCtxClickSuppression = armCtxClickSuppression(sidebarCtxClickSuppression, kind, id, SIDEBAR_LONG_PRESS_SUPPRESS_MS);
         openContextMenu({ kind, id }, longPressStartX, longPressStartY);
         window.requestAnimationFrame(() => {
           if (layout.sidebarBody.scrollTop !== prevTop) layout.sidebarBody.scrollTop = prevTop;
@@ -10339,12 +10338,11 @@ export function mountApp(root: HTMLElement) {
       sidebarCtxClickSuppression = consumed.state;
       const keySuppressed = consumed.suppressed;
       const root = typeof document !== "undefined" ? document.documentElement : null;
-      const longPressUntil = Number(root?.dataset.sidebarLongPressUntil || 0);
-      const longPressSuppressed = Number.isFinite(longPressUntil) && longPressUntil > Date.now();
-      const shouldSuppress = suppressSidebarClick || keySuppressed || longPressSuppressed;
+      const shouldSuppress = suppressSidebarClick || keySuppressed;
       if (!shouldSuppress) return;
       e.preventDefault();
       e.stopPropagation();
+      btn.removeAttribute("data-ctx-suppress-until");
       disarmSidebarClickSuppression();
     },
     true

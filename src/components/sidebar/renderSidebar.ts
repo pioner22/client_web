@@ -144,9 +144,7 @@ function shouldSuppressRowClick(btn: HTMLElement): boolean {
   if (Number.isFinite(localUntil) && localUntil > now) return true;
   if (typeof document === "undefined" || !document.documentElement) return false;
   const rootUntil = Number(document.documentElement.dataset.sidebarClickSuppressUntil || 0);
-  if (Number.isFinite(rootUntil) && rootUntil > now) return true;
-  const longPressUntil = Number(document.documentElement.dataset.sidebarLongPressUntil || 0);
-  return Number.isFinite(longPressUntil) && longPressUntil > now;
+  return Number.isFinite(rootUntil) && rootUntil > now;
 }
 
 function isImageName(name: string, mime?: string | null): boolean {
@@ -256,6 +254,7 @@ function friendRow(
   btn.addEventListener("click", (e) => {
     const ev = e as MouseEvent;
     if (shouldSuppressRowClick(btn)) {
+      btn.removeAttribute("data-ctx-suppress-until");
       ev.preventDefault();
       ev.stopPropagation();
       return;
@@ -320,6 +319,7 @@ function roomRow(
   btn.addEventListener("click", (e) => {
     const ev = e as MouseEvent;
     if (shouldSuppressRowClick(btn)) {
+      btn.removeAttribute("data-ctx-suppress-until");
       ev.preventDefault();
       ev.stopPropagation();
       return;

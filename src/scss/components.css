@@ -688,10 +688,18 @@
   line-height: 1;
   transform: scale(1);
   transform-origin: center;
-  animation: row-badge-in var(--chatlist-badge-transition-in) both;
-  transition: color var(--chatlist-badge-transition-in),
-    transform var(--chatlist-badge-transition-in),
-    opacity var(--chatlist-badge-transition-in);
+  animation: none;
+  transition: none;
+}
+
+html.app-typing .row-pin,
+html.app-typing .row-unread,
+html.app-typing .row-mention,
+html.app-typing .row-reaction,
+html.app-typing .row-draft,
+html.app-typing .row-muted {
+  animation: none;
+  transition: none;
 }
 
 .row-muted {
