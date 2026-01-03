@@ -2941,7 +2941,7 @@
   height: var(--composer-icon-btn-size);
   margin-bottom: var(--composer-icon-offset);
   padding: 0;
-  border-radius: 12px;
+  border-radius: 50%;
   border-color: transparent;
   background: transparent;
   color: var(--btn-text);
@@ -2957,7 +2957,7 @@
   height: var(--composer-icon-btn-size);
   margin-bottom: var(--composer-icon-offset);
   padding: 0;
-  border-radius: 12px;
+  border-radius: 50%;
   border-color: transparent;
   background: transparent;
   color: var(--btn-text);
@@ -2973,7 +2973,7 @@
   height: var(--composer-icon-btn-size);
   margin-bottom: var(--composer-icon-offset);
   padding: 0;
-  border-radius: 12px;
+  border-radius: 50%;
   border-color: transparent;
   background: transparent;
   color: var(--btn-text);
