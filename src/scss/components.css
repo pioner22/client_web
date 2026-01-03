@@ -2990,10 +2990,10 @@
   margin-left: var(--composer-send-gap);
   margin-bottom: var(--composer-icon-offset);
   padding: 0;
-  border-radius: 12px;
+  border-radius: 50%;
   border-color: transparent;
-  background: color-mix(in srgb, var(--btn-bg), transparent 12%);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
   font-size: 0;
   line-height: 1;
   display: grid;
@@ -3061,9 +3061,9 @@
 }
 
 .btn.composer-send:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--btn-bg-hover), transparent 18%);
+  background: color-mix(in srgb, var(--accent), #000 10%);
   border-color: transparent;
-  color: var(--accent);
+  color: #fff;
 }
 
 .btn.composer-board-editor:hover:not(:disabled),
@@ -3084,7 +3084,7 @@
 }
 
 .btn.composer-send:active:not(:disabled) {
-  background: color-mix(in srgb, var(--btn-bg-active), transparent 12%);
+  background: color-mix(in srgb, var(--accent), #000 18%);
   transform: translateY(1px);
 }
 
