@@ -3571,6 +3571,7 @@ export function mountApp(root: HTMLElement) {
 
   type HistoryPrependAnchor = {
     key: string;
+    msgKey?: string;
     msgId?: number;
     rectBottom?: number;
     scrollHeight: number;
@@ -3586,15 +3587,18 @@ export function mountApp(root: HTMLElement) {
     const hostRect = host.getBoundingClientRect();
     const children = Array.from(lines.children) as HTMLElement[];
     let fallback: HTMLElement | null = null;
+    const visible: Array<{ element: HTMLElement; rect: DOMRect }> = [];
     for (const child of children) {
       if (!child.classList.contains("msg")) continue;
       if (!fallback) fallback = child;
       const rect = child.getBoundingClientRect();
       if (rect.bottom >= hostRect.top && rect.top <= hostRect.bottom) {
-        return { element: child, rect };
+        visible.push({ element: child, rect });
+      } else if (visible.length && rect.top > hostRect.bottom) {
+        break;
       }
-      if (rect.top > hostRect.bottom) break;
     }
+    if (visible.length) return visible[visible.length - 1];
     if (fallback) return { element: fallback, rect: fallback.getBoundingClientRect() };
     return null;
   }
@@ -3604,10 +3608,34 @@ export function mountApp(root: HTMLElement) {
     const base: HistoryPrependAnchor = { key, scrollHeight: host.scrollHeight, scrollTop: host.scrollTop };
     const anchor = findHistoryAnchorElement();
     if (!anchor) return base;
+    const msgKey = String(anchor.element.getAttribute("data-msg-key") || "").trim();
     const rawMsgId = anchor.element.getAttribute("data-msg-id");
     const msgId = rawMsgId ? Number(rawMsgId) : NaN;
-    if (!Number.isFinite(msgId)) return base;
-    return { ...base, msgId, rectBottom: anchor.rect.bottom };
+    const next: HistoryPrependAnchor = { ...base, rectBottom: anchor.rect.bottom };
+    if (msgKey) return { ...next, msgKey };
+    if (Number.isFinite(msgId)) return { ...next, msgId };
+    return base;
+  }
+
+  function findHistoryAnchorByKey(anchor: HistoryPrependAnchor): HTMLElement | null {
+    const host = layout.chatHost;
+    const lines = host.firstElementChild as HTMLElement | null;
+    if (!lines) return null;
+    const children = Array.from(lines.children) as HTMLElement[];
+    for (const child of children) {
+      if (!child.classList.contains("msg")) continue;
+      if (anchor.msgKey) {
+        if (child.getAttribute("data-msg-key") === anchor.msgKey) return child;
+        continue;
+      }
+      if (anchor.msgId !== undefined) {
+        const raw = child.getAttribute("data-msg-id");
+        if (!raw) continue;
+        const msgId = Number(raw);
+        if (Number.isFinite(msgId) && msgId === anchor.msgId) return child;
+      }
+    }
+    return null;
   }
 
   function requestMoreHistory() {
@@ -11283,9 +11311,8 @@ export function mountApp(root: HTMLElement) {
         historyPrependAnchor = null;
       } else if (!st.historyLoading[anchorKey]) {
         let applied = false;
-        if (historyPrependAnchor.msgId && historyPrependAnchor.rectBottom !== undefined) {
-          const selector = `.msg[data-msg-id="${historyPrependAnchor.msgId}"]`;
-          const anchor = layout.chatHost.querySelector(selector) as HTMLElement | null;
+        if ((historyPrependAnchor.msgKey || historyPrependAnchor.msgId !== undefined) && historyPrependAnchor.rectBottom !== undefined) {
+          const anchor = findHistoryAnchorByKey(historyPrependAnchor);
           if (anchor) {
             const rect = anchor.getBoundingClientRect();
             const delta = rect.bottom - historyPrependAnchor.rectBottom;

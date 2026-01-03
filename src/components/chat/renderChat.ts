@@ -1058,6 +1058,8 @@ export function renderChat(layout: Layout, state: AppState) {
         line.setAttribute("data-msg-idx", String(group[group.length - 1].idx));
         const groupMsgId = Number(group[group.length - 1].msg.id ?? NaN);
         if (Number.isFinite(groupMsgId)) line.setAttribute("data-msg-id", String(groupMsgId));
+        const groupMsgKey = messageSelectionKey(group[group.length - 1].msg);
+        if (groupMsgKey) line.setAttribute("data-msg-key", groupMsgKey);
         if (hit) line.classList.add("msg-hit");
         if (active) line.classList.add("msg-hit-active");
         lineItems.push(line);
@@ -1073,6 +1075,8 @@ export function renderChat(layout: Layout, state: AppState) {
     line.setAttribute("data-msg-idx", String(msgIdx));
     const msgId = Number(m.id ?? NaN);
     if (Number.isFinite(msgId)) line.setAttribute("data-msg-id", String(msgId));
+    const msgKey = messageSelectionKey(m);
+    if (msgKey) line.setAttribute("data-msg-key", msgKey);
     if (selectionSet) {
       const selKey = messageSelectionKey(m);
       if (selKey && selectionSet.has(selKey)) line.classList.add("msg-selected");

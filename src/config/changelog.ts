@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.400",
+    date: "2026-01-03",
+    improved: ["История: восстановление скролла при prepend учитывает anchor key (устойчивее на локальных сообщениях)"],
+  },
+  {
     version: "0.1.399",
     date: "2026-01-03",
     improved: ["Чат: pinned-bottom и кнопка «Вниз» используют точный maxScrollTop"],
