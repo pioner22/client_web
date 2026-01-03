@@ -901,11 +901,12 @@ export function renderChat(layout: Layout, state: AppState) {
   const selectionSet =
     selectionState && Array.isArray(selectionState.ids) && selectionState.ids.length ? new Set(selectionState.ids) : null;
   const selectionCount = selectionSet ? selectionSet.size : 0;
+  const maxScrollTop = () => Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
   layout.chat.classList.toggle("chat-board", Boolean(state.selected && state.selected.kind === "board"));
   const prevKey = String(scrollHost.getAttribute("data-chat-key") || "");
   const keyChanged = key !== prevKey;
   const prevScrollTop = scrollHost.scrollTop;
-  const atBottomBefore = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
+  const atBottomBefore = scrollHost.scrollTop >= maxScrollTop() - 24;
   const sticky = hostState.__stickBottom;
   const stickyActive = Boolean(sticky && sticky.active && sticky.key === key);
   // NOTE: autoscroll-on-open/sent is handled in app/mountApp.ts (pendingChatAutoScroll).
@@ -1477,7 +1478,7 @@ export function renderChat(layout: Layout, state: AppState) {
       // ignore
     }
   }
-  const atBottomNow = scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 24;
+  const atBottomNow = scrollHost.scrollTop >= maxScrollTop() - 24;
   layout.chatJump.classList.toggle("hidden", !key || shouldStick || atBottomNow);
   if (shouldStick) {
     const stickNow = () => {

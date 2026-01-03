@@ -1478,6 +1478,8 @@ export function mountApp(root: HTMLElement) {
     return count;
   };
 
+  const getMaxScrollTop = (host: HTMLElement) => Math.max(0, host.scrollHeight - host.clientHeight);
+
   const updateChatJumpVisibility = () => {
     chatJumpRaf = null;
     const btn = layout.chatJump;
@@ -1505,7 +1507,7 @@ export function mountApp(root: HTMLElement) {
       return;
     }
     const host = layout.chatHost;
-    const atBottom = host.scrollTop + host.clientHeight >= host.scrollHeight - 24;
+    const atBottom = host.scrollTop >= getMaxScrollTop(host) - 24;
     btn.classList.toggle("hidden", atBottom);
   };
   const scheduleChatJumpVisibility = () => {
@@ -1680,7 +1682,7 @@ export function mountApp(root: HTMLElement) {
       lastChatScrollTop = scrollTop;
       const hostState = layout.chatHost as any;
       const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
-      const atBottom = scrollTop + layout.chatHost.clientHeight >= layout.chatHost.scrollHeight - 24;
+      const atBottom = scrollTop >= getMaxScrollTop(layout.chatHost) - 24;
       if (key) {
         const stick = hostState.__stickBottom;
         if (!stick || stick.key !== key) {
@@ -1813,7 +1815,7 @@ export function mountApp(root: HTMLElement) {
       }
       const host = layout.chatHost;
       const top = host.scrollTop <= 0;
-      const bottom = host.scrollTop + host.clientHeight >= host.scrollHeight - 1;
+      const bottom = host.scrollTop >= getMaxScrollTop(host) - 1;
       if ((dy > 0 && top) || (dy < 0 && bottom)) {
         e.preventDefault();
       }
@@ -2745,7 +2747,7 @@ export function mountApp(root: HTMLElement) {
     if (!currentKey || currentKey !== k) return true;
     const sticky = (host as any).__stickBottom;
     if (sticky && sticky.active && sticky.key === k) return true;
-    return host.scrollTop + host.clientHeight >= host.scrollHeight - 24;
+    return host.scrollTop >= getMaxScrollTop(host) - 24;
   }
 
   function shouldShowRightOverlay(st: AppState): boolean {
