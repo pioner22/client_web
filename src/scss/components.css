@@ -1681,6 +1681,11 @@
   display: none;
 }
 
+.msg-date.msg-sep::before,
+.msg-date.msg-sep::after {
+  display: none;
+}
+
 .msg-unread {
   color: var(--focus);
   padding: 0;
@@ -1726,7 +1731,10 @@
 
 .msg-date .msg-sep-text {
   border: 0;
-  background: color-mix(in srgb, var(--panel2), transparent 35%);
+  background: color-mix(in srgb, var(--panel2), var(--line) 20%);
+  color: var(--text);
+  padding: 4px 12px;
+  font-weight: var(--font-weight-bold, 600);
 }
 
 .msg {
