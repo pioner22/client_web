@@ -361,6 +361,95 @@ export function renderSidebar(
       return false;
     }
   })();
+  const hostState = target as any;
+  const prevRender = hostState.__sidebarRenderState as
+    | {
+        page: string;
+        selectedKind: string;
+        selectedId: string;
+        mobileTab: string;
+        sidebarQuery: string;
+        sidebarChatFilter: string;
+        conn: string;
+        authed: boolean;
+        selfId: string;
+        isMobile: boolean;
+        mobileUi: boolean;
+        disableSearchWhileTyping: boolean;
+        friendsRef: AppState["friends"];
+        groupsRef: AppState["groups"];
+        boardsRef: AppState["boards"];
+        profilesRef: AppState["profiles"];
+        conversationsRef: AppState["conversations"];
+        pinnedRef: AppState["pinned"];
+        mutedRef: AppState["muted"];
+        pendingInRef: AppState["pendingIn"];
+        pendingOutRef: AppState["pendingOut"];
+        pendingGroupInvitesRef: AppState["pendingGroupInvites"];
+        pendingGroupJoinRequestsRef: AppState["pendingGroupJoinRequests"];
+        pendingBoardInvitesRef: AppState["pendingBoardInvites"];
+        fileOffersInRef: AppState["fileOffersIn"];
+      }
+    | null;
+  const selectedKind = state.selected?.kind ? String(state.selected.kind) : "";
+  const selectedId = state.selected?.id ? String(state.selected.id) : "";
+  const sidebarQueryRaw = compactOneLine(String((state as any).sidebarQuery || ""));
+  const renderState = {
+    page: state.page,
+    selectedKind,
+    selectedId,
+    mobileTab: String(state.mobileSidebarTab || ""),
+    sidebarQuery: sidebarQueryRaw,
+    sidebarChatFilter: String(state.sidebarChatFilter || ""),
+    conn: String(state.conn || ""),
+    authed: Boolean(state.authed),
+    selfId: String(state.selfId || ""),
+    isMobile,
+    mobileUi,
+    disableSearchWhileTyping,
+    friendsRef: state.friends,
+    groupsRef: state.groups,
+    boardsRef: state.boards,
+    profilesRef: state.profiles,
+    conversationsRef: state.conversations,
+    pinnedRef: state.pinned,
+    mutedRef: state.muted,
+    pendingInRef: state.pendingIn,
+    pendingOutRef: state.pendingOut,
+    pendingGroupInvitesRef: state.pendingGroupInvites,
+    pendingGroupJoinRequestsRef: state.pendingGroupJoinRequests,
+    pendingBoardInvitesRef: state.pendingBoardInvites,
+    fileOffersInRef: state.fileOffersIn,
+  };
+  const canSkipRender =
+    prevRender &&
+    prevRender.page === renderState.page &&
+    prevRender.selectedKind === renderState.selectedKind &&
+    prevRender.selectedId === renderState.selectedId &&
+    prevRender.mobileTab === renderState.mobileTab &&
+    prevRender.sidebarQuery === renderState.sidebarQuery &&
+    prevRender.sidebarChatFilter === renderState.sidebarChatFilter &&
+    prevRender.conn === renderState.conn &&
+    prevRender.authed === renderState.authed &&
+    prevRender.selfId === renderState.selfId &&
+    prevRender.isMobile === renderState.isMobile &&
+    prevRender.mobileUi === renderState.mobileUi &&
+    prevRender.disableSearchWhileTyping === renderState.disableSearchWhileTyping &&
+    prevRender.friendsRef === renderState.friendsRef &&
+    prevRender.groupsRef === renderState.groupsRef &&
+    prevRender.boardsRef === renderState.boardsRef &&
+    prevRender.profilesRef === renderState.profilesRef &&
+    prevRender.conversationsRef === renderState.conversationsRef &&
+    prevRender.pinnedRef === renderState.pinnedRef &&
+    prevRender.mutedRef === renderState.mutedRef &&
+    prevRender.pendingInRef === renderState.pendingInRef &&
+    prevRender.pendingOutRef === renderState.pendingOutRef &&
+    prevRender.pendingGroupInvitesRef === renderState.pendingGroupInvitesRef &&
+    prevRender.pendingGroupJoinRequestsRef === renderState.pendingGroupJoinRequestsRef &&
+    prevRender.pendingBoardInvitesRef === renderState.pendingBoardInvitesRef &&
+    prevRender.fileOffersInRef === renderState.fileOffersInRef;
+  if (canSkipRender) return;
+  hostState.__sidebarRenderState = renderState;
 
   const toggleClass = (node: HTMLElement | null | undefined, cls: string, enabled: boolean) => {
     if (!node) return;
@@ -542,7 +631,6 @@ export function renderSidebar(
   const boards = state.boards || [];
   const groups = state.groups || [];
   const sel = state.selected;
-  const sidebarQueryRaw = compactOneLine(String((state as any).sidebarQuery || ""));
   const sidebarQuery = sidebarQueryRaw.toLowerCase();
   const hasSidebarQuery = Boolean(sidebarQuery);
   const sidebarChatFilter: SidebarChatFilter = state.sidebarChatFilter === "unread" ? "unread" : "all";

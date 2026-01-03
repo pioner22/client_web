@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.414",
+    date: "2026-01-03",
+    fixed: [
+      "Desktop: снижены лаги/мигание закрепов при наборе текста (sidebar/chat render cache)",
+      "Chat: стабильный skip‑render при выключенном поиске",
+    ],
+  },
+  {
     version: "0.1.413",
     date: "2026-01-03",
     fixed: [

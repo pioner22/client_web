@@ -24,6 +24,7 @@ function dayKey(ts: number): string {
 }
 
 const EMPTY_CHAT: ChatMessage[] = [];
+const EMPTY_HITS: number[] = [];
 
 function formatDayLabel(ts: number): string {
   try {
@@ -952,7 +953,7 @@ export function renderChat(layout: Layout, state: AppState) {
   const hasMore = Boolean(key && state.historyHasMore && state.historyHasMore[key]);
   const loadingMore = Boolean(key && state.historyLoading && state.historyLoading[key]);
   const searchActive = Boolean(state.chatSearchOpen && state.chatSearchQuery.trim());
-  const hits = searchActive ? state.chatSearchHits || [] : [];
+  const hits = searchActive ? state.chatSearchHits || EMPTY_HITS : EMPTY_HITS;
   const hitSet = searchActive && hits.length ? new Set(hits) : null;
   const activePos = searchActive ? Math.max(0, Math.min(hits.length ? hits.length - 1 : 0, state.chatSearchPos | 0)) : 0;
   const activeMsgIdx = searchActive && hits.length ? hits[activePos] : null;
