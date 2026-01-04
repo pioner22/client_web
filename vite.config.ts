@@ -22,6 +22,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           const cleanId = id.replace(/\\/g, "/");
+          if (cleanId.includes("/src/helpers/ui/emojiCatalog")) return "emoji-catalog";
           if (cleanId.includes("node_modules")) return "vendor";
           if (cleanId.includes("/src/config/")) return "config";
           if (cleanId.includes("/src/pages/")) return "pages";

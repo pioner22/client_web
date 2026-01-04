@@ -91,13 +91,8 @@ import { armCtxClickSuppression, consumeCtxClickSuppression, type CtxClickSuppre
 import { applyIosInputAssistantWorkaround, isIOS, isStandaloneDisplayMode } from "../helpers/ui/iosInputAssistant";
 import { installDebugHud } from "../helpers/ui/debugHud";
 import { installSidebarLeftResize } from "../helpers/ui/sidebarLeftResize";
-import {
-  EMOJI_RECENTS_ID,
-  buildEmojiSections,
-  filterEmojiSections,
-  insertTextAtSelection,
-  updateEmojiRecents,
-} from "../helpers/ui/emoji";
+import { EMOJI_RECENTS_ID, insertTextAtSelection, loadEmojiCatalog, updateEmojiRecents } from "../helpers/ui/emoji";
+import type { EmojiCategory } from "../helpers/ui/emojiCatalog";
 import { createRafScrollLock } from "../helpers/ui/rafScrollLock";
 import { readScrollSnapshot } from "../helpers/ui/scrollSnapshot";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
@@ -393,6 +388,9 @@ export function mountApp(root: HTMLElement) {
   const store = new Store<AppState>(createInitialState());
   applyTheme(store.get().theme);
   applyMessageView(store.get().messageView);
+  const handleMessageViewResize = () => applyMessageView(store.get().messageView);
+  window.addEventListener("resize", handleMessageViewResize);
+  window.visualViewport?.addEventListener("resize", handleMessageViewResize);
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
   const layout = createLayout(root, { iosStandalone });
   const debugHud = installDebugHud({ mount: root, chatHost: layout.chatHost, getState: () => store.get() });
@@ -499,6 +497,27 @@ export function mountApp(root: HTMLElement) {
       else ids.add(selId);
       return { ...prev, chatSelection: ids.size ? { key, ids: Array.from(ids) } : null };
     });
+  }
+
+  function resolveChatSelection(st: AppState): { key: string; messages: ChatMessage[]; ids: string[] } | null {
+    const sel = st.selected;
+    const selection = st.chatSelection;
+    if (!sel || !selection || !Array.isArray(selection.ids) || !selection.ids.length) return null;
+    const key = conversationKey(sel);
+    if (!key || selection.key !== key) return null;
+    const conv = st.conversations[key] || [];
+    if (!conv.length) return null;
+    const idSet = new Set(selection.ids);
+    const messages: ChatMessage[] = [];
+    const ids: string[] = [];
+    for (const msg of conv) {
+      const selId = messageSelectionKey(msg);
+      if (!selId || !idSet.has(selId)) continue;
+      messages.push(msg);
+      ids.push(selId);
+    }
+    if (!messages.length) return null;
+    return { key, messages, ids };
   }
 
   function formatSearchServerShareLine(st: AppState, entry: SearchResultEntry): string {
@@ -2076,10 +2095,7 @@ export function mountApp(root: HTMLElement) {
       const activeId = typeof activeRaw === "number" && ids.includes(activeRaw) ? activeRaw : ids[0];
       const conv = st.conversations[key] || [];
       const idx = conv.findIndex((m) => typeof m.id === "number" && m.id === activeId);
-      if (idx < 0) {
-        showToast("Сообщение пока не загружено", { kind: "info" });
-        return;
-      }
+      if (idx < 0) return;
       const row = layout.chat.querySelector(`[data-msg-idx="${idx}"]`) as HTMLElement | null;
       if (!row) return;
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -2426,6 +2442,31 @@ export function mountApp(root: HTMLElement) {
         gateway.send({ type: "file_get", file_id: fileId });
         store.set({ status: `Скачивание: ${name}` });
       })();
+      return;
+    }
+  });
+
+  layout.chatSelectionBar.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement | null;
+    const btn = target?.closest("button[data-action^='chat-selection-']") as HTMLButtonElement | null;
+    if (!btn || btn.hasAttribute("disabled")) return;
+    const action = String(btn.getAttribute("data-action") || "");
+    if (!action) return;
+    e.preventDefault();
+    if (action === "chat-selection-cancel") {
+      clearChatSelection();
+      return;
+    }
+    if (action === "chat-selection-forward") {
+      handleChatSelectionForward();
+      return;
+    }
+    if (action === "chat-selection-delete") {
+      handleChatSelectionDelete();
+      return;
+    }
+    if (action === "chat-selection-pin") {
+      handleChatSelectionPin();
       return;
     }
   });
@@ -6931,7 +6972,7 @@ export function mountApp(root: HTMLElement) {
           : null;
     const forwardDraft =
       opts?.forwardDraft !== undefined
-        ? opts.forwardDraft && opts.forwardDraft.key === key
+        ? opts.forwardDraft && (opts?.target || opts.forwardDraft.key === key)
           ? opts.forwardDraft
           : null
         : st.forwardDraft && st.forwardDraft.key === key
@@ -7463,6 +7504,10 @@ export function mountApp(root: HTMLElement) {
   let emojiSearch = "";
   let emojiHideTimer: number | null = null;
   let emojiLastQuery = "";
+  type EmojiCatalog = Awaited<ReturnType<typeof loadEmojiCatalog>>;
+  let emojiCatalog: EmojiCatalog | null = null;
+  let emojiCatalogLoading = false;
+  let emojiCatalogError: string | null = null;
 
   function loadEmojiRecents(): string[] {
     try {
@@ -7489,6 +7534,23 @@ export function mountApp(root: HTMLElement) {
       window.clearTimeout(emojiHideTimer);
       emojiHideTimer = null;
     }
+  }
+
+  function ensureEmojiCatalog() {
+    if (emojiCatalog || emojiCatalogLoading) return;
+    emojiCatalogLoading = true;
+    emojiCatalogError = null;
+    void loadEmojiCatalog()
+      .then((mod) => {
+        emojiCatalog = mod;
+        emojiCatalogLoading = false;
+        if (emojiOpen) renderEmojiPopover();
+      })
+      .catch(() => {
+        emojiCatalogLoading = false;
+        emojiCatalogError = "Не удалось загрузить эмодзи";
+        if (emojiOpen) renderEmojiPopover();
+      });
   }
 
   function setActiveEmojiTab(sectionId: string) {
@@ -7642,7 +7704,7 @@ export function mountApp(root: HTMLElement) {
     return pop;
   }
 
-  function renderEmojiTabs(sections: ReturnType<typeof buildEmojiSections>) {
+  function renderEmojiTabs(sections: EmojiCategory[]) {
     if (!emojiTabs) return;
     if (!sections.length) {
       emojiTabs.replaceChildren();
@@ -7669,7 +7731,7 @@ export function mountApp(root: HTMLElement) {
     emojiTabs.replaceChildren(...buttons);
   }
 
-  function renderEmojiContent(sections: ReturnType<typeof buildEmojiSections>, hasQuery: boolean) {
+  function renderEmojiContent(sections: EmojiCategory[], hasQuery: boolean) {
     if (!emojiContent) return;
     const contentNodes: HTMLElement[] = [];
     for (const section of sections) {
@@ -7697,10 +7759,35 @@ export function mountApp(root: HTMLElement) {
     emojiContent.replaceChildren(...contentNodes);
   }
 
+  function renderEmojiLoading() {
+    if (emojiTabs) emojiTabs.replaceChildren();
+    if (!emojiContent) return;
+    const msg = emojiCatalogError ? emojiCatalogError : "Загрузка эмодзи…";
+    emojiContent.replaceChildren(el("div", { class: "emoji-empty" }, [msg]));
+  }
+
   function renderEmojiPopover() {
     const pop = ensureEmojiPopover();
-    const sections = buildEmojiSections(loadEmojiRecents());
-    const filtered = filterEmojiSections(sections, emojiSearch);
+    if (!emojiCatalog) {
+      ensureEmojiCatalog();
+      if (emojiSearchInput) {
+        emojiSearchInput.disabled = true;
+        emojiSearchInput.placeholder = "Загрузка эмодзи";
+        if (emojiSearchInput.value) emojiSearchInput.value = "";
+      }
+      if (emojiSearchWrap) emojiSearchWrap.classList.remove("has-value");
+      pop.classList.remove("emoji-searching");
+      renderEmojiLoading();
+      return;
+    }
+
+    if (emojiSearchInput) {
+      emojiSearchInput.disabled = false;
+      emojiSearchInput.placeholder = "Поиск эмодзи";
+    }
+
+    const sections = emojiCatalog.buildEmojiSections(loadEmojiRecents());
+    const filtered = emojiCatalog.filterEmojiSections(sections, emojiSearch);
     const hasQuery = emojiSearch.trim().length > 0;
 
     if (emojiSearchInput && emojiSearchInput.value !== emojiSearch) {
@@ -8114,6 +8201,163 @@ export function mountApp(root: HTMLElement) {
         suggestedAt: Date.now() + 60 * 60 * 1000,
       },
     });
+  };
+
+  const openForwardModal = (draftInput: MessageHelperDraft | MessageHelperDraft[]) => {
+    const st = store.get();
+    if (st.modal) return;
+    const drafts = Array.isArray(draftInput) ? draftInput.filter(Boolean) : draftInput ? [draftInput] : [];
+    if (!drafts.length) return;
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    store.set({
+      modal: {
+        kind: "forward_select",
+        forwardDraft: drafts[0],
+        ...(drafts.length > 1 ? { forwardDrafts: drafts } : {}),
+      },
+      replyDraft: null,
+      forwardDraft: null,
+    });
+  };
+
+  const sendForwardToTargets = (targets: TargetRef[]) => {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "forward_select") return;
+    const drafts =
+      Array.isArray(modal.forwardDrafts) && modal.forwardDrafts.length
+        ? modal.forwardDrafts
+        : modal.forwardDraft
+          ? [modal.forwardDraft]
+          : [];
+    if (!drafts.length) {
+      closeModal();
+      return;
+    }
+    const seen = new Set<string>();
+    const uniqueTargets = targets.filter((t) => {
+      const key = conversationKey(t);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (!uniqueTargets.length) return;
+    uniqueTargets.forEach((target) => {
+      drafts.forEach((draft) => {
+        sendChat({ target, text: "", forwardDraft: draft });
+      });
+    });
+    const total = uniqueTargets.length * drafts.length;
+    store.set({ modal: null, chatSelection: null });
+  };
+
+  const buildSelectionDrafts = (st: AppState, selection: { key: string; messages: ChatMessage[] } | null): MessageHelperDraft[] => {
+    if (!selection) return [];
+    return selection.messages
+      .map((msg) => buildHelperDraft(st, selection.key, msg))
+      .filter((draft): draft is MessageHelperDraft => Boolean(draft));
+  };
+
+  const handleChatSelectionForward = () => {
+    const st = store.get();
+    const selection = resolveChatSelection(st);
+    const drafts = buildSelectionDrafts(st, selection);
+    if (!drafts.length) return;
+    openForwardModal(drafts);
+  };
+
+  const handleChatSelectionDelete = () => {
+    const st = store.get();
+    const selection = resolveChatSelection(st);
+    if (!selection) return;
+    const { key, messages, ids } = selection;
+    const idSet = new Set(ids);
+    const canRemoteDelete = Boolean(st.authed && st.conn === "connected");
+    const outgoingIds = canRemoteDelete
+      ? messages
+          .filter((msg) => msg.kind === "out" && typeof msg.id === "number" && msg.id > 0 && st.selfId && String(msg.from) === String(st.selfId))
+          .map((msg) => Math.trunc(Number(msg.id)))
+      : [];
+    let nextPinnedSnapshot: Record<string, number[]> | null = null;
+    store.set((prev) => {
+      const conv = prev.conversations[key] || [];
+      if (!conv.length) return { ...prev, chatSelection: null };
+      const nextConv = conv.filter((msg) => {
+        const selId = messageSelectionKey(msg);
+        return !(selId && idSet.has(selId));
+      });
+      let nextPinned = prev.pinnedMessages;
+      let nextActive = prev.pinnedMessageActive;
+      const curPinned = prev.pinnedMessages[key];
+      if (Array.isArray(curPinned) && curPinned.length) {
+        const remaining = new Set<number>();
+        for (const msg of nextConv) {
+          const id = typeof msg.id === "number" && Number.isFinite(msg.id) ? Math.trunc(msg.id) : 0;
+          if (id > 0) remaining.add(id);
+        }
+        const nextList = curPinned.filter((id) => remaining.has(id));
+        if (nextList.length !== curPinned.length) {
+          nextPinned = { ...prev.pinnedMessages };
+          nextActive = { ...prev.pinnedMessageActive };
+          if (nextList.length) {
+            nextPinned[key] = nextList;
+            if (!nextList.includes(nextActive[key])) nextActive[key] = nextList[0];
+          } else {
+            delete nextPinned[key];
+            delete nextActive[key];
+          }
+          nextPinnedSnapshot = nextPinned;
+        }
+      }
+      return {
+        ...prev,
+        conversations: { ...prev.conversations, [key]: nextConv },
+        pinnedMessages: nextPinned,
+        pinnedMessageActive: nextActive,
+        chatSelection: null,
+      };
+    });
+    if (nextPinnedSnapshot && st.selfId) savePinnedMessagesForUser(st.selfId, nextPinnedSnapshot);
+    outgoingIds.forEach((id) => gateway.send({ type: "message_delete", id }));
+  };
+
+  const handleChatSelectionPin = () => {
+    const st = store.get();
+    const selection = resolveChatSelection(st);
+    if (!selection) return;
+    const { key, messages } = selection;
+    const msgIds = messages
+      .map((msg) => (typeof msg.id === "number" && Number.isFinite(msg.id) ? Math.trunc(msg.id) : 0))
+      .filter((id) => id > 0);
+    if (!msgIds.length) return;
+    const allPinned = msgIds.every((id) => isPinnedMessage(st.pinnedMessages, key, id));
+    let nextPinned = st.pinnedMessages;
+    let changed = false;
+    for (const id of msgIds) {
+      const pinned = isPinnedMessage(nextPinned, key, id);
+      if (allPinned) {
+        if (pinned) {
+          nextPinned = togglePinnedMessage(nextPinned, key, id);
+          changed = true;
+        }
+      } else if (!pinned) {
+        nextPinned = togglePinnedMessage(nextPinned, key, id);
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    const nextList = nextPinned[key] || [];
+    const nextActive = { ...st.pinnedMessageActive };
+    if (nextList.length) {
+      if (!nextList.includes(nextActive[key])) nextActive[key] = nextList[0];
+    } else {
+      delete nextActive[key];
+    }
+    store.set({ pinnedMessages: nextPinned, pinnedMessageActive: nextActive, chatSelection: null });
+    if (st.selfId) savePinnedMessagesForUser(st.selfId, nextPinned);
   };
 
   layout.sendBtn.addEventListener("contextmenu", (e) => {
@@ -9068,7 +9312,7 @@ export function mountApp(root: HTMLElement) {
         return;
       }
 
-      if (itemId === "msg_reply" || itemId === "msg_forward") {
+      if (itemId === "msg_reply") {
         if (!selKey || !msg) {
           close();
           return;
@@ -9078,12 +9322,23 @@ export function mountApp(root: HTMLElement) {
           close();
           return;
         }
-        if (itemId === "msg_reply") {
-          store.set({ replyDraft: draft, forwardDraft: null });
-        } else {
-          store.set({ forwardDraft: draft, replyDraft: null });
-        }
+        store.set({ replyDraft: draft, forwardDraft: null });
         scheduleFocusComposer();
+        close();
+        return;
+      }
+
+      if (itemId === "msg_forward") {
+        if (!selKey || !msg) {
+          close();
+          return;
+        }
+        const draft = buildHelperDraft(st, selKey, msg);
+        if (!draft) {
+          close();
+          return;
+        }
+        openForwardModal(draft);
         close();
         return;
       }
@@ -10792,6 +11047,7 @@ export function mountApp(root: HTMLElement) {
     onMembersRemove: () => membersRemoveSubmit(),
     onRename: () => renameSubmit(),
     onSendSchedule: () => sendScheduleSubmit(),
+    onForwardSend: (targets: TargetRef[]) => sendForwardToTargets(targets),
     onInviteUser: () => inviteUserSubmit(),
     onAuthRequest: (peer: string) => requestAuth(peer),
     onAuthAccept: (peer: string) => acceptAuth(peer),
@@ -10915,11 +11171,9 @@ export function mountApp(root: HTMLElement) {
           }
         }
         if (!ids.length) {
-          store.set({ status: "Нет сообщений для удаления" });
           return;
         }
         ids.forEach((id) => gateway.send({ type: "message_delete", id }));
-        store.set({ status: "Удаляем сообщения…" });
         return;
       }
       store.set((prev) => {
@@ -10962,26 +11216,19 @@ export function mountApp(root: HTMLElement) {
           pinnedMessageActive: nextActive,
         };
       });
-      showToast("Удалено у вас", { kind: "success" });
     },
     onSearchHistoryForward: (items: Array<{ target: TargetRef; idx: number }>) => {
       const st = store.get();
       const list = Array.isArray(items) ? items : [];
       const text = formatSearchHistoryShareText(st, list);
-      if (!text) {
-        store.set({ status: "Нет сообщений для пересылки" });
-        return;
-      }
+      if (!text) return;
       const target = st.selected;
       const canSend = canSendShareNow(st, target);
       if (canSend.ok && target) {
         appendShareTextToComposer(text, target);
-        store.set({ status: list.length > 1 ? "Пересланы сообщения в поле ввода" : "Переслано сообщение в поле ввода" });
         return;
       }
-      copyText(text).then((ok) => {
-        store.set({ status: ok ? (list.length > 1 ? "Сообщения скопированы" : "Сообщение скопировано") : "Не удалось скопировать сообщение" });
-      });
+      copyText(text);
     },
     onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => {
       lastUserInputAt = Date.now();
@@ -11001,12 +11248,9 @@ export function mountApp(root: HTMLElement) {
       const canSend = canSendShareNow(st, target);
       if (canSend.ok && target) {
         appendShareTextToComposer(text, target);
-        store.set({ status: list.length > 1 ? "Пересланы ID в поле ввода" : "Переслан ID в поле ввода" });
         return;
       }
-      copyText(text).then((ok) => {
-        store.set({ status: ok ? "ID скопирован" : "Не удалось скопировать ID" });
-      });
+      copyText(text);
     },
     onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => {
       const display_name = draft.displayName.trim();

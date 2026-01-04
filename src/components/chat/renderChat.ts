@@ -2,6 +2,7 @@ import { el } from "../../helpers/dom/el";
 import { formatTime } from "../../helpers/time";
 import { conversationKey } from "../../helpers/chat/conversationKey";
 import { messageSelectionKey } from "../../helpers/chat/chatSelection";
+import { isPinnedMessage } from "../../helpers/chat/pinnedMessages";
 import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import type { AppState, ChatMessage, ChatMessageRef, FileOfferIn, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
@@ -1431,10 +1432,11 @@ export function renderChat(layout: Layout, state: AppState) {
     const activeId = typeof activeRaw === "number" && pinnedIds.includes(activeRaw) ? activeRaw : pinnedIds[0];
     const activeIdx = Math.max(0, pinnedIds.indexOf(activeId));
     const pinnedMsg = msgs.find((m) => typeof m.id === "number" && m.id === activeId) || null;
-    const preview =
+    const previewRaw =
       pinnedMsg?.attachment?.kind === "file"
         ? `Файл: ${String(pinnedMsg.attachment.name || "файл")}`
         : String(pinnedMsg?.text || "").trim() || `Сообщение #${activeId}`;
+    const preview = previewRaw.length > 140 ? `${previewRaw.slice(0, 137)}…` : previewRaw;
     const titleNodes: Array<string | HTMLElement> = ["Закреплено"];
     if (pinnedIds.length > 1) {
       titleNodes.push(
@@ -1444,10 +1446,17 @@ export function renderChat(layout: Layout, state: AppState) {
       );
     }
 
-    const jumpBtn = el("button", { class: "chat-pinned-body", type: "button", "data-action": "chat-pinned-jump", "aria-label": "Показать закреплённое сообщение" }, [
-      el("div", { class: "chat-pinned-title" }, titleNodes),
-      el("div", { class: "chat-pinned-text" }, [preview.length > 140 ? `${preview.slice(0, 137)}…` : preview]),
-    ]);
+    const jumpBtn = el(
+      "button",
+      { class: "chat-pinned-body", type: "button", "data-action": "chat-pinned-jump", "aria-label": "Показать закреплённое сообщение" },
+      [
+        el("div", { class: "chat-pinned-main" }, [
+          el("span", { class: "chat-pinned-title" }, titleNodes),
+          el("span", { class: "chat-pinned-text" }, [preview]),
+        ]),
+        el("span", { class: "chat-pinned-jump", "aria-hidden": "true" }, ["→"]),
+      ]
+    );
     const closeBtn = el("button", { class: "btn chat-pinned-close", type: "button", "data-action": "chat-pinned-unpin", "aria-label": "Открепить" }, [
       "×",
     ]);
@@ -1475,6 +1484,20 @@ export function renderChat(layout: Layout, state: AppState) {
     layout.chatSearchFooter.replaceChildren();
   }
   if (selectionCount > 0) {
+    const selectedMsgs =
+      selectionSet && selectionSet.size
+        ? msgs.filter((msg) => {
+            const selKey = messageSelectionKey(msg);
+            return Boolean(selKey && selectionSet.has(selKey));
+          })
+        : [];
+    const pinCandidates = selectedMsgs
+      .map((msg) => (typeof msg.id === "number" && Number.isFinite(msg.id) ? Math.trunc(msg.id) : 0))
+      .filter((id) => id > 0);
+    const canPin = pinCandidates.length > 0;
+    const allPinned = canPin && pinCandidates.every((id) => isPinnedMessage(state.pinnedMessages, key, id));
+    const pinLabel = allPinned ? "📍" : "📌";
+    const pinTitle = allPinned ? "Открепить" : "Закрепить";
     const cancelBtn = el(
       "button",
       {
@@ -1482,12 +1505,46 @@ export function renderChat(layout: Layout, state: AppState) {
         type: "button",
         "data-action": "chat-selection-cancel",
         "aria-label": "Отменить выбор",
-        title: "Отменить выбор",
       },
       ["×"]
     );
     const countNode = el("div", { class: "chat-selection-count" }, [formatSelectionCount(selectionCount)]);
-    const inner = el("div", { class: "chat-selection-inner" }, [cancelBtn, countNode]);
+    const forwardBtn = el(
+      "button",
+      {
+        class: "btn chat-selection-action",
+        type: "button",
+        "data-action": "chat-selection-forward",
+        "aria-label": "Переслать выбранные сообщения",
+        title: "Переслать",
+      },
+      ["↪"]
+    );
+    const deleteBtn = el(
+      "button",
+      {
+        class: "btn chat-selection-action chat-selection-danger",
+        type: "button",
+        "data-action": "chat-selection-delete",
+        "aria-label": "Удалить выбранные сообщения",
+        title: "Удалить",
+      },
+      ["🗑️"]
+    );
+    const pinBtn = el(
+      "button",
+      {
+        class: "btn chat-selection-action",
+        type: "button",
+        "data-action": "chat-selection-pin",
+        "aria-label": pinTitle,
+        title: pinTitle,
+        ...(canPin ? {} : { disabled: "true" }),
+      },
+      [pinLabel]
+    );
+    const actions = el("div", { class: "chat-selection-actions" }, [forwardBtn, deleteBtn, pinBtn]);
+    const inner = el("div", { class: "chat-selection-inner" }, [cancelBtn, countNode, actions]);
     layout.chatSelectionBar.classList.remove("hidden");
     layout.chatSelectionBar.replaceChildren(inner);
   } else {

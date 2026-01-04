@@ -1299,6 +1299,8 @@ html.app-typing .row-muted {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .btn.chat-selection-cancel {
@@ -1310,6 +1312,49 @@ html.app-typing .row-muted {
   border: 1px solid color-mix(in srgb, var(--line), transparent 20%);
   color: var(--text);
   cursor: pointer;
+}
+
+.chat-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.btn.chat-selection-action {
+  min-width: 38px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sel), transparent 30%);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 30%);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.btn.chat-selection-action:hover {
+  background: color-mix(in srgb, var(--sel), transparent 10%);
+}
+
+.btn.chat-selection-action:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
+.btn.chat-selection-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+  background: color-mix(in srgb, var(--line), transparent 70%);
+}
+
+.btn.chat-selection-action.chat-selection-danger {
+  background: color-mix(in srgb, var(--danger), transparent 70%);
+  border-color: color-mix(in srgb, var(--danger), transparent 40%);
+}
+
+.btn.chat-selection-action.chat-selection-danger:hover {
+  background: color-mix(in srgb, var(--danger), transparent 50%);
 }
 
 .btn.chat-selection-cancel:hover {
@@ -1343,17 +1388,20 @@ html.app-typing .row-muted {
 .chat-pinned {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px 10px;
   margin-bottom: var(--sp-2);
   border: 1px solid color-mix(in srgb, var(--line), transparent 25%);
-  background: color-mix(in srgb, var(--panel), transparent 35%);
-  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--panel2), transparent 25%);
+  border-radius: 12px;
 }
 
 .chat-pinned-body {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: transparent;
   border: 0;
   padding: 0;
@@ -1369,13 +1417,20 @@ html.app-typing .row-muted {
 
 .chat-pinned-title {
   font-size: 11px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 2px;
   display: flex;
   align-items: baseline;
+  gap: 6px;
+}
+
+.chat-pinned-main {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .chat-pinned-count {
@@ -1385,7 +1440,7 @@ html.app-typing .row-muted {
 }
 
 .chat-pinned-text {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -1400,24 +1455,29 @@ html.app-typing .row-muted {
 .chat-pinned-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+}
+
+.chat-pinned-jump {
+  font-size: 14px;
+  color: color-mix(in srgb, var(--muted), transparent 10%);
 }
 
 .btn.chat-pinned-nav {
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   display: grid;
   place-items: center;
   line-height: 1;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .btn.chat-pinned-close {
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -2078,6 +2138,7 @@ html.app-typing .row-muted {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
+  width: 100%;
 }
 
 :root[data-msg-view="plain"] .msg-meta {

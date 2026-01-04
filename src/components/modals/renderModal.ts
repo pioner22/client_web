@@ -1,4 +1,4 @@
-import type { AppState } from "../../stores/types";
+import type { AppState, TargetRef } from "../../stores/types";
 import { renderAuthModal } from "./renderAuthModal";
 import { renderUpdateModal } from "./renderUpdateModal";
 import { renderPwaUpdateModal } from "./renderPwaUpdateModal";
@@ -15,6 +15,7 @@ import { renderActionModal } from "./renderActionModal";
 import { renderContextMenu } from "./renderContextMenu";
 import { renderBoardPostModal } from "./renderBoardPostModal";
 import { renderSendScheduleModal } from "./renderSendScheduleModal";
+import { renderForwardModal } from "./renderForwardModal";
 
 export interface ModalActions {
   onAuthLogin: () => void;
@@ -46,6 +47,7 @@ export interface ModalActions {
   onFileOfferReject: (fileId: string) => void;
   onContextMenuAction: (itemId: string) => void;
   onFileViewerNavigate: (dir: "prev" | "next") => void;
+  onForwardSend: (targets: TargetRef[]) => void;
 }
 
 export function renderModal(state: AppState, actions: ModalActions): HTMLElement | null {
@@ -82,6 +84,19 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
   if (kind === "send_schedule") {
     return renderSendScheduleModal(modal.text, modal.suggestedAt, modal.message, {
       onSchedule: actions.onSendSchedule,
+      onCancel: actions.onClose,
+    });
+  }
+  if (kind === "forward_select") {
+    const drafts =
+      Array.isArray(modal.forwardDrafts) && modal.forwardDrafts.length
+        ? modal.forwardDrafts
+        : modal.forwardDraft
+          ? [modal.forwardDraft]
+          : [];
+    if (!drafts.length) return null;
+    return renderForwardModal(drafts, state.friends || [], state.groups || [], state.boards || [], state.profiles || {}, modal.message, {
+      onSend: actions.onForwardSend,
       onCancel: actions.onClose,
     });
   }

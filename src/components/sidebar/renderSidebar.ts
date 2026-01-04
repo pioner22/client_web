@@ -1148,7 +1148,7 @@ export function renderSidebar(
 
       const chatFixedRows: HTMLElement[] = [];
       if (pinnedDialogRows.length) {
-        chatFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows);
+        chatFixedRows.push(...pinnedDialogRows);
       }
       chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
       const chatList = buildChatlist(
@@ -1185,7 +1185,7 @@ export function renderSidebar(
 
       const boardFixedRows: HTMLElement[] = [];
       if (pinnedBoardRows.length) {
-        boardFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows);
+        boardFixedRows.push(...pinnedBoardRows);
       }
       boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
       const boardList = buildChatlist(
@@ -1224,7 +1224,7 @@ export function renderSidebar(
         const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
         const contactFixedRows: HTMLElement[] = [];
         if (pinnedContactRowsCompact.length) {
-          contactFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+          contactFixedRows.push(...pinnedContactRowsCompact);
         }
         if (allRows.length) {
           contactFixedRows.push(el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]));
@@ -1236,7 +1236,7 @@ export function renderSidebar(
       const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
       const contactFixedRows: HTMLElement[] = [];
       if (pinnedContactRowsCompact.length) {
-        contactFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+        contactFixedRows.push(...pinnedContactRowsCompact);
       }
       if (compactUnknownAttnRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
@@ -1542,7 +1542,7 @@ export function renderSidebar(
 
       const chatFixedRows: HTMLElement[] = [];
       if (pinnedDialogRows.length) {
-        chatFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows);
+        chatFixedRows.push(...pinnedDialogRows);
       }
       chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
       const chatList = buildChatlist(
@@ -1580,7 +1580,7 @@ export function renderSidebar(
 
       const boardFixedRows: HTMLElement[] = [];
       if (pinnedBoardRows.length) {
-        boardFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows);
+        boardFixedRows.push(...pinnedBoardRows);
       }
       boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
       const boardList = buildChatlist(
@@ -1619,7 +1619,7 @@ export function renderSidebar(
         const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
         const contactFixedRows: HTMLElement[] = [];
         if (pinnedContactRowsCompact.length) {
-          contactFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+          contactFixedRows.push(...pinnedContactRowsCompact);
         }
         if (allRows.length) {
           contactFixedRows.push(el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]));
@@ -1643,7 +1643,7 @@ export function renderSidebar(
 
       const contactFixedRows: HTMLElement[] = [];
       if (pinnedContactRowsCompact.length) {
-        contactFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedContactRowsCompact);
+        contactFixedRows.push(...pinnedContactRowsCompact);
       }
       if (unknownAttnRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
@@ -2023,7 +2023,7 @@ export function renderSidebar(
 
     const chatFixedRows: HTMLElement[] = [];
     if (pinnedDialogRows.length) {
-      chatFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedDialogRows);
+      chatFixedRows.push(...pinnedDialogRows);
     }
     chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
     const chatList = buildChatlist(
@@ -2061,7 +2061,7 @@ export function renderSidebar(
 
     const boardFixedRows: HTMLElement[] = [];
     if (pinnedBoardRows.length) {
-      boardFixedRows.push(el("div", { class: "pane-section" }, ["Закреплённые"]), ...pinnedBoardRows);
+      boardFixedRows.push(...pinnedBoardRows);
     }
     boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
     const boardList = buildChatlist(

@@ -160,6 +160,7 @@ export interface RenderActions {
   onMembersRemove: () => void;
   onRename: () => void;
   onSendSchedule: () => void;
+  onForwardSend: (targets: TargetRef[]) => void;
   onInviteUser: () => void;
   onAuthRequest: (peer: string) => void;
   onAuthAccept: (peer: string) => void;
@@ -522,6 +523,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     onFileSendConfirm: actions.onFileSendConfirm,
     onFileViewerNavigate: actions.onFileViewerNavigate,
     onContextMenuAction: actions.onContextMenuAction,
+    onForwardSend: actions.onForwardSend,
   };
   const authMessage = state.modal?.kind === "auth" ? state.modal.message : undefined;
   const authModalNode = authModalVisible

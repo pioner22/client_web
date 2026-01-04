@@ -371,6 +371,12 @@
   --modal-actions-mt: 10px;
 }
 
+:root[data-msg-wide="1"] {
+  --messages-container-width: 100%;
+  --chat-bubbles-max-width: 100%;
+  --msg-body-max-width: 100%;
+}
+
 @media (min-width: 926px) {
   html.sidebar-left-collapsed {
     --sidebar-width-min: var(--sidebar-collapsed-width);

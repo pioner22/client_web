@@ -7,6 +7,7 @@ export type ModalKind =
   | "update"
   | "pwa_update"
   | "send_schedule"
+  | "forward_select"
   | "members_add"
   | "members_remove"
   | "rename"
@@ -164,6 +165,12 @@ export type ModalState =
       replyDraft?: MessageHelperDraft | null;
       forwardDraft?: MessageHelperDraft | null;
       suggestedAt?: number;
+      message?: string;
+    }
+  | {
+      kind: "forward_select";
+      forwardDraft?: MessageHelperDraft | null;
+      forwardDrafts?: MessageHelperDraft[] | null;
       message?: string;
     }
   | { kind: "board_post"; boardId: string }
