@@ -375,6 +375,8 @@
     --composer-input-pad-y: 6px;
     --composer-field-pad: 4px;
     --composer-field-min-h: 46px;
+    --composer-helper-min-h: 40px;
+    --composer-helper-pad-y: 4px;
     --composer-btn-size: var(--composer-field-min-h);
     --composer-icon-btn-size: 38px;
     --composer-icon-offset: 4px;
