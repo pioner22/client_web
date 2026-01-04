@@ -373,7 +373,7 @@
     --composer-input-font-family: var(--font-family);
     --composer-input-font-weight: 500;
     --composer-input-pad-y: 6px;
-    --composer-field-pad: 4px;
+    --composer-field-pad: 6px;
     --composer-field-min-h: 46px;
     --composer-helper-min-h: 40px;
     --composer-helper-pad-y: 4px;
