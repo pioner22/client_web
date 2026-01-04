@@ -8897,6 +8897,7 @@ export function mountApp(root: HTMLElement) {
       addGroup([makeItem("sidebar_status", statusLabel, st.conn === "connected" ? "●" : "○", { disabled: true })]);
       addGroup([
         makeItem("sidebar_profile", "Профиль", "☺", { disabled: !canAct }),
+        makeItem("sidebar_search", "Поиск", "🔍", { disabled: !canAct }),
         makeItem("sidebar_files", "Файлы", "▦", { disabled: !canAct }),
         makeItem("sidebar_info", "Info", "?", { disabled: false }),
       ]);
@@ -9148,6 +9149,11 @@ export function mountApp(root: HTMLElement) {
       if (stSnapshot.authed && stSnapshot.conn === "connected") {
         gateway.send({ type: "profile_get" });
       }
+      return;
+    }
+    if (itemId === "sidebar_search") {
+      close();
+      setPage("search");
       return;
     }
     if (itemId === "sidebar_files") {
