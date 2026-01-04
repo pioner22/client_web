@@ -3797,14 +3797,6 @@ export function mountApp(root: HTMLElement) {
       }
       return;
     }
-    suppressMobileSidebarCloseStickBottom = true;
-    suppressFloatingSidebarCloseStickBottom = true;
-    try {
-      closeMobileSidebar();
-    } finally {
-      suppressMobileSidebarCloseStickBottom = false;
-      suppressFloatingSidebarCloseStickBottom = false;
-    }
     const prevKey = prev.selected ? conversationKey(prev.selected) : "";
     const nextKey = conversationKey(t);
     if (nextKey) {
@@ -3849,6 +3841,14 @@ export function mountApp(root: HTMLElement) {
         ...(trimmed ? { conversations: trimmed.conversations, historyCursor: trimmed.historyCursor } : {}),
       };
     });
+    suppressMobileSidebarCloseStickBottom = true;
+    suppressFloatingSidebarCloseStickBottom = true;
+    try {
+      closeMobileSidebar();
+    } finally {
+      suppressMobileSidebarCloseStickBottom = false;
+      suppressFloatingSidebarCloseStickBottom = false;
+    }
     if (prev.authed) {
       const userId = prev.selfId || prev.authRememberedId || "";
       if (userId) saveLastActiveTarget(userId, t);

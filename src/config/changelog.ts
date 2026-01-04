@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.442",
+    date: "2026-01-04",
+    fixed: ["Mobile: контакты открываются по одному тапу"],
+  },
+  {
     version: "0.1.441",
     date: "2026-01-04",
     improved: ["Desktop/PWA: меню убрано из табов, доступно через ☰", "Шапка: стрелка «назад» из чата, затем ☰ для меню"],
