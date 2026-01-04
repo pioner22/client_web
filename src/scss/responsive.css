@@ -380,6 +380,7 @@
     --composer-btn-size: var(--composer-field-min-h);
     --composer-icon-btn-size: 40px;
     --composer-icon-offset: 3px;
+    --composer-send-gap: 6px;
   }
 
   :root[data-skin][data-msg-view="plain"] {
