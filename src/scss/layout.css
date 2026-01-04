@@ -321,7 +321,7 @@ body.has-right-col .right-col {
 
 .composer-row {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   min-height: var(--composer-field-min-h);
 }
 
