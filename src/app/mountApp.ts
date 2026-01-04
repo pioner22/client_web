@@ -3426,17 +3426,6 @@ export function mountApp(root: HTMLElement) {
     if (prevPage === "group_create" && page !== "group_create") resetCreateMembers("group_create");
     if (prevPage === "board_create" && page !== "board_create") resetCreateMembers("board_create");
     if (page !== "main") closeEmojiPopover();
-    // Mobile: не допускаем "пустой экран" (main без выбранного чата) — в этом случае
-    // возвращаем пользователя в список (sidebar) вместо закрытия drawer.
-    const keepSidebar = Boolean(
-      (mobileSidebarMq.matches || floatingSidebarMq.matches) && page === "main" && !store.get().selected && !store.get().modal
-    );
-    if (page !== "main" || !keepSidebar) {
-      closeMobileSidebar();
-    } else {
-      if (mobileSidebarMq.matches) setMobileSidebarOpen(true);
-      else if (floatingSidebarMq.matches) setFloatingSidebarOpen(true);
-    }
     store.set((prev) => ({
       ...prev,
       page,
@@ -3458,6 +3447,18 @@ export function mountApp(root: HTMLElement) {
           }
         : {}),
     }));
+    // Mobile: не допускаем "пустой экран" (main без выбранного чата) — в этом случае
+    // возвращаем пользователя в список (sidebar) вместо закрытия drawer.
+    const st = store.get();
+    const keepSidebar = Boolean(
+      (mobileSidebarMq.matches || floatingSidebarMq.matches) && st.page === "main" && !st.selected && !st.modal
+    );
+    if (st.page !== "main" || !keepSidebar) {
+      closeMobileSidebar();
+    } else {
+      if (mobileSidebarMq.matches) setMobileSidebarOpen(true);
+      else if (floatingSidebarMq.matches) setFloatingSidebarOpen(true);
+    }
   }
 
   function openUserPage(id: string) {
