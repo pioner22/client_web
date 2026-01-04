@@ -253,7 +253,7 @@ function friendRow(
   btn.setAttribute("data-online", f.online ? "1" : "0");
   btn.addEventListener("click", (e) => {
     const ev = e as MouseEvent;
-    if (ctx && shouldSuppressRowClick(btn)) {
+    if (btn.hasAttribute("data-ctx-kind") && shouldSuppressRowClick(btn)) {
       btn.removeAttribute("data-ctx-suppress-until");
       ev.preventDefault();
       ev.stopPropagation();
@@ -318,7 +318,7 @@ function roomRow(
   }
   btn.addEventListener("click", (e) => {
     const ev = e as MouseEvent;
-    if (shouldSuppressRowClick(btn)) {
+    if (btn.hasAttribute("data-ctx-kind") && shouldSuppressRowClick(btn)) {
       btn.removeAttribute("data-ctx-suppress-until");
       ev.preventDefault();
       ev.stopPropagation();
