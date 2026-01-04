@@ -372,6 +372,7 @@
     --composer-field-bg: color-mix(in srgb, var(--panel2), transparent 4%);
     --composer-input-font-family: var(--font-family);
     --composer-input-font-weight: 500;
+    --composer-input-pad-y: 6px;
     --composer-field-pad: 4px;
     --composer-field-min-h: 46px;
     --composer-btn-size: var(--composer-field-min-h);
