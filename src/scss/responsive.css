@@ -603,7 +603,7 @@
     background: color-mix(in srgb, var(--composer-bg), transparent 10%);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
-    padding-bottom: max(0px, calc(var(--safe-bottom-layout-pad) - var(--sp-3)));
+    padding-bottom: max(var(--composer-pad-y), calc(var(--safe-bottom-layout-pad) - var(--sp-3)));
   }
 
   /* iOS: blur/transparency can create an extra "dark strip" near the bottom safe-area. Keep the bar solid. */
