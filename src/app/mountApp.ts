@@ -3187,6 +3187,13 @@ export function mountApp(root: HTMLElement) {
       }));
       return;
     }
+    if (action === "chat-back") {
+      e.preventDefault();
+      const st = store.get();
+      if (st.modal) return;
+      clearSelectedTarget();
+      return;
+    }
     if (action !== "sidebar-toggle") return;
     e.preventDefault();
     const st = store.get();
@@ -3876,6 +3883,48 @@ export function mountApp(root: HTMLElement) {
         scheduleFocusComposer();
       }
     }
+  }
+
+  function clearSelectedTarget() {
+    const prev = store.get();
+    if (!prev.selected) return;
+    const prevKey = conversationKey(prev.selected);
+    const prevText = layout.input.value || "";
+    const nextDrafts = prevKey ? updateDraftMap(prev.drafts, prevKey, prevText) : prev.drafts;
+    store.set((p) => ({
+      ...p,
+      selected: null,
+      page: "main",
+      rightPanel: null,
+      drafts: nextDrafts,
+      input: "",
+      editing: null,
+      replyDraft: null,
+      forwardDraft: null,
+      chatSelection: null,
+      boardComposerOpen: false,
+      chatSearchOpen: false,
+      chatSearchResultsOpen: false,
+      chatSearchQuery: "",
+      chatSearchDate: "",
+      chatSearchFilter: "all",
+      chatSearchHits: [],
+      chatSearchPos: 0,
+      chatSearchCounts: createChatSearchCounts(),
+    }));
+    try {
+      if (layout.input.value) layout.input.value = "";
+      autosizeInput(layout.input);
+      scheduleBoardEditorPreview();
+    } catch {
+      // ignore
+    }
+    scheduleSaveDrafts(store);
+    if (mobileSidebarMq.matches) {
+      setMobileSidebarOpen(true);
+      return;
+    }
+    if (floatingSidebarMq.matches) setFloatingSidebarOpen(true);
   }
 
   function searchableMessagesForSelected(st: AppState) {

@@ -1362,7 +1362,7 @@ export function renderSidebar(
   // not just as "scroll-to" shortcuts.
   if (isStandaloneDisplayMode()) {
     const rawTab = state.mobileSidebarTab;
-    const showMenuTab = true;
+    const showMenuTab = isMobile;
     const defaultTab: MobileSidebarTab = unknownAttnPeers.length ? "contacts" : "chats";
     let activeTab: MobileSidebarTab =
       rawTab === "contacts" || rawTab === "boards" || (showMenuTab && rawTab === "menu") ? rawTab : defaultTab;

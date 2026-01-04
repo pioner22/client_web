@@ -54,10 +54,10 @@ export function renderHeader(layout: Layout, state: AppState) {
 
   const chatSearchBtn = null;
   const navBackToMain = state.page !== "main";
-  const navShowsBack = navBackToMain || (state.page === "main" && Boolean(state.selected));
-  const navAction = navBackToMain ? "nav-back" : "sidebar-toggle";
-  const navTitle = navBackToMain ? "Назад" : navShowsBack ? "Список" : "Меню";
-  const navAria = navBackToMain ? "Назад" : navShowsBack ? "Открыть список чатов" : "Открыть меню";
+  const navBackFromChat = Boolean(state.page === "main" && state.selected);
+  const navAction = navBackToMain ? "nav-back" : navBackFromChat ? "chat-back" : "sidebar-toggle";
+  const navTitle = navBackToMain || navBackFromChat ? "Назад" : "Меню";
+  const navAria = navBackToMain ? "Назад" : navBackFromChat ? "Назад к списку" : "Открыть меню";
   const navIcon = navAction === "sidebar-toggle" ? "☰" : "←";
 
   layout.headerLeft.replaceChildren(
