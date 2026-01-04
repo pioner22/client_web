@@ -378,8 +378,8 @@
     --composer-helper-min-h: 40px;
     --composer-helper-pad-y: 4px;
     --composer-btn-size: var(--composer-field-min-h);
-    --composer-icon-btn-size: 38px;
-    --composer-icon-offset: 4px;
+    --composer-icon-btn-size: 40px;
+    --composer-icon-offset: 3px;
   }
 
   :root[data-skin][data-msg-view="plain"] {
