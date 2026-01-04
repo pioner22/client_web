@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.438",
+    date: "2026-01-04",
+    fixed: ["iPhone: safe-area снизу держится ≥34px, композер не клипится"],
+  },
+  {
     version: "0.1.437",
     date: "2026-01-04",
     notes: ["Тесты: запуск без предупреждения Node о --localstorage-file"],

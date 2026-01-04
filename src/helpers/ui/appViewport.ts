@@ -159,13 +159,14 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       vvTop,
       vvBottom: Math.round(coveredBottom),
       gapBottom,
+      safeBottomRaw,
       vhHeight: vhHeight > 0 ? vhHeight : 0,
     };
   };
 
   const apply = () => {
     rafId = null;
-    const { height, keyboard, vvTop, vvBottom, gapBottom, vhHeight } = read();
+    const { height, keyboard, vvTop, vvBottom, gapBottom, safeBottomRaw, vhHeight } = read();
     if (!height) {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
       if (docEl?.classList) docEl.classList.remove("kbd-open");
@@ -181,11 +182,18 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
     // and creates an ugly gap above the keyboard. Override it to 0 while keyboard is open.
     // Use viewport-based detection too: sometimes activeElement is not yet an input when resize fires.
+    // iPhone safe-area bottom is typically 34px; keep at least that when safe-area is present.
+    const minSafeBottomPad = (() => {
+      if (!iosEnv || keyboard) return 0;
+      const candidate = Math.max(safeBottomRaw, gapBottom);
+      return candidate >= 28 ? 34 : 0;
+    })();
     if (keyboard) {
       setVar("--safe-bottom-pad", "0px");
       setVar("--safe-bottom-raw", "0px");
     } else {
-      setVar("--safe-bottom-pad", null);
+      if (minSafeBottomPad) setVar("--safe-bottom-pad", `${Math.max(safeBottomRaw, minSafeBottomPad)}px`);
+      else setVar("--safe-bottom-pad", null);
       setVar("--safe-bottom-raw", null);
     }
 
