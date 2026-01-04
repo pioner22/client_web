@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.437",
+    date: "2026-01-04",
+    notes: ["Тесты: запуск без предупреждения Node о --localstorage-file"],
+  },
+  {
     version: "0.1.436",
     date: "2026-01-04",
     improved: ["Mobile: фильтр «Упоминания» в списке чатов"],
