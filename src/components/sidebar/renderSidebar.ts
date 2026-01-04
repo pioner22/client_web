@@ -1281,13 +1281,19 @@ export function renderSidebar(
     });
     toggleClass(profileRow, "row-settings", true);
     profileRow.setAttribute("title", "Настройки профиля и интерфейса");
+    const searchRow = roomRow("🔍", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
+      sub: "Глобальный поиск",
+      time: null,
+      hasDraft: false,
+    });
+    searchRow.setAttribute("title", "Глобальный поиск");
     const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
       sub: "История и загрузки",
       time: null,
       hasDraft: false,
     });
     filesRow.setAttribute("title", "Передача файлов и история");
-    const navRows: HTMLElement[] = [profileRow, filesRow];
+    const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
 
     const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
       sub: "Групповой чат и приглашения",
@@ -1695,13 +1701,19 @@ export function renderSidebar(
     });
     toggleClass(profileRow, "row-settings", true);
     profileRow.setAttribute("title", "Настройки профиля и интерфейса");
+    const searchRow = roomRow("🔍", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
+      sub: "Глобальный поиск",
+      time: null,
+      hasDraft: false,
+    });
+    searchRow.setAttribute("title", "Глобальный поиск");
     const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
       sub: "История и загрузки",
       time: null,
       hasDraft: false,
     });
     filesRow.setAttribute("title", "Передача файлов и история");
-    const navRows: HTMLElement[] = [profileRow, filesRow];
+    const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
 
     const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
       sub: "Групповой чат и приглашения",
@@ -1942,13 +1954,19 @@ export function renderSidebar(
     });
     toggleClass(profileRow, "row-settings", true);
     profileRow.setAttribute("title", "Настройки профиля и интерфейса");
+    const searchRow = roomRow("🔍", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
+      sub: "Глобальный поиск",
+      time: null,
+      hasDraft: false,
+    });
+    searchRow.setAttribute("title", "Глобальный поиск");
     const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
       sub: "История и загрузки",
       time: null,
       hasDraft: false,
     });
     filesRow.setAttribute("title", "Передача файлов и история");
-    const navRows: HTMLElement[] = [profileRow, filesRow];
+    const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
 
     const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
       sub: "Групповой чат и приглашения",

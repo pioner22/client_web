@@ -235,7 +235,7 @@ test("mobile sidebar: Меню содержит навигацию/создан�
         const target = document.createElement("div");
         helper.renderSidebar(target, mkState("menu"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         assert.equal(hasText(target, "Навигация"), true);
-        assert.equal(hasText(target, "Поиск"), false);
+        assert.equal(hasText(target, "Поиск"), true);
         assert.equal(hasText(target, "Создать чат"), true);
         assert.equal(hasText(target, "Подсказки"), true);
         assert.equal(hasText(target, "Онлайн"), false);

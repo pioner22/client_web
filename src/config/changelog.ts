@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.440",
+    date: "2026-01-04",
+    improved: ["Меню: добавлен глобальный поиск"],
+  },
+  {
     version: "0.1.439",
     date: "2026-01-04",
     fixed: ["iOS: починен appViewport (композер/скролл не пропадают)", "PWA: safe-bottom-pad учитывает gap safe-area"],
