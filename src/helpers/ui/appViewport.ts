@@ -55,7 +55,15 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     docStyle?.setProperty(name, value);
   };
 
-  const read = (): { height: number; keyboard: boolean; vvTop: number; vvBottom: number; gapBottom: number; vhHeight: number } => {
+  const read = (): {
+    height: number;
+    keyboard: boolean;
+    vvTop: number;
+    vvBottom: number;
+    gapBottom: number;
+    safeBottomRaw: number;
+    vhHeight: number;
+  } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 32;
     // On iOS/Safari even a small (few px) mismatch between layout viewport and visual viewport
@@ -184,7 +192,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // Use viewport-based detection too: sometimes activeElement is not yet an input when resize fires.
     // iPhone safe-area bottom is typically 34px; keep at least that when safe-area is present.
     const minSafeBottomPad = (() => {
-      if (!iosEnv || keyboard) return 0;
+      if (!isIos || keyboard) return 0;
       const candidate = Math.max(safeBottomRaw, gapBottom);
       return candidate >= 28 ? 34 : 0;
     })();
