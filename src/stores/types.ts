@@ -219,7 +219,7 @@ export type PageKind =
 export type AuthMode = "auto" | "register" | "login";
 
 export type MobileSidebarTab = "chats" | "contacts" | "boards" | "menu";
-export type SidebarChatFilter = "all" | "unread";
+export type SidebarChatFilter = "all" | "unread" | "mentions";
 
 export type TargetKind = "dm" | "group" | "board";
 

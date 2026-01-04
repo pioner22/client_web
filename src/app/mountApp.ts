@@ -11015,7 +11015,7 @@ export function mountApp(root: HTMLElement) {
     },
     onSetMobileSidebarTab: (tab: MobileSidebarTab) => setMobileSidebarTab(tab),
     onSetSidebarChatFilter: (filter: SidebarChatFilter) => {
-      const next = filter === "unread" ? "unread" : "all";
+      const next = filter === "unread" || filter === "mentions" ? filter : "all";
       if (store.get().sidebarChatFilter === next) return;
       store.set({ sidebarChatFilter: next });
     },
