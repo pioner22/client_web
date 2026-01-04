@@ -253,7 +253,7 @@ function friendRow(
   btn.setAttribute("data-online", f.online ? "1" : "0");
   btn.addEventListener("click", (e) => {
     const ev = e as MouseEvent;
-    if (shouldSuppressRowClick(btn)) {
+    if (ctx && shouldSuppressRowClick(btn)) {
       btn.removeAttribute("data-ctx-suppress-until");
       ev.preventDefault();
       ev.stopPropagation();
