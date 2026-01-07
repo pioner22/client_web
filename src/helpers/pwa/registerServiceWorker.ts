@@ -16,6 +16,15 @@ function emitSwError(err: unknown) {
   }
 }
 
+function shouldNotifyUpdate(reg: ServiceWorkerRegistration | null): boolean {
+  return Boolean(reg?.waiting);
+}
+
+// Test-only hook to validate update notification logic without a real SW.
+export function __shouldNotifyUpdateForTest(reg: ServiceWorkerRegistration | null): boolean {
+  return shouldNotifyUpdate(reg);
+}
+
 // Test-only hook (used by node --test) to inject a fake SW registration.
 export function __setUpdateRegistrationForTest(reg: ServiceWorkerRegistration | null) {
   updateRegistration = reg;
@@ -156,12 +165,12 @@ function startUpdatePolling(reg: ServiceWorkerRegistration) {
   const run = () => {
     // Some tabs may miss "updatefound" if another tab already downloaded the new SW.
     // Polling must also surface an already-waiting worker.
-    if (reg.waiting && navigator.serviceWorker.controller) notifyUpdate(reg);
+    if (shouldNotifyUpdate(reg)) notifyUpdate(reg);
     reg
       .update()
       .catch(() => {})
       .finally(() => {
-        if (reg.waiting && navigator.serviceWorker.controller) notifyUpdate(reg);
+        if (shouldNotifyUpdate(reg)) notifyUpdate(reg);
         requestBuildId(reg);
       });
   };
@@ -232,7 +241,7 @@ export function registerServiceWorker() {
       startUpdatePolling(reg);
 
       // If there's already a waiting worker, surface it.
-      if (reg.waiting && navigator.serviceWorker.controller) {
+      if (shouldNotifyUpdate(reg)) {
         notifyUpdate(reg);
       }
 
@@ -241,7 +250,7 @@ export function registerServiceWorker() {
         if (!nw) return;
         nw.addEventListener("statechange", () => {
           // Only notify when updating an existing installation.
-          if (nw.state === "installed" && reg.waiting && navigator.serviceWorker.controller) {
+          if (nw.state === "installed" && shouldNotifyUpdate(reg)) {
             notifyUpdate(reg);
           }
         });

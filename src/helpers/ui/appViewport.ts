@@ -75,8 +75,19 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
     // Prefer the *visual* viewport height for app layout (like tweb `--vh`),
     // otherwise fixed/fullscreen elements may end up behind Safari UI and get clipped.
-    const base = inner > 0 ? inner : client;
     const iosEnv = isIos || iosStandalone;
+    let screenMax = 0;
+    try {
+      const sh = Math.round(Number((window as any).screen?.height) || 0);
+      if (sh > 0) screenMax = Math.max(screenMax, sh);
+      const avail = Math.round(Number((window as any).screen?.availHeight) || 0);
+      if (avail > 0) screenMax = Math.max(screenMax, avail);
+      const outer = Math.round(Number((window as any).outerHeight) || 0);
+      if (iosEnv && outer > 0) screenMax = Math.max(screenMax, outer);
+    } catch {
+      // ignore
+    }
+    const base = inner > 0 ? inner : client > 0 ? client : lastStableLayout > 0 ? lastStableLayout : screenMax;
     const safeBottomRaw = (() => {
       if (!docEl || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return 0;
       try {
@@ -91,23 +102,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // Track the gap so CSS can paint it. Do NOT inflate layout height: it causes scrollbars and layout jumps.
     let gapBottom = 0;
     let screenGap = 0;
-    let screenMax = 0;
-    try {
-      const sh = Math.round(Number((window as any).screen?.height) || 0);
-      if (sh > 0) screenMax = Math.max(screenMax, sh);
-      const avail = Math.round(Number((window as any).screen?.availHeight) || 0);
-      if (avail > 0) screenMax = Math.max(screenMax, avail);
-      const outer = Math.round(Number((window as any).outerHeight) || 0);
-      if (iosEnv && outer > 0) screenMax = Math.max(screenMax, outer);
-      // Only treat screen.height deltas as a "gap" in standalone mode.
-      // In Safari, the difference often includes browser chrome and should NOT be treated as safe-area.
-      if (iosStandalone && base > 0 && screenMax > base) {
-        const diff = screenMax - base;
-        screenGap = diff;
-        if (diff >= 6 && diff <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = diff;
-      }
-    } catch {
-      // ignore
+    // Only treat screen.height deltas as a "gap" in standalone mode.
+    // In Safari, the difference often includes browser chrome and should NOT be treated as safe-area.
+    if (iosStandalone && base > 0 && screenMax > base) {
+      const diff = screenMax - base;
+      screenGap = diff;
+      if (diff >= 6 && diff <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = diff;
     }
     if (safeBottomRaw > 0 && gapBottom > safeBottomRaw) gapBottom = safeBottomRaw;
     // Fallback: if screen.height is not available (tests/odd environments), reuse safe-area inset as the "gap".
@@ -159,16 +159,23 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // iOS standalone: prefer layout height when keyboard is closed to avoid clipping header/footer.
     const useVisualViewportHeight = Boolean(allowVisualViewportHeight && (!iosStandalone || keyboardVisible));
     const resolved = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : useVisualViewportHeight ? vvHeight : base;
-    const height = Math.round(Number(resolved) || 0);
+    const rawHeight = Math.round(Number(resolved) || 0);
+    // Guard against transient 0-1px heights from WebKit that collapse the layout.
+    const minHeight = 200;
+    const height = rawHeight > 0 && rawHeight < minHeight && base >= minHeight ? base : rawHeight;
+    const fallbackHeight =
+      lastStableLayout > 0 ? lastStableLayout : lastHeight > 0 ? lastHeight : screenMax > 0 ? screenMax : 0;
+    const resolvedHeight = height > 0 ? height : fallbackHeight;
     const vhHeight = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : base;
+    const resolvedVhHeight = vhHeight > 0 ? vhHeight : resolvedHeight;
     return {
-      height: height > 0 ? height : 0,
+      height: resolvedHeight > 0 ? resolvedHeight : 0,
       keyboard: keyboardVisible,
       vvTop,
       vvBottom: Math.round(coveredBottom),
       gapBottom,
       safeBottomRaw,
-      vhHeight: vhHeight > 0 ? vhHeight : 0,
+      vhHeight: resolvedVhHeight > 0 ? resolvedVhHeight : 0,
     };
   };
 
@@ -178,6 +185,11 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     if (!height) {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
       if (docEl?.classList) docEl.classList.remove("kbd-open");
+      setVar("--app-vv-top", null);
+      setVar("--app-vv-bottom", null);
+      setVar("--app-gap-bottom", null);
+      setVar("--safe-bottom-pad", null);
+      setVar("--safe-bottom-raw", null);
       return;
     }
 

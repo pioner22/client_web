@@ -312,7 +312,7 @@ body.has-right-col .right-col {
 .input-wrap {
   display: flex;
   flex-direction: column;
-  padding: var(--composer-pad-y) var(--chat-pad);
+  padding: var(--composer-pad-y) var(--chat-input-padding);
   /* Avoid "double padding" feel on iOS: safe-area already provides spacing. */
   padding-bottom: max(var(--composer-pad-y), var(--safe-bottom-layout-pad));
   border-top: var(--composer-border-width) solid var(--composer-border-color);
@@ -334,7 +334,7 @@ body.has-right-col .right-col {
 .input-wrap > .board-editor,
 .input-wrap > .composer-row,
 .input-wrap > .composer-meta {
-  max-width: var(--messages-container-width);
+  max-width: var(--chat-input-max-width);
   width: 100%;
   margin-left: auto;
   margin-right: auto;

@@ -889,8 +889,23 @@ export function renderSidebar(
       start: -1,
       end: -1,
       raf: 0 as number | 0,
+      rowHeight: 0,
+    };
+    const measureRenderedRowHeight = (): number => {
+      const el = items.firstElementChild as HTMLElement | null;
+      if (!el) return 0;
+      try {
+        const rect = el.getBoundingClientRect();
+        const h = Math.round(rect.height || 0);
+        return h > 0 ? h : 0;
+      } catch {
+        return 0;
+      }
     };
     const readRowHeight = (): number => {
+      if (state.rowHeight > 0) return state.rowHeight;
+      const measured = measureRenderedRowHeight();
+      if (measured > 0) return measured;
       try {
         const raw = getComputedStyle(body).getPropertyValue("--row-min-h").trim();
         const parsed = parseFloat(raw);
@@ -917,14 +932,35 @@ export function renderSidebar(
       const viewportHeight = body.clientHeight || 0;
       const offset = readBlockOffset();
       const virtualScrollTop = Math.max(0, body.scrollTop - offset);
-      const start = Math.max(0, Math.floor(virtualScrollTop / rowHeight) - VIRTUAL_CHATLIST_OVERSCAN);
-      const end = Math.min(rows.length, Math.ceil((virtualScrollTop + viewportHeight) / rowHeight) + VIRTUAL_CHATLIST_OVERSCAN);
-      if (start === state.start && end === state.end) return;
+      let start = Math.max(0, Math.floor(virtualScrollTop / rowHeight) - VIRTUAL_CHATLIST_OVERSCAN);
+      let end = Math.min(rows.length, Math.ceil((virtualScrollTop + viewportHeight) / rowHeight) + VIRTUAL_CHATLIST_OVERSCAN);
+      if (start === state.start && end === state.end && state.rowHeight > 0) return;
       state.start = start;
       state.end = end;
       items.replaceChildren(...rows.slice(start, end));
-      topSpacer.style.height = `${start * rowHeight}px`;
-      bottomSpacer.style.height = `${(rows.length - end) * rowHeight}px`;
+      let effectiveHeight = rowHeight;
+      const measured = measureRenderedRowHeight();
+      if (measured > 0 && Math.abs(measured - rowHeight) > 1) {
+        state.rowHeight = measured;
+        effectiveHeight = measured;
+        const nextStart = Math.max(0, Math.floor(virtualScrollTop / measured) - VIRTUAL_CHATLIST_OVERSCAN);
+        const nextEnd = Math.min(
+          rows.length,
+          Math.ceil((virtualScrollTop + viewportHeight) / measured) + VIRTUAL_CHATLIST_OVERSCAN
+        );
+        if (nextStart !== start || nextEnd !== end) {
+          start = nextStart;
+          end = nextEnd;
+          state.start = start;
+          state.end = end;
+          items.replaceChildren(...rows.slice(start, end));
+        }
+      } else if (measured > 0 && state.rowHeight === 0) {
+        state.rowHeight = measured;
+        effectiveHeight = measured;
+      }
+      topSpacer.style.height = `${start * effectiveHeight}px`;
+      bottomSpacer.style.height = `${(rows.length - end) * effectiveHeight}px`;
     };
     const onScroll = () => {
       if (state.raf) return;
@@ -938,8 +974,12 @@ export function renderSidebar(
         update();
       }
     };
+    const onResize = () => {
+      state.rowHeight = 0;
+      onScroll();
+    };
     body.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     try {
       window.requestAnimationFrame(update);
     } catch {
@@ -948,7 +988,7 @@ export function renderSidebar(
     (body as any)._virtualChatlistCleanup = () => {
       state.active = false;
       body.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
       if (state.raf) {
         try {
           window.cancelAnimationFrame(state.raf);

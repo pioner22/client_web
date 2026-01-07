@@ -332,28 +332,13 @@
     --sidebar-list-pad: 0px;
 
     --chat-pad: 8px;
-    --msg-body-max-width: calc(100% - var(--message-handhelds-margin));
+    --msg-body-max-width: min(100%, var(--messages-container-width));
     --chat-line-gap: 8px;
     --msg-pad-y: 3px;
     --msg-avatar-size: 32px;
     --msg-avatar-font-size: 12px;
     --chat-title-avatar-size: 24px;
     --chat-title-avatar-font-size: 11px;
-
-    --msg-in-border-width: 0px;
-    --msg-out-border-width: 0px;
-    --msg-in-bg: color-mix(in srgb, var(--panel), transparent 0%);
-    --msg-out-bg: color-mix(in srgb, var(--focus), var(--panel2) 88%);
-    --msg-in-radius: 15px;
-    --msg-in-cont-corner: 5px;
-    --msg-out-radius: 15px;
-    --msg-out-cont-corner: 5px;
-    --msg-in-pad-y: 4px;
-    --msg-in-pad-x: 8px;
-    --msg-in-pad-bottom: 5px;
-    --msg-out-pad-y: 4px;
-    --msg-out-pad-x: 8px;
-    --msg-out-pad-bottom: 5px;
 
     --row-pad-y: 7px;
     --row-pad-x: 16px;
@@ -367,60 +352,26 @@
     --composer-pad-y: var(--sp-1);
     --composer-pad-x: var(--sp-3);
     --composer-gap: 2px;
-    --composer-field-radius: 16px;
     --composer-field-border-width: 0px;
     --composer-field-bg: color-mix(in srgb, var(--panel2), transparent 4%);
     --composer-input-font-family: var(--font-family);
     --composer-input-font-weight: 500;
     --composer-input-pad-y: 6px;
-    --composer-field-pad: 6px;
-    --composer-field-min-h: 46px;
+    --chat-input-size: 46px;
+    --chat-input-padding: var(--chat-pad);
+    --chat-input-inner-padding: 6px;
+    --chat-input-border-radius: 16px;
+    --chat-input-max-width: var(--messages-container-width);
+    --chat-input-btn-send-margin: 6px;
+    --composer-field-radius: var(--chat-input-border-radius);
+    --composer-field-pad: var(--chat-input-inner-padding);
+    --composer-field-min-h: var(--chat-input-size);
     --composer-helper-min-h: 40px;
     --composer-helper-pad-y: 4px;
     --composer-btn-size: var(--composer-field-min-h);
-    --composer-icon-btn-size: 40px;
+    --composer-icon-btn-size: min(40px, calc(var(--chat-input-size) - 6px));
     --composer-icon-offset: 3px;
-    --composer-send-gap: 6px;
-  }
-
-  :root[data-skin][data-msg-view="plain"] {
-    --msg-in-bg: transparent;
-    --msg-out-bg: transparent;
-    --msg-in-border-width: 0;
-    --msg-out-border-width: 0;
-    --msg-in-pad-y: 0;
-    --msg-in-pad-x: 0;
-    --msg-in-pad-bottom: 0;
-    --msg-out-pad-y: 0;
-    --msg-out-pad-x: 0;
-    --msg-out-pad-bottom: 0;
-    --msg-pad-y: 1px;
-    --chat-line-gap: 2px;
-    --msg-body-max-width: min(100%, 980px);
-    --msg-in-justify: flex-start;
-    --msg-out-justify: flex-start;
-  }
-
-  :root[data-skin][data-msg-view="compact"] {
-    --msg-in-bg: transparent;
-    --msg-out-bg: transparent;
-    --msg-in-border-width: 0;
-    --msg-out-border-width: 0;
-    --msg-in-pad-y: 0;
-    --msg-in-pad-x: 0;
-    --msg-in-pad-bottom: 0;
-    --msg-out-pad-y: 0;
-    --msg-out-pad-x: 0;
-    --msg-out-pad-bottom: 0;
-    --msg-pad-y: 1px;
-    --chat-line-gap: 3px;
-    --msg-body-max-width: min(100%, 940px);
-    --msg-in-radius: 0;
-    --msg-out-radius: 0;
-    --msg-in-justify: flex-start;
-    --msg-out-justify: flex-start;
-    --msg-avatar-size: 0px;
-    --msg-avatar-font-size: 0px;
+    --composer-send-gap: var(--chat-input-btn-send-margin);
   }
 
   /* Dialog list: closer to Telegram density. */
@@ -518,6 +469,8 @@
     font-size: 12px;
     line-height: 1.25;
     opacity: 0.9;
+    justify-content: space-between;
+    gap: var(--hdr-action-gap);
   }
 
   .hdr {
@@ -596,7 +549,7 @@
 
   .msg-in .msg-body,
   .msg-out .msg-body {
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--msg-card-outline), var(--msg-card-shadow);
   }
 
   /* Composer: closer to Telegram pill + stable "bar" feel. */

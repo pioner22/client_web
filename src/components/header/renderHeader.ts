@@ -80,7 +80,42 @@ export function renderHeader(layout: Layout, state: AppState) {
     el("span", { class: "hdr-sep" }, [" | "]),
     el("span", { class: "hdr-title" }, [title])
   );
-  layout.headerRight.textContent = state.status || "";
+  const showCallActions = Boolean(state.page === "main" && state.selected && state.selected.kind !== "board");
+  const statusLabel = state.status || "";
+  const statusEl = el("span", { class: "hdr-status" }, [statusLabel]);
+  const actions = showCallActions
+    ? el("span", { class: "hdr-actions" }, [
+        el(
+          "button",
+          {
+            class: "hdr-action",
+            type: "button",
+            disabled: "true",
+            title: "Аудиозвонок (скоро)",
+            "aria-label": "Аудиозвонок (скоро)",
+            "data-icon": "call",
+          },
+          []
+        ),
+        el(
+          "button",
+          {
+            class: "hdr-action",
+            type: "button",
+            disabled: "true",
+            title: "Видеозвонок (скоро)",
+            "aria-label": "Видеозвонок (скоро)",
+            "data-icon": "video",
+          },
+          []
+        ),
+      ])
+    : null;
+  if (actions) {
+    layout.headerRight.replaceChildren(statusEl, actions);
+  } else {
+    layout.headerRight.replaceChildren(statusEl);
+  }
 
   if (mobileUi) {
     layout.hotkeys.replaceChildren();

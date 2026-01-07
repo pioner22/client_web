@@ -21,7 +21,6 @@ import type {
   SidebarChatFilter,
   TargetRef,
   ThemeMode,
-  MessageViewMode,
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { messageSelectionKey } from "../helpers/chat/chatSelection";
@@ -58,7 +57,8 @@ import { loadFileCachePrefs, saveFileCachePrefs } from "../helpers/files/fileCac
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
-import { activatePwaUpdate } from "../helpers/pwa/registerServiceWorker";
+import { activatePwaUpdate, hasPwaUpdate } from "../helpers/pwa/registerServiceWorker";
+import { storeActiveBuildId } from "../helpers/pwa/buildIdStore";
 import { setPushOptOut } from "../helpers/pwa/pushPrefs";
 import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { installNotificationSoundUnlock } from "../helpers/notify/notifySound";
@@ -72,7 +72,7 @@ import {
 } from "../helpers/pwa/installPrompt";
 import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
-import { applyMessageView, normalizeMessageView, storeMessageView } from "../helpers/ui/messageView";
+import { applyMessageView } from "../helpers/ui/messageView";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
 import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
@@ -100,9 +100,7 @@ import { renderBoardPost } from "../helpers/boards/boardPost";
 import { loadBoardScheduleForUser, maxBoardScheduleDelayMs, saveBoardScheduleForUser } from "../helpers/boards/boardSchedule";
 
 const ROOM_INFO_MAX = 2000;
-const IOS_ACTIVE_CONV_LIMIT = 320;
 const IOS_INACTIVE_CONV_LIMIT = 120;
-const DEFAULT_ACTIVE_CONV_LIMIT = 800;
 const DEFAULT_INACTIVE_CONV_LIMIT = 300;
 
 function autosizeInput(el: HTMLTextAreaElement) {
@@ -1238,15 +1236,141 @@ export function mountApp(root: HTMLElement) {
   const historyPreviewLastAt = new Map<string, number>();
   const historyPreviewQueue: TargetRef[] = [];
   let historyPreviewTimer: number | null = null;
+  const clearPendingHistoryRequests = () => {
+    if (!historyRequested.size && !historyPreviewRequested.size) return;
+    const pending = new Set<string>([...historyRequested, ...historyPreviewRequested]);
+    historyRequested.clear();
+    historyPreviewRequested.clear();
+    historyPreviewQueue.length = 0;
+    if (historyPreviewTimer !== null) {
+      try {
+        window.clearTimeout(historyPreviewTimer);
+      } catch {
+        // ignore
+      }
+      historyPreviewTimer = null;
+    }
+    store.set((prev) => {
+      if (!pending.size) return prev;
+      let nextLoading = prev.historyLoading;
+      let changed = false;
+      for (const key of pending) {
+        if (!prev.historyLoading?.[key]) continue;
+        if (!changed) {
+          nextLoading = { ...prev.historyLoading };
+          changed = true;
+        }
+        nextLoading[key] = false;
+      }
+      return changed ? { ...prev, historyLoading: nextLoading } : prev;
+    });
+  };
   let autoAuthAttemptedForConn = false;
   let lastConn: ConnStatus = "connecting";
   const lastReadSentAt = new Map<string, number>();
   const lastReadSavedAt = new Map<string, number>();
   let pwaAutoApplyTimer: number | null = null;
   let pwaForceInFlight = false;
+  const PWA_AUTO_APPLY_GUARD_KEY = "yagodka_pwa_auto_apply_guard_v1";
+  const PWA_AUTO_APPLY_LOG_KEY = "yagodka_pwa_update_log_v1";
+  const PWA_AUTO_APPLY_GUARD_RESET_MS = 10 * 60 * 1000;
+  const PWA_AUTO_APPLY_MAX_TRIES = 3;
+  const PWA_AUTO_APPLY_RETRY_MS = 20 * 1000;
+  const PWA_AUTO_APPLY_LOG_LIMIT = 24;
+  let pwaPendingBuildId = "";
+  let pwaAutoApplySuppressed = false;
   let lastUserInputAt = Date.now();
+  type PwaUpdateMode = "auto" | "manual";
   const markUserActivity = () => {
     lastUserInputAt = Date.now();
+  };
+  type PwaAutoApplyGuard = { buildId: string; tries: number; ts: number };
+  const getStorage = (kind: "session" | "local"): Storage | null => {
+    try {
+      if (typeof window === "undefined") return null;
+      return kind === "session" ? window.sessionStorage : window.localStorage;
+    } catch {
+      return null;
+    }
+  };
+  const readGuardFrom = (storage: Storage | null): PwaAutoApplyGuard | null => {
+    if (!storage) return null;
+    try {
+      const raw = storage.getItem(PWA_AUTO_APPLY_GUARD_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      const buildId = typeof (parsed as any).buildId === "string" ? String((parsed as any).buildId).trim() : "";
+      const tries = Number.isFinite((parsed as any).tries) ? Math.max(0, Math.trunc((parsed as any).tries)) : 0;
+      const ts = Number.isFinite((parsed as any).ts) ? Math.max(0, Math.trunc((parsed as any).ts)) : 0;
+      if (!buildId || !ts) return null;
+      return { buildId, tries, ts };
+    } catch {
+      return null;
+    }
+  };
+  const readPwaAutoApplyGuard = (): PwaAutoApplyGuard | null => {
+    const session = readGuardFrom(getStorage("session"));
+    const local = readGuardFrom(getStorage("local"));
+    if (session && local) return session.ts >= local.ts ? session : local;
+    return session || local;
+  };
+  const writePwaAutoApplyGuard = (guard: PwaAutoApplyGuard | null) => {
+    const session = getStorage("session");
+    const local = getStorage("local");
+    try {
+      if (!guard) {
+        session?.removeItem(PWA_AUTO_APPLY_GUARD_KEY);
+        local?.removeItem(PWA_AUTO_APPLY_GUARD_KEY);
+        return;
+      }
+      const payload = JSON.stringify(guard);
+      session?.setItem(PWA_AUTO_APPLY_GUARD_KEY, payload);
+      local?.setItem(PWA_AUTO_APPLY_GUARD_KEY, payload);
+    } catch {
+      // ignore
+    }
+  };
+  const clearPwaAutoApplyGuard = () => {
+    writePwaAutoApplyGuard(null);
+    pwaAutoApplySuppressed = false;
+  };
+  const logPwaUpdate = (event: string, detail?: string) => {
+    const storage = getStorage("local");
+    if (!storage) return;
+    try {
+      const now = new Date().toISOString();
+      const line = detail ? `${now} ${event} ${detail}` : `${now} ${event}`;
+      const raw = storage.getItem(PWA_AUTO_APPLY_LOG_KEY);
+      const list = raw ? (JSON.parse(raw) as string[]) : [];
+      const next = Array.isArray(list) ? [...list, line] : [line];
+      if (next.length > PWA_AUTO_APPLY_LOG_LIMIT) next.splice(0, next.length - PWA_AUTO_APPLY_LOG_LIMIT);
+      storage.setItem(PWA_AUTO_APPLY_LOG_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+  const markPwaAutoApplyAttempt = (buildId: string) => {
+    const id = String(buildId || "").trim();
+    if (!id) return;
+    const now = Date.now();
+    const prev = readPwaAutoApplyGuard();
+    if (prev && prev.buildId === id && now - prev.ts < PWA_AUTO_APPLY_GUARD_RESET_MS) {
+      writePwaAutoApplyGuard({ buildId: id, tries: Math.min(prev.tries + 1, 9), ts: now });
+      logPwaUpdate("auto_try", `${id}#${Math.min(prev.tries + 1, 9)}`);
+      return;
+    }
+    writePwaAutoApplyGuard({ buildId: id, tries: 1, ts: now });
+    logPwaUpdate("auto_try", `${id}#1`);
+  };
+  const shouldBlockPwaAutoApply = (buildId: string): boolean => {
+    const id = String(buildId || "").trim();
+    if (!id) return false;
+    const guard = readPwaAutoApplyGuard();
+    if (!guard) return false;
+    if (guard.buildId !== id) return false;
+    if (Date.now() - guard.ts > PWA_AUTO_APPLY_GUARD_RESET_MS) return false;
+    return guard.tries >= PWA_AUTO_APPLY_MAX_TRIES;
   };
 
   const recordRoomLastReadEntry = (key: string, msg: ChatMessage | null) => {
@@ -1322,12 +1446,16 @@ export function mountApp(root: HTMLElement) {
   let transferSeq = 0;
   let localChatMsgSeq = 0;
   const cachedPreviewsAttempted = new Set<string>();
-  const previewPrefetchAttempted = new Set<string>();
+  const previewPrefetchAttempted = new Map<string, number>();
   const silentFileGets = new Set<string>();
   let previewWarmupTimer: number | null = null;
   let previewWarmupInFlight = false;
   let previewWarmupLastKey = "";
   let previewWarmupLastSig = "";
+  const PREVIEW_AUTO_MAX_BYTES = 20 * 1024 * 1024;
+  const PREVIEW_AUTO_OVERSCAN = 160;
+  const PREVIEW_AUTO_RETRY_MS = 15_000;
+  let previewAutoFetchRaf: number | null = null;
   const mobileSidebarMq = window.matchMedia("(max-width: 600px)");
   const floatingSidebarMq = window.matchMedia("(min-width: 601px) and (max-width: 925px)");
   const coarsePointerMq = window.matchMedia("(pointer: coarse)");
@@ -1429,13 +1557,13 @@ export function mountApp(root: HTMLElement) {
 
   function applyConversationLimits(prev: AppState, activeKey: string): { conversations: Record<string, ChatMessage[]>; historyCursor: Record<string, number> } | null {
     const ios = isIOS();
-    const activeLimit = ios ? IOS_ACTIVE_CONV_LIMIT : DEFAULT_ACTIVE_CONV_LIMIT;
     const inactiveLimit = ios ? IOS_INACTIVE_CONV_LIMIT : DEFAULT_INACTIVE_CONV_LIMIT;
     let conversations = prev.conversations;
     let historyCursor = prev.historyCursor;
     let changed = false;
     for (const [key, conv] of Object.entries(prev.conversations || {})) {
-      const limit = key === activeKey ? activeLimit : inactiveLimit;
+      if (key === activeKey) continue;
+      const limit = inactiveLimit;
       if (!Array.isArray(conv) || conv.length <= limit) continue;
       const trimmed = trimConversation(conv, limit);
       if (trimmed.list === conv) continue;
@@ -1456,6 +1584,8 @@ export function mountApp(root: HTMLElement) {
   let historyAutoBlockUntil = 0;
   let lastHistoryAutoAt = 0;
   let lastHistoryAutoKey = "";
+  let lastHistoryFillAt = 0;
+  let lastHistoryFillKey = "";
   let suppressChatClickUntil = 0;
   let pendingChatAutoScroll: { key: string; waitForHistory: boolean } | null = null;
 
@@ -1595,6 +1725,34 @@ export function mountApp(root: HTMLElement) {
     requestMoreHistory();
   }
 
+  function maybeAutoFillHistoryViewport() {
+    const now = Date.now();
+    if (now < historyAutoBlockUntil) return;
+
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") return;
+    if (st.page !== "main") return;
+    if (st.modal && st.modal.kind !== "context_menu") return;
+    if (!st.selected) return;
+
+    const key = conversationKey(st.selected);
+    if (!key) return;
+    if (!st.historyLoaded[key]) return;
+    if (!st.historyHasMore[key]) return;
+    if (st.historyLoading[key]) return;
+    if (historyRequested.has(key)) return;
+    const cursor = st.historyCursor[key];
+    if (!cursor || !Number.isFinite(cursor) || cursor <= 0) return;
+
+    const host = layout.chatHost;
+    if (host.scrollHeight > host.clientHeight + 32) return;
+    if (key === lastHistoryFillKey && now - lastHistoryFillAt < 900) return;
+    lastHistoryFillKey = key;
+    lastHistoryFillAt = now;
+    historyAutoBlockUntil = now + 200;
+    requestMoreHistory();
+  }
+
   let lastVirtualWindowUpdateAt = 0;
   function maybeUpdateVirtualWindow(scrollTop: number) {
     const st = store.get();
@@ -1724,6 +1882,7 @@ export function mountApp(root: HTMLElement) {
       maybeAutoLoadMoreHistory(scrollTop, scrollingUp);
       maybeUpdateVirtualWindow(scrollTop);
       scheduleViewportReadUpdate();
+      scheduleAutoFetchVisiblePreviews();
       if (atBottom) maybeRecordLastRead(key);
     },
     { passive: true }
@@ -3262,14 +3421,6 @@ export function mountApp(root: HTMLElement) {
     applySkin(finalId);
   }
 
-  function setMessageView(view: string) {
-    const mode = normalizeMessageView(view);
-    const label = mode === "plain" ? "Текстовый" : mode === "compact" ? "Компактный" : "Елочка";
-    store.set({ messageView: mode, status: `Отображение сообщений: ${label}` });
-    storeMessageView(mode);
-    applyMessageView(mode);
-  }
-
   const gateway = new GatewayClient(
     getGatewayUrl(),
     (msg) => {
@@ -3296,6 +3447,7 @@ export function mountApp(root: HTMLElement) {
           historyPreviewRequested.delete(key);
         }
       }
+      if (t === "error") clearPendingHistoryRequests();
       if (handleFileMessage(msg)) return;
       handleServerMessage(msg, store.get(), gateway, (p) => store.set(p));
       if (t === "message_delivered" || t === "message_queued" || t === "message_blocked" || t === "error" || t === "history_result") {
@@ -3332,7 +3484,7 @@ export function mountApp(root: HTMLElement) {
 
 	      if (conn !== "connected") {
 	        autoAuthAttemptedForConn = false;
-	        historyRequested.clear();
+	        clearPendingHistoryRequests();
 	        historyDeltaRequestedAt.clear();
 	        store.set((prev) => {
 	          if (!prev.selfId) return prev.authed ? { ...prev, authed: false } : prev;
@@ -5879,6 +6031,53 @@ export function mountApp(root: HTMLElement) {
     }, 120);
   }
 
+  function shouldAutoFetchPreview(name: string, mime: string | null, size: number): boolean {
+    if (!isMediaLikeFile(name, mime)) return false;
+    if (size > 0 && size > PREVIEW_AUTO_MAX_BYTES) return false;
+    return true;
+  }
+
+  function autoFetchVisiblePreviews() {
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") return;
+    if (st.page !== "main" || !st.selected) return;
+    if (!st.selfId) return;
+    const now = Date.now();
+    const host = layout.chatHost;
+    const hostRect = host.getBoundingClientRect();
+    const nodes = host.querySelectorAll("button.chat-file-preview-empty[data-file-id]");
+    if (!nodes.length) return;
+    for (const node of Array.from(nodes)) {
+      if (!(node instanceof HTMLButtonElement)) continue;
+      const rect = node.getBoundingClientRect();
+      if (rect.bottom < hostRect.top - PREVIEW_AUTO_OVERSCAN || rect.top > hostRect.bottom + PREVIEW_AUTO_OVERSCAN) continue;
+      const fileId = String(node.getAttribute("data-file-id") || "").trim();
+      if (!fileId) continue;
+      if ((st.fileOffersIn || []).some((offer) => String(offer?.id || "").trim() === fileId)) continue;
+      const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+      if (existing?.url || existing?.status === "downloading") continue;
+      const name = String(node.getAttribute("data-name") || "");
+      const mimeRaw = node.getAttribute("data-mime");
+      const mime = mimeRaw ? String(mimeRaw) : null;
+      const size = Number(node.getAttribute("data-size") || 0) || 0;
+      if (!shouldAutoFetchPreview(name, mime, size)) continue;
+      const key = `${st.selfId}:${fileId}`;
+      const lastAttempt = previewPrefetchAttempted.get(key) || 0;
+      if (lastAttempt && now - lastAttempt < PREVIEW_AUTO_RETRY_MS) continue;
+      previewPrefetchAttempted.set(key, now);
+      silentFileGets.add(fileId);
+      gateway.send({ type: "file_get", file_id: fileId });
+    }
+  }
+
+  function scheduleAutoFetchVisiblePreviews() {
+    if (previewAutoFetchRaf !== null) return;
+    previewAutoFetchRaf = window.requestAnimationFrame(() => {
+      previewAutoFetchRaf = null;
+      autoFetchVisiblePreviews();
+    });
+  }
+
   function convoSig(msgs: any[]): string {
     const last = msgs && msgs.length ? msgs[msgs.length - 1] : null;
     const lastKey = last ? String((last.id ?? last.ts ?? "") as any) : "";
@@ -5947,6 +6146,7 @@ export function mountApp(root: HTMLElement) {
         });
         if (tasks.length >= MAX_TASKS) break;
       }
+      const now = Date.now();
       for (const t of tasks) {
         const restored = await restoreCachedPreviewIntoTransfers({ key, ...t });
         if (!restored && t.prefetch) {
@@ -5958,8 +6158,9 @@ export function mountApp(root: HTMLElement) {
             // Only prefetch small media to avoid wasting traffic/storage.
             if (t.size > PREFETCH_MAX_BYTES) continue;
             const k = `${uid}:${t.fileId}`;
-            if (previewPrefetchAttempted.has(k)) continue;
-            previewPrefetchAttempted.add(k);
+            const lastAttempt = previewPrefetchAttempted.get(k) || 0;
+            if (lastAttempt && now - lastAttempt < PREVIEW_AUTO_RETRY_MS) continue;
+            previewPrefetchAttempted.set(k, now);
             silentFileGets.add(t.fileId);
             gateway.send({ type: "file_get", file_id: t.fileId });
           } catch {
@@ -6732,6 +6933,8 @@ export function mountApp(root: HTMLElement) {
       const silent = fileId ? silentFileGets.has(fileId) : false;
       if (fileId) {
         silentFileGets.delete(fileId);
+        const uid = store.get().selfId;
+        if (uid) previewPrefetchAttempted.delete(`${uid}:${fileId}`);
         pendingFileDownloads.delete(fileId);
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
         const upload = uploadByFileId.get(fileId);
@@ -6765,8 +6968,9 @@ export function mountApp(root: HTMLElement) {
     clearStoredSessionToken();
 
     autoAuthAttemptedForConn = false;
-    historyRequested.clear();
+    clearPendingHistoryRequests();
     historyDeltaRequestedAt.clear();
+    historyPreviewLastAt.clear();
     lastReadSentAt.clear();
     cachedPreviewsAttempted.clear();
     previewPrefetchAttempted.clear();
@@ -9774,24 +9978,61 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
-  async function applyPwaUpdateNow() {
+  async function applyPwaUpdateNow(opts?: { mode?: PwaUpdateMode; buildId?: string }) {
+    const mode: PwaUpdateMode = opts?.mode === "manual" ? "manual" : "auto";
+    const buildId = String(opts?.buildId ?? pwaPendingBuildId ?? store.get().clientVersion ?? "").trim();
     flushDrafts(store);
     flushOutbox(store);
     saveRestartState(store.get());
-    store.set({ status: "Применяем обновление веб-клиента…" });
+    store.set({ status: mode === "manual" ? "Применяем обновление веб-клиента…" : "Автообновление веб-клиента…" });
+    let activated = false;
     try {
-      sessionStorage.setItem("yagodka_updating", "1");
+      activated = await activatePwaUpdate();
     } catch {
       // ignore
     }
+    logPwaUpdate(mode === "manual" ? "manual_activate" : "auto_activate", `${buildId || "unknown"}#${activated ? "ok" : "no"}`);
+    if (!activated) {
+      const hasController = typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
+      const canReloadWithoutWaiting = Boolean(buildId) && hasController && !hasPwaUpdate();
+      if (canReloadWithoutWaiting) {
+        logPwaUpdate(mode === "manual" ? "manual_reload_active" : "auto_reload_active", buildId || "unknown");
+        storeActiveBuildId(buildId);
+        try {
+          sessionStorage.setItem("yagodka_updating", "1");
+        } catch {
+          // ignore
+        }
+        try {
+          window.location.replace(window.location.href);
+          return;
+        } catch {
+          // ignore
+        }
+        window.location.reload();
+        return;
+      }
+      const msg =
+        mode === "manual"
+          ? "Не удалось применить обновление. Закройте другие вкладки и попробуйте ещё раз."
+          : "Обновление ожидает применения. Повторим попытку автоматически.";
+      store.set({ status: msg, pwaUpdateAvailable: true });
+      logPwaUpdate(mode === "manual" ? "manual_wait" : "auto_wait", buildId || "unknown");
+      if (mode === "auto") {
+        scheduleAutoApplyPwaUpdate(PWA_AUTO_APPLY_RETRY_MS);
+      }
+      return;
+    }
+    storeActiveBuildId(buildId);
     try {
-      await activatePwaUpdate();
+      sessionStorage.setItem("yagodka_updating", "1");
     } catch {
       // ignore
     }
     // iOS/WebKit may occasionally produce a blank screen on `reload()` after a SW update.
     // `location.replace()` behaves more like a fresh navigation and is generally more reliable.
     try {
+      logPwaUpdate(mode === "manual" ? "manual_reload" : "auto_reload", buildId || "unknown");
       window.location.replace(window.location.href);
       return;
     } catch {
@@ -9815,7 +10056,7 @@ export function mountApp(root: HTMLElement) {
       } catch {
         // ignore
       }
-      await applyPwaUpdateNow();
+      await applyPwaUpdateNow({ mode: "manual" });
     } finally {
       pwaForceInFlight = false;
     }
@@ -9837,33 +10078,65 @@ export function mountApp(root: HTMLElement) {
     return true;
   }
 
-  function scheduleAutoApplyPwaUpdate() {
+  function scheduleAutoApplyPwaUpdate(delayMs = 800) {
     if (pwaAutoApplyTimer !== null) return;
     pwaAutoApplyTimer = window.setTimeout(() => {
       pwaAutoApplyTimer = null;
       const st = store.get();
       if (!st.pwaUpdateAvailable) return;
+      if (pwaAutoApplySuppressed) return;
       if (!isSafeToAutoApplyUpdate(st)) {
         scheduleAutoApplyPwaUpdate();
         return;
       }
-      void applyPwaUpdateNow();
-    }, 800);
+      const buildId = pwaPendingBuildId || st.clientVersion || "";
+      if (shouldBlockPwaAutoApply(buildId)) {
+        logPwaUpdate("auto_backoff", buildId || "unknown");
+        clearPwaAutoApplyGuard();
+        store.set({ status: "Обновление ожидает применения. Повторим попытку автоматически.", pwaUpdateAvailable: true });
+        scheduleAutoApplyPwaUpdate(PWA_AUTO_APPLY_RETRY_MS);
+        return;
+      }
+      markPwaAutoApplyAttempt(buildId);
+      void applyPwaUpdateNow({ mode: "auto", buildId });
+    }, delayMs);
   }
 
   window.addEventListener("yagodka:pwa-build", (ev) => {
     const detail = (ev as CustomEvent<any>).detail;
     const buildId = String(detail?.buildId ?? "").trim();
     if (!buildId) return;
-    const current = store.get().clientVersion;
-    if (current === buildId) return;
+    const hasController = typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
+    const hasWaiting = hasPwaUpdate();
+    const currentVersion = store.get().clientVersion;
+    const needReload = shouldReloadForBuild(currentVersion, buildId);
+    logPwaUpdate("build", `${buildId}${needReload ? "" : " ok"}`);
+    if (hasController && !hasWaiting) {
+      storeActiveBuildId(buildId);
+    }
+    if (needReload && hasController && !hasWaiting) {
+      clearPwaAutoApplyGuard();
+      pwaPendingBuildId = "";
+      pwaAutoApplySuppressed = false;
+      store.set({ clientVersion: buildId, pwaUpdateAvailable: false });
+      return;
+    }
+    if (!needReload) clearPwaAutoApplyGuard();
+    if (!needReload && hasController && !hasWaiting) {
+      store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, pwaUpdateAvailable: false } : prev));
+    }
+    if (currentVersion === buildId) return;
     store.set({ clientVersion: buildId });
     const st = store.get();
     if (st.conn === "connected" && st.authed) {
       gateway.send({ type: "client_info", client: "web", version: buildId });
     }
     // Если SW уже обновился до новой semver, а JS ещё старый — тихо перезапускаем приложение.
-    if (shouldReloadForBuild(APP_VERSION, buildId)) {
+    if (needReload) {
+      if (pwaPendingBuildId !== buildId) {
+        pwaPendingBuildId = buildId;
+        pwaAutoApplySuppressed = false;
+      }
       store.set((prev) => ({
         ...prev,
         pwaUpdateAvailable: true,
@@ -9877,12 +10150,12 @@ export function mountApp(root: HTMLElement) {
     const detail = (ev as CustomEvent<any>).detail;
     const err = String(detail?.error ?? "").trim();
     if (!err) return;
-    const st = store.get();
-    if (st.pwaPushSubscribed) return;
-    store.set({ pwaPushStatus: `Service Worker: ${err}` });
+    const msg = `Service Worker: ${err}`;
+    store.set({ pwaPushStatus: msg, status: msg });
   });
 
   window.addEventListener("yagodka:pwa-update", () => {
+    logPwaUpdate("sw_update");
     store.set({ pwaUpdateAvailable: true, status: "Получено обновление веб-клиента (применится автоматически)" });
     scheduleAutoApplyPwaUpdate();
   });
@@ -9954,12 +10227,12 @@ export function mountApp(root: HTMLElement) {
     if (st.modal?.kind === "pwa_update") {
       if ((e.ctrlKey || e.metaKey) && (e.key === "u" || e.key === "U")) {
         e.preventDefault();
-        void applyPwaUpdateNow();
+        void applyPwaUpdateNow({ mode: "manual" });
         return;
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        void applyPwaUpdateNow();
+        void applyPwaUpdateNow({ mode: "manual" });
         return;
       }
       if (!["Shift", "Control", "Alt", "Meta"].includes(e.key)) {
@@ -10004,7 +10277,7 @@ export function mountApp(root: HTMLElement) {
       e.preventDefault();
       if (!st.authed) return;
       if (st.pwaUpdateAvailable) {
-        void applyPwaUpdateNow();
+        void applyPwaUpdateNow({ mode: "manual" });
       } else if (st.updateLatest) {
         window.location.reload();
       } else {
@@ -11093,10 +11366,9 @@ export function mountApp(root: HTMLElement) {
     onCloseModal: () => closeModal(),
     onDismissUpdate: () => store.set({ modal: null, updateDismissedLatest: store.get().updateLatest }),
     onReloadUpdate: () => window.location.reload(),
-    onApplyPwaUpdate: () => void applyPwaUpdateNow(),
+    onApplyPwaUpdate: () => void applyPwaUpdateNow({ mode: "manual" }),
     onSkinChange: (skinId: string) => setSkin(skinId),
     onThemeChange: (theme: ThemeMode) => setTheme(theme),
-    onMessageViewChange: (view: MessageViewMode) => setMessageView(view),
     onGroupCreate: () => createGroup(),
     onBoardCreate: () => createBoard(),
     onMembersAdd: () => membersAddSubmit(),
@@ -11691,6 +11963,8 @@ export function mountApp(root: HTMLElement) {
     }
     if (st.authed && st.selfId) {
       scheduleWarmupCachedPreviews();
+      scheduleAutoFetchVisiblePreviews();
+      maybeAutoFillHistoryViewport();
     }
     prevAuthed = st.authed;
   });

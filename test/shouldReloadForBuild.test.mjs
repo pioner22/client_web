@@ -32,11 +32,14 @@ async function loadHelper() {
   }
 }
 
-test("shouldReloadForBuild: перезапускаемся только если версия build != APP_VERSION", async () => {
+test("shouldReloadForBuild: перезапуск при смене версии или build-hash", async () => {
   const helper = await loadHelper();
   try {
-    assert.equal(helper.shouldReloadForBuild("0.1.73", "0.1.73-215efba26440"), false);
+    assert.equal(helper.shouldReloadForBuild("0.1.73-111111111111", "0.1.73-111111111111"), false);
+    assert.equal(helper.shouldReloadForBuild("0.1.73-111111111111", "0.1.73-222222222222"), true);
+    assert.equal(helper.shouldReloadForBuild("0.1.73", "0.1.73-215efba26440"), true);
     assert.equal(helper.shouldReloadForBuild("0.1.73", "0.1.73"), false);
+    assert.equal(helper.shouldReloadForBuild("0.1.73-111111111111", "0.1.73"), false);
     assert.equal(helper.shouldReloadForBuild("0.1.73", ""), false);
     assert.equal(helper.shouldReloadForBuild("", "0.1.74-deadbeefcafe"), false);
     assert.equal(helper.shouldReloadForBuild("0.1.73", "0.1.74-deadbeefcafe"), true);
@@ -44,4 +47,3 @@ test("shouldReloadForBuild: перезапускаемся только если
     await helper.cleanup();
   }
 });
-

@@ -89,6 +89,13 @@ function formatBytes(size: number): string {
   return `${value.toFixed(precision)} ${units[idx]}`;
 }
 
+function resolveUserAccent(seed: string): string | null {
+  const s = String(seed ?? "").trim();
+  if (!s) return null;
+  const hue = avatarHue(s);
+  return `hsl(${hue} 68% 58%)`;
+}
+
 function isImageFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("image/")) return true;
@@ -484,9 +491,7 @@ function skeletonMsg(kind: "in" | "out", seed: number): HTMLElement {
     skeletonLine(v[2], "skel-line skel-meta"),
   ]);
   const children: HTMLElement[] = [];
-  if (kind === "in") {
-    children.push(el("div", { class: "msg-avatar" }, [el("span", { class: "avatar avatar-skel", "aria-hidden": "true" }, [""])]));
-  }
+  children.push(el("div", { class: "msg-avatar" }, [el("span", { class: "avatar avatar-skel", "aria-hidden": "true" }, [""])]));
   children.push(body);
   return el("div", { class: `msg msg-${kind} msg-skel`, "aria-hidden": "true" }, children);
 }
@@ -539,6 +544,48 @@ function renderMultilineText(text: string): HTMLElement {
   return el("div", { class: "invite-text" }, nodes);
 }
 
+function applyMessageDataset(
+  line: HTMLElement,
+  msgKind: string,
+  meta: {
+    boardUi?: boolean;
+    mobileUi?: boolean;
+    refKind?: "reply" | "forward";
+    hasReacts?: boolean;
+    hasCaption?: boolean;
+    hasText?: boolean;
+    emojiOnly?: boolean;
+    attachKind?: string;
+    fileKind?: string;
+    actionKind?: string;
+    album?: boolean;
+  }
+) {
+  const setData = (name: string, value?: string) => {
+    if (!value) return;
+    line.setAttribute(name, value);
+  };
+  const setFlag = (name: string, ok?: boolean) => {
+    if (!ok) return;
+    line.setAttribute(name, "1");
+  };
+  line.setAttribute("data-msg-kind", String(msgKind || ""));
+  setData("data-msg-attach", meta.attachKind);
+  setData("data-msg-file", meta.fileKind);
+  setData("data-msg-action", meta.actionKind);
+  if (meta.refKind) {
+    setData("data-msg-ref", meta.refKind);
+    setFlag("data-msg-has-ref", true);
+  }
+  setFlag("data-msg-has-reacts", meta.hasReacts);
+  setFlag("data-msg-has-caption", meta.hasCaption);
+  setFlag("data-msg-has-text", meta.hasText);
+  setFlag("data-msg-emoji-only", meta.emojiOnly);
+  setFlag("data-msg-board", meta.boardUi);
+  setFlag("data-msg-mobile", meta.mobileUi);
+  setFlag("data-msg-album", meta.album);
+}
+
 function messageLine(
   state: AppState,
   m: ChatMessage,
@@ -551,6 +598,7 @@ function messageLine(
     cls: string,
     baseClass: string = "msg-action-btn"
   ): HTMLElement => el("button", { class: `btn ${baseClass} ${cls}`.trim(), type: "button", ...attrs }, [label]);
+
 
   function renderInviteCard(payload: any, text: string): HTMLElement | null {
     if (!payload || typeof payload !== "object") return null;
@@ -657,11 +705,20 @@ function messageLine(
 
   if (m.kind === "sys") {
     const bodyChildren: HTMLElement[] = [];
+    const actionKind = m.attachment?.kind === "action" ? String(m.attachment.payload?.kind || "") : "";
     if (m.attachment?.kind === "action") {
       const card = renderInviteCard(m.attachment.payload, m.text);
       if (card) {
         bodyChildren.push(card);
-        return el("div", { class: "msg msg-sys" }, [el("div", { class: "msg-body" }, bodyChildren)]);
+        const line = el("div", { class: "msg msg-sys" }, [el("div", { class: "msg-body" }, bodyChildren)]);
+        applyMessageDataset(line, m.kind, {
+          boardUi: Boolean(opts?.boardUi && state.selected?.kind === "board"),
+          mobileUi: opts?.mobileUi,
+          attachKind: m.attachment?.kind,
+          actionKind,
+          hasText: Boolean(String(m.text || "").trim()),
+        });
+        return line;
       }
     }
     const emojiOnlySys = isEmojiOnlyText(m.text || "");
@@ -670,17 +727,25 @@ function messageLine(
       const actions = sysActions(m.attachment.payload);
       if (actions) bodyChildren.push(actions);
     }
-    return el("div", { class: "msg msg-sys" }, [
-      el("div", { class: "msg-body" }, bodyChildren),
-    ]);
+    const line = el("div", { class: "msg msg-sys" }, [el("div", { class: "msg-body" }, bodyChildren)]);
+    applyMessageDataset(line, m.kind, {
+      boardUi: Boolean(opts?.boardUi && state.selected?.kind === "board"),
+      mobileUi: opts?.mobileUi,
+      attachKind: m.attachment?.kind,
+      actionKind,
+      hasText: Boolean(String(m.text || "").trim()),
+      emojiOnly: emojiOnlySys,
+    });
+    return line;
   }
   const fromId = String(m.from || "").trim();
-  const isPlainView = state.messageView === "plain";
-  const showFrom =
-    m.kind === "in" &&
-    (Boolean(m.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board") || isPlainView);
-  const fromLabel = resolveUserLabel(state, fromId, friendLabels);
-  const canOpenProfile = Boolean(fromId);
+  const selfId = String(state.selfId || "").trim();
+  const displayFromId = m.kind === "out" ? selfId : fromId;
+  const accentId = displayFromId;
+  const resolvedLabel = displayFromId ? resolveUserLabel(state, displayFromId, friendLabels) : "";
+  const fromLabel = resolvedLabel && resolvedLabel !== "—" ? resolvedLabel : m.kind === "out" ? "Я" : "—";
+  const showFrom = true;
+  const canOpenProfile = Boolean(displayFromId);
   const meta = buildMessageMeta(m);
   const bodyChildren: HTMLElement[] = [];
   if (showFrom) {
@@ -689,22 +754,26 @@ function messageLine(
           class: "msg-from msg-from-btn",
           type: "button",
           "data-action": "user-open",
-          "data-user-id": fromId,
+          "data-user-id": displayFromId,
           title: `Профиль: ${fromLabel}`,
         }
       : { class: "msg-from" };
     const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
     bodyChildren.push(node);
-  } else if (isPlainView && m.kind === "out") {
-    bodyChildren.push(el("div", { class: "msg-from msg-from-self" }, ["Я"]));
   }
   const ref = m.reply || m.forward;
+  const refKind = m.reply ? "reply" : m.forward ? "forward" : undefined;
   if (ref) {
     const kind = m.reply ? "reply" : "forward";
     const refNode = renderMessageRef(state, ref, kind, friendLabels);
     if (refNode) bodyChildren.push(refNode);
   }
   const info = getFileAttachmentInfo(state, m, opts);
+  const attachKind = m.attachment?.kind ? String(m.attachment.kind) : "";
+  let hasCaption = false;
+  let hasText = false;
+  let emojiOnly = false;
+  let fileKind = "";
   if (info) {
     const name = info.name;
     const size = info.size;
@@ -786,6 +855,9 @@ function messageLine(
     bodyChildren.push(el("div", { class: fileRowClass }, rowChildren));
     if (viewerCaption) {
       const emojiOnlyCaption = isEmojiOnlyText(viewerCaption);
+      hasCaption = true;
+      hasText = true;
+      emojiOnly = emojiOnlyCaption;
       const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
       if (boardUi && !emojiOnlyCaption) {
         bodyChildren.push(el("div", { class: "msg-text msg-caption msg-text-board" }, [renderBoardPost(viewerCaption)]));
@@ -793,27 +865,31 @@ function messageLine(
         bodyChildren.push(el("div", { class: `msg-text msg-caption${emojiOnlyCaption ? " msg-emoji-only" : ""}` }, renderRichText(viewerCaption)));
       }
     }
+    fileKind = isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : "file";
   } else {
-    const emojiOnly = isEmojiOnlyText(m.text || "");
+    const trimmedText = String(m.text || "").trim();
+    const textEmojiOnly = isEmojiOnlyText(trimmedText);
+    hasText = Boolean(trimmedText);
+    emojiOnly = textEmojiOnly;
     const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
-    if (boardUi && !emojiOnly) {
+    if (boardUi && !textEmojiOnly) {
       bodyChildren.push(el("div", { class: "msg-text msg-text-board" }, [renderBoardPost(m.text)]));
     } else {
-      bodyChildren.push(el("div", { class: `msg-text${emojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(m.text)));
+      bodyChildren.push(el("div", { class: `msg-text${textEmojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(m.text)));
     }
   }
   bodyChildren.push(el("div", { class: "msg-meta" }, meta));
   const reacts = renderReactions(m);
   if (reacts) bodyChildren.push(reacts);
   const lineChildren: HTMLElement[] = [];
-  if (m.kind === "in" && fromId) {
-    const avatarNode = avatar("dm", fromId);
+  if (displayFromId) {
+    const avatarNode = avatar("dm", displayFromId);
     if (canOpenProfile) {
       lineChildren.push(
         el("div", { class: "msg-avatar" }, [
           el(
             "button",
-            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": fromId, title: `Профиль: ${fromLabel}` },
+            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": displayFromId, title: `Профиль: ${fromLabel}` },
             [avatarNode]
           ),
         ])
@@ -824,19 +900,37 @@ function messageLine(
   }
   lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
   const cls = m.attachment ? `msg msg-${m.kind} msg-attach` : `msg msg-${m.kind}`;
-  return el("div", { class: cls }, lineChildren);
+  const line = el("div", { class: cls }, lineChildren);
+  applyMessageDataset(line, m.kind, {
+    boardUi: Boolean(opts?.boardUi && state.selected?.kind === "board"),
+    mobileUi: opts?.mobileUi,
+    refKind,
+    hasReacts: Boolean(reacts),
+    hasCaption,
+    hasText,
+    emojiOnly,
+    attachKind,
+    fileKind,
+  });
+  const accent = resolveUserAccent(accentId);
+  if (accent) {
+    line.style.setProperty("--msg-accent", accent);
+    line.style.setProperty("--msg-from-color", accent);
+  }
+  return line;
 }
 
 function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map<string, string>): HTMLElement {
   const first = items[0];
   const last = items[items.length - 1];
   const fromId = String(first.msg.from || "").trim();
-  const isPlainView = state.messageView === "plain";
-  const showFrom =
-    first.msg.kind === "in" &&
-    (Boolean(first.msg.room) || (state.selected?.kind === "group") || (state.selected?.kind === "board") || isPlainView);
-  const fromLabel = resolveUserLabel(state, fromId, friendLabels);
-  const canOpenProfile = Boolean(fromId);
+  const selfId = String(state.selfId || "").trim();
+  const displayFromId = first.msg.kind === "out" ? selfId : fromId;
+  const accentId = displayFromId;
+  const resolvedLabel = displayFromId ? resolveUserLabel(state, displayFromId, friendLabels) : "";
+  const fromLabel = resolvedLabel && resolvedLabel !== "—" ? resolvedLabel : first.msg.kind === "out" ? "Я" : "—";
+  const showFrom = true;
+  const canOpenProfile = Boolean(displayFromId);
   const bodyChildren: HTMLElement[] = [];
   if (showFrom) {
     const attrs = canOpenProfile
@@ -844,16 +938,15 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
           class: "msg-from msg-from-btn",
           type: "button",
           "data-action": "user-open",
-          "data-user-id": fromId,
+          "data-user-id": displayFromId,
           title: `Профиль: ${fromLabel}`,
         }
       : { class: "msg-from" };
     const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
     bodyChildren.push(node);
-  } else if (isPlainView && first.msg.kind === "out") {
-    bodyChildren.push(el("div", { class: "msg-from msg-from-self" }, ["Я"]));
   }
   const ref = first.msg.reply || first.msg.forward;
+  const refKind = first.msg.reply ? "reply" : first.msg.forward ? "forward" : undefined;
   if (ref) {
     const kind = first.msg.reply ? "reply" : "forward";
     const refNode = renderMessageRef(state, ref, kind, friendLabels);
@@ -861,9 +954,15 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
   }
 
   const gridItems: HTMLElement[] = [];
+  let hasCaption = false;
+  let emojiOnly = false;
   for (const item of items) {
     const caption = String(item.msg.text || "").trim();
     const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
+    if (viewerCaption) {
+      hasCaption = true;
+      emojiOnly = isEmojiOnlyText(viewerCaption);
+    }
     const preview = renderImagePreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx, caption: viewerCaption });
     if (!preview) continue;
     const wrap = el("div", { class: "chat-album-item", "data-msg-idx": String(item.idx) }, [preview]);
@@ -875,14 +974,14 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
   if (reacts) bodyChildren.push(reacts);
 
   const lineChildren: HTMLElement[] = [];
-  if (first.msg.kind === "in" && fromId) {
-    const avatarNode = avatar("dm", fromId);
+  if (displayFromId) {
+    const avatarNode = avatar("dm", displayFromId);
     if (canOpenProfile) {
       lineChildren.push(
         el("div", { class: "msg-avatar" }, [
           el(
             "button",
-            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": fromId, title: `Профиль: ${fromLabel}` },
+            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": displayFromId, title: `Профиль: ${fromLabel}` },
             [avatarNode]
           ),
         ])
@@ -892,7 +991,23 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
     }
   }
   lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
-  return el("div", { class: `msg msg-${first.msg.kind} msg-attach msg-album` }, lineChildren);
+  const line = el("div", { class: `msg msg-${first.msg.kind} msg-attach msg-album` }, lineChildren);
+  applyMessageDataset(line, first.msg.kind, {
+    refKind,
+    hasReacts: Boolean(reacts),
+    hasCaption,
+    hasText: hasCaption,
+    emojiOnly,
+    attachKind: first.msg.attachment?.kind ? String(first.msg.attachment.kind) : "file",
+    fileKind: "image",
+    album: true,
+  });
+  const accent = resolveUserAccent(accentId);
+  if (accent) {
+    line.style.setProperty("--msg-accent", accent);
+    line.style.setProperty("--msg-from-color", accent);
+  }
+  return line;
 }
 
 export function renderChat(layout: Layout, state: AppState) {
@@ -906,7 +1021,10 @@ export function renderChat(layout: Layout, state: AppState) {
     selectionState && Array.isArray(selectionState.ids) && selectionState.ids.length ? new Set(selectionState.ids) : null;
   const selectionCount = selectionSet ? selectionSet.size : 0;
   const maxScrollTop = () => Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
-  layout.chat.classList.toggle("chat-board", Boolean(state.selected && state.selected.kind === "board"));
+  const selectedKindClass = state.selected ? state.selected.kind : null;
+  layout.chat.classList.toggle("chat-board", selectedKindClass === "board");
+  layout.chat.classList.toggle("chat-dm", selectedKindClass === "dm");
+  layout.chat.classList.toggle("chat-group", selectedKindClass === "group");
   const prevKey = String(scrollHost.getAttribute("data-chat-key") || "");
   const keyChanged = key !== prevKey;
   const prevScrollTop = scrollHost.scrollTop;
@@ -1141,7 +1259,7 @@ export function renderChat(layout: Layout, state: AppState) {
         const line = renderAlbumLine(state, group, friendLabels);
         if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
         const lastItem = group[group.length - 1];
-        if (lastItem?.msg?.kind !== "sys" && isGroupTail(lastItem.idx, lastItem.msg)) line.classList.add("msg-tail");
+        if (!boardUi && lastItem?.msg?.kind !== "sys" && isGroupTail(lastItem.idx, lastItem.msg)) line.classList.add("msg-tail");
         const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
         const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
         if (selectionSet) {
@@ -1167,7 +1285,7 @@ export function renderChat(layout: Layout, state: AppState) {
 
     const line = messageLine(state, m, friendLabels, { mobileUi, boardUi, msgIdx });
     if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
-    if (m.kind !== "sys" && isGroupTail(msgIdx, m)) line.classList.add("msg-tail");
+    if (!boardUi && m.kind !== "sys" && isGroupTail(msgIdx, m)) line.classList.add("msg-tail");
     line.setAttribute("data-msg-idx", String(msgIdx));
     const msgId = Number(m.id ?? NaN);
     if (Number.isFinite(msgId)) line.setAttribute("data-msg-id", String(msgId));
@@ -1183,17 +1301,29 @@ export function renderChat(layout: Layout, state: AppState) {
     prevMsg = m.kind === "sys" ? null : m;
   }
 
-  if (key && loadingMore) {
-    const btn = el(
-      "button",
-      {
-        class: "btn chat-history-more btn-loading",
-        type: "button",
-        disabled: "true",
-        "aria-live": "polite",
-      },
-      ["Загрузка…"]
-    );
+  if (key && hasMore) {
+    const btn =
+      loadingMore
+        ? el(
+            "button",
+            {
+              class: "btn chat-history-more btn-loading",
+              type: "button",
+              disabled: "true",
+              "aria-live": "polite",
+            },
+            ["Загрузка…"]
+          )
+        : el(
+            "button",
+            {
+              class: "btn chat-history-more",
+              type: "button",
+              "data-action": "chat-history-more",
+              "aria-label": "Загрузить ещё сообщения",
+            },
+            ["Загрузить ещё"]
+          );
     lineItems.unshift(el("div", { class: "chat-history-more-wrap" }, [btn]));
   }
 

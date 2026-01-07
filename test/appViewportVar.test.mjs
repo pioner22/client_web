@@ -169,6 +169,159 @@ test("viewport var: installAppViewportHeightVar предпочитает innerHe
   }
 });
 
+test("viewport var: держит последнюю стабильную высоту при обнулении innerHeight", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    const windowListeners = new Map();
+    const vvListeners = new Map();
+
+    globalThis.window = {
+      innerHeight: 700,
+      screen: { height: 0 },
+      visualViewport: {
+        height: 680,
+        addEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          list.push(cb);
+          vvListeners.set(type, list);
+        },
+        removeEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          vvListeners.set(
+            type,
+            list.filter((x) => x !== cb)
+          );
+        },
+      },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener(type, cb) {
+        const list = windowListeners.get(type) || [];
+        list.push(cb);
+        windowListeners.set(type, list);
+      },
+      removeEventListener(type, cb) {
+        const list = windowListeners.get(type) || [];
+        windowListeners.set(
+          type,
+          list.filter((x) => x !== cb)
+        );
+      },
+    };
+    globalThis.document = { documentElement: { clientHeight: 700 } };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "700px");
+
+    globalThis.window.innerHeight = 0;
+    globalThis.window.visualViewport.height = 0;
+    globalThis.document.documentElement.clientHeight = 0;
+    for (const cb of windowListeners.get("resize") || []) cb();
+
+    assert.equal(style._props.get("--app-vh"), "700px");
+
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});
+
+test("viewport var: fallback использует screen.height при нулевой высоте viewport", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    const windowListeners = new Map();
+    const vvListeners = new Map();
+
+    globalThis.window = {
+      innerHeight: 0,
+      outerHeight: 0,
+      screen: { height: 812, availHeight: 812 },
+      visualViewport: {
+        height: 0,
+        addEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          list.push(cb);
+          vvListeners.set(type, list);
+        },
+        removeEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          vvListeners.set(
+            type,
+            list.filter((x) => x !== cb)
+          );
+        },
+      },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener(type, cb) {
+        const list = windowListeners.get(type) || [];
+        list.push(cb);
+        windowListeners.set(type, list);
+      },
+      removeEventListener(type, cb) {
+        const list = windowListeners.get(type) || [];
+        windowListeners.set(
+          type,
+          list.filter((x) => x !== cb)
+        );
+      },
+    };
+    globalThis.document = { documentElement: { clientHeight: 0 } };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "812px");
+
+    cleanup();
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});
+
 test("viewport var: iOS PWA: учитывает разницу screen.height и base через --app-gap-bottom", async () => {
   const helper = await loadInstall();
   const prev = {
@@ -473,6 +626,56 @@ test("viewport var: при фокусе на input/textarea переключае
     assert.equal(style._props.get("--safe-bottom-raw"), "0px");
     assert.equal(style._props.get("--app-vv-bottom"), "58px");
     cleanup();
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});
+
+test("viewport var: guard against tiny heights (avoid layout collapse)", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    globalThis.document = {
+      activeElement: { tagName: "TEXTAREA" },
+      documentElement: { clientHeight: 700 },
+      addEventListener() {},
+      removeEventListener() {},
+    };
+    globalThis.window = {
+      innerHeight: 700,
+      screen: { height: 0 },
+      visualViewport: { height: 1, addEventListener() {}, removeEventListener() {} },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "700px");
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
   } finally {
     await helper.cleanup();
     if (prev.window === undefined) delete globalThis.window;

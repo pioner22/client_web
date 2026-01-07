@@ -4,6 +4,7 @@ import { getStoredSkinId } from "../helpers/skin/skin";
 import { resolveInitialTheme } from "../helpers/theme/theme";
 import { getStoredAuthId, getStoredSessionToken, isSessionAutoAuthBlocked } from "../helpers/auth/session";
 import { getPushOptOut } from "../helpers/pwa/pushPrefs";
+import { loadActiveBuildId } from "../helpers/pwa/buildIdStore";
 import { getNotifyInAppEnabled, getNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { getStoredMessageView } from "../helpers/ui/messageView";
 
@@ -47,7 +48,7 @@ export function createInitialState(): AppState {
     authed: false,
     selfId: null,
     serverVersion: null,
-    clientVersion: APP_VERSION,
+    clientVersion: loadActiveBuildId(APP_VERSION),
     status,
     authMode,
     authRememberedId: rememberedId,

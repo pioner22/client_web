@@ -2,7 +2,6 @@ import type { Layout } from "../components/layout/types";
 import type {
   ActionModalPayload,
   AppState,
-  MessageViewMode,
   MobileSidebarTab,
   PageKind,
   SearchResultEntry,
@@ -153,7 +152,6 @@ export interface RenderActions {
   onApplyPwaUpdate: () => void;
   onSkinChange: (skinId: string) => void;
   onThemeChange: (theme: ThemeMode) => void;
-  onMessageViewChange: (view: MessageViewMode) => void;
   onGroupCreate: () => void;
   onBoardCreate: () => void;
   onMembersAdd: () => void;
@@ -660,7 +658,6 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onRefresh: actions.onProfileRefresh,
         onSkinChange: actions.onSkinChange,
         onThemeChange: actions.onThemeChange,
-        onMessageViewChange: actions.onMessageViewChange,
         onAvatarSelect: actions.onProfileAvatarSelect,
         onAvatarClear: actions.onProfileAvatarClear,
         onPushEnable: actions.onPushEnable,

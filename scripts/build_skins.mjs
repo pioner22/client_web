@@ -8,6 +8,19 @@ const distDir = path.join(rootDir, "dist");
 const skinsDir = path.join(distDir, "skins");
 
 const SKIN_ID_RE = /^[a-z0-9_-]{1,32}$/;
+const TITLE_MAP = {
+  default: "По умолчанию",
+  "telegram-web": "Ягодка (светлая)",
+  "telegram-exact": "Telegram (точный)",
+  "dark-premium": "Тёмная премиум",
+  "light-mode": "Светлая тема",
+  "desktop-version": "Десктопная версия",
+  "gradient-accent": "Градиентный акцент",
+  "cyberberry-crt": "Cyberberry CRT",
+  showcase: "Showcase",
+  amber: "Amber",
+  green: "Green",
+};
 
 function titleFromId(id) {
   return String(id)
@@ -30,8 +43,7 @@ async function listSkins() {
     if (!it.name.endsWith(".css")) continue;
     const id = it.name.slice(0, -".css".length).toLowerCase();
     if (!SKIN_ID_RE.test(id)) continue;
-    let title = titleFromId(id);
-    if (id === "default") title = "По умолчанию";
+    const title = TITLE_MAP[id] || titleFromId(id);
     out.push({ id, title });
   }
   out.sort((a, b) => a.title.localeCompare(b.title));

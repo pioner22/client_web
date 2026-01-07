@@ -47,7 +47,7 @@ export class GatewayClient {
         this.stableTimer = window.setTimeout(() => {
           this.attempts = 0;
           this.stableTimer = null;
-        }, 2_000);
+        }, 10_000);
       };
       ws.onclose = (ev) => {
         this.ws = null;
