@@ -324,8 +324,8 @@
   --msg-avatar-gap: var(--sp-3);
   --msg-body-gap: var(--sp-3);
   --msg-meta-font-size: 11px;
-  --msg-card-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
-  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--msg-accent, var(--focus)) 20%, transparent 80%);
+  --msg-card-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--msg-accent, var(--focus)) 12%, var(--line) 88%);
   --msg-stripe-width: 4px;
   --msg-text-size: 15px;
   --msg-text-line: 1.55;
@@ -365,52 +365,34 @@
 
   /* "Bubble" styling for messages */
   --msg-in-bg: color-mix(in srgb, var(--panel), #ffffff 8%);
-  --msg-in-bg-hi: color-mix(in srgb, var(--msg-in-bg), #ffffff 12%);
-  --msg-in-fill: linear-gradient(180deg, var(--msg-in-bg-hi) 0%, var(--msg-in-bg) 70%);
+  --msg-in-bg-hi: var(--msg-in-bg);
+  --msg-in-fill: var(--msg-in-bg);
   --msg-in-border-color: color-mix(in srgb, var(--msg-accent, var(--focus)) 22%, var(--line) 78%);
-  --msg-in-border-gradient: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--msg-accent, var(--focus)) 70%, transparent 30%),
-    color-mix(in srgb, var(--msg-in-border-color) 70%, transparent 30%),
-    color-mix(in srgb, var(--msg-accent, var(--focus)) 25%, transparent 75%)
-  );
+  --msg-in-border-gradient: linear-gradient(180deg, var(--msg-in-border-color), var(--msg-in-border-color));
   --msg-in-border-width: var(--border-width);
-  --msg-in-radius: 20px;
-  --msg-in-radius-tail: 20px;
-  --msg-in-cont-corner: 14px;
+  --msg-in-radius: 14px;
+  --msg-in-radius-tail: 14px;
+  --msg-in-cont-corner: 10px;
   --msg-in-pad-y: var(--sp-5);
   --msg-in-pad-x: var(--sp-5);
   --msg-in-pad-bottom: var(--sp-4);
-  --msg-in-stripe: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--msg-accent, var(--focus)) 32%, transparent 68%) 0 var(--msg-stripe-width),
-    transparent var(--msg-stripe-width) 100%
-  );
-  --msg-in-gloss: linear-gradient(180deg, color-mix(in srgb, #ffffff 22%, transparent 78%) 0%, transparent 45%);
+  --msg-in-stripe: none;
+  --msg-in-gloss: none;
 
   --msg-out-bg: color-mix(in srgb, var(--panel), #ffffff 6%);
-  --msg-out-bg-hi: color-mix(in srgb, var(--msg-out-bg), #ffffff 10%);
-  --msg-out-fill: linear-gradient(180deg, var(--msg-out-bg-hi) 0%, var(--msg-out-bg) 70%);
+  --msg-out-bg-hi: var(--msg-out-bg);
+  --msg-out-fill: var(--msg-out-bg);
   --msg-out-border-color: color-mix(in srgb, var(--msg-accent, var(--focus)) 28%, var(--line) 72%);
-  --msg-out-border-gradient: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--msg-accent, var(--focus)) 72%, transparent 28%),
-    color-mix(in srgb, var(--msg-out-border-color) 70%, transparent 30%),
-    color-mix(in srgb, var(--msg-accent, var(--focus)) 25%, transparent 75%)
-  );
+  --msg-out-border-gradient: linear-gradient(180deg, var(--msg-out-border-color), var(--msg-out-border-color));
   --msg-out-border-width: var(--border-width);
-  --msg-out-radius: 20px;
-  --msg-out-radius-tail: 20px;
-  --msg-out-cont-corner: 14px;
+  --msg-out-radius: 14px;
+  --msg-out-radius-tail: 14px;
+  --msg-out-cont-corner: 10px;
   --msg-out-pad-y: var(--sp-5);
   --msg-out-pad-x: var(--sp-5);
   --msg-out-pad-bottom: var(--sp-4);
-  --msg-out-stripe: linear-gradient(
-    90deg,
-    transparent 0 calc(100% - var(--msg-stripe-width)),
-    color-mix(in srgb, var(--msg-accent, var(--focus)) 32%, transparent 68%) calc(100% - var(--msg-stripe-width)) 100%
-  );
-  --msg-out-gloss: linear-gradient(180deg, color-mix(in srgb, #ffffff 20%, transparent 80%) 0%, transparent 45%);
+  --msg-out-stripe: none;
+  --msg-out-gloss: none;
   --msg-tail-size: 0px;
   --msg-tail-offset: 0px;
   --msg-tail-radius: 2px;

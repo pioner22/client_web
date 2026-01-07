@@ -2262,6 +2262,18 @@ html.app-typing .row-muted {
   gap: var(--msg-body-gap, var(--sp-1));
 }
 
+:root[data-msg-view="bubble"] .chat:not(.chat-board) .msg-body {
+  flex: 0 1 auto;
+  width: min(100%, var(--msg-body-max-width));
+  max-width: min(100%, var(--msg-body-max-width));
+  justify-items: start;
+  width: fit-content;
+}
+
+:root[data-msg-view="bubble"] .chat:not(.chat-board) .msg-meta {
+  justify-self: end;
+}
+
 :root[data-msg-view="plain"] .msg-from,
 :root[data-msg-view="compact"] .msg-from {
   text-transform: none;
