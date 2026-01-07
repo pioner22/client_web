@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.486",
+    date: "2026-01-07",
+    fixed: ["PWA: принудительное обновление больше не показывает ошибку, если обновлений нет"],
+  },
+  {
     version: "0.1.485",
     date: "2026-01-07",
     improved: [

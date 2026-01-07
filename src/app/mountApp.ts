@@ -9994,7 +9994,16 @@ export function mountApp(root: HTMLElement) {
     logPwaUpdate(mode === "manual" ? "manual_activate" : "auto_activate", `${buildId || "unknown"}#${activated ? "ok" : "no"}`);
     if (!activated) {
       const hasController = typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
-      const canReloadWithoutWaiting = Boolean(buildId) && hasController && !hasPwaUpdate();
+      const hasWaiting = hasPwaUpdate();
+      if (mode === "manual" && !hasWaiting) {
+        const msg = hasController
+          ? "Новых обновлений нет."
+          : "PWA обновление недоступно: нет активного Service Worker. Перезапустите приложение.";
+        store.set({ status: msg, pwaUpdateAvailable: false });
+        logPwaUpdate("manual_no_update", buildId || "unknown");
+        return;
+      }
+      const canReloadWithoutWaiting = Boolean(buildId) && hasController && !hasWaiting;
       if (canReloadWithoutWaiting) {
         logPwaUpdate(mode === "manual" ? "manual_reload_active" : "auto_reload_active", buildId || "unknown");
         storeActiveBuildId(buildId);
