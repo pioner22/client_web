@@ -2657,33 +2657,34 @@ html.app-typing .row-muted {
 
 /* ===== Message style: dark-premium baseline across skins ===== */
 .chat:not(.chat-board) {
-  --msg-pad-y: 2px;
-  --msg-body-max-width: 80%;
-  --msg-avatar-size: 32px;
-  --msg-avatar-gap: 8px;
-  --msg-body-gap: 4px;
+  --chat-line-gap: calc(var(--sp-4) * var(--phi-inv));
+  --msg-pad-y: calc(var(--sp-2) * var(--phi-inv2));
+  --msg-body-max-width: min(100%, clamp(320px, calc(var(--messages-container-width) * var(--phi-inv)), 760px));
+  --msg-avatar-size: calc(20px * var(--phi));
+  --msg-avatar-gap: calc(var(--sp-2) * var(--phi));
+  --msg-body-gap: calc(var(--sp-2) * var(--phi-inv));
   --msg-text-size: 15px;
-  --msg-text-line: 1.3;
+  --msg-text-line: var(--phi);
   --msg-card-shadow: 0 0 0 0 transparent;
   --msg-card-outline: 0 0 0 0 transparent;
   --msg-stripe-width: 0px;
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-end;
   --msg-sys-justify: flex-start;
-  --msg-in-radius: 20px;
-  --msg-in-radius-tail: 20px;
-  --msg-in-pad-y: 8px;
-  --msg-in-pad-x: 12px;
-  --msg-in-pad-bottom: 8px;
+  --msg-in-radius: calc(12px * var(--phi));
+  --msg-in-radius-tail: calc(12px * var(--phi));
+  --msg-in-pad-y: calc(var(--sp-4) * var(--phi-inv));
+  --msg-in-pad-x: calc(var(--sp-4) * var(--phi));
+  --msg-in-pad-bottom: calc(var(--sp-4) * var(--phi-inv));
   --msg-in-border-color: transparent;
   --msg-in-border-gradient: linear-gradient(180deg, transparent, transparent);
   --msg-in-gloss: none;
   --msg-in-stripe: none;
-  --msg-out-radius: 20px;
-  --msg-out-radius-tail: 20px;
-  --msg-out-pad-y: 8px;
-  --msg-out-pad-x: 12px;
-  --msg-out-pad-bottom: 8px;
+  --msg-out-radius: calc(12px * var(--phi));
+  --msg-out-radius-tail: calc(12px * var(--phi));
+  --msg-out-pad-y: calc(var(--sp-4) * var(--phi-inv));
+  --msg-out-pad-x: calc(var(--sp-4) * var(--phi));
+  --msg-out-pad-bottom: calc(var(--sp-4) * var(--phi-inv));
   --msg-out-border-color: transparent;
   --msg-out-border-gradient: linear-gradient(180deg, transparent, transparent);
   --msg-out-gloss: none;
@@ -2698,30 +2699,43 @@ html.app-typing .row-muted {
   --msg-from-border: transparent;
   --msg-tail-size: 0px;
   --msg-tail-offset: 0px;
-  --msg-bubble-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+  --msg-bubble-shadow: 0 calc(8px * var(--phi-inv)) calc(12px * var(--phi)) rgba(0, 0, 0, 0.28);
   --msg-quote-bg: #663399;
 }
 
 .chat.chat-dm {
-  --msg-avatar-gap: 0px;
-  --msg-body-gap: 2px;
-}
-
-.chat.chat-dm .msg-avatar,
-.chat.chat-dm .msg-from {
-  display: none;
+  --msg-avatar-gap: calc(var(--sp-2) * var(--phi-inv));
+  --msg-body-gap: calc(var(--sp-2) * var(--phi-inv2));
 }
 
 .chat:not(.chat-board) .msg-from {
+  display: grid;
+  justify-items: start;
+  gap: calc(var(--sp-1) * var(--phi-inv2));
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: 0.02em;
   font-weight: 600;
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-from.msg-from-btn {
+  text-align: left;
+}
+
+.chat:not(.chat-board) .msg-from-name {
+  font-weight: 650;
+}
+
+.chat:not(.chat-board) .msg-from-handle {
+  font-size: calc(var(--msg-from-size, 12px) * var(--phi-inv2));
+  color: var(--msg-time-color);
+  font-weight: 500;
 }
 
 .chat:not(.chat-board) .msg-meta {
-  margin-top: 2px;
-  margin-bottom: 6px;
-  gap: 6px;
+  margin-top: calc(var(--sp-2) * var(--phi-inv));
+  margin-bottom: calc(var(--sp-3) * var(--phi-inv2));
+  gap: calc(var(--sp-2) * var(--phi-inv));
   font-size: 11px;
   color: var(--msg-time-color);
 }
@@ -2738,8 +2752,9 @@ html.app-typing .row-muted {
 .chat:not(.chat-board) .msg-body {
   flex: 0 1 auto;
   width: fit-content;
-  max-width: var(--msg-body-max-width);
+  max-width: min(100%, var(--msg-body-max-width));
   justify-items: start;
+  min-width: 0;
 }
 
 .chat:not(.chat-board) .msg-out .msg-body {
@@ -2761,6 +2776,7 @@ html.app-typing .row-muted {
   max-width: 100%;
   line-height: var(--msg-text-line, 1.3);
   box-shadow: var(--msg-bubble-shadow, none);
+  overflow-wrap: anywhere;
 }
 
 .chat:not(.chat-board) .msg-in .msg-text:not(.msg-caption) {
@@ -2780,7 +2796,7 @@ html.app-typing .row-muted {
 .chat:not(.chat-board) .msg-attach .msg-text.msg-caption {
   background: transparent;
   padding: 0;
-  margin-top: 5px;
+  margin-top: calc(var(--sp-2) * var(--phi-inv));
   border-radius: 0;
   border-top: 0;
   font-size: 14px;
@@ -2796,20 +2812,21 @@ html.app-typing .row-muted {
 
 .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-image {
   background: var(--panel2);
-  padding: 5px;
-  border-radius: 10px;
-  width: min(70vw, 280px);
+  padding: calc(var(--sp-2) * var(--phi-inv));
+  border-radius: calc(8px * var(--phi));
+  width: min(100%, clamp(260px, calc(var(--messages-container-width) * var(--phi-inv)), 420px));
+  max-width: 100%;
 }
 
 .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-image > .chat-file-preview {
-  border-radius: 10px;
+  border-radius: calc(8px * var(--phi));
 }
 
 .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-image .file-actions {
   position: static;
-  margin-top: 6px;
+  margin-top: calc(var(--sp-2) * var(--phi-inv));
   justify-content: flex-end;
-  gap: 10px;
+  gap: calc(var(--sp-2) * var(--phi-inv));
 }
 
 .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-image .file-action {
@@ -2817,38 +2834,50 @@ html.app-typing .row-muted {
   border: 0;
   padding: 0;
   min-height: 0;
-  width: 18px;
-  height: 18px;
+  width: calc(12px * var(--phi));
+  height: calc(12px * var(--phi));
   color: var(--msg-time-color);
   box-shadow: none;
 }
 
 .chat:not(.chat-board) .msg-attach .msg-meta {
-  margin: 2px 0 0;
+  margin: calc(var(--sp-2) * var(--phi-inv2)) 0 0;
   padding: 0;
 }
 
 .chat:not(.chat-board) .msg-ref {
   background: var(--panel2);
   border: 0;
-  border-radius: 10px;
-  padding: 8px 12px;
+  border-radius: calc(8px * var(--phi-inv));
+  padding: calc(var(--sp-3) * var(--phi-inv)) calc(var(--sp-4) * var(--phi-inv));
   box-shadow: none;
   color: var(--msg-time-color);
   font-size: 13px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chat:not(.chat-board) .msg-ref-header,
+.chat:not(.chat-board) .msg-ref-title-wrap,
+.chat:not(.chat-board) .msg-ref-body {
+  min-width: 0;
 }
 
 .chat:not(.chat-board) .msg-ref-title {
   color: var(--msg-time-color);
   font-size: 13px;
+  max-width: 100%;
 }
 
 .chat:not(.chat-board) .msg-ref-meta {
   color: var(--msg-time-color);
+  max-width: 100%;
 }
 
 .chat:not(.chat-board) .msg-ref-text {
   color: var(--msg-text-in-color);
+  max-width: 100%;
 }
 
 .chat:not(.chat-board) .msg-ref-quote {
@@ -2869,8 +2898,8 @@ html.app-typing .row-muted {
 .chat:not(.chat-board) .msg-ref-quote .msg-ref-text {
   background: var(--msg-quote-bg);
   color: var(--msg-text-in-color);
-  padding: 6px 10px;
-  border-radius: 15px;
+  padding: calc(var(--sp-3) * var(--phi-inv)) calc(var(--sp-4) * var(--phi-inv));
+  border-radius: calc(10px * var(--phi-inv));
   display: inline-block;
 }
 
@@ -2881,7 +2910,7 @@ html.app-typing .row-muted {
   box-shadow: none;
   color: var(--focus);
   font-size: 13px;
-  margin: 10px 0 5px;
+  margin: calc(var(--sp-3) * var(--phi-inv)) 0 calc(var(--sp-2) * var(--phi-inv));
 }
 
 .chat:not(.chat-board) .msg-ref-forward .msg-ref-avatar {

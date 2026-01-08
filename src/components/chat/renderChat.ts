@@ -178,6 +178,13 @@ function resolveUserLabel(state: AppState, id: string, friendLabels?: Map<string
   return fromFriends || pid;
 }
 
+function resolveUserHandle(state: AppState, id: string): string {
+  const pid = String(id || "").trim();
+  if (!pid) return "";
+  const p = state.profiles?.[pid];
+  return normalizeHandle(String(p?.handle || ""));
+}
+
 function normalizeHandle(value: string): string {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -225,6 +232,8 @@ function renderMessageRef(
   const canShowSender = Boolean(sender) && !(isForward && hiddenProfile);
   const title = canShowSender ? (isForward ? `Переслано от ${sender}` : `Ответ: ${sender}`) : titleBase;
   const metaParts: string[] = [];
+  const senderHandle = !hiddenProfile && fromId ? resolveUserHandle(state, fromId) : "";
+  if (senderHandle && !sender.includes(senderHandle)) metaParts.push(senderHandle);
   if (hiddenProfile) metaParts.push("Скрытый профиль");
   if (viaBot) metaParts.push(`через ${viaBot}`);
   if (postAuthor) metaParts.push(`Автор: ${postAuthor}`);
@@ -744,6 +753,9 @@ function messageLine(
   const accentId = displayFromId;
   const resolvedLabel = displayFromId ? resolveUserLabel(state, displayFromId, friendLabels) : "";
   const fromLabel = resolvedLabel && resolvedLabel !== "—" ? resolvedLabel : m.kind === "out" ? "Я" : "—";
+  const fromHandle = displayFromId ? resolveUserHandle(state, displayFromId) : "";
+  const showHandle = Boolean(fromHandle && !fromLabel.includes(fromHandle));
+  const titleLabel = showHandle ? `${fromLabel} ${fromHandle}` : fromLabel;
   const showFrom = true;
   const canOpenProfile = Boolean(displayFromId);
   const meta = buildMessageMeta(m);
@@ -755,10 +767,12 @@ function messageLine(
           type: "button",
           "data-action": "user-open",
           "data-user-id": displayFromId,
-          title: `Профиль: ${fromLabel}`,
+          title: `Профиль: ${titleLabel}`,
         }
       : { class: "msg-from" };
-    const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
+    const labelChildren = [el("span", { class: "msg-from-name" }, [fromLabel])];
+    if (showHandle) labelChildren.push(el("span", { class: "msg-from-handle" }, [fromHandle]));
+    const node = canOpenProfile ? el("button", attrs, labelChildren) : el("div", attrs, labelChildren);
     bodyChildren.push(node);
   }
   const ref = m.reply || m.forward;
@@ -889,7 +903,7 @@ function messageLine(
         el("div", { class: "msg-avatar" }, [
           el(
             "button",
-            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": displayFromId, title: `Профиль: ${fromLabel}` },
+            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": displayFromId, title: `Профиль: ${titleLabel}` },
             [avatarNode]
           ),
         ])
@@ -929,6 +943,9 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
   const accentId = displayFromId;
   const resolvedLabel = displayFromId ? resolveUserLabel(state, displayFromId, friendLabels) : "";
   const fromLabel = resolvedLabel && resolvedLabel !== "—" ? resolvedLabel : first.msg.kind === "out" ? "Я" : "—";
+  const fromHandle = displayFromId ? resolveUserHandle(state, displayFromId) : "";
+  const showHandle = Boolean(fromHandle && !fromLabel.includes(fromHandle));
+  const titleLabel = showHandle ? `${fromLabel} ${fromHandle}` : fromLabel;
   const showFrom = true;
   const canOpenProfile = Boolean(displayFromId);
   const bodyChildren: HTMLElement[] = [];
@@ -939,10 +956,12 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
           type: "button",
           "data-action": "user-open",
           "data-user-id": displayFromId,
-          title: `Профиль: ${fromLabel}`,
+          title: `Профиль: ${titleLabel}`,
         }
       : { class: "msg-from" };
-    const node = canOpenProfile ? el("button", attrs, [fromLabel]) : el("div", attrs, [fromLabel]);
+    const labelChildren = [el("span", { class: "msg-from-name" }, [fromLabel])];
+    if (showHandle) labelChildren.push(el("span", { class: "msg-from-handle" }, [fromHandle]));
+    const node = canOpenProfile ? el("button", attrs, labelChildren) : el("div", attrs, labelChildren);
     bodyChildren.push(node);
   }
   const ref = first.msg.reply || first.msg.forward;
@@ -981,7 +1000,7 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
         el("div", { class: "msg-avatar" }, [
           el(
             "button",
-            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": displayFromId, title: `Профиль: ${fromLabel}` },
+            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": displayFromId, title: `Профиль: ${titleLabel}` },
             [avatarNode]
           ),
         ])

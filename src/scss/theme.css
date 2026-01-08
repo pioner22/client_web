@@ -325,9 +325,9 @@
   --chat-line-gap: var(--sp-4);
   --msg-pad-y: 0px;
   --msg-status-read-color: var(--focus);
-  --messages-container-width: 728px;
+  --messages-container-width: min(100%, clamp(360px, calc(100% * var(--phi-inv)), 960px));
   --chat-bubbles-max-width: min(100%, var(--messages-container-width));
-  --msg-body-max-width: min(100%, var(--messages-container-width));
+  --msg-body-max-width: min(100%, clamp(320px, calc(var(--messages-container-width) * var(--phi-inv)), 760px));
   --msg-avatar-size: 36px;
   --msg-avatar-font-size: 12px;
   --msg-avatar-gap: var(--sp-3);
@@ -434,9 +434,9 @@
 }
 
 :root[data-msg-wide="1"] {
-  --messages-container-width: 100%;
-  --chat-bubbles-max-width: 100%;
-  --msg-body-max-width: 100%;
+  --messages-container-width: min(100%, clamp(420px, calc(100% * var(--phi)), 1080px));
+  --chat-bubbles-max-width: min(100%, var(--messages-container-width));
+  --msg-body-max-width: min(100%, clamp(360px, calc(var(--messages-container-width) * var(--phi-inv)), 820px));
 }
 
 :root[data-msg-view="bubble"] {

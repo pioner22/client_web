@@ -32,8 +32,8 @@
   --chat-bg: #000000;
   --chat-pad: 15px;
   --chat-line-gap: 8px;
-  --messages-container-width: 100%;
-  --chat-bubbles-max-width: 100%;
+  --messages-container-width: min(100%, clamp(360px, calc(100% * var(--phi-inv)), 960px));
+  --chat-bubbles-max-width: min(100%, var(--messages-container-width));
 
   --composer-bg: linear-gradient(90deg, rgba(0, 0, 0, 0.9), rgba(75, 0, 130, 0.9));
   --composer-border-color: rgba(255, 255, 255, 0.1);
@@ -53,7 +53,7 @@
   --hdr-action-color: #ffffff;
 
   --msg-pad-y: 2px;
-  --msg-body-max-width: 80%;
+  --msg-body-max-width: min(100%, clamp(320px, calc(var(--messages-container-width) * var(--phi-inv)), 760px));
   --msg-avatar-size: 32px;
   --msg-avatar-gap: 8px;
   --msg-text-size: 15px;
