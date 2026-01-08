@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.490",
+    date: "2026-01-08",
+    improved: [
+      "Сайдбар: поиск с иконкой и более заметным фокусом",
+      "Сайдбар: clear-кнопка поиска реагирует сразу и возвращает фокус",
+    ],
+  },
+  {
     version: "0.1.489",
     date: "2026-01-08",
     improved: [

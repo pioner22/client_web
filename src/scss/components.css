@@ -1143,6 +1143,22 @@ html.app-typing .row-muted {
   display: none;
 }
 
+.sidebar-search-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 15px;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.sidebar-searchbar:focus-within .sidebar-search-icon {
+  color: var(--text);
+  opacity: 1;
+}
+
 .sidebar-search-input {
   flex: 1 1 auto;
   min-width: 0;

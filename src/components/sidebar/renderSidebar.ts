@@ -904,31 +904,45 @@ export function renderSidebar(
       spellcheck: "false",
       enterkeyhint: "search",
     }) as HTMLInputElement;
+    const searchIcon = el("span", { class: "sidebar-search-icon", "aria-hidden": "true" }, ["🔍"]);
     input.value = sidebarQueryRaw;
     input.disabled = disableSearchWhileTyping;
-    input.addEventListener("input", () => onSetSidebarQuery(input.value));
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onSetSidebarQuery("");
-      }
-    });
     const clearBtn = el(
       "button",
       {
-        class: sidebarQueryRaw ? "btn sidebar-search-clear" : "btn sidebar-search-clear hidden",
+        class: "btn sidebar-search-clear",
         type: "button",
         title: "Очистить",
         "aria-label": "Очистить",
       },
       ["×"]
     ) as HTMLButtonElement;
+    const updateClearState = () => toggleClass(clearBtn, "hidden", !input.value.trim());
+    updateClearState();
+    input.addEventListener("input", () => {
+      onSetSidebarQuery(input.value);
+      updateClearState();
+    });
+    input.addEventListener("search", () => {
+      onSetSidebarQuery(input.value);
+      updateClearState();
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        input.value = "";
+        onSetSidebarQuery("");
+        updateClearState();
+      }
+    });
     clearBtn.addEventListener("click", (e) => {
       e.preventDefault();
+      input.value = "";
       onSetSidebarQuery("");
+      updateClearState();
       focusElement(input);
     });
-    const children: HTMLElement[] = [input, clearBtn];
+    const children: HTMLElement[] = [searchIcon, input, clearBtn];
     if (opts?.action) children.push(opts.action);
     return el("div", { class: "sidebar-searchbar" }, children);
   };
