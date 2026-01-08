@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.489",
+    date: "2026-01-08",
+    improved: [
+      "Контакты: в списке показывается статус (онлайн/last seen) и @handle",
+      "Контакты: порядок контактов — online-first, затем last seen и имя",
+      "Контакты: в табе Контакты убрана чат-мета (время/непрочитанные/реакции)",
+    ],
+  },
+  {
     version: "0.1.488",
     date: "2026-01-08",
     improved: ["Контакты: добавлен заголовок секции для активного списка (tweb parity)"],

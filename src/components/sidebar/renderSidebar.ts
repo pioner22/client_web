@@ -604,44 +604,80 @@ export function renderSidebar(
     const ts = Date.parse(String(raw));
     return Number.isFinite(ts) ? ts : 0;
   };
+  const formatLastSeenLabel = (ts: number): string | null => {
+    if (!Number.isFinite(ts) || ts <= 0) return null;
+    const now = Date.now();
+    const diff = Math.max(0, now - ts);
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (diff < minute) return "был(а) только что";
+    if (diff < hour) {
+      const mins = Math.max(1, Math.floor(diff / minute));
+      return `был(а) ${mins} мин назад`;
+    }
+    if (diff < day) {
+      const hours = Math.max(1, Math.floor(diff / hour));
+      return `был(а) ${hours} ч назад`;
+    }
+    const date = new Date(ts);
+    if (!Number.isFinite(date.getTime())) return null;
+    const label = date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+    return `был(а) ${label}`;
+  };
   const lastTsForKey = (key: string): number => {
     const conv = state.conversations[key] || [];
     const last = conv.length ? conv[conv.length - 1] : null;
     const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
     return Math.max(0, ts);
   };
-  const lastActivityTs = (f: FriendEntry): number => {
+  const contactStatusLabel = (f: FriendEntry): string | null => {
+    const parts: string[] = [];
+    if (f.online) {
+      parts.push("в сети");
+    } else {
+      const seenLabel = formatLastSeenLabel(lastSeenTs(f));
+      if (seenLabel) parts.push(seenLabel);
+    }
     const id = String(f.id || "").trim();
-    if (!id) return 0;
-    const ts = lastTsForKey(dmKey(id));
-    if (ts) return ts;
-    return lastSeenTs(f);
+    const rawHandle = String(f.handle || state.profiles?.[id]?.handle || "").trim();
+    const handle = rawHandle.replace(/^@/, "");
+    if (handle) parts.push(`@${handle}`);
+    return parts.length ? parts.join(" · ") : null;
   };
-  const compareFriendsByActivity = (a: FriendEntry, b: FriendEntry): number => {
-    const aTs = lastActivityTs(a);
-    const bTs = lastActivityTs(b);
-    if (aTs !== bTs) return bTs - aTs;
+  const compareContactsByPresence = (a: FriendEntry, b: FriendEntry): number => {
+    const aOnline = Boolean(a.online);
+    const bOnline = Boolean(b.online);
+    if (aOnline !== bOnline) return aOnline ? -1 : 1;
+    const aSeen = lastSeenTs(a);
+    const bSeen = lastSeenTs(b);
+    if (aSeen !== bSeen) return bSeen - aSeen;
     return displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
   };
-  const buildContactRows = (items: FriendEntry[]): HTMLElement[] =>
-    markCompactAvatarRows(
-      items
-        .slice()
-        .sort(compareFriendsByActivity)
-        .map((f) => {
-          const k = dmKey(f.id);
-          const meta = previewForConversation(state, k, "dm", drafts[k]);
-          return friendRow(
-            state,
-            f,
-            Boolean(sel && sel.kind === "dm" && sel.id === f.id),
-            meta,
-            onSelect,
-            onOpenUser,
-            attnSet.has(f.id)
-          );
-        })
+  const buildContactRows = (items: FriendEntry[], opts?: { sort?: boolean }): HTMLElement[] => {
+    const ordered = items.slice();
+    if (opts?.sort !== false) ordered.sort(compareContactsByPresence);
+    return markCompactAvatarRows(
+      ordered.map((f) => {
+        const meta: SidebarRowMeta = {
+          sub: contactStatusLabel(f),
+          time: null,
+          hasDraft: false,
+          reactionEmoji: null,
+        };
+        const rowFriend = f.unread ? { ...f, unread: 0 } : f;
+        return friendRow(
+          state,
+          rowFriend,
+          Boolean(sel && sel.kind === "dm" && sel.id === f.id),
+          meta,
+          onSelect,
+          onOpenUser,
+          attnSet.has(f.id)
+        );
+      })
     );
+  };
 
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
@@ -1149,6 +1185,7 @@ export function renderSidebar(
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
     const pinnedContactRows: HTMLElement[] = [];
+    const pinnedContactEntries: FriendEntry[] = [];
     for (const key of pinnedKeys) {
       if (key.startsWith("dm:")) {
         const id = key.slice(3);
@@ -1162,6 +1199,7 @@ export function renderSidebar(
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention);
         pinnedContactRows.push(row);
+        pinnedContactEntries.push(f);
         continue;
       }
       if (key.startsWith("room:")) {
@@ -1331,7 +1369,7 @@ export function renderSidebar(
     });
 
     if (activeTab === "contacts") {
-      const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
+      const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
       const contactRowsAll = buildContactRows(contactCandidates);
       const activeContactRows = buildContactRows(activeContacts);
       const archivedContactRows = buildContactRows(archivedContacts);
@@ -1532,6 +1570,7 @@ export function renderSidebar(
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
     const pinnedContactRows: HTMLElement[] = [];
+    const pinnedContactEntries: FriendEntry[] = [];
     for (const key of pinnedKeys) {
       if (key.startsWith("dm:")) {
         const id = key.slice(3);
@@ -1544,6 +1583,7 @@ export function renderSidebar(
         if (!passesChatFilter({ unread, attention })) continue;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         pinnedContactRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention));
+        pinnedContactEntries.push(f);
         continue;
       }
       if (key.startsWith("room:")) {
@@ -1731,7 +1771,7 @@ export function renderSidebar(
     }
 
     if (activeTab === "contacts") {
-      const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
+      const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
       const contactRowsAll = buildContactRows(contactCandidates);
       const activeContactRows = buildContactRows(activeContacts);
       const archivedContactRows = buildContactRows(archivedContacts);
@@ -2232,20 +2272,16 @@ export function renderSidebar(
   }
 
   // Contacts tab.
-  const pinnedDesktopContactRows: HTMLElement[] = [];
+  const pinnedContactEntries: FriendEntry[] = [];
   for (const key of pinnedKeys) {
     if (!key.startsWith("dm:")) continue;
     const id = key.slice(3);
     const f = state.friends.find((x) => x.id === id);
     if (!f) continue;
     if (!matchesFriend(f)) continue;
-    const k = dmKey(f.id);
-    const meta = previewForConversation(state, k, "dm", drafts[k]);
-    pinnedDesktopContactRows.push(
-      friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id))
-    );
+    pinnedContactEntries.push(f);
   }
-  const pinnedContactRowsCompact = markCompactAvatarRows(pinnedDesktopContactRows);
+  const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
   const contactRowsAll = buildContactRows(contactCandidates);
   const activeContactRows = buildContactRows(activeContacts);
   const archivedContactRows = buildContactRows(archivedContacts);
