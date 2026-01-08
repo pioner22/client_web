@@ -2699,15 +2699,8 @@ html.app-typing .row-muted {
   --msg-from-border: transparent;
   --msg-tail-size: 0px;
   --msg-tail-offset: 0px;
-  --msg-bubble-shadow: 0 calc(8px * var(--phi-inv)) calc(12px * var(--phi)) rgba(0, 0, 0, 0.28);
-  --msg-quote-bg: #663399;
-  --msg-row-bg: color-mix(in srgb, var(--panel2) 88%, transparent);
-  --msg-row-bg-out: color-mix(in srgb, var(--msg-out-bg) 12%, var(--panel2) 88%);
-  --msg-row-border: color-mix(in srgb, var(--line) 55%, transparent);
-  --msg-row-radius: calc(12px * var(--phi-inv2));
-  --msg-row-pad-y: calc(var(--sp-4) * var(--phi-inv));
-  --msg-row-pad-x: calc(var(--sp-4) * var(--phi));
-  --msg-row-accent: calc(2px * var(--phi));
+  --msg-bubble-shadow: none;
+  --msg-quote-bg: color-mix(in srgb, var(--focus) 18%, var(--panel2) 82%);
 }
 
 .chat.chat-dm {
@@ -2716,9 +2709,9 @@ html.app-typing .row-muted {
 }
 
 .chat:not(.chat-board) .msg-from {
-  display: grid;
-  justify-items: start;
-  gap: calc(var(--sp-1) * var(--phi-inv2));
+  display: inline-flex;
+  align-items: baseline;
+  gap: calc(var(--sp-2) * var(--phi-inv));
   text-transform: none;
   letter-spacing: 0.02em;
   font-weight: 600;
@@ -2737,10 +2730,6 @@ html.app-typing .row-muted {
   font-size: calc(var(--msg-from-size, 12px) * var(--phi-inv2));
   color: var(--msg-time-color);
   font-weight: 500;
-}
-
-.chat:not(.chat-board) .msg-out {
-  --msg-row-bg: var(--msg-row-bg-out);
 }
 
 .chat:not(.chat-board) .msg-meta {
@@ -2768,11 +2757,9 @@ html.app-typing .row-muted {
   max-width: var(--msg-body-max-width);
   justify-items: start;
   min-width: 0;
-  background: var(--msg-row-bg);
-  border: 1px solid var(--msg-row-border);
-  border-left: var(--msg-row-accent) solid color-mix(in srgb, var(--msg-accent, var(--focus)) 55%, transparent);
-  border-radius: var(--msg-row-radius);
-  padding: var(--msg-row-pad-y) var(--msg-row-pad-x);
+  background: transparent;
+  border: 0;
+  padding: 0;
   box-shadow: none;
 }
 
@@ -2784,10 +2771,9 @@ html.app-typing .row-muted {
 .chat:not(.chat-board) .msg-out .msg-body,
 .chat:not(.chat-board) .msg-attach.msg-in .msg-body,
 .chat:not(.chat-board) .msg-attach.msg-out .msg-body {
-  background: var(--msg-row-bg);
-  border: 1px solid var(--msg-row-border);
-  border-left: var(--msg-row-accent) solid color-mix(in srgb, var(--msg-accent, var(--focus)) 55%, transparent);
-  padding: var(--msg-row-pad-y) var(--msg-row-pad-x);
+  background: transparent;
+  border: 0;
+  padding: 0;
   box-shadow: none;
 }
 
@@ -2839,6 +2825,13 @@ html.app-typing .row-muted {
   max-width: 100%;
 }
 
+.chat:not(.chat-board) .msg-attach .file-row-chat:not(.file-row-image) {
+  background: color-mix(in srgb, var(--panel2) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: calc(10px * var(--phi-inv2));
+  padding: calc(var(--sp-3) * var(--phi-inv)) calc(var(--sp-4) * var(--phi-inv));
+}
+
 .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-image > .chat-file-preview {
   border-radius: calc(8px * var(--phi));
 }
@@ -2868,7 +2861,7 @@ html.app-typing .row-muted {
 
 .chat:not(.chat-board) .msg-sys .msg-body {
   border-left-color: transparent;
-  background: color-mix(in srgb, var(--panel2) 72%, transparent);
+  background: transparent;
 }
 
 .chat:not(.chat-board) .msg-reacts {
@@ -2880,7 +2873,7 @@ html.app-typing .row-muted {
 }
 
 .chat:not(.chat-board) .msg.msg-cont {
-  padding-top: calc(var(--msg-pad-y) * var(--phi-inv2));
+  padding-top: calc(var(--msg-pad-y) * var(--phi-inv3));
 }
 
 .chat:not(.chat-board) .msg.msg-cont .msg-avatar {
@@ -2892,10 +2885,11 @@ html.app-typing .row-muted {
 }
 
 .chat:not(.chat-board) .msg-ref {
-  background: var(--panel2);
+  background: transparent;
   border: 0;
-  border-radius: calc(8px * var(--phi-inv));
-  padding: calc(var(--sp-3) * var(--phi-inv)) calc(var(--sp-4) * var(--phi-inv));
+  border-left: calc(2px * var(--phi)) solid color-mix(in srgb, var(--msg-accent, var(--focus)) 50%, transparent);
+  border-radius: 0;
+  padding: calc(var(--sp-2) * var(--phi-inv)) calc(var(--sp-4) * var(--phi-inv));
   box-shadow: none;
   color: var(--msg-time-color);
   font-size: 13px;
