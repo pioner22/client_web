@@ -430,6 +430,15 @@
   --msg-body-max-width: 100%;
 }
 
+:root[data-msg-view="bubble"] {
+  --msg-card-shadow: 0 0 0 0 transparent;
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--line), transparent 70%);
+  --msg-in-radius: 10px;
+  --msg-in-radius-tail: 10px;
+  --msg-out-radius: 10px;
+  --msg-out-radius-tail: 10px;
+}
+
 @media (min-width: 926px) {
   html.sidebar-left-collapsed {
     --sidebar-width-min: var(--sidebar-collapsed-width);
