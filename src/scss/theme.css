@@ -62,6 +62,15 @@
   --sp-5: 12px;
   --sp-6: 18px;
 
+  /* ===== Golden ratio scale ===== */
+  --phi: 1.618;
+  --phi-inv: 0.618;
+  --phi-inv2: 0.382;
+  --phi-inv3: 0.236;
+  --phi-pct: 61.8%;
+  --phi-inv2-pct: 38.2%;
+  --phi-inv3-pct: 23.6%;
+
   /* ===== Radii ===== */
   --r-xs: 4px;
   --r-sm: 6px;
@@ -431,12 +440,27 @@
 }
 
 :root[data-msg-view="bubble"] {
+  --chat-line-gap: calc(var(--sp-4) * var(--phi-inv));
+  --msg-body-gap: calc(var(--sp-3) * var(--phi-inv));
+  --msg-text-line: 1.618;
+  --msg-body-max-width: min(100%, clamp(320px, calc(var(--messages-container-width) * var(--phi-inv)), 760px));
   --msg-card-shadow: 0 0 0 0 transparent;
-  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--line), transparent 70%);
-  --msg-in-radius: 10px;
-  --msg-in-radius-tail: 10px;
-  --msg-out-radius: 10px;
-  --msg-out-radius-tail: 10px;
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--line) var(--phi-pct), transparent);
+  --msg-time-color: color-mix(in srgb, var(--muted) var(--phi-pct), var(--text) var(--phi-inv2-pct));
+  --msg-meta-bg: color-mix(in srgb, var(--panel2) var(--phi-pct), transparent);
+  --msg-meta-border: color-mix(in srgb, var(--line) var(--phi-inv2-pct), transparent);
+  --msg-in-radius: calc(16px * var(--phi-inv));
+  --msg-in-radius-tail: calc(16px * var(--phi-inv));
+  --msg-out-radius: calc(16px * var(--phi-inv));
+  --msg-out-radius-tail: calc(16px * var(--phi-inv));
+  --msg-in-pad-x: calc(var(--sp-4) * var(--phi));
+  --msg-in-pad-y: calc(var(--sp-4) * var(--phi-inv));
+  --msg-in-pad-bottom: calc(var(--sp-4) * var(--phi-inv));
+  --msg-out-pad-x: calc(var(--sp-4) * var(--phi));
+  --msg-out-pad-y: calc(var(--sp-4) * var(--phi-inv));
+  --msg-out-pad-bottom: calc(var(--sp-4) * var(--phi-inv));
+  --msg-in-border-color: color-mix(in srgb, var(--msg-in-bg) var(--phi-pct), var(--line) var(--phi-inv2-pct));
+  --msg-out-border-color: color-mix(in srgb, var(--msg-out-bg) var(--phi-pct), var(--line) var(--phi-inv2-pct));
 }
 
 @media (min-width: 926px) {

@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.493",
+    date: "2026-01-08",
+    improved: [
+      "История: золотое сечение в геометрии, ритме и цветах сообщений",
+      "История: более плавные джампы прокрутки (phi-скорость)",
+    ],
+  },
+  {
     version: "0.1.492",
     date: "2026-01-08",
     improved: [
