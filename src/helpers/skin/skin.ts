@@ -4,11 +4,13 @@ import { scheduleChromeColorSync } from "../ui/chromeColors";
 const STORAGE_KEY = "yagodka_skin";
 const LINK_ID = "yagodka-skin-css";
 const SKIN_ID_RE = /^[a-z0-9_-]{1,32}$/;
+export const DEFAULT_SKIN_ID = "telegram-exact";
+const DEFAULT_SKIN_TITLE = "Telegram (точный)";
 
 export function normalizeSkinId(input: unknown): string {
   const raw = String(input ?? "").trim().toLowerCase();
-  if (!raw || raw === "default") return "default";
-  if (!SKIN_ID_RE.test(raw)) return "default";
+  if (!raw || raw === "default") return DEFAULT_SKIN_ID;
+  if (!SKIN_ID_RE.test(raw)) return DEFAULT_SKIN_ID;
   return raw;
 }
 
@@ -16,7 +18,7 @@ export function getStoredSkinId(): string {
   try {
     return normalizeSkinId(localStorage.getItem(STORAGE_KEY));
   } catch {
-    return "default";
+    return DEFAULT_SKIN_ID;
   }
 }
 
@@ -58,7 +60,7 @@ export function applySkin(id: string): void {
 }
 
 export async function fetchAvailableSkins(): Promise<SkinInfo[] | null> {
-  const defaultSkin: SkinInfo = { id: "default", title: "По умолчанию" };
+  const defaultSkin: SkinInfo = { id: DEFAULT_SKIN_ID, title: DEFAULT_SKIN_TITLE };
   try {
     const res = await fetch("./skins/skins.json", { headers: { Accept: "application/json" } });
     if (!res.ok) return null;
@@ -68,14 +70,14 @@ export async function fetchAvailableSkins(): Promise<SkinInfo[] | null> {
     for (const it of raw) {
       const id = normalizeSkinId(it?.id);
       const titleRaw = String(it?.title ?? it?.name ?? id).trim() || id;
-      const title = id === "default" ? defaultSkin.title : titleRaw;
+      const title = id === DEFAULT_SKIN_ID ? defaultSkin.title : titleRaw;
       byId.set(id, { id, title });
     }
-    if (!byId.has("default")) byId.set("default", defaultSkin);
+    if (!byId.has(DEFAULT_SKIN_ID)) byId.set(DEFAULT_SKIN_ID, defaultSkin);
     const out = Array.from(byId.values());
     out.sort((a, b) => {
-      if (a.id === "default") return -1;
-      if (b.id === "default") return 1;
+      if (a.id === DEFAULT_SKIN_ID) return -1;
+      if (b.id === DEFAULT_SKIN_ID) return 1;
       return a.title.localeCompare(b.title);
     });
     return out;

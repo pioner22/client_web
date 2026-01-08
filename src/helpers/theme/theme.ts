@@ -4,7 +4,7 @@ import { scheduleChromeColorSync } from "../ui/chromeColors";
 export type ThemeMode = "light" | "dark";
 
 const STORAGE_KEY = "yagodka_theme";
-const LIGHT_SKINS = new Set(["telegram-web", "telegram-exact"]);
+const LIGHT_SKINS = new Set(["telegram-exact"]);
 
 function normalizeTheme(input: unknown): ThemeMode | null {
   const raw = String(input ?? "").trim().toLowerCase();

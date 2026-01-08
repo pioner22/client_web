@@ -53,7 +53,11 @@ export function createInitialState(): AppState {
     authMode,
     authRememberedId: rememberedId,
     skin,
-    skins: [{ id: "default", title: "По умолчанию" }],
+    skins: [
+      { id: "telegram-exact", title: "Telegram (точный)" },
+      { id: "dark-premium", title: "Тёмная премиум" },
+      { id: "amber", title: "Amber" },
+    ],
     theme,
     messageView,
     mobileSidebarTab: "chats",

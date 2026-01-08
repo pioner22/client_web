@@ -70,7 +70,7 @@ import {
   shouldOfferPwaInstall,
   type BeforeInstallPromptEvent,
 } from "../helpers/pwa/installPrompt";
-import { applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
+import { DEFAULT_SKIN_ID, applySkin, fetchAvailableSkins, normalizeSkinId, storeSkinId } from "../helpers/skin/skin";
 import { applyTheme, storeTheme } from "../helpers/theme/theme";
 import { applyMessageView } from "../helpers/ui/messageView";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
@@ -3397,9 +3397,9 @@ export function mountApp(root: HTMLElement) {
     store.set({ skins });
     const current = normalizeSkinId(store.get().skin);
     if (!skins.some((s) => s.id === current)) {
-      store.set({ skin: "default" });
-      storeSkinId("default");
-      applySkin("default");
+      store.set({ skin: DEFAULT_SKIN_ID });
+      storeSkinId(DEFAULT_SKIN_ID);
+      applySkin(DEFAULT_SKIN_ID);
     }
   }
 
@@ -3414,7 +3414,7 @@ export function mountApp(root: HTMLElement) {
     const norm = normalizeSkinId(id);
     const skins = store.get().skins || [];
     const exists = skins.some((s) => s.id === norm);
-    const finalId = exists ? norm : "default";
+    const finalId = exists ? norm : DEFAULT_SKIN_ID;
     const title = skins.find((s) => s.id === finalId)?.title ?? finalId;
     store.set({ skin: finalId, status: `Скин: ${title}` });
     storeSkinId(finalId);
