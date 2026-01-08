@@ -328,30 +328,8 @@ html[data-skin="telegram-exact"] .msg-body {
   position: relative;
 }
 
-html[data-skin="telegram-exact"] .msg-in:not(.msg-cont) .msg-body::after {
-  content: "";
-  position: absolute;
-  left: -6px;
-  bottom: 6px;
-  width: 12px;
-  height: 12px;
-  background: var(--msg-in-bg);
-  border-left: var(--msg-in-border-width) solid var(--msg-in-border-color);
-  border-bottom: var(--msg-in-border-width) solid var(--msg-in-border-color);
-  transform: rotate(45deg);
-}
-
-html[data-skin="telegram-exact"] .msg-out:not(.msg-cont) .msg-body::after {
-  content: "";
-  position: absolute;
-  right: -6px;
-  bottom: 6px;
-  width: 12px;
-  height: 12px;
-  background: var(--msg-out-bg);
-  border-right: var(--msg-out-border-width) solid var(--msg-out-border-color);
-  border-bottom: var(--msg-out-border-width) solid var(--msg-out-border-color);
-  transform: rotate(-45deg);
+html[data-skin="telegram-exact"] .msg-body::after {
+  display: none;
 }
 
 html[data-skin="telegram-exact"] .msg.msg-cont .msg-body::after,

@@ -2659,7 +2659,7 @@ html.app-typing .row-muted {
 .chat:not(.chat-board) {
   --chat-line-gap: calc(var(--sp-4) * var(--phi-inv));
   --msg-pad-y: calc(var(--sp-2) * var(--phi-inv2));
-  --msg-body-max-width: min(100%, clamp(320px, calc(var(--messages-container-width) * var(--phi-inv)), 760px));
+  --msg-body-max-width: min(100%, var(--messages-container-width));
   --msg-avatar-size: calc(20px * var(--phi));
   --msg-avatar-gap: calc(var(--sp-2) * var(--phi));
   --msg-body-gap: calc(var(--sp-2) * var(--phi-inv));
@@ -2669,7 +2669,7 @@ html.app-typing .row-muted {
   --msg-card-outline: 0 0 0 0 transparent;
   --msg-stripe-width: 0px;
   --msg-in-justify: flex-start;
-  --msg-out-justify: flex-end;
+  --msg-out-justify: flex-start;
   --msg-sys-justify: flex-start;
   --msg-in-radius: calc(12px * var(--phi));
   --msg-in-radius-tail: calc(12px * var(--phi));
@@ -2701,6 +2701,13 @@ html.app-typing .row-muted {
   --msg-tail-offset: 0px;
   --msg-bubble-shadow: 0 calc(8px * var(--phi-inv)) calc(12px * var(--phi)) rgba(0, 0, 0, 0.28);
   --msg-quote-bg: #663399;
+  --msg-row-bg: color-mix(in srgb, var(--panel2) 88%, transparent);
+  --msg-row-bg-out: color-mix(in srgb, var(--msg-out-bg) 12%, var(--panel2) 88%);
+  --msg-row-border: color-mix(in srgb, var(--line) 55%, transparent);
+  --msg-row-radius: calc(12px * var(--phi-inv2));
+  --msg-row-pad-y: calc(var(--sp-4) * var(--phi-inv));
+  --msg-row-pad-x: calc(var(--sp-4) * var(--phi));
+  --msg-row-accent: calc(2px * var(--phi));
 }
 
 .chat.chat-dm {
@@ -2732,12 +2739,18 @@ html.app-typing .row-muted {
   font-weight: 500;
 }
 
+.chat:not(.chat-board) .msg-out {
+  --msg-row-bg: var(--msg-row-bg-out);
+}
+
 .chat:not(.chat-board) .msg-meta {
   margin-top: calc(var(--sp-2) * var(--phi-inv));
   margin-bottom: calc(var(--sp-3) * var(--phi-inv2));
   gap: calc(var(--sp-2) * var(--phi-inv));
   font-size: 11px;
   color: var(--msg-time-color);
+  justify-content: flex-start;
+  align-self: flex-start;
 }
 
 .chat:not(.chat-board) .msg-in .msg-meta {
@@ -2746,51 +2759,59 @@ html.app-typing .row-muted {
 }
 
 .chat:not(.chat-board) .msg-out .msg-meta {
-  justify-self: flex-end;
+  justify-self: flex-start;
 }
 
 .chat:not(.chat-board) .msg-body {
-  flex: 0 1 auto;
-  width: fit-content;
-  max-width: min(100%, var(--msg-body-max-width));
+  flex: 1 1 auto;
+  width: min(100%, var(--msg-body-max-width));
+  max-width: var(--msg-body-max-width);
   justify-items: start;
   min-width: 0;
+  background: var(--msg-row-bg);
+  border: 1px solid var(--msg-row-border);
+  border-left: var(--msg-row-accent) solid color-mix(in srgb, var(--msg-accent, var(--focus)) 55%, transparent);
+  border-radius: var(--msg-row-radius);
+  padding: var(--msg-row-pad-y) var(--msg-row-pad-x);
+  box-shadow: none;
 }
 
 .chat:not(.chat-board) .msg-out .msg-body {
-  justify-items: end;
+  justify-items: start;
 }
 
 .chat:not(.chat-board) .msg-in .msg-body,
 .chat:not(.chat-board) .msg-out .msg-body,
 .chat:not(.chat-board) .msg-attach.msg-in .msg-body,
 .chat:not(.chat-board) .msg-attach.msg-out .msg-body {
-  background: transparent;
-  border: 0;
-  padding: 0;
+  background: var(--msg-row-bg);
+  border: 1px solid var(--msg-row-border);
+  border-left: var(--msg-row-accent) solid color-mix(in srgb, var(--msg-accent, var(--focus)) 55%, transparent);
+  padding: var(--msg-row-pad-y) var(--msg-row-pad-x);
   box-shadow: none;
 }
 
 .chat:not(.chat-board) .msg-text:not(.msg-caption) {
-  display: inline-block;
+  display: block;
   max-width: 100%;
   line-height: var(--msg-text-line, 1.3);
-  box-shadow: var(--msg-bubble-shadow, none);
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
   overflow-wrap: anywhere;
 }
 
 .chat:not(.chat-board) .msg-in .msg-text:not(.msg-caption) {
-  background: var(--msg-in-bg);
-  color: var(--msg-text-in-color);
-  padding: var(--msg-in-pad-y) var(--msg-in-pad-x);
-  border-radius: var(--msg-in-radius);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .chat:not(.chat-board) .msg-out .msg-text:not(.msg-caption) {
-  background: var(--msg-out-bg);
-  color: var(--msg-text-out-color);
-  padding: var(--msg-out-pad-y) var(--msg-out-pad-x);
-  border-radius: var(--msg-out-radius);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .chat:not(.chat-board) .msg-attach .msg-text.msg-caption {
@@ -2843,6 +2864,31 @@ html.app-typing .row-muted {
 .chat:not(.chat-board) .msg-attach .msg-meta {
   margin: calc(var(--sp-2) * var(--phi-inv2)) 0 0;
   padding: 0;
+}
+
+.chat:not(.chat-board) .msg-sys .msg-body {
+  border-left-color: transparent;
+  background: color-mix(in srgb, var(--panel2) 72%, transparent);
+}
+
+.chat:not(.chat-board) .msg-reacts {
+  justify-content: flex-start;
+}
+
+.chat:not(.chat-board) .msg-out .msg-reacts {
+  justify-content: flex-start;
+}
+
+.chat:not(.chat-board) .msg.msg-cont {
+  padding-top: calc(var(--msg-pad-y) * var(--phi-inv2));
+}
+
+.chat:not(.chat-board) .msg.msg-cont .msg-avatar {
+  visibility: hidden;
+}
+
+.chat:not(.chat-board) .msg.msg-cont .msg-from {
+  display: none;
 }
 
 .chat:not(.chat-board) .msg-ref {
