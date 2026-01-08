@@ -2,14 +2,6 @@
   "skins": [
     { "id": "default", "title": "По умолчанию" },
     { "id": "telegram-web", "title": "Ягодка (светлая)" },
-    { "id": "telegram-exact", "title": "Telegram (точный)" },
-    { "id": "dark-premium", "title": "Тёмная премиум" },
-    { "id": "light-mode", "title": "Светлая тема" },
-    { "id": "desktop-version", "title": "Десктопная версия" },
-    { "id": "gradient-accent", "title": "Градиентный акцент" },
-    { "id": "cyberberry-crt", "title": "Cyberberry CRT" },
-    { "id": "showcase", "title": "Showcase" },
-    { "id": "amber", "title": "Amber" },
-    { "id": "green", "title": "Green" }
+    { "id": "dark-premium", "title": "Тёмная премиум" }
   ]
 }
