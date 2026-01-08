@@ -124,6 +124,7 @@
   --row-gap: 10px;
   --row-radius: 0px;
   --row-bg-hover: rgba(0, 0, 0, 0.04);
+  --row-bg-menu-open: rgba(0, 0, 0, 0.06);
   --row-bg-selected: #3390ec;
   --row-bg-selected-hover: #2b6fc2;
   --row-text-selected: #ffffff;
@@ -237,6 +238,7 @@
   /* ===== Sidebar rows ===== */
   --row-text: #e6e9ee;
   --row-bg-hover: rgba(255, 255, 255, 0.04);
+  --row-bg-menu-open: rgba(255, 255, 255, 0.08);
   --row-bg-selected: #2b5278;
   --row-bg-selected-hover: #24486d;
   --row-dot-online: #4ea4f6;

@@ -346,6 +346,7 @@ export function renderSidebar(
   onAuthOpen: () => void,
   onAuthLogout: () => void,
   onOpenSidebarToolsMenu: (x: number, y: number) => void,
+  onToggleSidebarArchive: () => void = () => {},
   sidebarDock?: HTMLElement | null
 ) {
   const isMobile =
@@ -370,6 +371,7 @@ export function renderSidebar(
         mobileTab: string;
         sidebarQuery: string;
         sidebarChatFilter: string;
+        sidebarArchiveOpen: boolean;
         conn: string;
         authed: boolean;
         selfId: string;
@@ -401,6 +403,7 @@ export function renderSidebar(
     mobileTab: String(state.mobileSidebarTab || ""),
     sidebarQuery: sidebarQueryRaw,
     sidebarChatFilter: String(state.sidebarChatFilter || ""),
+    sidebarArchiveOpen: state.sidebarArchiveOpen !== false,
     conn: String(state.conn || ""),
     authed: Boolean(state.authed),
     selfId: String(state.selfId || ""),
@@ -429,6 +432,7 @@ export function renderSidebar(
     prevRender.mobileTab === renderState.mobileTab &&
     prevRender.sidebarQuery === renderState.sidebarQuery &&
     prevRender.sidebarChatFilter === renderState.sidebarChatFilter &&
+    prevRender.sidebarArchiveOpen === renderState.sidebarArchiveOpen &&
     prevRender.conn === renderState.conn &&
     prevRender.authed === renderState.authed &&
     prevRender.selfId === renderState.selfId &&
@@ -619,6 +623,25 @@ export function renderSidebar(
     if (aTs !== bTs) return bTs - aTs;
     return displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
   };
+  const buildContactRows = (items: FriendEntry[]): HTMLElement[] =>
+    markCompactAvatarRows(
+      items
+        .slice()
+        .sort(compareFriendsByActivity)
+        .map((f) => {
+          const k = dmKey(f.id);
+          const meta = previewForConversation(state, k, "dm", drafts[k]);
+          return friendRow(
+            state,
+            f,
+            Boolean(sel && sel.kind === "dm" && sel.id === f.id),
+            meta,
+            onSelect,
+            onOpenUser,
+            attnSet.has(f.id)
+          );
+        })
+    );
 
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
@@ -754,7 +777,6 @@ export function renderSidebar(
     const h = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "";
     return matchesQuery([name, h, id].filter(Boolean).join(" "));
   };
-
   const hasActiveDialogForFriend = (f: FriendEntry): boolean => {
     const id = String(f.id || "").trim();
     if (!id) return false;
@@ -766,6 +788,7 @@ export function renderSidebar(
     const attention = attnSet.has(id);
     return hasConv || hasDraft || unread > 0 || attention;
   };
+
 
   const isUnreadDialog = (opts: { unread: number; mention?: boolean; attention?: boolean }): boolean =>
     opts.unread > 0 || Boolean(opts.mention) || Boolean(opts.attention);
@@ -832,7 +855,7 @@ export function renderSidebar(
     ]);
   };
 
-  const buildSidebarSearchBar = (placeholder: string): HTMLElement => {
+  const buildSidebarSearchBar = (placeholder: string, opts?: { action?: HTMLElement }): HTMLElement => {
     const input = el("input", {
       class: "sidebar-search-input",
       type: "search",
@@ -869,8 +892,36 @@ export function renderSidebar(
       onSetSidebarQuery("");
       focusElement(input);
     });
-    return el("div", { class: "sidebar-searchbar" }, [input, clearBtn]);
+    const children: HTMLElement[] = [input, clearBtn];
+    if (opts?.action) children.push(opts.action);
+    return el("div", { class: "sidebar-searchbar" }, children);
   };
+  const buildSidebarArchiveToggle = (count: number, active: boolean): HTMLElement => {
+    const label = count > 0 ? `Архив (${count})` : "Архив";
+    const btn = el(
+      "button",
+      {
+        class: active ? "btn sidebar-archive-toggle sidebar-archive-toggle-active" : "btn sidebar-archive-toggle",
+        type: "button",
+        "aria-pressed": String(active),
+        title: label,
+      },
+      [label]
+    ) as HTMLButtonElement;
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      onToggleSidebarArchive();
+    });
+    return btn;
+  };
+
+  const contactCandidates = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
+  const activeContacts = contactCandidates.filter((f) => hasActiveDialogForFriend(f));
+  const archivedContacts = contactCandidates.filter((f) => !hasActiveDialogForFriend(f));
+  const archiveCount = hasSidebarQuery ? 0 : archivedContacts.length;
+  const archiveVisible = archiveCount > 0;
+  const archiveOpen = archiveVisible && state.sidebarArchiveOpen !== false;
+  const archiveToggle = archiveVisible ? buildSidebarArchiveToggle(archiveCount, archiveOpen) : null;
   const wrapChatlist = (children: HTMLElement[]): HTMLElement => el("div", { class: "chatlist virtual-chatlist" }, children);
   const VIRTUAL_CHATLIST_MIN_ROWS = 80;
   const VIRTUAL_CHATLIST_OVERSCAN = 6;
@@ -1002,14 +1053,16 @@ export function renderSidebar(
   const buildChatlist = (
     fixedRows: HTMLElement[],
     rows: HTMLElement[],
-    emptyLabel?: string
+    emptyLabel?: string,
+    opts?: { virtual?: boolean }
   ): HTMLElement => {
     const children: HTMLElement[] = [...fixedRows];
     if (!rows.length) {
       if (emptyLabel) children.push(el("div", { class: "pane-section" }, [emptyLabel]));
       return wrapChatlist(children);
     }
-    if (rows.length < VIRTUAL_CHATLIST_MIN_ROWS) return wrapChatlist([...children, ...rows]);
+    const allowVirtual = opts?.virtual !== false;
+    if (!allowVirtual || rows.length < VIRTUAL_CHATLIST_MIN_ROWS) return wrapChatlist([...children, ...rows]);
     const block = buildVirtualChatlistBlock(rows);
     children.push(block);
     return wrapChatlist(children);
@@ -1044,11 +1097,13 @@ export function renderSidebar(
       tabMenu,
     ]);
 
+    const searchBarAction = activeTab === "contacts" ? archiveToggle : null;
     const searchBar =
       activeTab === "menu"
         ? null
         : buildSidebarSearchBar(
-            activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск"
+            activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск",
+            searchBarAction ? { action: searchBarAction } : undefined
           );
     const sticky = el("div", { class: "sidebar-mobile-sticky" }, [
       tabs,
@@ -1277,18 +1332,15 @@ export function renderSidebar(
 
     if (activeTab === "contacts") {
       const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
-      const contactRowsSorted = markCompactAvatarRows(
-        (state.friends || [])
-          .filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)))
-          .sort(compareFriendsByActivity)
-          .map((f) => {
-            const k = dmKey(f.id);
-            const meta = previewForConversation(state, k, "dm", drafts[k]);
-            return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-          })
-      );
+      const contactRowsAll = buildContactRows(contactCandidates);
+      const activeContactRows = buildContactRows(activeContacts);
+      const archivedContactRows = buildContactRows(archivedContacts);
+      const archiveBlock =
+        archiveOpen && archivedContactRows.length
+          ? [el("div", { class: "pane-section pane-section-archive" }, [`Архив (${archivedContactRows.length})`]), ...archivedContactRows]
+          : [];
       if (hasSidebarQuery) {
-        const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
+        const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsAll]);
         const contactFixedRows: HTMLElement[] = [];
         if (pinnedContactRowsCompact.length) {
           contactFixedRows.push(...pinnedContactRowsCompact);
@@ -1308,7 +1360,8 @@ export function renderSidebar(
       if (compactUnknownAttnRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
       }
-      const contactList = buildChatlist(contactFixedRows, contactRowsSorted);
+      const contactRows = archiveBlock.length ? [...activeContactRows, ...archiveBlock] : activeContactRows;
+      const contactList = buildChatlist(contactFixedRows, contactRows, undefined, { virtual: !archiveOpen });
       mountMobile([contactList]);
       return;
     }
@@ -1446,11 +1499,13 @@ export function renderSidebar(
       tabsList[next]?.focus();
     });
 
+    const searchBarAction = activeTab === "contacts" ? archiveToggle : null;
     const searchBar =
       showMenuTab && activeTab === "menu"
         ? null
         : buildSidebarSearchBar(
-            activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск"
+            activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск",
+            searchBarAction ? { action: searchBarAction } : undefined
           );
     const headerToolbar = buildSidebarHeaderToolbar(activeTab);
     const headerStack = el("div", { class: "sidebar-header-stack" }, [
@@ -1674,16 +1729,13 @@ export function renderSidebar(
 
     if (activeTab === "contacts") {
       const pinnedContactRowsCompact = markCompactAvatarRows(pinnedContactRows);
-      const contactRowsSorted = markCompactAvatarRows(
-        (state.friends || [])
-          .filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)))
-          .sort(compareFriendsByActivity)
-          .map((f) => {
-            const k = dmKey(f.id);
-            const meta = previewForConversation(state, k, "dm", drafts[k]);
-            return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-          })
-      );
+      const contactRowsAll = buildContactRows(contactCandidates);
+      const activeContactRows = buildContactRows(activeContacts);
+      const archivedContactRows = buildContactRows(archivedContacts);
+      const archiveBlock =
+        archiveOpen && archivedContactRows.length
+          ? [el("div", { class: "pane-section pane-section-archive" }, [`Архив (${archivedContactRows.length})`]), ...archivedContactRows]
+          : [];
 
       if (hasSidebarQuery) {
         const unknownAttnRows = unknownAttnPeers
@@ -1696,7 +1748,7 @@ export function renderSidebar(
             const pseudo: FriendEntry = { id, online: false, unread: 0 };
             return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
           });
-        const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
+        const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsAll]);
         const contactFixedRows: HTMLElement[] = [];
         if (pinnedContactRowsCompact.length) {
           contactFixedRows.push(...pinnedContactRowsCompact);
@@ -1728,7 +1780,8 @@ export function renderSidebar(
       if (unknownAttnRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
       }
-      const contactList = buildChatlist(contactFixedRows, contactRowsSorted);
+      const contactRows = archiveBlock.length ? [...activeContactRows, ...archiveBlock] : activeContactRows;
+      const contactList = buildChatlist(contactFixedRows, contactRows, undefined, { virtual: !archiveOpen });
       mountPwa([contactList]);
       return;
     }
@@ -1853,8 +1906,10 @@ export function renderSidebar(
     desktopTabsList[next]?.focus();
   });
 
+  const searchBarAction = activeDesktopTab === "contacts" ? archiveToggle : null;
   const searchBar = buildSidebarSearchBar(
-    activeDesktopTab === "contacts" ? "Поиск контакта" : activeDesktopTab === "boards" ? "Поиск доски" : "Поиск"
+    activeDesktopTab === "contacts" ? "Поиск контакта" : activeDesktopTab === "boards" ? "Поиск доски" : "Поиск",
+    searchBarAction ? { action: searchBarAction } : undefined
   );
   const headerToolbar = buildSidebarHeaderToolbar(activeDesktopTab);
   const headerStack = el("div", { class: "sidebar-header-stack" }, [
@@ -2171,20 +2226,34 @@ export function renderSidebar(
   }
 
   // Contacts tab.
-  const contactRowsSorted = markCompactAvatarRows(
-    (state.friends || [])
-      .filter((f) => matchesFriend(f))
-      .sort(compareFriendsByActivity)
-      .map((f) => {
-        const k = dmKey(f.id);
-        const meta = previewForConversation(state, k, "dm", drafts[k]);
-        return friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id));
-      })
-  );
+  const pinnedDesktopContactRows: HTMLElement[] = [];
+  for (const key of pinnedKeys) {
+    if (!key.startsWith("dm:")) continue;
+    const id = key.slice(3);
+    const f = state.friends.find((x) => x.id === id);
+    if (!f) continue;
+    if (!matchesFriend(f)) continue;
+    const k = dmKey(f.id);
+    const meta = previewForConversation(state, k, "dm", drafts[k]);
+    pinnedDesktopContactRows.push(
+      friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attnSet.has(f.id))
+    );
+  }
+  const pinnedContactRowsCompact = markCompactAvatarRows(pinnedDesktopContactRows);
+  const contactRowsAll = buildContactRows(contactCandidates);
+  const activeContactRows = buildContactRows(activeContacts);
+  const archivedContactRows = buildContactRows(archivedContacts);
+  const archiveBlock =
+    archiveOpen && archivedContactRows.length
+      ? [el("div", { class: "pane-section pane-section-archive" }, [`Архив (${archivedContactRows.length})`]), ...archivedContactRows]
+      : [];
 
   if (hasSidebarQuery) {
-    const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsSorted]);
+    const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsAll]);
     const contactFixedRows: HTMLElement[] = [];
+    if (pinnedContactRowsCompact.length) {
+      contactFixedRows.push(...pinnedContactRowsCompact);
+    }
     if (allRows.length) {
       contactFixedRows.push(el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]));
     }
@@ -2195,9 +2264,13 @@ export function renderSidebar(
 
   const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
   const contactFixedRows: HTMLElement[] = [];
+  if (pinnedContactRowsCompact.length) {
+    contactFixedRows.push(...pinnedContactRowsCompact);
+  }
   if (compactUnknownAttnRows.length) {
     contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
   }
-  const contactList = buildChatlist(contactFixedRows, contactRowsSorted);
+  const contactRows = archiveBlock.length ? [...activeContactRows, ...archiveBlock] : activeContactRows;
+  const contactList = buildChatlist(contactFixedRows, contactRows, undefined, { virtual: !archiveOpen });
   mountDesktop([contactList]);
 }

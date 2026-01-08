@@ -1712,7 +1712,7 @@ export function mountApp(root: HTMLElement) {
     if (!cursor || !Number.isFinite(cursor) || cursor <= 0) return;
 
     // Telegram-like: если пользователь доскроллил до верха — подтянуть более ранние сообщения.
-    const nearTop = scrollTop <= 48;
+    const nearTop = scrollTop <= 96;
     if (!nearTop) return;
     // Чтобы не "заливать" историю сама по себе при ререндере/программном скролле — требуем жест вверх
     // (кроме случая когда уже ровно на 0).
@@ -11362,6 +11362,8 @@ export function mountApp(root: HTMLElement) {
       if (store.get().sidebarQuery === q) return;
       store.set({ sidebarQuery: q });
     },
+    onToggleSidebarArchive: () =>
+      store.set((prev) => ({ ...prev, sidebarArchiveOpen: !prev.sidebarArchiveOpen })),
     onAuthOpen: () =>
       store.set((prev) => ({
         ...prev,

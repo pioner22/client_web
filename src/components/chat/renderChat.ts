@@ -1184,10 +1184,12 @@ export function renderChat(layout: Layout, state: AppState) {
   let prevDay = "";
   let prevMsg: ChatMessage | null = null;
   let unreadIdx = -1;
+  let unreadCount = 0;
   if (state.selected?.kind === "dm" && !searchActive) {
     const unread = (state.friends || []).find((f) => f.id === state.selected?.id)?.unread ?? 0;
     if (unread > 0 && msgs.length > 0) {
       unreadIdx = Math.max(0, Math.min(msgs.length - 1, msgs.length - unread));
+      unreadCount = Math.max(0, Math.min(unread, msgs.length - unreadIdx));
     }
   } else if (!searchActive && key) {
     const marker = state.lastRead?.[key];
@@ -1200,6 +1202,7 @@ export function renderChat(layout: Layout, state: AppState) {
       const idx = msgs.findIndex((m) => Number(m?.ts ?? 0) > lastReadAt);
       if (idx >= 0) unreadIdx = idx;
     }
+    if (unreadIdx >= 0) unreadCount = Math.max(0, msgs.length - unreadIdx);
   }
   if (virtualEnabled && virtualStart > 0) {
     const prev = msgs[virtualStart - 1];
@@ -1233,9 +1236,10 @@ export function renderChat(layout: Layout, state: AppState) {
       prevMsg = null;
     }
     if (msgIdx === unreadIdx) {
+      const unreadLabel = unreadCount > 0 ? `Непрочитанные (${unreadCount})` : "Непрочитанные";
       lineItems.push(
-        el("div", { class: "msg-sep msg-unread", role: "separator", "aria-label": "Непрочитанные" }, [
-          el("span", { class: "msg-sep-text" }, ["Непрочитанные"]),
+        el("div", { class: "msg-sep msg-unread", role: "separator", "aria-label": unreadLabel }, [
+          el("span", { class: "msg-sep-text" }, [unreadLabel]),
         ])
       );
       prevMsg = null;

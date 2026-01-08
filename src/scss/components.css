@@ -1199,6 +1199,36 @@ html.app-typing .row-muted {
   outline-offset: 2px;
 }
 
+.btn.sidebar-archive-toggle {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 20%);
+  background: color-mix(in srgb, var(--panel), transparent 20%);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.btn.sidebar-archive-toggle:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--line), transparent 10%);
+}
+
+.btn.sidebar-archive-toggle.sidebar-archive-toggle-active {
+  background: var(--focus);
+  border-color: var(--focus);
+  color: #fff;
+}
+
+.pane-section.pane-section-archive {
+  margin-top: var(--sp-4);
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .sidebar-tips {
   margin: 0 0 var(--sp-3);
   border: 1px solid color-mix(in srgb, var(--line), transparent 30%);
@@ -1891,6 +1921,7 @@ html.app-typing .row-muted {
   margin: 0;
   padding: 0;
   text-align: center;
+  white-space: nowrap;
   width: 200vw;
   margin-left: -50vw;
   margin-right: -50vw;

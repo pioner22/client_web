@@ -59,6 +59,7 @@ export function createInitialState(): AppState {
     mobileSidebarTab: "chats",
     sidebarChatFilter: "all",
     sidebarQuery: "",
+    sidebarArchiveOpen: true,
     friends: [],
     topPeers: [],
     pendingIn: [],

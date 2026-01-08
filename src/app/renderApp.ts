@@ -139,6 +139,7 @@ export interface RenderActions {
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void;
   onSetSidebarChatFilter: (filter: SidebarChatFilter) => void;
   onSetSidebarQuery: (query: string) => void;
+  onToggleSidebarArchive: () => void;
   onAuthLogin: () => void;
   onAuthRegister: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
@@ -423,6 +424,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onAuthOpen,
     actions.onAuthLogout,
     actions.onOpenSidebarToolsMenu,
+    actions.onToggleSidebarArchive,
     layout.sidebarDock
   );
   const shouldResetSidebarScroll =

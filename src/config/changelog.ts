@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.487",
+    date: "2026-01-08",
+    added: ["Сайдбар: архив контактов с переключателем в строке поиска (активные/архивные отдельно)"],
+    improved: [
+      "История: автодогрузка ранних сообщений начинается раньше при прокрутке вверх",
+      "История: разделитель непрочитанных показывает количество",
+      "Темы Telegram: menu-open фон в списке чатов выровнен с tweb",
+    ],
+  },
+  {
     version: "0.1.486",
     date: "2026-01-07",
     fixed: ["PWA: принудительное обновление больше не показывает ошибку, если обновлений нет"],

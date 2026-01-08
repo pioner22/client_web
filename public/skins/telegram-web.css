@@ -103,6 +103,7 @@
   --row-pad-x: 10px;
   --row-radius: 10px;
   --row-bg-hover: rgba(0, 0, 0, 0.04);
+  --row-bg-menu-open: rgba(0, 0, 0, 0.06);
   --row-bg-selected: rgba(51, 144, 236, 0.12);
   --row-bg-selected-hover: #2b6fc2;
   --row-text-selected-hover: #ffffff;

@@ -421,6 +421,7 @@ export interface AppState {
   mobileSidebarTab: MobileSidebarTab;
   sidebarChatFilter: SidebarChatFilter;
   sidebarQuery: string;
+  sidebarArchiveOpen: boolean;
 
   friends: FriendEntry[];
   topPeers: TopPeerEntry[];
