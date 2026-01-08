@@ -1360,6 +1360,9 @@ export function renderSidebar(
       if (compactUnknownAttnRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
       }
+      if (activeContactRows.length) {
+        contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
+      }
       const contactRows = archiveBlock.length ? [...activeContactRows, ...archiveBlock] : activeContactRows;
       const contactList = buildChatlist(contactFixedRows, contactRows, undefined, { virtual: !archiveOpen });
       mountMobile([contactList]);
@@ -1779,6 +1782,9 @@ export function renderSidebar(
       }
       if (unknownAttnRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
+      }
+      if (activeContactRows.length) {
+        contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
       }
       const contactRows = archiveBlock.length ? [...activeContactRows, ...archiveBlock] : activeContactRows;
       const contactList = buildChatlist(contactFixedRows, contactRows, undefined, { virtual: !archiveOpen });
@@ -2269,6 +2275,9 @@ export function renderSidebar(
   }
   if (compactUnknownAttnRows.length) {
     contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
+  }
+  if (activeContactRows.length) {
+    contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
   }
   const contactRows = archiveBlock.length ? [...activeContactRows, ...archiveBlock] : activeContactRows;
   const contactList = buildChatlist(contactFixedRows, contactRows, undefined, { virtual: !archiveOpen });

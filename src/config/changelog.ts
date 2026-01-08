@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.488",
+    date: "2026-01-08",
+    improved: ["Контакты: добавлен заголовок секции для активного списка (tweb parity)"],
+  },
+  {
     version: "0.1.487",
     date: "2026-01-08",
     added: ["Сайдбар: архив контактов с переключателем в строке поиска (активные/архивные отдельно)"],
