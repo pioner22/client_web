@@ -180,7 +180,7 @@
   --sidebar-width: var(--current-sidebar-left-width, var(--sidebar-width-max));
 
   --chat-bg: var(--bg);
-  --chat-pad: calc(var(--space) * 2);
+  --chat-pad: calc(var(--space) * var(--phi));
   --surface-color: var(--panel2);
 
   --composer-bg: var(--panel);
@@ -220,7 +220,7 @@
   --composer-field-border-color: color-mix(in srgb, var(--line), transparent 30%);
   --composer-field-border-width: var(--field-border-width);
   --composer-field-text: var(--field-text);
-  --chat-input-size: 48px;
+  --chat-input-size: 54px;
   --chat-input-padding: var(--chat-pad);
   --chat-input-inner-padding: 8px;
   --chat-input-border-radius: 16px;
@@ -345,7 +345,7 @@
   --chat-line-gap: var(--sp-1);
   --msg-pad-y: 0px;
   --msg-status-read-color: var(--focus);
-  --messages-container-width: min(100%, clamp(720px, calc(100% * var(--phi-inv)), 1120px));
+  --messages-container-width: min(100%, 728px);
   --chat-bubbles-max-width: min(100%, var(--messages-container-width));
   --msg-body-max-width: min(100%, 68ch);
   --msg-avatar-size: 36px;
@@ -463,18 +463,18 @@
 }
 
 :root[data-msg-wide="1"] {
-  --messages-container-width: 100%;
+  --messages-container-width: min(100%, 728px);
   --chat-bubbles-max-width: min(100%, var(--messages-container-width));
-  --msg-body-max-width: min(100%, clamp(360px, calc(var(--messages-container-width) * var(--phi-inv)), 820px));
+  --msg-body-max-width: min(100%, calc(var(--messages-container-width) * 0.85));
 }
 
 :root[data-msg-view="bubble"] {
-  --messages-container-width: min(100%, clamp(720px, calc(100% * var(--phi-inv)), 1120px));
+  --messages-container-width: min(100%, 728px);
   --chat-input-max-width: var(--messages-container-width);
   --chat-line-gap: var(--sp-1);
   --msg-body-gap: calc(var(--space) * 0.5);
-  --msg-text-line: 1.45;
-  --msg-body-max-width: min(100%, 68ch);
+  --msg-text-line: var(--line-height);
+  --msg-body-max-width: min(100%, calc(var(--messages-container-width) * 0.85));
   --msg-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
   --msg-card-outline: 0 0 0 0 transparent;
   --msg-time-color: var(--muted);

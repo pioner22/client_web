@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.517",
+    date: "2026-01-10",
+    improved: [
+      "История: tweb‑ширина колонки (728px) и bubble max‑width 85% от контейнера",
+      "Композер: выровненные размеры/отступы по tweb (chat‑pad ~13px, input 54px)",
+      "Wide‑режим: убрано растягивание сообщений до краёв",
+      "Типографика: базовый размер сообщений 16px и мета 12px",
+    ],
+  },
+  {
     version: "0.1.516",
     date: "2026-01-10",
     improved: [

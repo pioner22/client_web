@@ -2660,12 +2660,13 @@ html.app-typing .row-muted {
 .chat:not(.chat-board) {
   --chat-line-gap: calc(var(--sp-1) * 0.5);
   --msg-pad-y: 0px;
-  --msg-body-max-width: min(100%, clamp(320px, calc(var(--messages-container-width) * 0.85), 640px));
+  --msg-body-max-width: min(100%, calc(var(--messages-container-width) * 0.85));
   --msg-avatar-size: 32px;
   --msg-avatar-gap: var(--space);
   --msg-body-gap: var(--sp-1);
-  --msg-text-size: 14px;
+  --msg-text-size: 16px;
   --msg-text-line: var(--line-height);
+  --msg-from-size: 14px;
   --msg-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 6px 18px rgba(0, 0, 0, 0.22);
   --msg-card-outline: 0 0 0 0 transparent;
   --msg-stripe-width: 0px;
@@ -2700,7 +2701,7 @@ html.app-typing .row-muted {
   --msg-meta-border: transparent;
   --msg-meta-pad-y: 0px;
   --msg-meta-pad-x: 0px;
-  --msg-meta-font-size: 10px;
+  --msg-meta-font-size: 12px;
   --msg-from-pad-y: 0px;
   --msg-from-pad-x: 0px;
   --msg-from-bg: transparent;
@@ -2754,7 +2755,7 @@ html.app-typing .row-muted {
 }
 
 .chat:not(.chat-board) .msg-from-handle {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--msg-time-color);
   font-weight: 500;
 }
