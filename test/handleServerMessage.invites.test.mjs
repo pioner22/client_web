@@ -146,3 +146,42 @@ test("handleServerMessage: update_required открывает экран обн�
     await cleanup();
   }
 });
+
+test("handleServerMessage: update_required с build id инициирует SW update без модала", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const nav = globalThis.navigator ?? {};
+  const hadNavigator = Boolean(globalThis.navigator);
+  const prevSw = nav.serviceWorker;
+  if (!hadNavigator) {
+    Object.defineProperty(globalThis, "navigator", { value: nav, configurable: true });
+  }
+  Object.defineProperty(nav, "serviceWorker", {
+    value: { getRegistration: async () => ({ update: () => {} }) },
+    configurable: true,
+  });
+  try {
+    const { getState, patch } = createPatchHarness({
+      updateLatest: null,
+      updateDismissedLatest: null,
+      modal: null,
+      status: "",
+    });
+
+    handleServerMessage({ type: "update_required", latest: "0.1.515-c539a3244834" }, getState(), { send() {} }, patch);
+
+    const st = getState();
+    assert.equal(st.updateLatest, "0.1.515-c539a3244834");
+    assert.equal(st.modal, null);
+    assert.ok(String(st.status || "").includes("автоматически"));
+  } finally {
+    if (prevSw === undefined) {
+      delete nav.serviceWorker;
+    } else {
+      Object.defineProperty(nav, "serviceWorker", { value: prevSw, configurable: true });
+    }
+    if (!hadNavigator) {
+      delete globalThis.navigator;
+    }
+    await cleanup();
+  }
+});
