@@ -340,8 +340,8 @@
     --chat-pad: 8px;
     --messages-container-width: 100%;
     --msg-body-max-width: min(100%, calc(100% - var(--message-handhelds-margin)));
-    --chat-line-gap: 8px;
-    --msg-pad-y: 3px;
+    --chat-line-gap: 2px;
+    --msg-pad-y: 0px;
     --msg-avatar-size: 32px;
     --msg-avatar-font-size: 12px;
     --chat-title-avatar-size: 24px;

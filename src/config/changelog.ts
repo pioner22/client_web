@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.516",
+    date: "2026-01-10",
+    improved: [
+      "История: tweb‑ритм отступов и ширины пузырей, выверенные радиусы в группах",
+      "Медиа: превью в пузыре без лишних отступов, аккуратные оверлей‑кнопки",
+      "Сообщения: компактнее мета‑строка и тайм‑бэйдж для медиа без подписи",
+    ],
+  },
+  {
     version: "0.1.515",
     date: "2026-01-10",
     improved: ["Обновления: при update_required с build id запускаем SW update без модального окна"],
