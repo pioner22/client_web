@@ -1878,7 +1878,7 @@ html.app-typing .row-muted {
   word-break: break-word;
   width: 100%;
   max-width: var(--messages-container-width);
-  margin: 0;
+  margin: 0 auto;
   min-height: 100%;
   align-content: flex-end;
   box-sizing: border-box;
@@ -2319,7 +2319,7 @@ html.app-typing .row-muted {
 }
 
 :root[data-msg-view="bubble"] .chat:not(.chat-board) .msg-meta {
-  justify-self: start;
+  justify-self: end;
 }
 
 :root[data-msg-view="plain"] .msg-from,
@@ -2658,41 +2658,41 @@ html.app-typing .row-muted {
 
 /* ===== Message style: dark-premium baseline across skins ===== */
 .chat:not(.chat-board) {
-  --chat-line-gap: var(--space);
-  --msg-pad-y: 2px;
+  --chat-line-gap: var(--sp-1);
+  --msg-pad-y: var(--sp-1);
   --msg-body-max-width: min(100%, 68ch);
   --msg-avatar-size: 32px;
   --msg-avatar-gap: var(--space);
   --msg-body-gap: calc(var(--space) * 0.5);
   --msg-text-size: 14px;
   --msg-text-line: 1.45;
-  --msg-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
+  --msg-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
   --msg-card-outline: 0 0 0 0 transparent;
   --msg-stripe-width: 0px;
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-end;
   --msg-sys-justify: center;
-  --msg-in-bg: color-mix(in srgb, var(--bg) 92%, var(--text) 8%);
+  --msg-in-bg: rgba(255, 255, 255, 0.06);
   --msg-in-bg-hi: var(--msg-in-bg);
   --msg-in-fill: var(--msg-in-bg);
-  --msg-in-radius: calc(var(--space) * 2);
-  --msg-in-radius-tail: calc(var(--space) * 2);
+  --msg-in-radius: var(--radius-lg);
+  --msg-in-radius-tail: var(--radius-lg);
   --msg-in-pad-y: calc(var(--space) * 1.5);
   --msg-in-pad-x: calc(var(--space) * 2);
   --msg-in-pad-bottom: calc(var(--space) * 1.5);
-  --msg-in-border-color: color-mix(in srgb, var(--line), transparent 35%);
+  --msg-in-border-color: rgba(255, 255, 255, 0.08);
   --msg-in-border-gradient: linear-gradient(180deg, var(--msg-in-border-color), var(--msg-in-border-color));
   --msg-in-gloss: none;
   --msg-in-stripe: none;
-  --msg-out-bg: color-mix(in srgb, var(--accent) 20%, var(--bg) 80%);
+  --msg-out-bg: rgba(90, 162, 255, 0.14);
   --msg-out-bg-hi: var(--msg-out-bg);
   --msg-out-fill: var(--msg-out-bg);
-  --msg-out-radius: calc(var(--space) * 2);
-  --msg-out-radius-tail: calc(var(--space) * 2);
+  --msg-out-radius: var(--radius-lg);
+  --msg-out-radius-tail: var(--radius);
   --msg-out-pad-y: calc(var(--space) * 1.5);
   --msg-out-pad-x: calc(var(--space) * 2);
   --msg-out-pad-bottom: calc(var(--space) * 1.5);
-  --msg-out-border-color: color-mix(in srgb, var(--accent), transparent 70%);
+  --msg-out-border-color: rgba(90, 162, 255, 0.2);
   --msg-out-border-gradient: linear-gradient(180deg, var(--msg-out-border-color), var(--msg-out-border-color));
   --msg-out-gloss: none;
   --msg-out-stripe: none;
@@ -2717,13 +2717,21 @@ html.app-typing .row-muted {
 }
 
 .chat:not(.chat-board) .chat-lines {
-  margin: 0;
+  margin: 0 auto;
   max-width: var(--messages-container-width);
 }
 
 .chat.chat-dm {
   --msg-avatar-gap: var(--space);
   --msg-body-gap: calc(var(--space) * 0.5);
+}
+
+.chat:not(.chat-board) .msg-out .msg-avatar {
+  display: none;
+}
+
+.chat:not(.chat-board) .msg-out .msg-from {
+  display: none;
 }
 
 .chat:not(.chat-board) .msg-from {
@@ -2849,7 +2857,7 @@ html.app-typing .row-muted {
   background: color-mix(in srgb, var(--panel2) 85%, transparent);
   padding: calc(var(--space) * 0.75);
   border-radius: var(--radius-lg);
-  width: min(100%, clamp(240px, calc(var(--messages-container-width) * var(--phi-inv)), 520px));
+  width: min(100%, clamp(240px, calc(var(--messages-container-width) * var(--phi-inv)), 640px));
   max-width: 100%;
 }
 
@@ -2901,7 +2909,7 @@ html.app-typing .row-muted {
 }
 
 .chat:not(.chat-board) .msg.msg-cont {
-  padding-top: calc(var(--space) * 0.5);
+  padding-top: 0;
 }
 
 .chat:not(.chat-board) .msg.msg-cont .msg-avatar {
@@ -2924,6 +2932,8 @@ html.app-typing .row-muted {
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .chat:not(.chat-board) .msg-ref-header,
@@ -2936,6 +2946,7 @@ html.app-typing .row-muted {
   color: var(--msg-ref-accent);
   font-size: 12px;
   max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .chat:not(.chat-board) .msg-ref-meta {
@@ -2946,6 +2957,7 @@ html.app-typing .row-muted {
 .chat:not(.chat-board) .msg-ref-text {
   color: var(--msg-text-in-color);
   max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .chat:not(.chat-board) .msg-ref-quote {

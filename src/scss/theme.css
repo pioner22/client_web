@@ -342,10 +342,10 @@
   /* ===== Chat messages ===== */
   --chat-title-color: var(--muted);
   --chat-title-mb: var(--sp-3);
-  --chat-line-gap: var(--space);
+  --chat-line-gap: var(--sp-1);
   --msg-pad-y: 0px;
   --msg-status-read-color: var(--focus);
-  --messages-container-width: min(100%, clamp(560px, calc(100% * (1 - var(--phi-inv3))), 980px));
+  --messages-container-width: min(100%, clamp(720px, calc(100% * var(--phi-inv)), 1120px));
   --chat-bubbles-max-width: min(100%, var(--messages-container-width));
   --msg-body-max-width: min(100%, 68ch);
   --msg-avatar-size: 36px;
@@ -469,9 +469,9 @@
 }
 
 :root[data-msg-view="bubble"] {
-  --messages-container-width: min(100%, clamp(560px, calc(100% * (1 - var(--phi-inv3))), 980px));
+  --messages-container-width: min(100%, clamp(720px, calc(100% * var(--phi-inv)), 1120px));
   --chat-input-max-width: var(--messages-container-width);
-  --chat-line-gap: var(--space);
+  --chat-line-gap: var(--sp-1);
   --msg-body-gap: calc(var(--space) * 0.5);
   --msg-text-line: 1.45;
   --msg-body-max-width: min(100%, 68ch);
