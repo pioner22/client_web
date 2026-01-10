@@ -294,7 +294,7 @@ export interface OutboxEntry {
   text: string;
   to?: string;
   room?: string;
-  status?: "queued" | "sending";
+  status?: "queued" | "sending" | "sent";
   attempts?: number;
   lastAttemptAt?: number;
   whenOnline?: boolean;

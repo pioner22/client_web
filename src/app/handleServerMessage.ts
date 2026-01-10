@@ -31,6 +31,7 @@ import {
   storeAuthId,
   storeSessionToken,
 } from "../helpers/auth/session";
+import { clearOutboxForUser } from "../helpers/pwa/outboxSync";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { loadLastReadMarkers, saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
@@ -312,6 +313,8 @@ export function handleServerMessage(
   if (t === "auth_fail") {
     const reason = String(msg?.reason ?? "auth_failed");
     if (reason === "session_invalid" || reason === "session_expired") {
+      const uid = String(state.selfId || "").trim();
+      if (uid) void clearOutboxForUser(uid);
       clearStoredSessionToken();
       patch({
         authMode: getStoredAuthId() ? "login" : "register",

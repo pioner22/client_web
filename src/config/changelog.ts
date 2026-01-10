@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.514",
+    date: "2026-01-10",
+    improved: [
+      "PWA: офлайн‑очередь исходящих сообщений и автодосылка через Background Sync",
+      "PWA: тихие push‑сигналы пробуждают синхронизацию очереди",
+      "Outbox: синхронизация статусов с сервис‑воркером и очистка при разлогине",
+    ],
+  },
+  {
     version: "0.1.513",
     date: "2026-01-10",
     improved: [

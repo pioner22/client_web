@@ -16,6 +16,7 @@ import type {
   FileOfferIn,
   FileTransferEntry,
   MobileSidebarTab,
+  OutboxEntry,
   PageKind,
   SearchResultEntry,
   SidebarChatFilter,
@@ -56,9 +57,10 @@ import { fileBadge } from "../helpers/files/fileBadge";
 import { loadFileCachePrefs, saveFileCachePrefs } from "../helpers/files/fileCachePrefs";
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
-import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry } from "../helpers/chat/outbox";
+import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry, type OutboxMap } from "../helpers/chat/outbox";
 import { activatePwaUpdate, hasPwaUpdate } from "../helpers/pwa/registerServiceWorker";
 import { storeActiveBuildId } from "../helpers/pwa/buildIdStore";
+import { clearOutboxForUser, requestOutboxSnapshot, syncOutboxToServiceWorker } from "../helpers/pwa/outboxSync";
 import { setPushOptOut } from "../helpers/pwa/pushPrefs";
 import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { installNotificationSoundUnlock } from "../helpers/notify/notifySound";
@@ -134,6 +136,8 @@ let fileTransfersSaveTimer: number | null = null;
 let fileTransfersLoadedForUser: string | null = null;
 let outboxSaveTimer: number | null = null;
 let outboxLoadedForUser: string | null = null;
+let outboxSyncPendingForUser: string | null = null;
+let outboxSwReadyForUser: string | null = null;
 let boardScheduleLoadedForUser: string | null = null;
 
 function scheduleSaveDrafts(store: Store<AppState>) {
@@ -178,6 +182,9 @@ function scheduleSaveOutbox(store: Store<AppState>) {
       const st = store.get();
       if (!st.selfId) return;
       saveOutboxForUser(st.selfId, st.outbox);
+      if (outboxSwReadyForUser === st.selfId) {
+        void syncOutboxToServiceWorker(st.selfId, st.outbox, getStoredSessionToken());
+      }
     } catch {
       // ignore
     }
@@ -193,10 +200,14 @@ function flushOutbox(store: Store<AppState>) {
     const st = store.get();
     if (!st.selfId) return;
     saveOutboxForUser(st.selfId, st.outbox);
+    if (outboxSwReadyForUser === st.selfId) {
+      void syncOutboxToServiceWorker(st.selfId, st.outbox, getStoredSessionToken());
+    }
   } catch {
     // ignore
   }
 }
+
 
 function scheduleSavePinnedMessages(store: Store<AppState>) {
   if (pinnedMessagesSaveTimer !== null) {
@@ -3496,10 +3507,12 @@ export function mountApp(root: HTMLElement) {
 	            const hasSending = arr.some((e) => e && typeof e === "object" && (e as any).status === "sending");
 	            if (!hasSending) continue;
 	            outboxChanged = true;
-	            outbox = {
-	              ...outbox,
-	              [k]: arr.map((e) => (e && typeof e === "object" ? { ...(e as any), status: "queued" as const } : e)),
-	            };
+            outbox = {
+              ...outbox,
+              [k]: arr.map((e) =>
+                e && typeof e === "object" && (e as any).status === "sending" ? { ...(e as any), status: "queued" as const } : e
+              ),
+            };
 	          }
 
 	          let conversations = prev.conversations;
@@ -7009,6 +7022,7 @@ export function mountApp(root: HTMLElement) {
     }
 
     if (id) storeAuthId(id);
+    if (id) void clearOutboxForUser(id);
     clearStoredSessionToken();
 
     autoAuthAttemptedForConn = false;
@@ -7549,6 +7563,99 @@ export function mountApp(root: HTMLElement) {
     }, delay);
   }
 
+  function mergeOutboxSnapshot(prevOutbox: AppState["outbox"], snapshot: OutboxEntry[] | OutboxMap): OutboxMap {
+    const rawMap: OutboxMap =
+      Array.isArray(snapshot)
+        ? { unknown: snapshot }
+        : (snapshot as OutboxMap);
+    const merged: OutboxMap = {};
+    for (const [key, list] of Object.entries(rawMap || {})) {
+      const arr = Array.isArray(list) ? list : [];
+      const normalized = arr
+        .map((e) => {
+          const status: OutboxEntry["status"] = e?.status === "sent" ? "sent" : "queued";
+          return { ...e, status };
+        })
+        .filter((e) => typeof e.localId === "string" && Boolean(e.localId.trim()));
+      if (normalized.length) merged[key] = normalized;
+    }
+    for (const [key, list] of Object.entries(prevOutbox || {})) {
+      const base = Array.isArray(merged[key]) ? merged[key] : [];
+      const seen = new Set(base.map((e) => String(e?.localId || "").trim()).filter(Boolean));
+      const extras = (Array.isArray(list) ? list : []).filter((e) => {
+        const lid = typeof e?.localId === "string" ? e.localId.trim() : "";
+        return Boolean(lid) && !seen.has(lid);
+      });
+      if (extras.length) merged[key] = [...base, ...extras].sort((a, b) => a.ts - b.ts);
+    }
+    return merged;
+  }
+
+  async function syncOutboxFromServiceWorker(store: Store<AppState>, userId: string) {
+    const uid = String(userId || "").trim();
+    if (!uid) {
+      drainOutbox();
+      return;
+    }
+    if (outboxSyncPendingForUser === uid) return;
+    outboxSyncPendingForUser = uid;
+    try {
+      const snapshot = await requestOutboxSnapshot(uid);
+      if (snapshot && typeof snapshot === "object") {
+        store.set((prev) => {
+          if (prev.selfId !== uid) return prev;
+          const mergedOutbox = mergeOutboxSnapshot(prev.outbox, snapshot);
+          let conversations = prev.conversations;
+          let convChanged = false;
+          for (const [k, list] of Object.entries(mergedOutbox)) {
+            const out = Array.isArray(list) ? list : [];
+            if (!out.length) continue;
+            const prevConv = conversations[k] ?? [];
+            const has = new Set(prevConv.map((m) => (typeof m.localId === "string" ? m.localId : "")).filter(Boolean));
+            const add = out
+              .filter((e) => !has.has(e.localId))
+              .map((e) => ({
+                kind: "out" as const,
+                from: prev.selfId || "",
+                to: e.to,
+                room: e.room,
+                text: e.text,
+                ts: e.ts,
+                localId: e.localId,
+                id: null,
+                status: "queued" as const,
+                ...(e.whenOnline ? { whenOnline: true } : {}),
+                ...(typeof e.scheduleAt === "number" && Number.isFinite(e.scheduleAt) ? { scheduleAt: e.scheduleAt } : {}),
+              }));
+            if (!add.length) continue;
+            convChanged = true;
+            conversations = {
+              ...conversations,
+              [k]: [...prevConv, ...add].sort((a, b) => {
+                const sa = typeof a.id === "number" && Number.isFinite(a.id) ? a.id : a.ts;
+                const sb = typeof b.id === "number" && Number.isFinite(b.id) ? b.id : b.ts;
+                return sa - sb;
+              }),
+            };
+          }
+          return convChanged ? { ...prev, outbox: mergedOutbox, conversations } : { ...prev, outbox: mergedOutbox };
+        });
+        scheduleSaveOutbox(store);
+      }
+    } catch {
+      // ignore
+    } finally {
+      outboxSwReadyForUser = uid;
+      outboxSyncPendingForUser = null;
+      try {
+        void syncOutboxToServiceWorker(uid, store.get().outbox, getStoredSessionToken());
+      } catch {
+        // ignore
+      }
+      drainOutbox();
+    }
+  }
+
   function drainOutbox(limit = OUTBOX_DRAIN_MAX) {
     const st = store.get();
     const entries = Object.entries(st.outbox || {});
@@ -7578,6 +7685,8 @@ export function mountApp(root: HTMLElement) {
         if (!lid) continue;
         const text = typeof e?.text === "string" ? e.text : "";
         if (!text) continue;
+        const status = e?.status;
+        if (status === "sent") continue;
         const to = typeof e?.to === "string" && e.to.trim() ? e.to.trim() : undefined;
         const room = typeof e?.room === "string" && e.room.trim() ? e.room.trim() : undefined;
         if (!to && !room) continue;
@@ -11814,19 +11923,22 @@ export function mountApp(root: HTMLElement) {
 	        return extras.length ? [...st.fileTransfers, ...extras] : st.fileTransfers;
 	      })();
 
-	      const storedOutboxRaw = needOutbox ? loadOutboxForUser(st.selfId) : {};
-	      const storedOutbox = (() => {
-	        if (!needOutbox) return st.outbox;
-	        const out: typeof st.outbox = {};
-	        for (const [k, list] of Object.entries(storedOutboxRaw || {})) {
-	          const arr = Array.isArray(list) ? list : [];
-	          const normalized = arr
-	            .map((e) => ({ ...e, status: "queued" as const }))
-	            .filter((e) => typeof e.localId === "string" && Boolean(e.localId.trim()));
-	          if (normalized.length) out[k] = normalized;
-	        }
-	        return out;
-	      })();
+        const storedOutboxRaw = needOutbox ? loadOutboxForUser(st.selfId) : {};
+        const storedOutbox = (() => {
+          if (!needOutbox) return st.outbox;
+          const out: typeof st.outbox = {};
+          for (const [k, list] of Object.entries(storedOutboxRaw || {})) {
+            const arr = Array.isArray(list) ? list : [];
+            const normalized = arr
+              .map((e) => {
+                const status: OutboxEntry["status"] = e?.status === "sent" ? "sent" : "queued";
+                return { ...e, status };
+              })
+              .filter((e) => typeof e.localId === "string" && Boolean(e.localId.trim()));
+            if (normalized.length) out[k] = normalized;
+          }
+          return out;
+        })();
 
       const mergedOutbox = (() => {
 	        if (!needOutbox) return st.outbox;
@@ -11920,7 +12032,7 @@ export function mountApp(root: HTMLElement) {
 	      }
       scheduleSaveOutbox(store);
         armBoardScheduleTimer();
-        drainOutbox();
+        void syncOutboxFromServiceWorker(store, st.selfId);
       return;
     }
 

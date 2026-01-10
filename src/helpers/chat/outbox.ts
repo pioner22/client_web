@@ -55,7 +55,8 @@ function sanitizeEntry(raw: any, key: string): OutboxEntry | null {
   if (key.startsWith("room:") && !room) return null;
 
   const statusRaw = raw.status;
-  const status: OutboxEntry["status"] | undefined = statusRaw === "sending" ? "sending" : statusRaw === "queued" ? "queued" : undefined;
+  const status: OutboxEntry["status"] | undefined =
+    statusRaw === "sending" ? "sending" : statusRaw === "queued" ? "queued" : statusRaw === "sent" ? "sent" : undefined;
   const attemptsRaw = raw.attempts;
   const attempts = Number.isFinite(attemptsRaw) ? Math.max(0, Math.min(999, Math.trunc(attemptsRaw))) : undefined;
   const lastAttemptAtRaw = raw.lastAttemptAt;

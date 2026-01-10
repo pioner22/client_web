@@ -15,6 +15,331 @@ const streams = new Map();
 const PREFS_CACHE = `${CACHE_PREFIX}prefs-v1`;
 const PREFS_URL = "./__prefs__/notify.json";
 let notifyPrefs = null;
+const OUTBOX_DB = "yagodka-pwa-outbox-v1";
+const OUTBOX_STORE = "outbox";
+const OUTBOX_META = "meta";
+const OUTBOX_SYNC_TAG = "yagodka-outbox-sync";
+const OUTBOX_SEND_LIMIT = 8;
+const OUTBOX_RETRY_MIN_MS = 900;
+const OUTBOX_SCHEDULE_GRACE_MS = 1200;
+let outboxDbPromise = null;
+
+function openOutboxDb() {
+  if (outboxDbPromise) return outboxDbPromise;
+  outboxDbPromise = new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(OUTBOX_DB, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
+          db.createObjectStore(OUTBOX_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(OUTBOX_META)) {
+          db.createObjectStore(OUTBOX_META, { keyPath: "key" });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return outboxDbPromise;
+}
+
+function waitTx(tx) {
+  return new Promise((resolve) => {
+    if (!tx) return resolve();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+    tx.onabort = () => resolve();
+  });
+}
+
+async function getAllOutboxItems() {
+  const db = await openOutboxDb();
+  if (!db) return [];
+  return await new Promise((resolve) => {
+    const tx = db.transaction(OUTBOX_STORE, "readonly");
+    const store = tx.objectStore(OUTBOX_STORE);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => resolve([]);
+  });
+}
+
+async function getOutboxItemsForUser(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return [];
+  const items = await getAllOutboxItems();
+  return items.filter((it) => String(it?.userId || "") === uid);
+}
+
+async function replaceOutboxForUser(userId, items) {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  const db = await openOutboxDb();
+  if (!db) return;
+  const existing = await getAllOutboxItems();
+  const tx = db.transaction(OUTBOX_STORE, "readwrite");
+  const store = tx.objectStore(OUTBOX_STORE);
+  for (const it of existing) {
+    if (String(it?.userId || "") !== uid) continue;
+    store.delete(it.id);
+  }
+  for (const it of items || []) {
+    if (!it || !it.id) continue;
+    store.put(it);
+  }
+  await waitTx(tx);
+}
+
+async function updateOutboxItems(items) {
+  if (!items || !items.length) return;
+  const db = await openOutboxDb();
+  if (!db) return;
+  const tx = db.transaction(OUTBOX_STORE, "readwrite");
+  const store = tx.objectStore(OUTBOX_STORE);
+  for (const it of items) {
+    if (!it || !it.id) continue;
+    store.put(it);
+  }
+  await waitTx(tx);
+}
+
+async function saveSessionForUser(userId, session) {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  const db = await openOutboxDb();
+  if (!db) return;
+  const tx = db.transaction(OUTBOX_META, "readwrite");
+  const store = tx.objectStore(OUTBOX_META);
+  const key = `session:${uid}`;
+  if (session) {
+    store.put({ key, session, updatedAt: Date.now() });
+  } else {
+    store.delete(key);
+  }
+  await waitTx(tx);
+}
+
+async function loadSessionForUser(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return null;
+  const db = await openOutboxDb();
+  if (!db) return null;
+  return await new Promise((resolve) => {
+    const tx = db.transaction(OUTBOX_META, "readonly");
+    const store = tx.objectStore(OUTBOX_META);
+    const req = store.get(`session:${uid}`);
+    req.onsuccess = () => resolve(req.result?.session || null);
+    req.onerror = () => resolve(null);
+  });
+}
+
+async function clearOutboxForUser(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  await replaceOutboxForUser(uid, []);
+  await saveSessionForUser(uid, null);
+}
+
+function normalizeOutboxSync(userId, outbox) {
+  const uid = String(userId || "").trim();
+  if (!uid || !outbox || typeof outbox !== "object") return [];
+  const items = [];
+  for (const [convKey, list] of Object.entries(outbox || {})) {
+    const arr = Array.isArray(list) ? list : [];
+    for (const entry of arr) {
+      if (!entry || typeof entry !== "object") continue;
+      const localId = String(entry.localId || "").trim();
+      const text = typeof entry.text === "string" ? entry.text : "";
+      const ts = Number(entry.ts || 0);
+      const to = typeof entry.to === "string" && entry.to.trim() ? entry.to.trim() : undefined;
+      const room = typeof entry.room === "string" && entry.room.trim() ? entry.room.trim() : undefined;
+      if (!localId || !text || (!to && !room)) continue;
+      const status = entry.status === "sent" ? "sent" : "queued";
+      const id = `${uid}:${convKey}:${localId}`;
+      items.push({
+        id,
+        userId: uid,
+        convKey,
+        localId,
+        text,
+        ts: Number.isFinite(ts) && ts > 0 ? ts : Date.now(),
+        to,
+        room,
+        status,
+        attempts: Number.isFinite(entry.attempts) ? Math.max(0, Math.trunc(entry.attempts)) : 0,
+        lastAttemptAt: Number.isFinite(entry.lastAttemptAt) ? Math.max(0, Math.trunc(entry.lastAttemptAt)) : 0,
+        whenOnline: Boolean(entry.whenOnline),
+        silent: Boolean(entry.silent),
+        scheduleAt: Number.isFinite(entry.scheduleAt) ? Math.max(0, Math.trunc(entry.scheduleAt)) : 0,
+        updatedAt: Date.now(),
+      });
+    }
+  }
+  return items;
+}
+
+function outboxItemsToMap(items, userId) {
+  const uid = String(userId || "").trim();
+  const out = {};
+  for (const it of items || []) {
+    if (String(it?.userId || "") !== uid) continue;
+    const key = String(it?.convKey || "").trim();
+    if (!key) continue;
+    const list = Array.isArray(out[key]) ? out[key] : [];
+    list.push({
+      localId: it.localId,
+      ts: it.ts,
+      text: it.text,
+      to: it.to,
+      room: it.room,
+      status: it.status === "sent" ? "sent" : "queued",
+      attempts: it.attempts,
+      lastAttemptAt: it.lastAttemptAt,
+      whenOnline: it.whenOnline,
+      silent: it.silent,
+      scheduleAt: it.scheduleAt,
+    });
+    out[key] = list;
+  }
+  for (const list of Object.values(out)) {
+    list.sort((a, b) => a.ts - b.ts);
+  }
+  return out;
+}
+
+function getGatewayUrl() {
+  try {
+    const loc = self.location;
+    const proto = loc.protocol === "https:" ? "wss:" : "ws:";
+    if (loc.hostname) {
+      if (loc.port && loc.port !== "80" && loc.port !== "443") {
+        return `${proto}//${loc.hostname}:8787/ws`;
+      }
+      if (loc.host) return `${proto}//${loc.host}/ws`;
+    }
+  } catch {}
+  return "ws://127.0.0.1:8787/ws";
+}
+
+async function hasActiveClients() {
+  try {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    return Boolean(clients && clients.length);
+  } catch {
+    return false;
+  }
+}
+
+async function sendOutboxViaGateway(session, items) {
+  if (!session || !items || !items.length) return [];
+  if (typeof WebSocket === "undefined") return [];
+  const url = getGatewayUrl();
+  return await new Promise((resolve) => {
+    let done = false;
+    const sent = [];
+    const finish = () => {
+      if (done) return;
+      done = true;
+      try {
+        ws.close();
+      } catch {}
+      resolve(sent);
+    };
+    const ws = new WebSocket(url);
+    const timer = setTimeout(() => finish(), 8000);
+    ws.onopen = () => {
+      try {
+        ws.send(JSON.stringify({ type: "auth", session }));
+      } catch {
+        clearTimeout(timer);
+        finish();
+      }
+    };
+    ws.onmessage = (event) => {
+      let msg = null;
+      try {
+        msg = JSON.parse(String(event?.data || ""));
+      } catch {
+        msg = null;
+      }
+      if (!msg || typeof msg !== "object") return;
+      const type = msg.type;
+      if (type === "auth_fail") {
+        clearTimeout(timer);
+        finish();
+        return;
+      }
+      if (type !== "auth_ok" && type !== "register_ok") return;
+      for (const it of items) {
+        if (!it || (!it.to && !it.room)) continue;
+        const payload = it.to
+          ? { type: "send", to: it.to, text: it.text, ...(it.silent ? { silent: true } : {}) }
+          : { type: "send", room: it.room, text: it.text, ...(it.silent ? { silent: true } : {}) };
+        try {
+          ws.send(JSON.stringify(payload));
+          sent.push(it.id);
+        } catch {}
+      }
+      clearTimeout(timer);
+      finish();
+    };
+    ws.onerror = () => {
+      clearTimeout(timer);
+      finish();
+    };
+    ws.onclose = () => {
+      clearTimeout(timer);
+      finish();
+    };
+  });
+}
+
+async function flushOutboxQueue() {
+  if (await hasActiveClients()) return;
+  const items = await getAllOutboxItems();
+  if (!items.length) return;
+  const now = Date.now();
+  const byUser = new Map();
+  for (const it of items) {
+    if (!it || it.status === "sent") continue;
+    if (it.whenOnline) continue;
+    const scheduleAt = Number(it.scheduleAt || 0);
+    if (scheduleAt && scheduleAt > now + OUTBOX_SCHEDULE_GRACE_MS) continue;
+    const lastAttemptAt = Number(it.lastAttemptAt || 0);
+    if (lastAttemptAt && now - lastAttemptAt < OUTBOX_RETRY_MIN_MS) continue;
+    const uid = String(it.userId || "").trim();
+    if (!uid) continue;
+    const list = byUser.get(uid) || [];
+    list.push(it);
+    byUser.set(uid, list);
+  }
+  if (!byUser.size) return;
+  for (const [uid, list] of byUser.entries()) {
+    const session = await loadSessionForUser(uid);
+    if (!session) continue;
+    const batch = list.sort((a, b) => a.ts - b.ts).slice(0, OUTBOX_SEND_LIMIT);
+    if (!batch.length) continue;
+    const sentIds = await sendOutboxViaGateway(session, batch);
+    if (!sentIds.length) continue;
+    const sentSet = new Set(sentIds);
+    const updated = [];
+    for (const it of batch) {
+      if (!sentSet.has(it.id)) continue;
+      updated.push({
+        ...it,
+        status: "sent",
+        attempts: (it.attempts || 0) + 1,
+        lastAttemptAt: now,
+        updatedAt: now,
+      });
+    }
+    await updateOutboxItems(updated);
+  }
+}
 
 async function loadNotifyPrefs() {
   if (notifyPrefs) return notifyPrefs;
@@ -221,6 +546,51 @@ self.addEventListener("message", (event) => {
   const data = event && event.data ? event.data : null;
   if (!data || typeof data !== "object") return;
   if (data.type === "SKIP_WAITING") self.skipWaiting();
+  if (data.type === "PWA_OUTBOX_SYNC") {
+    event.waitUntil(
+      (async () => {
+        const uid = String(data.userId || "").trim();
+        if (!uid) return;
+        const session = typeof data.session === "string" ? data.session.trim() : "";
+        if (session) await saveSessionForUser(uid, session);
+        const items = normalizeOutboxSync(uid, data.outbox || {});
+        await replaceOutboxForUser(uid, items);
+        const hasPending = items.some((it) => it.status !== "sent");
+        if (hasPending) {
+          try {
+            if (self.registration && "sync" in self.registration) {
+              await self.registration.sync.register(OUTBOX_SYNC_TAG);
+            } else {
+              await flushOutboxQueue();
+            }
+          } catch {}
+        }
+      })()
+    );
+    return;
+  }
+  if (data.type === "PWA_OUTBOX_REQUEST") {
+    const port = event.ports && event.ports[0];
+    if (!port) return;
+    event.waitUntil(
+      (async () => {
+        const uid = String(data.userId || "").trim();
+        if (!uid) {
+          port.postMessage({ outbox: {} });
+          return;
+        }
+        const items = await getOutboxItemsForUser(uid);
+        port.postMessage({ outbox: outboxItemsToMap(items, uid) });
+      })()
+    );
+    return;
+  }
+  if (data.type === "PWA_OUTBOX_CLEAR") {
+    const uid = String(data.userId || "").trim();
+    if (!uid) return;
+    event.waitUntil(clearOutboxForUser(uid));
+    return;
+  }
   if (data.type === "PWA_NOTIFY_PREFS") {
     event.waitUntil(saveNotifyPrefs(data.prefs));
   }
@@ -324,6 +694,12 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+self.addEventListener("sync", (event) => {
+  if (event && event.tag === OUTBOX_SYNC_TAG) {
+    event.waitUntil(flushOutboxQueue());
+  }
+});
+
 self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
@@ -342,6 +718,11 @@ self.addEventListener("push", (event) => {
         }
       }
       if (!payload || typeof payload !== "object") return;
+      const silentPush = Boolean(payload.silent || payload?.data?.silent || payload?.data?.event === "sync");
+      if (silentPush) {
+        await flushOutboxQueue();
+        return;
+      }
       const title = String(payload.title || "Новое сообщение");
       const body = String(payload.body || "");
       const tag = payload.tag ? String(payload.tag) : undefined;
@@ -360,6 +741,7 @@ self.addEventListener("push", (event) => {
       try {
         await self.registration.showNotification(title, options);
       } catch {}
+      await flushOutboxQueue();
     })()
   );
 });
