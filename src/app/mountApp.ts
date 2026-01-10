@@ -10120,8 +10120,16 @@ export function mountApp(root: HTMLElement) {
     if (hasActiveTransfer) return false;
     if (st.modal) return false;
     // Не перезапускаем приложение, пока пользователь находится в поле ввода (особенно на iOS).
+    // Исключение: пустой композер без активного редактирования/ответа.
     const ae = document.activeElement as HTMLElement | null;
-    if (ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae.isContentEditable)) return false;
+    if (ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae.isContentEditable)) {
+      const isComposer = ae.getAttribute("data-ios-assistant") === "composer";
+      if (!isComposer) return false;
+      const value =
+        ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement ? ae.value : String(ae.textContent || "");
+      if (value.trim()) return false;
+      if (st.editing || st.replyDraft || st.forwardDraft || st.chatSelection) return false;
+    }
     // Не дёргаем PWA/веб обновление, когда вкладка неактивна: на мобилках это часто даёт "чёрный экран" при возврате.
     if (document.visibilityState !== "visible") return false;
     const now = Date.now();

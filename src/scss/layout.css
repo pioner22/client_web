@@ -71,7 +71,9 @@ body.has-right-col {
   display: none;
   min-height: 0;
   min-width: 0;
-  background: var(--right-column-bg);
+  background:
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--right-column-bg);
   border-left: var(--right-column-border-width) solid var(--right-column-border-color);
   overflow: hidden;
 }
@@ -123,7 +125,9 @@ body.has-right-col .right-col {
   --avatar-size: 54px;
   --avatar-font-size: 20px;
   --row-pad-x: 16px;
-  background: var(--sidebar-bg);
+  background:
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--sidebar-bg);
   border-right: var(--sidebar-border-width) solid var(--sidebar-border-color);
   padding: var(--sidebar-pad);
   padding-bottom: 3px;
@@ -285,7 +289,10 @@ body.has-right-col .right-col {
 }
 
 .chat {
-  background: var(--chat-bg);
+  background:
+    linear-gradient(var(--layer-1), var(--layer-1)),
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--chat-bg);
   padding: var(--chat-pad);
   overflow: hidden;
   min-height: 0;
@@ -313,20 +320,41 @@ body.has-right-col .right-col {
   display: flex;
   flex-direction: column;
   padding: var(--composer-pad-y) var(--chat-input-padding);
+  --composer-action-gap: calc(var(--composer-gap) * var(--phi-inv));
+  --composer-action-size: var(--composer-icon-btn-size);
   /* Avoid "double padding" feel on iOS: safe-area already provides spacing. */
   padding-bottom: max(var(--composer-pad-y), var(--safe-bottom-layout-pad));
   border-top: var(--composer-border-width) solid var(--composer-border-color);
   background: var(--composer-bg);
 }
 
+@media (min-width: 601px) {
+  .input-wrap {
+    --composer-gap: var(--chat-input-btn-send-margin);
+    --composer-action-gap: 4px;
+    --composer-field-min-h: var(--chat-input-size);
+    --composer-action-size: 34px;
+    --composer-input-pad-y: var(--chat-input-inner-padding);
+  }
+}
+
 .composer-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  gap: var(--composer-gap);
   min-height: var(--composer-field-min-h);
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--composer-action-gap);
+  flex: 0 0 auto;
 }
 
 .composer-row > .composer-field {
   flex: 1 1 auto;
+  min-width: 0;
 }
 
 .input-wrap > .composer-edit,
@@ -336,7 +364,7 @@ body.has-right-col .right-col {
 .input-wrap > .composer-meta {
   max-width: var(--chat-input-max-width);
   width: 100%;
-  margin-left: auto;
+  margin-left: 0;
   margin-right: auto;
 }
 
@@ -352,8 +380,8 @@ body.has-right-col .right-col {
 
 .composer-field {
   display: flex;
-  align-items: flex-end;
-  gap: var(--composer-gap);
+  align-items: center;
+  gap: var(--composer-action-gap);
   min-height: var(--composer-field-min-h);
   position: relative;
   background: var(--composer-field-bg);
@@ -362,6 +390,10 @@ body.has-right-col .right-col {
   box-shadow: var(--composer-field-shadow);
   /* Telegram-like: controls sit inside the pill, so keep vertical padding minimal. */
   padding: 0 var(--composer-field-pad);
+}
+
+.composer-field .composer-actions {
+  gap: var(--composer-action-gap);
 }
 
 .composer-field::after {
@@ -453,6 +485,7 @@ body.has-right-col .right-col {
 }
 
 .input-wrap.input-wrap-no-composer .composer-field,
+.input-wrap.input-wrap-no-composer .composer-row,
 .input-wrap.input-wrap-no-composer .composer-meta,
 .input-wrap.input-wrap-no-composer .composer-edit,
 .input-wrap.input-wrap-no-composer .composer-helper {
@@ -738,6 +771,12 @@ body.has-right-col .right-col {
 
   .board-editor-schedule-label {
     display: none;
+  }
+}
+
+@media (min-width: 601px) {
+  .input-wrap {
+    box-shadow: var(--composer-divider-shadow);
   }
 }
 

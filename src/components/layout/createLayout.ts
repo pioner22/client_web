@@ -45,21 +45,27 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     inputmode: "text",
     enterkeyhint: "send",
   }) as HTMLTextAreaElement;
-  const attachBtn = el("button", { class: "btn composer-attach", type: "button", title: "Файл", "aria-label": "Прикрепить файл" }, [
+  const attachBtn = el("button", { class: "btn composer-action composer-attach", type: "button", title: "Файл", "aria-label": "Прикрепить файл" }, [
     "＋",
   ]) as HTMLButtonElement;
-  const emojiBtn = el("button", { class: "btn composer-emoji", type: "button", title: "Эмодзи", "aria-label": "Открыть эмодзи" }, [
+  const emojiBtn = el("button", { class: "btn composer-action composer-emoji", type: "button", title: "Эмодзи", "aria-label": "Открыть эмодзи" }, [
     "☺︎",
   ]) as HTMLButtonElement;
   const sendBtn = el(
     "button",
-    { class: "btn composer-send", type: "button", title: "Отправить", "aria-label": "Отправить", "data-action": "composer-send" },
+    {
+      class: "btn composer-action composer-send",
+      type: "button",
+      title: "Отправить",
+      "aria-label": "Отправить",
+      "data-action": "composer-send",
+    },
     ["→"]
   ) as HTMLButtonElement;
   const boardEditorBtn = el(
     "button",
     {
-      class: "btn composer-board-editor hidden",
+      class: "btn composer-action composer-board-editor hidden",
       type: "button",
       title: "Редактор новости",
       "aria-label": "Редактор новости",
@@ -206,9 +212,16 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     boardEditorPreview,
     boardActionsRow,
   ]);
-  const composerRow = el("div", { class: "composer-row" }, [
+  const composerActionsLeft = el("div", { class: "composer-actions composer-actions-left" }, [
     // Telegram-like: ✏️ стоит рядом со скрепкой (особенно важно на mobile, где смайлы скрыты).
-    el("div", { class: "composer-field" }, [attachBtn, boardEditorBtn, emojiBtn, input, sendBtn]),
+    attachBtn,
+    boardEditorBtn,
+    emojiBtn,
+  ]);
+  const composerField = el("div", { class: "composer-field" }, [composerActionsLeft, input]);
+  const composerRow = el("div", { class: "composer-row" }, [
+    composerField,
+    el("div", { class: "composer-actions composer-actions-right" }, [sendBtn]),
   ]);
   const inputWrap = el("div", { class: "input-wrap" }, [editBar, helperBar, boardEditorWrap, composerRow, composerMeta]);
 

@@ -1207,7 +1207,7 @@ input.modal-input[type="file"]::file-selector-button:active {
 
 .modal.modal-viewer {
   width: min(920px, 100%);
-  padding: var(--sp-4);
+  padding: var(--viewer-pad);
 }
 
 .overlay.overlay-viewer .modal.modal-viewer {
@@ -1228,20 +1228,21 @@ input.modal-input[type="file"]::file-selector-button:active {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-3);
+  gap: var(--viewer-gap);
+  margin-bottom: calc(var(--viewer-gap) * var(--phi));
 }
 
 .viewer-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--viewer-actions-gap);
 }
 
 .viewer-nav-btn {
-  min-width: 36px;
-  height: 32px;
-  padding: 0 10px;
+  min-width: var(--viewer-nav-size);
+  height: var(--viewer-nav-size);
+  padding: 0 var(--viewer-nav-pad-x);
+  border-radius: calc(var(--viewer-nav-size) * var(--phi-inv2));
   line-height: 1;
 }
 
@@ -1253,10 +1254,10 @@ input.modal-input[type="file"]::file-selector-button:active {
 
 .overlay.overlay-viewer .viewer-header {
   margin: 0;
-  padding: 12px;
-  padding-top: calc(12px + env(safe-area-inset-top));
-  padding-left: calc(12px + env(safe-area-inset-left));
-  padding-right: calc(12px + env(safe-area-inset-right));
+  padding: var(--viewer-pad);
+  padding-top: calc(var(--viewer-pad) + env(safe-area-inset-top));
+  padding-left: calc(var(--viewer-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--viewer-pad) + env(safe-area-inset-right));
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1266,7 +1267,7 @@ input.modal-input[type="file"]::file-selector-button:active {
 .viewer-title-wrap {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: calc(var(--viewer-gap) * var(--phi-inv));
 }
 
 .viewer-title {
@@ -1275,11 +1276,13 @@ input.modal-input[type="file"]::file-selector-button:active {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: var(--phi);
 }
 
 .viewer-sub {
   color: var(--modal-line-color);
   font-size: 12px;
+  line-height: var(--phi);
 }
 
 .viewer-media {
@@ -1307,7 +1310,7 @@ input.modal-input[type="file"]::file-selector-button:active {
 .viewer-img {
   display: block;
   max-width: 100%;
-  max-height: min(70vh, 560px);
+  max-height: var(--viewer-media-max-h);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -1318,7 +1321,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   display: block;
   width: 100%;
   max-width: 100%;
-  max-height: min(70vh, 560px);
+  max-height: var(--viewer-media-max-h);
   background: #000;
 }
 
@@ -1327,23 +1330,23 @@ input.modal-input[type="file"]::file-selector-button:active {
 }
 
 .viewer-media.viewer-media-audio {
-  padding: 18px 14px;
+  padding: calc(var(--viewer-pad) * var(--phi-inv)) calc(var(--viewer-pad) * var(--phi));
 }
 
 .viewer-caption {
-  margin-top: var(--sp-3);
+  margin-top: var(--viewer-gap);
   color: var(--text);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: var(--phi);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .overlay.overlay-viewer .viewer-caption {
   margin: 0;
-  padding: 8px 12px 12px;
-  padding-left: calc(12px + env(safe-area-inset-left));
-  padding-right: calc(12px + env(safe-area-inset-right));
+  padding: var(--viewer-caption-pad-y) var(--viewer-caption-pad-x) calc(var(--viewer-caption-pad-y) * var(--phi));
+  padding-left: calc(var(--viewer-caption-pad-x) + env(safe-area-inset-left));
+  padding-right: calc(var(--viewer-caption-pad-x) + env(safe-area-inset-right));
 }
 
 .overlay.overlay-viewer .viewer-img {
@@ -1358,8 +1361,8 @@ input.modal-input[type="file"]::file-selector-button:active {
 
 .viewer-file {
   display: grid;
-  gap: var(--sp-2);
-  padding: var(--sp-4);
+  gap: var(--viewer-gap);
+  padding: calc(var(--viewer-pad) * var(--phi-inv)) calc(var(--viewer-pad) * var(--phi));
   border: 1px solid var(--modal-border-color);
   border-radius: var(--field-radius);
   background: color-mix(in srgb, var(--panel2), transparent 10%);
@@ -1367,7 +1370,7 @@ input.modal-input[type="file"]::file-selector-button:active {
 
 .overlay.overlay-viewer .viewer-file {
   margin: 0 auto;
-  width: min(640px, calc(100% - 24px));
+  width: min(640px, calc(100% - (var(--viewer-pad) * 2)));
   border-radius: var(--r-lg);
 }
 
@@ -1384,7 +1387,7 @@ input.modal-input[type="file"]::file-selector-button:active {
 }
 
 .viewer-empty {
-  padding: var(--sp-4);
+  padding: calc(var(--viewer-pad) * var(--phi-inv));
   border: 1px solid color-mix(in srgb, var(--bad), transparent 55%);
   border-radius: var(--field-radius);
   background: color-mix(in srgb, var(--bad), transparent 92%);
@@ -1397,26 +1400,26 @@ input.modal-input[type="file"]::file-selector-button:active {
 
 .overlay.overlay-viewer .modal-actions.viewer-actions {
   margin: 0;
-  padding: 12px;
-  padding-bottom: calc(12px + var(--safe-bottom-pad));
-  padding-left: calc(12px + env(safe-area-inset-left));
-  padding-right: calc(12px + env(safe-area-inset-right));
+  padding: var(--viewer-pad);
+  padding-bottom: calc(var(--viewer-pad) + var(--safe-bottom-pad));
+  padding-left: calc(var(--viewer-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--viewer-pad) + env(safe-area-inset-right));
   position: sticky;
   bottom: 0;
   z-index: 2;
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0));
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: var(--viewer-actions-gap);
   justify-content: stretch;
 }
 
 @media (max-width: 480px) {
   .modal.modal-viewer {
-    padding: var(--sp-3);
+    padding: calc(var(--viewer-pad) * var(--phi-inv));
   }
   .viewer-img {
-    max-height: min(60vh, 440px);
+    max-height: var(--viewer-media-max-h-mobile);
   }
 
   .overlay.overlay-viewer .modal-actions.viewer-actions {

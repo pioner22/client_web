@@ -20,6 +20,7 @@
   --bad: #fb7185;
   --sel: #1f2a3a;
   --focus: #3b82f6;
+  --accent: var(--focus);
   --overlay: rgba(0, 0, 0, 0.6);
 
   /* ===== Typography ===== */
@@ -61,6 +62,13 @@
   --sp-4: 10px;
   --sp-5: 12px;
   --sp-6: 18px;
+  --space: 8px;
+  --gap: var(--space);
+  --radius: calc(var(--space) * 1);
+  --radius-lg: calc(var(--space) * 2);
+  --layer-1: color-mix(in srgb, var(--text) 6%, transparent);
+  --layer-2: color-mix(in srgb, var(--text) 10%, transparent);
+  --body-bg: linear-gradient(var(--layer-1), var(--layer-1)), linear-gradient(var(--layer-2), var(--layer-2)), var(--bg);
 
   /* ===== Golden ratio scale ===== */
   --phi: 1.618;
@@ -172,7 +180,7 @@
   --sidebar-width: var(--current-sidebar-left-width, var(--sidebar-width-max));
 
   --chat-bg: var(--bg);
-  --chat-pad: 13px;
+  --chat-pad: calc(var(--space) * 2);
   --surface-color: var(--panel2);
 
   --composer-bg: var(--panel);
@@ -180,9 +188,13 @@
   --safe-area-bg: var(--app-bg);
   --composer-border-color: var(--line);
   --composer-border-width: var(--border-width);
-  --composer-pad-y: 6px;
-  --composer-pad-x: 12px;
-  --composer-gap: 2px;
+  --composer-divider-line: color-mix(in srgb, var(--composer-border-color), transparent 35%);
+  --composer-divider-glow: color-mix(in srgb, var(--composer-bg), transparent 78%);
+  --composer-divider-shadow: 0 -1px 0 var(--composer-divider-line),
+    0 calc(-1 * var(--sp-4)) calc(var(--sp-5) * var(--phi)) var(--composer-divider-glow);
+  --composer-pad-y: calc(var(--space) * 1.5);
+  --composer-pad-x: calc(var(--space) * 2);
+  --composer-gap: calc(var(--space) * 0.75);
   --prompt-color: var(--muted);
 
   --footer-bg: var(--panel);
@@ -204,11 +216,11 @@
   --field-placeholder: var(--muted);
 
   /* Chat composer field can be styled separately */
-  --composer-field-bg: var(--panel2);
-  --composer-field-border-color: var(--line);
+  --composer-field-bg: color-mix(in srgb, var(--panel2) 88%, transparent);
+  --composer-field-border-color: color-mix(in srgb, var(--line), transparent 30%);
   --composer-field-border-width: var(--field-border-width);
   --composer-field-text: var(--field-text);
-  --chat-input-size: 54px;
+  --chat-input-size: 48px;
   --chat-input-padding: var(--chat-pad);
   --chat-input-inner-padding: 8px;
   --chat-input-border-radius: 16px;
@@ -218,10 +230,18 @@
   --composer-field-pad: var(--chat-input-inner-padding);
   --composer-field-min-h: var(--chat-input-size);
   --composer-field-max-h: 120px;
-  --composer-field-shadow: 0 1px 8px 1px rgb(0 0 0 / 12%);
-  --composer-helper-min-h: 45px;
-  --composer-helper-pad-y: 6px;
-  --composer-helper-pad-x: 10px;
+  --composer-field-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --composer-helper-min-h: calc(var(--chat-input-size) * var(--phi-inv));
+  --composer-helper-pad-y: calc(var(--chat-pad) * var(--phi-inv2));
+  --composer-helper-pad-x: calc(var(--chat-pad) * var(--phi));
+  --composer-helper-gap: calc(var(--sp-3) * var(--phi-inv));
+  --composer-helper-radius: calc(var(--r-md) * var(--phi));
+  --composer-helper-icon-size: clamp(18px, calc(var(--chat-input-size) * var(--phi-inv)), 24px);
+  --composer-helper-action-size: clamp(
+    32px,
+    calc((var(--chat-input-size) * var(--phi-inv)) + (var(--chat-input-size) * var(--phi-inv3))),
+    42px
+  );
   --composer-field-focus-border: var(--field-focus-border);
   --composer-field-placeholder: var(--field-placeholder);
   --composer-focus-ring-width: 1px;
@@ -232,10 +252,10 @@
   --composer-input-line-height: 1.3125;
   --composer-input-font-weight: 450;
   --composer-input-letter-spacing: 0em;
-  --composer-input-pad-y: 8px;
+  --composer-input-pad-y: calc(var(--chat-pad) * var(--phi-inv));
   --composer-btn-size: var(--composer-field-min-h);
-  --composer-icon-btn-size: calc(var(--chat-input-size) - 20px);
-  --composer-icon-offset: calc((var(--chat-input-size) - var(--composer-icon-btn-size)) / 4);
+  --composer-icon-btn-size: calc(var(--chat-input-size) * var(--phi-inv));
+  --composer-icon-offset: calc((var(--chat-input-size) - var(--composer-icon-btn-size)) * var(--phi-inv3));
   --composer-send-gap: var(--chat-input-btn-send-margin);
 
   /* Send button icon (brand berry) */
@@ -322,12 +342,12 @@
   /* ===== Chat messages ===== */
   --chat-title-color: var(--muted);
   --chat-title-mb: var(--sp-3);
-  --chat-line-gap: var(--sp-4);
+  --chat-line-gap: var(--space);
   --msg-pad-y: 0px;
   --msg-status-read-color: var(--focus);
-  --messages-container-width: min(100%, clamp(360px, calc(100% * var(--phi-inv)), 960px));
+  --messages-container-width: min(100%, clamp(560px, calc(100% * (1 - var(--phi-inv3))), 980px));
   --chat-bubbles-max-width: min(100%, var(--messages-container-width));
-  --msg-body-max-width: min(100%, clamp(320px, calc(var(--messages-container-width) * var(--phi-inv)), 760px));
+  --msg-body-max-width: min(100%, 68ch);
   --msg-avatar-size: 36px;
   --msg-avatar-font-size: 12px;
   --msg-avatar-gap: var(--sp-3);
@@ -431,36 +451,47 @@
   --modal-warn-mt: 8px;
   --modal-actions-gap: var(--sp-2);
   --modal-actions-mt: 10px;
+  --viewer-pad: calc(var(--sp-4) * var(--phi));
+  --viewer-gap: calc(var(--sp-3) * var(--phi-inv));
+  --viewer-nav-size: clamp(32px, calc(var(--sp-6) * var(--phi)), 44px);
+  --viewer-nav-pad-x: calc(var(--sp-3) * var(--phi-inv));
+  --viewer-caption-pad-x: calc(var(--sp-4) * var(--phi));
+  --viewer-caption-pad-y: calc(var(--sp-3) * var(--phi-inv));
+  --viewer-actions-gap: calc(var(--sp-3) * var(--phi-inv));
+  --viewer-media-max-h: min(calc(100vh * var(--phi-inv)), 640px);
+  --viewer-media-max-h-mobile: min(calc(100vh * var(--phi-inv)), 520px);
 }
 
 :root[data-msg-wide="1"] {
-  --messages-container-width: min(100%, clamp(420px, calc(100% * var(--phi)), 1080px));
+  --messages-container-width: 100%;
   --chat-bubbles-max-width: min(100%, var(--messages-container-width));
   --msg-body-max-width: min(100%, clamp(360px, calc(var(--messages-container-width) * var(--phi-inv)), 820px));
 }
 
 :root[data-msg-view="bubble"] {
-  --chat-line-gap: calc(var(--sp-4) * var(--phi-inv));
-  --msg-body-gap: calc(var(--sp-3) * var(--phi-inv));
-  --msg-text-line: 1.618;
-  --msg-body-max-width: min(100%, clamp(320px, calc(var(--messages-container-width) * var(--phi-inv)), 760px));
-  --msg-card-shadow: 0 0 0 0 transparent;
-  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--line) var(--phi-pct), transparent);
-  --msg-time-color: color-mix(in srgb, var(--muted) var(--phi-pct), var(--text) var(--phi-inv2-pct));
-  --msg-meta-bg: color-mix(in srgb, var(--panel2) var(--phi-pct), transparent);
-  --msg-meta-border: color-mix(in srgb, var(--line) var(--phi-inv2-pct), transparent);
-  --msg-in-radius: calc(16px * var(--phi-inv));
-  --msg-in-radius-tail: calc(16px * var(--phi-inv));
-  --msg-out-radius: calc(16px * var(--phi-inv));
-  --msg-out-radius-tail: calc(16px * var(--phi-inv));
-  --msg-in-pad-x: calc(var(--sp-4) * var(--phi));
-  --msg-in-pad-y: calc(var(--sp-4) * var(--phi-inv));
-  --msg-in-pad-bottom: calc(var(--sp-4) * var(--phi-inv));
-  --msg-out-pad-x: calc(var(--sp-4) * var(--phi));
-  --msg-out-pad-y: calc(var(--sp-4) * var(--phi-inv));
-  --msg-out-pad-bottom: calc(var(--sp-4) * var(--phi-inv));
-  --msg-in-border-color: color-mix(in srgb, var(--msg-in-bg) var(--phi-pct), var(--line) var(--phi-inv2-pct));
-  --msg-out-border-color: color-mix(in srgb, var(--msg-out-bg) var(--phi-pct), var(--line) var(--phi-inv2-pct));
+  --messages-container-width: min(100%, clamp(560px, calc(100% * (1 - var(--phi-inv3))), 980px));
+  --chat-input-max-width: var(--messages-container-width);
+  --chat-line-gap: var(--space);
+  --msg-body-gap: calc(var(--space) * 0.5);
+  --msg-text-line: 1.45;
+  --msg-body-max-width: min(100%, 68ch);
+  --msg-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
+  --msg-card-outline: 0 0 0 0 transparent;
+  --msg-time-color: var(--muted);
+  --msg-meta-bg: transparent;
+  --msg-meta-border: transparent;
+  --msg-in-radius: calc(var(--space) * 2);
+  --msg-in-radius-tail: calc(var(--space) * 2);
+  --msg-out-radius: calc(var(--space) * 2);
+  --msg-out-radius-tail: calc(var(--space) * 2);
+  --msg-in-pad-x: calc(var(--space) * 2);
+  --msg-in-pad-y: calc(var(--space) * 1.5);
+  --msg-in-pad-bottom: calc(var(--space) * 1.5);
+  --msg-out-pad-x: calc(var(--space) * 2);
+  --msg-out-pad-y: calc(var(--space) * 1.5);
+  --msg-out-pad-bottom: calc(var(--space) * 1.5);
+  --msg-in-border-color: color-mix(in srgb, var(--line), transparent 35%);
+  --msg-out-border-color: color-mix(in srgb, var(--accent), transparent 70%);
 }
 
 @media (min-width: 926px) {

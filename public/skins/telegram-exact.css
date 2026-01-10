@@ -77,7 +77,7 @@
 
   /* ===== Chat ===== */
   --chat-bg: #e6ebee;
-  --chat-pad: 14px;
+  --chat-pad: calc(var(--space) * 2);
   --chat-title-color: var(--muted);
   --chat-line-gap: 6px;
 
@@ -85,9 +85,9 @@
   --composer-bg: var(--panel);
   --composer-border-color: var(--line);
   --composer-border-width: 1px;
-  --composer-pad-y: 8px;
-  --composer-pad-x: 12px;
-  --composer-gap: 8px;
+  --composer-pad-y: calc(var(--space) * 1.5);
+  --composer-pad-x: calc(var(--space) * 2);
+  --composer-gap: var(--space);
   --prompt-color: var(--muted);
 
   --composer-field-bg: #f5f7f8;
@@ -96,7 +96,7 @@
   --composer-field-text: var(--text);
   --composer-field-radius: 16px;
   --composer-field-pad: 8px;
-  --composer-field-min-h: 40px;
+  --composer-field-min-h: var(--chat-input-size);
   --composer-field-max-h: 200px;
   --composer-field-focus-border: #3390ec;
   --composer-field-placeholder: rgba(112, 117, 121, 0.7);
@@ -145,7 +145,7 @@
   --avatar-text: #ffffff;
 
   /* ===== Chat messages ===== */
-  --msg-body-max-width: min(78%, 728px);
+  --msg-body-max-width: 100%;
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-end;
   --msg-sys-justify: center;

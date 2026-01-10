@@ -338,7 +338,8 @@
     --sidebar-list-pad: 0px;
 
     --chat-pad: 8px;
-    --msg-body-max-width: min(100%, var(--messages-container-width));
+    --messages-container-width: 100%;
+    --msg-body-max-width: min(100%, calc(100% - var(--message-handhelds-margin)));
     --chat-line-gap: 8px;
     --msg-pad-y: 3px;
     --msg-avatar-size: 32px;
@@ -365,10 +366,10 @@
     --composer-input-pad-y: 6px;
     --chat-input-size: 46px;
     --chat-input-padding: var(--chat-pad);
-    --chat-input-inner-padding: 6px;
+    --chat-input-inner-padding: 4px;
     --chat-input-border-radius: 16px;
     --chat-input-max-width: var(--messages-container-width);
-    --chat-input-btn-send-margin: 6px;
+    --chat-input-btn-send-margin: 8px;
     --composer-field-radius: var(--chat-input-border-radius);
     --composer-field-pad: var(--chat-input-inner-padding);
     --composer-field-min-h: var(--chat-input-size);
