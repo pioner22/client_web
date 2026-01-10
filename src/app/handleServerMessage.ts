@@ -2360,6 +2360,25 @@ export function handleServerMessage(
   if (t === "update_required") {
     const latest = String(msg?.latest ?? "").trim();
     if (!latest) return;
+    const hasSw = (() => {
+      try {
+        return typeof navigator !== "undefined" && "serviceWorker" in navigator;
+      } catch {
+        return false;
+      }
+    })();
+    const isBuildId = /-[a-f0-9]{12}$/i.test(latest);
+    if (hasSw && isBuildId) {
+      if (state.updateLatest !== latest) {
+        patch({ updateLatest: latest, status: "Доступно обновление веб-клиента (применится автоматически)" });
+      }
+      try {
+        void navigator.serviceWorker.getRegistration().then((reg) => reg?.update()).catch(() => {});
+      } catch {
+        // ignore
+      }
+      return;
+    }
     if (state.updateDismissedLatest && state.updateDismissedLatest === latest) return;
     const hint = isMobileLikeUi() ? "" : " (Ctrl+U — применить)";
     patch({ updateLatest: latest, status: `Доступно обновление до v${latest}${hint}`, modal: { kind: "update" } });

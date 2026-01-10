@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.515",
+    date: "2026-01-10",
+    improved: ["Обновления: при update_required с build id запускаем SW update без модального окна"],
+  },
+  {
     version: "0.1.514",
     date: "2026-01-10",
     improved: [
