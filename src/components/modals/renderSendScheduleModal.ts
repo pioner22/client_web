@@ -21,10 +21,12 @@ export function renderSendScheduleModal(
   text: string,
   suggestedAt: number | undefined,
   message: string | undefined,
+  title: string | undefined,
+  confirmLabel: string | undefined,
   actions: SendScheduleModalActions
 ): HTMLElement {
   const box = el("div", { class: "modal" });
-  const btnSchedule = el("button", { class: "btn btn-primary", type: "button" }, ["Запланировать"]);
+  const btnSchedule = el("button", { class: "btn btn-primary", type: "button" }, [confirmLabel || "Запланировать"]);
   const btnCancel = el("button", { class: "btn", type: "button" }, ["Отмена"]);
 
   const previewRaw = String(text || "").trim();
@@ -38,7 +40,7 @@ export function renderSendScheduleModal(
   const days = Math.round(maxBoardScheduleDelayMs() / (24 * 60 * 60 * 1000));
 
   box.append(
-    el("div", { class: "modal-title" }, ["Запланировать отправку"]),
+    el("div", { class: "modal-title" }, [title || "Запланировать отправку"]),
     el("div", { class: "modal-line" }, [preview]),
     el("div", { class: "modal-line" }, ["Дата и время:"]),
     el("input", {

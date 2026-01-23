@@ -1881,6 +1881,26 @@ export function renderChat(layout: Layout, state: AppState) {
             return Boolean(selKey && selectionSet.has(selKey));
           })
         : [];
+    const canCopy = selectedMsgs.some((msg) => {
+      if (!msg) return false;
+      const raw = String(msg.text || "").trim();
+      if (raw && !raw.startsWith("[file]")) return true;
+      const att = msg.attachment;
+      if (att?.kind === "file") return Boolean(String(att.name || "").trim());
+      return false;
+    });
+    const fileIds = (() => {
+      const out = new Set<string>();
+      for (const msg of selectedMsgs) {
+        const fid = msg?.attachment?.kind === "file" ? String(msg.attachment.fileId || "").trim() : "";
+        if (fid) out.add(fid);
+      }
+      return out;
+    })();
+    const scheduledCount = selectedMsgs.filter((msg) => {
+      const at = typeof msg?.scheduleAt === "number" && Number.isFinite(msg.scheduleAt) ? Math.trunc(msg.scheduleAt) : 0;
+      return at > Date.now() + 1200;
+    }).length;
     const pinCandidates = selectedMsgs
       .map((msg) => (typeof msg.id === "number" && Number.isFinite(msg.id) ? Math.trunc(msg.id) : 0))
       .filter((id) => id > 0);
@@ -1910,6 +1930,46 @@ export function renderChat(layout: Layout, state: AppState) {
       },
       ["↪"]
     );
+    const copyBtn = el(
+      "button",
+      {
+        class: "btn chat-selection-action",
+        type: "button",
+        "data-action": "chat-selection-copy",
+        "aria-label": "Скопировать выбранные сообщения",
+        title: "Скопировать",
+        ...(canCopy ? {} : { disabled: "true" }),
+      },
+      ["📋"]
+    );
+    const downloadBtn =
+      fileIds.size > 0
+        ? el(
+            "button",
+            {
+              class: "btn chat-selection-action",
+              type: "button",
+              "data-action": "chat-selection-download",
+              "aria-label": "Скачать выбранные файлы",
+              title: "Скачать",
+            },
+            ["⬇️"]
+          )
+        : null;
+    const sendNowBtn =
+      scheduledCount > 0
+        ? el(
+            "button",
+            {
+              class: "btn chat-selection-action",
+              type: "button",
+              "data-action": "chat-selection-send-now",
+              "aria-label": "Отправить сейчас выбранные сообщения из очереди",
+              title: "Отправить сейчас",
+            },
+            ["⚡"]
+          )
+        : null;
     const deleteBtn = el(
       "button",
       {
@@ -1933,7 +1993,14 @@ export function renderChat(layout: Layout, state: AppState) {
       },
       [pinLabel]
     );
-    const actions = el("div", { class: "chat-selection-actions" }, [forwardBtn, deleteBtn, pinBtn]);
+    const actions = el("div", { class: "chat-selection-actions" }, [
+      forwardBtn,
+      copyBtn,
+      ...(downloadBtn ? [downloadBtn] : []),
+      ...(sendNowBtn ? [sendNowBtn] : []),
+      deleteBtn,
+      pinBtn,
+    ]);
     const inner = el("div", { class: "chat-selection-inner" }, [cancelBtn, countNode, actions]);
     layout.chatSelectionBar.classList.remove("hidden");
     layout.chatSelectionBar.replaceChildren(inner);

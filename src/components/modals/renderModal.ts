@@ -139,7 +139,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     });
   }
   if (kind === "send_schedule") {
-    return renderSendScheduleModal(modal.text, modal.suggestedAt, modal.message, {
+    return renderSendScheduleModal(modal.text, modal.suggestedAt, modal.message, modal.title, modal.confirmLabel, {
       onSchedule: actions.onSendSchedule,
       onCancel: actions.onClose,
     });

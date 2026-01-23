@@ -3537,6 +3537,18 @@ export function mountApp(root: HTMLElement) {
       handleChatSelectionForward();
       return;
     }
+    if (action === "chat-selection-copy") {
+      void handleChatSelectionCopy();
+      return;
+    }
+    if (action === "chat-selection-download") {
+      void handleChatSelectionDownload();
+      return;
+    }
+    if (action === "chat-selection-send-now") {
+      handleChatSelectionSendNow();
+      return;
+    }
     if (action === "chat-selection-delete") {
       handleChatSelectionDelete();
       return;
@@ -6258,6 +6270,36 @@ export function mountApp(root: HTMLElement) {
     }
     if (when > maxAt) {
       store.set({ modal: { ...modal, message: "Максимум — 7 дней вперёд" } });
+      return;
+    }
+    const edit = modal.edit;
+    if (edit && edit.key && edit.localId) {
+      const key = String(edit.key || "").trim();
+      const localId = String(edit.localId || "").trim();
+      if (!key || !localId) {
+        store.set({ modal: null });
+        return;
+      }
+      const list = st.outbox?.[key] || [];
+      const has = Array.isArray(list) && list.some((e) => String(e?.localId || "").trim() === localId);
+      if (!has) {
+        store.set({ modal: null });
+        showToast("Не найдено в очереди отправки", { kind: "warn" });
+        return;
+      }
+      store.set((prev) => {
+        const outbox = updateOutboxEntry(prev.outbox, key, localId, (e) => ({ ...e, scheduleAt: when }));
+        const conv = prev.conversations[key] || [];
+        if (!Array.isArray(conv) || !conv.length) return { ...prev, outbox, modal: null };
+        const idx = conv.findIndex((m) => m.kind === "out" && typeof m.localId === "string" && m.localId === localId);
+        if (idx < 0) return { ...prev, outbox, modal: null };
+        const next = [...conv];
+        next[idx] = { ...next[idx], scheduleAt: when, status: next[idx].status === "sent" ? next[idx].status : "queued" };
+        return { ...prev, outbox, conversations: { ...prev.conversations, [key]: next }, modal: null };
+      });
+      scheduleSaveOutbox(store);
+      drainOutbox();
+      showToast("Время отправки изменено", { kind: "success" });
       return;
     }
     store.set({ modal: null });
@@ -10670,6 +10712,109 @@ export function mountApp(root: HTMLElement) {
     openForwardModal(drafts);
   };
 
+  const handleChatSelectionCopy = async () => {
+    const st = store.get();
+    const selection = resolveChatSelection(st);
+    if (!selection) return;
+    const parts: string[] = [];
+    for (const msg of selection.messages) {
+      if (!msg) continue;
+      const raw = String(msg.text || "").trim();
+      const text = raw && !raw.startsWith("[file]") ? raw : "";
+      if (text) {
+        parts.push(text);
+        continue;
+      }
+      const att = msg.attachment;
+      if (att?.kind === "file") {
+        const caption = String(msg.text || "").trim();
+        if (caption && !caption.startsWith("[file]")) {
+          parts.push(caption);
+          continue;
+        }
+        const name = String(att.name || "").trim();
+        if (name) parts.push(name);
+      }
+    }
+    const text = parts.join("\n\n").trim();
+    if (!text) {
+      showToast("Нечего копировать", { kind: "warn" });
+      return;
+    }
+    const ok = await copyText(text);
+    showToast(ok ? "Скопировано" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
+  };
+
+  const handleChatSelectionDownload = async () => {
+    const st = store.get();
+    const selection = resolveChatSelection(st);
+    if (!selection) return;
+    const ids = new Set<string>();
+    for (const msg of selection.messages) {
+      const fid = msg?.attachment?.kind === "file" ? String(msg.attachment.fileId || "").trim() : "";
+      if (fid) ids.add(fid);
+    }
+    const list = Array.from(ids);
+    if (!list.length) {
+      showToast("В выбранных сообщениях нет файлов", { kind: "info" });
+      return;
+    }
+    showToast(`Скачиваем файлов: ${list.length}`, { kind: "info" });
+    for (const fid of list) {
+      // Fire-and-forget: download pipeline has its own concurrency/queueing.
+      void beginFileDownload(fid);
+    }
+  };
+
+  const handleChatSelectionSendNow = () => {
+    const st = store.get();
+    const selection = resolveChatSelection(st);
+    if (!selection) return;
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    const now = Date.now();
+    const localIds: string[] = [];
+    for (const msg of selection.messages) {
+      if (msg?.kind !== "out") continue;
+      const lid = typeof msg.localId === "string" ? msg.localId.trim() : "";
+      if (!lid) continue;
+      const scheduleAt = typeof msg.scheduleAt === "number" && Number.isFinite(msg.scheduleAt) ? Math.trunc(msg.scheduleAt) : 0;
+      if ((scheduleAt && scheduleAt > now + OUTBOX_SCHEDULE_GRACE_MS) || msg.whenOnline) localIds.push(lid);
+    }
+    if (!localIds.length) {
+      showToast("Нет запланированных сообщений в выборе", { kind: "info" });
+      return;
+    }
+    const key = selection.key;
+    store.set((prev) => {
+      let outbox = prev.outbox;
+      let conversations = prev.conversations;
+      const cur = conversations[key] || [];
+      let nextConv: ChatMessage[] | null = null;
+      for (const lid of localIds) {
+        outbox = updateOutboxEntry(outbox, key, lid, (e) => {
+          const { whenOnline, scheduleAt, ...rest } = e as any;
+          return rest;
+        });
+        if (Array.isArray(cur) && cur.length) {
+          const idx = cur.findIndex((m) => m.kind === "out" && typeof m.localId === "string" && m.localId === lid);
+          if (idx >= 0) {
+            if (!nextConv) nextConv = [...cur];
+            const { scheduleAt, whenOnline, ...rest } = nextConv[idx] as any;
+            nextConv[idx] = { ...rest, status: nextConv[idx].status === "sent" ? nextConv[idx].status : "queued" };
+          }
+        }
+      }
+      if (nextConv) conversations = { ...conversations, [key]: nextConv };
+      return { ...prev, outbox, conversations };
+    });
+    scheduleSaveOutbox(store);
+    drainOutbox();
+    showToast(`Отправляем сейчас: ${localIds.length}`, { kind: "info" });
+  };
+
   const handleChatSelectionDelete = () => {
     const st = store.get();
     const selection = resolveChatSelection(st);
@@ -11207,6 +11352,8 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
+  let msgContextSelection: { key: string; idx: number; text: string } | null = null;
+
   function openContextMenu(target: { kind: ContextMenuTargetKind; id: string }, x: number, y: number) {
     const st = store.get();
     if (st.modal) return;
@@ -11401,6 +11548,9 @@ export function mountApp(root: HTMLElement) {
       const mine = typeof msg?.reactions?.mine === "string" ? msg.reactions.mine : null;
       reactionBar = { emojis: ["👍", "❤️", "😂", "😮", "😢", "🔥"], active: mine };
 
+      const selectedText =
+        msgContextSelection && msgContextSelection.key === selKey && msgContextSelection.idx === idx ? msgContextSelection.text : "";
+
       const preview =
         msg?.attachment?.kind === "file"
           ? `Файл: ${String(msg.attachment.name || "файл")}`
@@ -11410,11 +11560,13 @@ export function mountApp(root: HTMLElement) {
       const fromId = msg?.from ? String(msg.from).trim() : "";
       const caption = msg?.attachment?.kind === "file" ? String(msg?.text || "").trim() : "";
       const copyLabel =
-        msg?.attachment?.kind === "file"
-          ? caption
-            ? "Скопировать подпись"
-            : "Скопировать имя файла"
-          : "Скопировать текст";
+        selectedText
+          ? "Скопировать выделенное"
+          : msg?.attachment?.kind === "file"
+            ? caption
+              ? "Скопировать подпись"
+              : "Скопировать имя файла"
+            : "Скопировать текст";
       const canEdit = Boolean(canPin && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
       const canDeleteForAll = Boolean(canPin && canAct && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
       const canReply = Boolean(msg && msg.kind !== "sys");
@@ -11424,6 +11576,17 @@ export function mountApp(root: HTMLElement) {
         if (!raw || raw.startsWith("[file]")) return "";
         return raw;
       })();
+      const scheduleAt =
+        msg && typeof msg.scheduleAt === "number" && Number.isFinite(msg.scheduleAt) && msg.scheduleAt > 0 ? Math.trunc(msg.scheduleAt) : 0;
+      const canEditSchedule = Boolean(msg?.kind === "out" && scheduleAt > Date.now() + OUTBOX_SCHEDULE_GRACE_MS);
+      const scheduleGroup: ContextMenuItem[] = [];
+      if (canEditSchedule) {
+        const localId = typeof msg?.localId === "string" ? msg.localId.trim() : "";
+        const canLocalOutbox = Boolean(st.authed && localId);
+        scheduleGroup.push(makeItem("msg_send_now", "Отправить сейчас", "⚡", { disabled: !canLocalOutbox }));
+        scheduleGroup.push(makeItem("msg_schedule_edit", "Изменить время…", "🗓", { disabled: !canLocalOutbox }));
+      }
+      addGroup(scheduleGroup);
       const repliesCount = (() => {
         if (!conv || !msg) return 0;
         const msgLocalId = typeof msg.localId === "string" ? msg.localId.trim() : "";
@@ -11451,7 +11614,8 @@ export function mountApp(root: HTMLElement) {
         )
       );
       primary.push(makeItem("msg_copy", copyLabel, "📋", { disabled: !msg }));
-      primary.push(makeItem("msg_quote", "Цитировать", "❝", { disabled: !canReply || helperBlocked }));
+      if (selectedText) primary.push(makeItem("msg_search_selection", "Искать выделенное", "🔍", { disabled: !msg }));
+      primary.push(makeItem("msg_quote", selectedText ? "Цитировать выделенное" : "Цитировать", "❝", { disabled: !canReply || helperBlocked }));
       primary.push(makeItem("msg_reply", "Ответить", "↩", { disabled: !canReply || helperBlocked }));
       if (repliesCount > 0) primary.push(makeItem("msg_view_replies", `Ответы (${repliesCount})`, "🧵"));
       primary.push(makeItem("msg_forward", "Переслать", "↪", { disabled: !canReply || helperBlocked }));
@@ -11511,7 +11675,10 @@ export function mountApp(root: HTMLElement) {
     if (!modal || modal.kind !== "context_menu") return;
     const t = modal.payload.target;
 
-    const close = () => store.set({ modal: null });
+    const close = () => {
+      msgContextSelection = null;
+      store.set({ modal: null });
+    };
 
     if (itemId === "composer_send_when_online") {
       close();
@@ -11740,11 +11907,16 @@ export function mountApp(root: HTMLElement) {
       const conv = selKey ? st.conversations[selKey] : null;
       const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
       const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
+      const selectedText =
+        msgContextSelection && msgContextSelection.key === selKey && msgContextSelection.idx === idx ? msgContextSelection.text : "";
 
       if (itemId === "msg_copy") {
         const caption = msg?.attachment?.kind === "file" ? String(msg?.text || "").trim() : "";
-        const text =
-          msg?.attachment?.kind === "file" ? (caption || String(msg.attachment.name || "файл")) : String(msg?.text || "");
+        const text = selectedText
+          ? selectedText
+          : msg?.attachment?.kind === "file"
+            ? (caption || String(msg.attachment.name || "файл"))
+            : String(msg?.text || "");
         const ok = await copyText(text);
         showToast(ok ? "Скопировано" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
         close();
@@ -11770,7 +11942,7 @@ export function mountApp(root: HTMLElement) {
         const trimmedText = rawText.trimEnd();
         const text = trimmedText && !trimmedText.startsWith("[file]") ? trimmedText : "";
         const fileName = msg.attachment?.kind === "file" ? String(msg.attachment.name || "").trim() : "";
-        const quoteBody = text || fileName;
+        const quoteBody = selectedText || text || fileName;
         if (!quoteBody) {
           showToast("Нечего цитировать", { kind: "warn" });
           close();
@@ -11797,6 +11969,93 @@ export function mountApp(root: HTMLElement) {
         }
         scheduleFocusComposer();
         close();
+        return;
+      }
+
+      if (itemId === "msg_search_selection") {
+        if (!selectedText) {
+          close();
+          return;
+        }
+        close();
+        openChatSearch();
+        setChatSearchQuery(selectedText);
+        return;
+      }
+
+      if (itemId === "msg_send_now") {
+        if (!selKey || !conv || !msg) {
+          close();
+          return;
+        }
+        const localId = typeof msg.localId === "string" ? msg.localId.trim() : "";
+        if (!localId) {
+          close();
+          return;
+        }
+        if (!st.authed) {
+          store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+          return;
+        }
+        const list = st.outbox?.[selKey] || [];
+        const has = Array.isArray(list) && list.some((e) => String(e?.localId || "").trim() === localId);
+        if (!has) {
+          showToast("Не найдено в очереди отправки", { kind: "warn" });
+          close();
+          return;
+        }
+        store.set((prev) => {
+          const outbox = updateOutboxEntry(prev.outbox, selKey, localId, (e) => {
+            const { whenOnline, scheduleAt, ...rest } = e as any;
+            return rest;
+          });
+          const cur = prev.conversations[selKey] || [];
+          if (!Array.isArray(cur) || !cur.length) return { ...prev, outbox };
+          if (idx < 0 || idx >= cur.length) return { ...prev, outbox };
+          const next = [...cur];
+          const { scheduleAt: sa, whenOnline: wo, ...msgRest } = next[idx] as any;
+          next[idx] = { ...msgRest, status: next[idx].status === "sent" ? next[idx].status : "queued" };
+          return { ...prev, outbox, conversations: { ...prev.conversations, [selKey]: next } };
+        });
+        scheduleSaveOutbox(store);
+        drainOutbox();
+        showToast("Отправляем сейчас", { kind: "info" });
+        close();
+        return;
+      }
+
+      if (itemId === "msg_schedule_edit") {
+        if (!selKey || !msg) {
+          close();
+          return;
+        }
+        if (!st.selected) {
+          close();
+          return;
+        }
+        const localId = typeof msg.localId === "string" ? msg.localId.trim() : "";
+        const scheduleAt =
+          typeof msg.scheduleAt === "number" && Number.isFinite(msg.scheduleAt) && msg.scheduleAt > 0 ? Math.trunc(msg.scheduleAt) : 0;
+        if (!localId || !scheduleAt) {
+          close();
+          return;
+        }
+        if (!st.authed) {
+          store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+          return;
+        }
+        close();
+        store.set({
+          modal: {
+            kind: "send_schedule",
+            target: st.selected,
+            text: String(msg.text || ""),
+            suggestedAt: scheduleAt,
+            edit: { key: selKey, localId },
+            title: "Изменить время",
+            confirmLabel: "Сохранить",
+          },
+        });
         return;
       }
 
@@ -13580,6 +13839,18 @@ export function mountApp(root: HTMLElement) {
     if (!row) return;
     const idx = String(row.getAttribute("data-msg-idx") || "").trim();
     if (!idx) return;
+    const selKey = conversationKey(st.selected);
+    const idxNum = Number.isFinite(Number(idx)) ? Math.trunc(Number(idx)) : -1;
+    msgContextSelection = null;
+    try {
+      const sel = document.getSelection?.();
+      const text = sel ? String(sel.toString() || "").trim() : "";
+      if (text && sel?.anchorNode && sel?.focusNode && row.contains(sel.anchorNode) && row.contains(sel.focusNode) && idxNum >= 0) {
+        msgContextSelection = { key: selKey, idx: idxNum, text: text.length > 2000 ? `${text.slice(0, 2000)}…` : text };
+      }
+    } catch {
+      msgContextSelection = null;
+    }
     e.preventDefault();
     openContextMenu({ kind: "message", id: idx }, e.clientX, e.clientY);
   });

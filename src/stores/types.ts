@@ -172,6 +172,9 @@ export type ModalState =
       forwardDraft?: MessageHelperDraft | null;
       suggestedAt?: number;
       message?: string;
+      edit?: { key: string; localId: string } | null;
+      title?: string;
+      confirmLabel?: string;
     }
   | {
       kind: "forward_select";
