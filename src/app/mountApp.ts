@@ -3456,25 +3456,7 @@ export function mountApp(root: HTMLElement) {
       if (!fileId) return;
       e.preventDefault();
       closeMobileSidebar();
-      void (async () => {
-        const meta = resolveFileMeta(fileId);
-        const st = store.get();
-        const fromCache = await tryServeFileFromCache(fileId, meta);
-        if (fromCache) return;
-        const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
-        if (entry?.url) {
-          triggerBrowserDownload(entry.url, meta.name || entry.name || "файл");
-          return;
-        }
-        const canStream = Number(meta.size || 0) >= STREAM_MIN_BYTES && startStreamDownload(fileId, meta);
-        if (canStream) {
-          store.set({ status: `Скачивание: ${meta.name || "файл"}` });
-          return;
-        }
-        pendingFileDownloads.set(fileId, { name: meta.name || "файл" });
-        enqueueFileGet(fileId, { priority: "high" });
-        store.set({ status: `Скачивание: ${meta.name || fileId}` });
-      })();
+      void beginFileDownload(fileId);
       return;
     }
 
@@ -6810,6 +6792,28 @@ export function mountApp(root: HTMLElement) {
       };
     }
     return { name: "файл", size: 0, mime: null };
+  }
+
+  async function beginFileDownload(fileId: string): Promise<void> {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    const meta = resolveFileMeta(fid);
+    const st = store.get();
+    const fromCache = await tryServeFileFromCache(fid, meta);
+    if (fromCache) return;
+    const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fid);
+    if (entry?.url) {
+      triggerBrowserDownload(entry.url, meta.name || entry.name || "файл");
+      return;
+    }
+    const canStream = Number(meta.size || 0) >= STREAM_MIN_BYTES && startStreamDownload(fid, meta);
+    if (canStream) {
+      store.set({ status: `Скачивание: ${meta.name || "файл"}` });
+      return;
+    }
+    pendingFileDownloads.set(fid, { name: meta.name || "файл" });
+    enqueueFileGet(fid, { priority: "high" });
+    store.set({ status: `Скачивание: ${meta.name || fid}` });
   }
 
   function getFileCachePrefsForUser(userId: string | null): { maxBytes: number; autoCleanMs: number; lastCleanAt: number } | null {
@@ -11415,6 +11419,27 @@ export function mountApp(root: HTMLElement) {
       const canDeleteForAll = Boolean(canPin && canAct && msg?.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
       const canReply = Boolean(msg && msg.kind !== "sys");
       const helperBlocked = Boolean(st.editing);
+      const translateText = (() => {
+        const raw = String(msg?.text || "").trim();
+        if (!raw || raw.startsWith("[file]")) return "";
+        return raw;
+      })();
+      const repliesCount = (() => {
+        if (!conv || !msg) return 0;
+        const msgLocalId = typeof msg.localId === "string" ? msg.localId.trim() : "";
+        if (msgId === null && !msgLocalId) return 0;
+        let count = 0;
+        for (let i = idx + 1; i < conv.length; i += 1) {
+          const ref = conv[i]?.reply;
+          if (!ref) continue;
+          const refId = typeof ref.id === "number" && Number.isFinite(ref.id) ? ref.id : null;
+          const refLocalId = typeof ref.localId === "string" ? ref.localId.trim() : "";
+          const matchById = msgId !== null && msgId > 0 && refId === msgId;
+          const matchByLocalId = msgLocalId && refLocalId && refLocalId === msgLocalId;
+          if (matchById || matchByLocalId) count += 1;
+        }
+        return count;
+      })();
       const primary: ContextMenuItem[] = [];
       if (fromId) primary.push(makeItem("msg_profile", "Профиль отправителя", "👤", { disabled: !canAct }));
       primary.push(
@@ -11426,9 +11451,23 @@ export function mountApp(root: HTMLElement) {
         )
       );
       primary.push(makeItem("msg_copy", copyLabel, "📋", { disabled: !msg }));
+      primary.push(makeItem("msg_quote", "Цитировать", "❝", { disabled: !canReply || helperBlocked }));
       primary.push(makeItem("msg_reply", "Ответить", "↩", { disabled: !canReply || helperBlocked }));
+      if (repliesCount > 0) primary.push(makeItem("msg_view_replies", `Ответы (${repliesCount})`, "🧵"));
       primary.push(makeItem("msg_forward", "Переслать", "↪", { disabled: !canReply || helperBlocked }));
+      if (translateText) primary.push(makeItem("msg_translate", "Перевести", "🌐"));
       addGroup(primary);
+
+      const fileGroup: ContextMenuItem[] = [];
+      if (msg?.attachment?.kind === "file") {
+        const fileId = String(msg.attachment.fileId || "").trim();
+        const hasLocalUrl = Boolean(
+          fileId && st.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean(t.url))
+        );
+        fileGroup.push(makeItem("msg_download", "Скачать", "⬇️", { disabled: !(fileId && (canAct || hasLocalUrl)) }));
+        fileGroup.push(makeItem("msg_copy_link", "Скопировать ссылку", "🔗", { disabled: !(fileId && canAct) }));
+      }
+      addGroup(fileGroup);
 
       const editGroup: ContextMenuItem[] = [
         makeItem("msg_pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌", {
@@ -11709,6 +11748,148 @@ export function mountApp(root: HTMLElement) {
         const ok = await copyText(text);
         showToast(ok ? "Скопировано" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
         close();
+        return;
+      }
+
+      if (itemId === "msg_quote") {
+        if (!selKey || !msg) {
+          close();
+          return;
+        }
+        if (st.editing) {
+          showToast("Сначала завершите редактирование", { kind: "warn" });
+          close();
+          return;
+        }
+        const draft = buildHelperDraft(st, selKey, msg);
+        if (!draft) {
+          close();
+          return;
+        }
+        const rawText = String(msg.text || "").replace(/\r\n?/g, "\n");
+        const trimmedText = rawText.trimEnd();
+        const text = trimmedText && !trimmedText.startsWith("[file]") ? trimmedText : "";
+        const fileName = msg.attachment?.kind === "file" ? String(msg.attachment.name || "").trim() : "";
+        const quoteBody = text || fileName;
+        if (!quoteBody) {
+          showToast("Нечего цитировать", { kind: "warn" });
+          close();
+          return;
+        }
+        const quoted = quoteBody
+          .split("\n")
+          .map((line) => `> ${line}`)
+          .join("\n");
+        const prevValue = String(layout.input.value || "");
+        const base = prevValue.trimEnd();
+        const nextInput = base ? `${base}\n\n${quoted}\n` : `${quoted}\n`;
+        store.set({ replyDraft: draft, forwardDraft: null });
+        try {
+          layout.input.value = nextInput;
+          pendingInputValue = nextInput;
+          scheduleAutosize();
+          scheduleBoardEditorPreview();
+          updateComposerTypingUi();
+          commitInputUpdate();
+        } catch {
+          store.set({ input: nextInput });
+          scheduleSaveDrafts(store);
+        }
+        scheduleFocusComposer();
+        close();
+        return;
+      }
+
+      if (itemId === "msg_download") {
+        const fileId = msg?.attachment?.kind === "file" ? String(msg.attachment.fileId || "").trim() : "";
+        if (!fileId) {
+          showToast("Файл ещё не готов", { kind: "warn" });
+          close();
+          return;
+        }
+        close();
+        closeMobileSidebar();
+        void beginFileDownload(fileId);
+        return;
+      }
+
+      if (itemId === "msg_copy_link") {
+        const fileId = msg?.attachment?.kind === "file" ? String(msg.attachment.fileId || "").trim() : "";
+        if (!fileId) {
+          close();
+          return;
+        }
+        if (st.conn !== "connected") {
+          store.set({ status: "Нет соединения" });
+          close();
+          return;
+        }
+        if (!st.authed) {
+          store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+          return;
+        }
+        try {
+          const url = await requestFreshHttpDownloadUrl(fileId);
+          const ok = await copyText(url);
+          showToast(ok ? "Ссылка скопирована" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
+        } catch {
+          showToast("Не удалось получить ссылку", { kind: "error" });
+        }
+        close();
+        return;
+      }
+
+      if (itemId === "msg_view_replies") {
+        if (!selKey || !conv || !msg) {
+          close();
+          return;
+        }
+        const msgLocalId = typeof msg.localId === "string" ? msg.localId.trim() : "";
+        if (msgId === null && !msgLocalId) {
+          close();
+          return;
+        }
+        let firstIdx: number | null = null;
+        let count = 0;
+        for (let i = idx + 1; i < conv.length; i += 1) {
+          const ref = conv[i]?.reply;
+          if (!ref) continue;
+          const refId = typeof ref.id === "number" && Number.isFinite(ref.id) ? ref.id : null;
+          const refLocalId = typeof ref.localId === "string" ? ref.localId.trim() : "";
+          const matchById = msgId !== null && msgId > 0 && refId === msgId;
+          const matchByLocalId = msgLocalId && refLocalId && refLocalId === msgLocalId;
+          if (!(matchById || matchByLocalId)) continue;
+          count += 1;
+          if (firstIdx === null) firstIdx = i;
+        }
+        if (firstIdx === null) {
+          showToast("Ответов нет", { kind: "info" });
+          close();
+          return;
+        }
+        close();
+        window.setTimeout(() => jumpToChatMsgIdx(firstIdx), 0);
+        showToast(`Ответов: ${count}`, { kind: "info" });
+        return;
+      }
+
+      if (itemId === "msg_translate") {
+        const raw = String(msg?.text || "").trim();
+        const text = raw && !raw.startsWith("[file]") ? raw : "";
+        if (!text) {
+          close();
+          return;
+        }
+        const snippet = text.length > 1800 ? text.slice(0, 1800) : text;
+        const url = `https://translate.google.com/?sl=auto&tl=ru&text=${encodeURIComponent(snippet)}&op=translate`;
+        close();
+        try {
+          const opened = window.open(url, "_blank", "noopener,noreferrer");
+          if (!opened) throw new Error("popup_blocked");
+        } catch {
+          const ok = await copyText(text);
+          showToast(ok ? "Текст скопирован" : "Не удалось открыть переводчик", { kind: ok ? "success" : "error" });
+        }
         return;
       }
 

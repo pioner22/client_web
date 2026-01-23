@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.645",
+    date: "2026-01-23",
+    improved: [
+      "Сообщения: контекст‑меню стало ближе к tweb — добавлены «Цитировать», «Скачать», «Скопировать ссылку», «Перевести» и «Ответы» (если есть)",
+    ],
+  },
+  {
     version: "0.1.644",
     date: "2026-01-23",
     improved: [
