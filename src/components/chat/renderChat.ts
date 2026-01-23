@@ -896,6 +896,8 @@ function messageLine(
   const canOpenProfile = Boolean(displayFromId);
   const meta = buildMessageMeta(m);
   const bodyChildren: HTMLElement[] = [];
+  let fileRowEl: HTMLElement | null = null;
+  let selectionBtnPlacedInFileRow = false;
   if (showFrom) {
     const attrs = canOpenProfile
       ? {
@@ -1036,7 +1038,8 @@ function messageLine(
       : isAudio
         ? "file-row file-row-chat file-row-audio"
         : "file-row file-row-chat";
-    bodyChildren.push(el("div", { class: fileRowClass }, rowChildren));
+    fileRowEl = el("div", { class: fileRowClass }, rowChildren);
+    bodyChildren.push(fileRowEl);
     if (viewerCaption) {
       const emojiOnlyCaption = isEmojiOnlyText(viewerCaption);
       hasCaption = true;
@@ -1068,8 +1071,10 @@ function messageLine(
   const selectionMode = Boolean(opts?.selectionMode);
   const selected = Boolean(opts?.selected);
   const selectionIdx = typeof opts?.msgIdx === "number" && Number.isFinite(opts.msgIdx) ? Math.trunc(opts.msgIdx) : null;
+  const selectionDisabled =
+    m.attachment?.kind === "action" || m.status === "sending" || m.status === "queued" || m.status === "error";
   const selectionBtn =
-    selectionMode && selectionIdx !== null
+    selectionMode && selectionIdx !== null && !selectionDisabled
       ? el(
           "button",
           {
@@ -1084,6 +1089,11 @@ function messageLine(
           [selected ? "✓" : ""]
         )
       : null;
+
+  if (selectionBtn && fileRowEl && (fileKind === "audio" || fileKind === "file") && !Boolean(opts?.boardUi)) {
+    selectionBtnPlacedInFileRow = true;
+    fileRowEl.prepend(selectionBtn);
+  }
 
   const lineChildren: HTMLElement[] = [];
   if (displayFromId) {
@@ -1102,8 +1112,14 @@ function messageLine(
       lineChildren.push(el("div", { class: "msg-avatar" }, [avatarNode]));
     }
   }
-  if (selectionBtn) lineChildren.push(selectionBtn);
-  lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
+  const bodyNode = el("div", { class: "msg-body" }, bodyChildren);
+  if (m.kind === "out") {
+    lineChildren.push(bodyNode);
+    if (selectionBtn && !selectionBtnPlacedInFileRow) lineChildren.push(selectionBtn);
+  } else {
+    if (selectionBtn && !selectionBtnPlacedInFileRow) lineChildren.push(selectionBtn);
+    lineChildren.push(bodyNode);
+  }
   const cls = m.attachment ? `msg msg-${m.kind} msg-attach` : `msg msg-${m.kind}`;
   const line = el("div", { class: cls }, lineChildren);
   applyMessageDataset(line, m.kind, {
@@ -1129,7 +1145,7 @@ function renderAlbumLine(
   state: AppState,
   items: AlbumItem[],
   friendLabels?: Map<string, string>,
-  opts?: { selectionMode?: boolean; selected?: boolean }
+  opts?: { selectionMode?: boolean; selected?: boolean; partial?: boolean; groupStartIdx?: number; groupEndIdx?: number }
 ): HTMLElement {
   const first = items[0];
   const last = items[items.length - 1];
@@ -1190,21 +1206,28 @@ function renderAlbumLine(
 
   const selectionMode = Boolean(opts?.selectionMode);
   const selected = Boolean(opts?.selected);
+  const partial = Boolean(opts?.partial);
   const selectionIdx = typeof last.idx === "number" && Number.isFinite(last.idx) ? Math.trunc(last.idx) : null;
   const selectionBtn =
     selectionMode && selectionIdx !== null
       ? el(
           "button",
           {
-            class: `btn msg-select${selected ? " msg-select-on" : ""}`,
+            class: `btn msg-select${selected || partial ? " msg-select-on" : ""}${partial ? " msg-select-partial" : ""}`,
             type: "button",
             "data-action": "msg-select-toggle",
             "data-msg-idx": String(selectionIdx),
-            title: selected ? "Снять выбор" : "Выбрать",
-            "aria-label": selected ? "Снять выбор" : "Выбрать",
-            ...(selected ? { "aria-pressed": "true" } : { "aria-pressed": "false" }),
+            ...(typeof opts?.groupStartIdx === "number" && Number.isFinite(opts.groupStartIdx)
+              ? { "data-msg-group-start": String(Math.trunc(opts.groupStartIdx)) }
+              : {}),
+            ...(typeof opts?.groupEndIdx === "number" && Number.isFinite(opts.groupEndIdx)
+              ? { "data-msg-group-end": String(Math.trunc(opts.groupEndIdx)) }
+              : {}),
+            title: selected ? "Снять выбор" : partial ? "Выбрать всё" : "Выбрать",
+            "aria-label": selected ? "Снять выбор" : partial ? "Выбрать всё" : "Выбрать",
+            ...(selected ? { "aria-pressed": "true" } : partial ? { "aria-pressed": "mixed" } : { "aria-pressed": "false" }),
           },
-          [selected ? "✓" : ""]
+          [selected ? "✓" : partial ? "–" : ""]
         )
       : null;
 
@@ -1225,8 +1248,14 @@ function renderAlbumLine(
       lineChildren.push(el("div", { class: "msg-avatar" }, [avatarNode]));
     }
   }
-  if (selectionBtn) lineChildren.push(selectionBtn);
-  lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
+  const bodyNode = el("div", { class: "msg-body" }, bodyChildren);
+  if (first.msg.kind === "out") {
+    lineChildren.push(bodyNode);
+    if (selectionBtn) lineChildren.push(selectionBtn);
+  } else {
+    if (selectionBtn) lineChildren.push(selectionBtn);
+    lineChildren.push(bodyNode);
+  }
   const line = el("div", { class: `msg msg-${first.msg.kind} msg-attach msg-album` }, lineChildren);
   applyMessageDataset(line, first.msg.kind, {
     refKind,
@@ -1532,25 +1561,42 @@ export function renderChat(layout: Layout, state: AppState) {
         scan += 1;
         if (group.length >= albumMax) break;
       }
-	      if (group.length >= albumMin) {
-	        const selected = selectionSet
-	          ? group.some((item) => {
-	              const selKey = messageSelectionKey(item.msg);
-	              return selKey ? selectionSet.has(selKey) : false;
-	            })
-	          : false;
-	        const line = renderAlbumLine(state, group, friendLabels, { selectionMode: selectionCount > 0, selected });
-	        if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
-	        const lastItem = group[group.length - 1];
-	        if (!boardUi && lastItem?.msg?.kind !== "sys" && isGroupTail(lastItem.idx, lastItem.msg)) line.classList.add("msg-tail");
-	        const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
-	        const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
-	        if (selected) line.classList.add("msg-selected");
-	        line.setAttribute("data-msg-idx", String(group[group.length - 1].idx));
-	        const groupMsgId = Number(group[group.length - 1].msg.id ?? NaN);
-	        if (Number.isFinite(groupMsgId)) line.setAttribute("data-msg-id", String(groupMsgId));
-	        const groupMsgKey = messageSelectionKey(group[group.length - 1].msg);
-	        if (groupMsgKey) line.setAttribute("data-msg-key", groupMsgKey);
+		      if (group.length >= albumMin) {
+		        const groupCounts = (() => {
+		          let selectedCount = 0;
+		          let selectableCount = 0;
+		          for (const item of group) {
+		            const selKey = messageSelectionKey(item.msg);
+		            if (!selKey) continue;
+		            selectableCount += 1;
+		            if (selectionSet && selectionSet.has(selKey)) selectedCount += 1;
+		          }
+		          const anySelected = selectedCount > 0;
+		          const allSelected = selectableCount > 0 && selectedCount === selectableCount;
+		          const partial = anySelected && !allSelected;
+		          return { anySelected, allSelected, partial };
+		        })();
+		        const lastIdx = group[group.length - 1].idx;
+		        const line = renderAlbumLine(state, group, friendLabels, {
+		          selectionMode: selectionCount > 0,
+		          selected: groupCounts.allSelected,
+		          partial: groupCounts.partial,
+		          groupStartIdx: group[0].idx,
+		          groupEndIdx: lastIdx,
+		        });
+		        if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
+		        const lastItem = group[group.length - 1];
+		        if (!boardUi && lastItem?.msg?.kind !== "sys" && isGroupTail(lastItem.idx, lastItem.msg)) line.classList.add("msg-tail");
+		        const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
+		        const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
+		        if (groupCounts.anySelected) line.classList.add("msg-selected");
+		        line.setAttribute("data-msg-idx", String(lastIdx));
+		        line.setAttribute("data-msg-group-start", String(group[0].idx));
+		        line.setAttribute("data-msg-group-end", String(lastIdx));
+		        const groupMsgId = Number(group[group.length - 1].msg.id ?? NaN);
+		        if (Number.isFinite(groupMsgId)) line.setAttribute("data-msg-id", String(groupMsgId));
+		        const groupMsgKey = messageSelectionKey(group[group.length - 1].msg);
+		        if (groupMsgKey) line.setAttribute("data-msg-key", groupMsgKey);
         if (hit) line.classList.add("msg-hit");
         if (active) line.classList.add("msg-hit-active");
         lineItems.push(line);

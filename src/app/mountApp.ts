@@ -655,6 +655,14 @@ export function mountApp(root: HTMLElement) {
   let chatSelectionAnchorIdx: number | null = null;
   let suppressMsgSelectToggleClickUntil = 0;
 
+  function isChatMessageSelectable(msg: ChatMessage | null | undefined): msg is ChatMessage {
+    if (!msg) return false;
+    if (msg.kind === "sys") return false;
+    if (msg.attachment?.kind === "action") return false;
+    if (msg.status === "sending" || msg.status === "queued" || msg.status === "error") return false;
+    return true;
+  }
+
   function clearChatSelection() {
     const st = store.get();
     if (!st.chatSelection) return;
@@ -664,7 +672,7 @@ export function mountApp(root: HTMLElement) {
 
   function toggleChatSelection(key: string, msg: ChatMessage) {
     if (!key) return;
-    if (!msg || msg.kind === "sys") return;
+    if (!isChatMessageSelectable(msg)) return;
     const selId = messageSelectionKey(msg);
     if (!selId) return;
     store.set((prev) => {
@@ -692,9 +700,32 @@ export function mountApp(root: HTMLElement) {
       const boundedEnd = Math.min(end, conv.length - 1);
       for (let i = start; i <= boundedEnd; i += 1) {
         const msg = conv[i];
-        if (!msg || msg.kind === "sys") continue;
+        if (!isChatMessageSelectable(msg)) continue;
         const selId = messageSelectionKey(msg);
         if (selId) ids.add(selId);
+      }
+      return { ...prev, chatSelection: ids.size ? { key, ids: Array.from(ids) } : null };
+    });
+  }
+
+  function setChatSelectionRangeValue(key: string, fromIdx: number, toIdx: number, value: boolean) {
+    if (!key) return;
+    if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdx)) return;
+    const start = Math.max(0, Math.min(fromIdx, toIdx));
+    const end = Math.max(0, Math.max(fromIdx, toIdx));
+    store.set((prev) => {
+      const conv = prev.conversations[key] || [];
+      if (!Array.isArray(conv) || !conv.length) return prev;
+      const current = prev.chatSelection;
+      const ids = new Set(current && current.key === key ? current.ids || [] : []);
+      const boundedEnd = Math.min(end, conv.length - 1);
+      for (let i = start; i <= boundedEnd; i += 1) {
+        const msg = conv[i];
+        if (!isChatMessageSelectable(msg)) continue;
+        const selId = messageSelectionKey(msg);
+        if (!selId) continue;
+        if (value) ids.add(selId);
+        else ids.delete(selId);
       }
       return { ...prev, chatSelection: ids.size ? { key, ids: Array.from(ids) } : null };
     });
@@ -708,7 +739,7 @@ export function mountApp(root: HTMLElement) {
       if (!Array.isArray(conv) || !conv.length) return prev;
       if (idx >= conv.length) return prev;
       const msg = conv[idx];
-      if (!msg || msg.kind === "sys") return prev;
+      if (!isChatMessageSelectable(msg)) return prev;
       const selId = messageSelectionKey(msg);
       if (!selId) return prev;
       const current = prev.chatSelection;
@@ -750,6 +781,7 @@ export function mountApp(root: HTMLElement) {
     const messages: ChatMessage[] = [];
     const ids: string[] = [];
     for (const msg of conv) {
+      if (!isChatMessageSelectable(msg)) continue;
       const selId = messageSelectionKey(msg);
       if (!selId || !idSet.has(selId)) continue;
       messages.push(msg);
@@ -3121,8 +3153,34 @@ export function mountApp(root: HTMLElement) {
       const conv = key ? st.conversations[key] : null;
       const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
       if (!msg) return;
+      if (!isChatMessageSelectable(msg)) return;
       e.preventDefault();
       e.stopPropagation();
+      const groupStartRaw = String(msgSelectBtn.getAttribute("data-msg-group-start") || "").trim();
+      const groupEndRaw = String(msgSelectBtn.getAttribute("data-msg-group-end") || "").trim();
+      if (groupStartRaw && groupEndRaw && conv) {
+        const start = Number.isFinite(Number(groupStartRaw)) ? Math.trunc(Number(groupStartRaw)) : -1;
+        const end = Number.isFinite(Number(groupEndRaw)) ? Math.trunc(Number(groupEndRaw)) : -1;
+        if (start >= 0 && end >= 0) {
+          const selection = st.chatSelection;
+          const idSet = new Set(selection && selection.key === key ? selection.ids || [] : []);
+          let selectedCount = 0;
+          let selectableCount = 0;
+          const boundedEnd = Math.min(Math.max(start, end), conv.length - 1);
+          for (let i = Math.min(start, end); i <= boundedEnd; i += 1) {
+            const m = conv[i];
+            if (!isChatMessageSelectable(m)) continue;
+            const selId = messageSelectionKey(m);
+            if (!selId) continue;
+            selectableCount += 1;
+            if (idSet.has(selId)) selectedCount += 1;
+          }
+          const shouldSelectAll = selectedCount < selectableCount;
+          setChatSelectionRangeValue(key, start, end, shouldSelectAll);
+          chatSelectionAnchorIdx = idx;
+          return;
+        }
+      }
       const shift = "shiftKey" in e ? Boolean((e as MouseEvent).shiftKey) : false;
       if (shift && chatSelectionAnchorIdx !== null) addChatSelectionRange(key, chatSelectionAnchorIdx, idx);
       else toggleChatSelection(key, msg);
@@ -3142,6 +3200,33 @@ export function mountApp(root: HTMLElement) {
       if (row) {
         const idx = Math.trunc(Number(row.getAttribute("data-msg-idx") || ""));
         const conv = selectionKey ? stForSelection.conversations[selectionKey] : null;
+        const groupStartRaw = String(row.getAttribute("data-msg-group-start") || "").trim();
+        const groupEndRaw = String(row.getAttribute("data-msg-group-end") || "").trim();
+        if (groupStartRaw && groupEndRaw && conv) {
+          const start = Number.isFinite(Number(groupStartRaw)) ? Math.trunc(Number(groupStartRaw)) : -1;
+          const end = Number.isFinite(Number(groupEndRaw)) ? Math.trunc(Number(groupEndRaw)) : -1;
+          if (start >= 0 && end >= 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            const selection = stForSelection.chatSelection;
+            const idSet = new Set(selection && selection.key === selectionKey ? selection.ids || [] : []);
+            let selectedCount = 0;
+            let selectableCount = 0;
+            const boundedEnd = Math.min(Math.max(start, end), conv.length - 1);
+            for (let i = Math.min(start, end); i <= boundedEnd; i += 1) {
+              const m = conv[i];
+              if (!isChatMessageSelectable(m)) continue;
+              const selId = messageSelectionKey(m);
+              if (!selId) continue;
+              selectableCount += 1;
+              if (idSet.has(selId)) selectedCount += 1;
+            }
+            const shouldSelectAll = selectedCount < selectableCount;
+            setChatSelectionRangeValue(selectionKey, start, end, shouldSelectAll);
+            chatSelectionAnchorIdx = idx;
+            return;
+          }
+        }
         const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
         if (msg) {
           e.preventDefault();
@@ -13902,7 +13987,7 @@ export function mountApp(root: HTMLElement) {
       const idx = Number.isFinite(Number(idxRaw)) ? Math.trunc(Number(idxRaw)) : -1;
       const conv = key ? st.conversations[key] : null;
       const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
-      if (!msg || msg.kind === "sys") return;
+      if (!isChatMessageSelectable(msg)) return;
       const selId = messageSelectionKey(msg);
       if (!selId) return;
       const isSelected = selection.ids.includes(selId);

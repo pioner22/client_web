@@ -1498,7 +1498,7 @@ html.app-typing .row-muted {
   max-width: calc(100% - (var(--chat-input-padding) * 2));
   margin: 0 auto;
   padding: 6px var(--chat-input-padding);
-  background: color-mix(in srgb, var(--panel2), transparent 8%);
+  background: var(--surface-color);
   border: 1px solid color-mix(in srgb, var(--line), transparent 28%);
   border-radius: var(--chat-input-border-radius);
 }
@@ -2330,6 +2330,12 @@ html.app-typing .row-muted {
 .msg-select.msg-select-on {
   background: var(--focus);
   border-color: var(--focus);
+  color: #ffffff;
+}
+
+.msg-select.msg-select-partial {
+  background: color-mix(in srgb, var(--focus), transparent 30%);
+  border-color: color-mix(in srgb, var(--focus), transparent 10%);
   color: #ffffff;
 }
 
@@ -3218,6 +3224,19 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
   gap: 12px;
   display: grid;
   grid-template-columns: 1fr auto;
+  position: relative;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat:not(.file-row-image):has(> .msg-select) {
+  padding: 8px 12px 8px 44px;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat:not(.file-row-image) > .msg-select {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
 }
 
 .chat:not(.chat-board) .file-row-chat .file-main {
