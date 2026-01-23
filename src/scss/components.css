@@ -4519,6 +4519,11 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
   color: #fff;
 }
 
+.btn.composer-send.is-menu-open:not(:disabled) {
+  background: color-mix(in srgb, var(--accent), #000 14%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 78%), var(--composer-field-shadow);
+}
+
 .btn.composer-board-editor:hover:not(:disabled),
 .btn.composer-board-editor.btn-active:not(:disabled) {
   background: color-mix(in srgb, var(--btn-bg-hover), transparent 25%);

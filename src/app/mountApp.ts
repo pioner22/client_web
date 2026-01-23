@@ -10761,14 +10761,15 @@ export function mountApp(root: HTMLElement) {
     const key = conversationKey(sel);
     const editing = st.editing && key && st.editing.key === key;
     const friend = sel.kind === "dm" ? st.friends.find((f) => f.id === sel.id) : null;
+    const friendKnown = Boolean(friend);
     const friendOnline = Boolean(friend?.online);
     const canSend = Boolean(getComposerFinalText(st));
     const canSendNow = canSend && !editing;
-    const whenOnlineAllowed = sel.kind === "dm" && !friendOnline && !editing;
+    const whenOnlineAllowed = sel.kind === "dm" && friendKnown && !friendOnline && !editing;
     const items: ContextMenuItem[] = [
       { id: "composer_send_silent", label: "Отправить без звука", icon: "🔕", disabled: !canSendNow },
       { id: "composer_send_schedule", label: "Запланировать", icon: "🗓", disabled: !canSendNow },
-      { id: "composer_send_when_online", label: "Когда будет онлайн", icon: "🕓", disabled: !canSend || !whenOnlineAllowed },
+      ...(whenOnlineAllowed ? [{ id: "composer_send_when_online", label: "Когда будет онлайн", icon: "🕓", disabled: !canSend }] : []),
     ];
     store.set({
       modal: {
@@ -11091,7 +11092,6 @@ export function mountApp(root: HTMLElement) {
     const st = store.get();
     if (st.modal) return;
     const ev = e as PointerEvent;
-    if (ev.pointerType === "mouse") return;
     if (ev.button !== 0) return;
     clearSendMenuLongPress();
     sendMenuLongPressStartX = ev.clientX;

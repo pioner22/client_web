@@ -422,6 +422,10 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const canSendText = Boolean(composerText) && !tooLong && !boardEditorOpen;
   layout.sendBtn.disabled = !canSendNow || !canSendText;
   layout.sendBtn.classList.toggle("btn-active", canSendNow && canSendText);
+  layout.sendBtn.classList.toggle(
+    "is-menu-open",
+    Boolean(state.modal?.kind === "context_menu" && state.modal.payload.target.kind === "composer_send")
+  );
   layout.boardPublishBtn.disabled = !boardEditorOpen || !canSendNow || !composerText || tooLong;
   layout.attachBtn.disabled = !canSendNow || !sel || isBoardReadOnly || Boolean(editing);
   layout.emojiBtn.disabled = !canSendNow || !sel || isBoardReadOnly;
