@@ -2354,6 +2354,11 @@ html.app-typing .row-muted {
   color: #ffffff;
 }
 
+.msg.msg-tail.msg-in > .msg-select {
+  align-self: flex-end;
+  margin-bottom: 6px;
+}
+
 .msg-in .msg-from {
   color: var(--msg-from-color, var(--msg-from-in-color));
 }
@@ -3508,15 +3513,44 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
 .chat:not(.chat-board) .chat-album-grid {
   gap: var(--chat-album-gap);
   max-width: min(100%, var(--chat-album-frame-max), var(--msg-body-max-width));
+  position: relative;
 }
 
 .chat:not(.chat-board) .chat-album-item {
   border-radius: calc(var(--msg-in-radius) - 2px);
   overflow: hidden;
+  position: relative;
 }
 
 .chat:not(.chat-board) .msg-out .chat-album-item {
   border-radius: calc(var(--msg-out-radius) - 2px);
+}
+
+.chat:not(.chat-board) .chat-album-grid > .msg-select {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 3;
+}
+
+.chat:not(.chat-board) .chat-album-grid > .msg-select:not(.msg-select-on):not(.msg-select-partial) {
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.chat:not(.chat-board) .chat-album-grid > .msg-select:not(.msg-select-on):not(.msg-select-partial):hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.chat:not(.chat-board) .msg-album.msg-selected .chat-album-item {
+  background: color-mix(in srgb, var(--focus), transparent 90%);
+}
+
+.chat:not(.chat-board) .msg-album.msg-selected .chat-album-item .chat-file-preview {
+  transform: scale(0.883333);
+  transition: transform 180ms ease;
 }
 
 .chat:not(.chat-board) .chat-album-item .chat-file-preview {
@@ -3744,6 +3778,61 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
   position: relative;
   width: min(78vw, var(--msg-media-max-width, 420px));
   max-width: 100%;
+}
+
+.file-row-chat.file-row-image > .msg-select {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 3;
+}
+
+.file-row-chat.file-row-image > .msg-select:not(.msg-select-on):not(.msg-select-partial) {
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.file-row-chat.file-row-image > .msg-select:not(.msg-select-on):not(.msg-select-partial):hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.chat:not(.chat-board) .msg-selected .file-row-chat:not(.file-row-image) {
+  transform: scale(0.985);
+  transition: transform 180ms ease;
+}
+
+.chat:not(.chat-board) .msg-selected .file-row-chat:not(.file-row-image)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--focus), transparent 92%);
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-selected .file-row-chat.file-row-image {
+  border-radius: var(--msg-in-radius);
+  background: color-mix(in srgb, var(--focus), transparent 90%);
+}
+
+.chat:not(.chat-board) .msg-out.msg-selected .file-row-chat.file-row-image {
+  border-radius: var(--msg-out-radius);
+}
+
+.chat:not(.chat-board) .msg-selected .file-row-chat.file-row-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-selected .file-row-chat.file-row-image > .chat-file-preview {
+  transform: scale(0.92);
+  transition: transform 180ms ease;
 }
 
 .file-row-chat.file-row-image > .chat-file-preview {

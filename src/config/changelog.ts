@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.650",
+    date: "2026-01-23",
+    improved: [
+      "Выбор сообщений: чекбоксы для фото/видео теперь отображаются поверх превью (внутри медиа-блока)",
+      "Выбор сообщений: альбом — чекбокс внутри альбома (в правом верхнем углу) + tweb-like визуальное выделение (scale/overlay)",
+      "Выбор сообщений: документы/аудио получают более заметное выделение в режиме выбора (scale/overlay)",
+    ],
+  },
+  {
     version: "0.1.649",
     date: "2026-01-23",
     improved: [

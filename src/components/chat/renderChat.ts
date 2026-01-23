@@ -1090,9 +1090,14 @@ function messageLine(
         )
       : null;
 
-  if (selectionBtn && fileRowEl && (fileKind === "audio" || fileKind === "file") && !Boolean(opts?.boardUi)) {
-    selectionBtnPlacedInFileRow = true;
-    fileRowEl.prepend(selectionBtn);
+  if (selectionBtn && fileRowEl && !Boolean(opts?.boardUi)) {
+    if (fileKind === "audio" || fileKind === "file") {
+      selectionBtnPlacedInFileRow = true;
+      fileRowEl.prepend(selectionBtn);
+    } else if (fileKind === "image" || fileKind === "video") {
+      selectionBtnPlacedInFileRow = true;
+      fileRowEl.append(selectionBtn);
+    }
   }
 
   const lineChildren: HTMLElement[] = [];
@@ -1184,30 +1189,11 @@ function renderAlbumLine(
     if (refNode) bodyChildren.push(refNode);
   }
 
-  const gridItems: HTMLElement[] = [];
-  let hasCaption = false;
-  let emojiOnly = false;
-  for (const item of items) {
-    const caption = String(item.msg.text || "").trim();
-    const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
-    if (viewerCaption) {
-      hasCaption = true;
-      emojiOnly = isEmojiOnlyText(viewerCaption);
-    }
-    const preview = renderImagePreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx, caption: viewerCaption });
-    if (!preview) continue;
-    const wrap = el("div", { class: "chat-album-item", "data-msg-idx": String(item.idx) }, [preview]);
-    gridItems.push(wrap);
-  }
-  bodyChildren.push(el("div", { class: "chat-album-grid", "data-count": String(items.length) }, gridItems));
-  bodyChildren.push(el("div", { class: "msg-meta" }, buildMessageMeta(last.msg)));
-  const reacts = renderReactions(last.msg);
-  if (reacts) bodyChildren.push(reacts);
-
   const selectionMode = Boolean(opts?.selectionMode);
   const selected = Boolean(opts?.selected);
   const partial = Boolean(opts?.partial);
   const selectionIdx = typeof last.idx === "number" && Number.isFinite(last.idx) ? Math.trunc(last.idx) : null;
+  let selectionBtnPlacedInGrid = false;
   const selectionBtn =
     selectionMode && selectionIdx !== null
       ? el(
@@ -1231,6 +1217,31 @@ function renderAlbumLine(
         )
       : null;
 
+  const gridItems: HTMLElement[] = [];
+  let hasCaption = false;
+  let emojiOnly = false;
+  for (const item of items) {
+    const caption = String(item.msg.text || "").trim();
+    const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
+    if (viewerCaption) {
+      hasCaption = true;
+      emojiOnly = isEmojiOnlyText(viewerCaption);
+    }
+    const preview = renderImagePreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx, caption: viewerCaption });
+    if (!preview) continue;
+    const wrap = el("div", { class: "chat-album-item", "data-msg-idx": String(item.idx) }, [preview]);
+    gridItems.push(wrap);
+  }
+  const grid = el("div", { class: "chat-album-grid", "data-count": String(items.length) }, gridItems);
+  if (selectionBtn) {
+    selectionBtnPlacedInGrid = true;
+    grid.append(selectionBtn);
+  }
+  bodyChildren.push(grid);
+  bodyChildren.push(el("div", { class: "msg-meta" }, buildMessageMeta(last.msg)));
+  const reacts = renderReactions(last.msg);
+  if (reacts) bodyChildren.push(reacts);
+
   const lineChildren: HTMLElement[] = [];
   if (displayFromId) {
     const avatarNode = avatar("dm", displayFromId);
@@ -1251,9 +1262,9 @@ function renderAlbumLine(
   const bodyNode = el("div", { class: "msg-body" }, bodyChildren);
   if (first.msg.kind === "out") {
     lineChildren.push(bodyNode);
-    if (selectionBtn) lineChildren.push(selectionBtn);
+    if (selectionBtn && !selectionBtnPlacedInGrid) lineChildren.push(selectionBtn);
   } else {
-    if (selectionBtn) lineChildren.push(selectionBtn);
+    if (selectionBtn && !selectionBtnPlacedInGrid) lineChildren.push(selectionBtn);
     lineChildren.push(bodyNode);
   }
   const line = el("div", { class: `msg msg-${first.msg.kind} msg-attach msg-album` }, lineChildren);
