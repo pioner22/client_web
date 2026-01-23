@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.644",
+    date: "2026-01-23",
+    improved: [
+      "Чатлист: сортировка стала tweb/Telegram-like — pin → по времени последнего сообщения (без лишних «прыжков» от unread/draft)",
+      "Контакты: подпись online/last-seen обновляется автоматически (cadence ~30s)",
+    ],
+  },
+  {
     version: "0.1.643",
     date: "2026-01-23",
     improved: [

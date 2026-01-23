@@ -472,6 +472,15 @@ export function mountApp(root: HTMLElement) {
   installNotificationSoundUnlock();
   const tabNotifier = getTabNotifier(getOrCreateInstanceId);
   tabNotifier.install();
+  const PRESENCE_UI_TICK_MS = 30_000;
+  let presenceUiTimer: number | null = null;
+  const tickPresenceUi = () => {
+    if (document.visibilityState === "hidden") return;
+    const st = store.get();
+    if (!st.authed) return;
+    store.set((prev) => ({ ...prev, presenceTick: (prev.presenceTick || 0) + 1 }));
+  };
+  presenceUiTimer = window.setInterval(tickPresenceUi, PRESENCE_UI_TICK_MS);
   const flushCachesOnHide = () => {
     if (document.visibilityState !== "hidden") return;
     flushHistoryCache(store);
@@ -479,7 +488,18 @@ export function mountApp(root: HTMLElement) {
     flushOutbox(store);
   };
   document.addEventListener("visibilitychange", flushCachesOnHide);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") tickPresenceUi();
+  });
   window.addEventListener("pagehide", () => {
+    if (presenceUiTimer !== null) {
+      try {
+        window.clearInterval(presenceUiTimer);
+      } catch {
+        // ignore
+      }
+      presenceUiTimer = null;
+    }
     flushHistoryCache(store);
     flushFileTransfers(store);
     flushOutbox(store);

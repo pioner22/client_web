@@ -62,6 +62,7 @@ export function createInitialState(): AppState {
     sidebarChatFilter: "all",
     sidebarQuery: "",
     sidebarArchiveOpen: true,
+    presenceTick: 0,
     friends: [],
     topPeers: [],
     pendingIn: [],

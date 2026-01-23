@@ -428,6 +428,7 @@ export interface AppState {
   sidebarChatFilter: SidebarChatFilter;
   sidebarQuery: string;
   sidebarArchiveOpen: boolean;
+  presenceTick: number;
 
   friends: FriendEntry[];
   topPeers: TopPeerEntry[];
