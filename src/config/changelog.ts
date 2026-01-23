@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.649",
+    date: "2026-01-23",
+    improved: [
+      "Выбор сообщений: панель выбора теперь отображается поверх композера (как в tweb) — композер скрывается в режиме выбора",
+      "Выбор сообщений: действия сгруппированы справа (контейнеры left/right)",
+    ],
+  },
+  {
     version: "0.1.648",
     date: "2026-01-23",
     improved: [

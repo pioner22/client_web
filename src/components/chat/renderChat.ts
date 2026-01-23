@@ -2092,7 +2092,9 @@ export function renderChat(layout: Layout, state: AppState) {
       deleteBtn,
       pinBtn,
     ]);
-    const inner = el("div", { class: "chat-selection-inner" }, [cancelBtn, countNode, actions]);
+    const left = el("div", { class: "chat-selection-container-left" }, [cancelBtn, countNode]);
+    const right = el("div", { class: "chat-selection-container-right" }, [actions]);
+    const inner = el("div", { class: "chat-selection-inner" }, [left, right]);
     layout.chatSelectionBar.classList.remove("hidden");
     layout.chatSelectionBar.replaceChildren(inner);
   } else {

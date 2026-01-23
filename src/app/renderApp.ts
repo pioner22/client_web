@@ -301,6 +301,19 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const forwardDraft = !editing && state.forwardDraft && state.forwardDraft.key === selectedKey ? state.forwardDraft : null;
   const helperDraft = replyDraft || forwardDraft;
   const helperKind = replyDraft ? "reply" : forwardDraft ? "forward" : null;
+  const selectionActive = (() => {
+    if (!selectedKey) return false;
+    const selState = state.chatSelection && state.chatSelection.key === selectedKey ? state.chatSelection : null;
+    return Boolean(selState && Array.isArray(selState.ids) && selState.ids.length > 0);
+  })();
+  layout.inputWrap.classList.toggle("is-selecting", selectionActive);
+  if (selectionActive && typeof document !== "undefined" && document.activeElement === layout.input) {
+    try {
+      layout.input.blur();
+    } catch {
+      // ignore
+    }
+  }
   const isBoardReadOnly = (() => {
     if (!chatInputVisible) return false;
     if (!sel || sel.kind !== "board") return false;

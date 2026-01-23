@@ -335,6 +335,20 @@ body.has-right-col .right-col {
   background: var(--composer-bg);
 }
 
+.input-wrap > .chat-selection-bar {
+  padding: 0;
+  border-top: 0;
+  background: transparent;
+}
+
+.input-wrap.is-selecting > .composer-edit,
+.input-wrap.is-selecting > .composer-helper,
+.input-wrap.is-selecting > .board-editor,
+.input-wrap.is-selecting > .composer-row,
+.input-wrap.is-selecting > .composer-meta {
+  display: none;
+}
+
 @media (min-width: 601px) {
   .input-wrap {
     --composer-gap: var(--chat-input-btn-send-margin);

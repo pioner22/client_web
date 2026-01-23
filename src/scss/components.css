@@ -1503,6 +1503,21 @@ html.app-typing .row-muted {
   border-radius: var(--chat-input-border-radius);
 }
 
+.chat-selection-container-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--selection-gap);
+}
+
+.chat-selection-container-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--selection-gap);
+}
+
 .chat-selection-count {
   font-size: 15px;
   font-weight: 600;

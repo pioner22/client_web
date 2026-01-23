@@ -20,7 +20,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const chatSearchResults = el("div", { class: "chat-search-results hidden" });
   const chatHost = el("div", { class: "chat-host" });
   const chatSearchFooter = el("div", { class: "chat-search-footer hidden" });
-  const chatSelectionBar = el("div", { class: "chat-selection-bar hidden" });
+  const chatSelectionBar = el("div", { class: "chat-selection-bar selection-wrapper hidden" });
   const chatJumpIcon = el("span", { class: "chat-jump-icon", "aria-hidden": "true" }, ["↓"]);
   const chatJumpBadge = el("span", { class: "chat-jump-badge hidden", "aria-hidden": "true" }, [""]);
   const chatJump = el(
@@ -223,14 +223,14 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     composerField,
     el("div", { class: "composer-actions composer-actions-right" }, [sendBtn]),
   ]);
-  const inputWrap = el("div", { class: "input-wrap" }, [editBar, helperBar, boardEditorWrap, composerRow, composerMeta]);
+  const inputWrap = el("div", { class: "input-wrap" }, [chatSelectionBar, editBar, helperBar, boardEditorWrap, composerRow, composerMeta]);
 
   const footer = el("footer", { class: "footer" });
   const toastHost = el("div", { class: "toast-host hidden", "aria-live": "polite", "aria-atomic": "true" });
   const navOverlay = el("div", { class: "nav-overlay hidden", "aria-hidden": "true" });
   const overlay = el("div", { class: "overlay hidden" });
 
-  const chatCol = el("div", { class: "chat-col" }, [chat, chatSearchFooter, chatSelectionBar, inputWrap]);
+  const chatCol = el("div", { class: "chat-col" }, [chat, chatSearchFooter, inputWrap]);
   const rightCol = el("aside", { class: "right-col hidden", "aria-hidden": "true" });
   const grid = el("div", { class: "grid" }, [sidebar, chatCol, rightCol]);
 
