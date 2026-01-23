@@ -171,6 +171,7 @@ export type ModalState =
       replyDraft?: MessageHelperDraft | null;
       forwardDraft?: MessageHelperDraft | null;
       suggestedAt?: number;
+      preserveComposer?: boolean;
       message?: string;
       edit?: { key: string; localId: string } | null;
       title?: string;

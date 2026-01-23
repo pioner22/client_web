@@ -4245,7 +4245,7 @@ export function mountApp(root: HTMLElement) {
     if (kind !== "context_menu" && kind !== "file_viewer") return;
     if (e.target !== layout.overlay) return;
     e.preventDefault();
-    store.set({ modal: null });
+    closeModal();
   });
 
   // Chips inputs живут внутри layout.chat (inline page/modal), поэтому слушаем layout.chat, а не overlay.
@@ -6478,7 +6478,7 @@ export function mountApp(root: HTMLElement) {
       showToast("Время отправки изменено", { kind: "success" });
       return;
     }
-    store.set({ modal: null });
+    closeModal();
     sendChat({
       mode: "schedule",
       scheduleAt: when,
@@ -6486,6 +6486,7 @@ export function mountApp(root: HTMLElement) {
       text: modal.text,
       replyDraft: modal.replyDraft ?? null,
       forwardDraft: modal.forwardDraft ?? null,
+      preserveComposer: Boolean(modal.preserveComposer),
     });
   }
 
@@ -6515,13 +6516,14 @@ export function mountApp(root: HTMLElement) {
       store.set({ modal: { ...modal, message: "Контакт уже онлайн" } });
       return;
     }
-    store.set({ modal: null });
+    closeModal();
     sendChat({
       mode: "when_online",
       target: modal.target,
       text: modal.text,
       replyDraft: modal.replyDraft ?? null,
       forwardDraft: modal.forwardDraft ?? null,
+      preserveComposer: Boolean(modal.preserveComposer),
     });
   }
 
@@ -9447,6 +9449,7 @@ export function mountApp(root: HTMLElement) {
     mode?: "now" | "when_online" | "schedule";
     scheduleAt?: number;
     silent?: boolean;
+    preserveComposer?: boolean;
     target?: TargetRef;
     text?: string;
     replyDraft?: MessageHelperDraft | null;
@@ -9478,6 +9481,7 @@ export function mountApp(root: HTMLElement) {
     const finalText = text || forwardFallback;
     const mode = opts?.mode === "when_online" ? "when_online" : opts?.mode === "schedule" ? "schedule" : "now";
     const silent = Boolean(opts?.silent);
+    const preserveComposer = Boolean(opts?.preserveComposer);
     const scheduleAtRaw = mode === "schedule" ? opts?.scheduleAt : undefined;
     const scheduleAt =
       typeof scheduleAtRaw === "number" && Number.isFinite(scheduleAtRaw) && scheduleAtRaw > 0 ? Math.trunc(scheduleAtRaw) : 0;
@@ -9590,15 +9594,17 @@ export function mountApp(root: HTMLElement) {
     });
     scheduleSaveOutbox(store);
 
-    layout.input.value = "";
-    autosizeInput(layout.input);
-    layout.input.focus();
-    scheduleBoardEditorPreview();
-    store.set((prev) => {
-      const drafts = updateDraftMap(prev.drafts, convKey, "");
-      return { ...prev, input: "", drafts, replyDraft: null, forwardDraft: null };
-    });
-    scheduleSaveDrafts(store);
+    if (!preserveComposer) {
+      layout.input.value = "";
+      autosizeInput(layout.input);
+      layout.input.focus();
+      scheduleBoardEditorPreview();
+      store.set((prev) => {
+        const drafts = updateDraftMap(prev.drafts, convKey, "");
+        return { ...prev, input: "", drafts, replyDraft: null, forwardDraft: null };
+      });
+      scheduleSaveDrafts(store);
+    }
 
     if (scheduled) {
       store.set({ status: "Сообщение запланировано" });
@@ -10755,6 +10761,16 @@ export function mountApp(root: HTMLElement) {
   let sendMenuLongPressStartX = 0;
   let sendMenuLongPressStartY = 0;
 
+  type SendMenuDraft = {
+    target: TargetRef;
+    text: string;
+    replyDraft: MessageHelperDraft | null;
+    forwardDraft: MessageHelperDraft | null;
+    preserveComposer: boolean;
+  };
+
+  let sendMenuDraft: SendMenuDraft | null = null;
+
   const clearSendMenuLongPress = () => {
     if (sendMenuLongPressTimer !== null) {
       window.clearTimeout(sendMenuLongPressTimer);
@@ -10769,6 +10785,57 @@ export function mountApp(root: HTMLElement) {
     const forwardDraft = st.forwardDraft && key && st.forwardDraft.key === key ? st.forwardDraft : null;
     const forwardFallback = !text && forwardDraft ? String(forwardDraft.text || forwardDraft.preview || "") : "";
     return text || forwardFallback;
+  };
+
+  const buildSendMenuDraftFromComposer = (st: AppState): SendMenuDraft | null => {
+    const sel = st.selected;
+    if (!sel) return null;
+    const key = conversationKey(sel);
+    const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
+    const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
+    return {
+      target: sel,
+      text: getComposerFinalText(st),
+      replyDraft,
+      forwardDraft,
+      preserveComposer: false,
+    };
+  };
+
+  const openSendMenuWithDraft = (x: number, y: number, draft: SendMenuDraft) => {
+    const st = store.get();
+    if (st.modal) return;
+    markUserActivity();
+    const sel = draft.target;
+    const key = conversationKey(sel);
+    const editing = st.editing && key && st.editing.key === key;
+    const friend = sel.kind === "dm" ? st.friends.find((f) => f.id === sel.id) : null;
+    const friendKnown = Boolean(friend);
+    const friendOnline = Boolean(friend?.online);
+    const isSelf = sel.kind === "dm" && st.selfId && String(sel.id) === String(st.selfId);
+    const canSend = Boolean(String(draft.text || "").trim());
+    const canSendNow = canSend && !editing;
+    const whenOnlineAllowed = sel.kind === "dm" && friendKnown && !friendOnline && !editing;
+
+    const items: ContextMenuItem[] = [
+      ...(!isSelf ? [{ id: "composer_send_silent", label: "Отправить без звука", icon: "🔕", disabled: !canSendNow }] : []),
+      { id: "composer_send_schedule", label: isSelf ? "Напомнить" : "Запланировать", icon: "🗓", disabled: !canSendNow },
+      ...(whenOnlineAllowed ? [{ id: "composer_send_when_online", label: "Когда будет онлайн", icon: "🕓", disabled: !canSend }] : []),
+    ];
+
+    sendMenuDraft = draft;
+    store.set({
+      modal: {
+        kind: "context_menu",
+        payload: {
+          x,
+          y,
+          title: isSelf ? "Напоминание" : "Отправка",
+          target: { kind: "composer_send", id: sel.id },
+          items,
+        },
+      },
+    });
   };
 
   const parseDatetimeLocal = (value: string): number | null => {
@@ -10794,31 +10861,41 @@ export function mountApp(root: HTMLElement) {
       store.set({ status: "Выберите контакт или чат слева" });
       return;
     }
-    markUserActivity();
+    const draft = buildSendMenuDraftFromComposer(st);
+    if (!draft) return;
+    openSendMenuWithDraft(x, y, draft);
+  };
+
+  const openSendScheduleModalWithDraft = (draft: SendMenuDraft) => {
+    const st = store.get();
+    if (st.modal) return;
+    const sel = draft.target;
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
     const key = conversationKey(sel);
-    const editing = st.editing && key && st.editing.key === key;
-    const friend = sel.kind === "dm" ? st.friends.find((f) => f.id === sel.id) : null;
-    const friendKnown = Boolean(friend);
-    const friendOnline = Boolean(friend?.online);
+    const editing = st.editing && key && st.editing.key === key ? st.editing : null;
+    if (editing) {
+      store.set({ status: "Сначала завершите редактирование" });
+      return;
+    }
+    const text = String(draft.text || "").trimEnd();
+    if (!text) {
+      store.set({ status: "Введите сообщение" });
+      return;
+    }
     const isSelf = sel.kind === "dm" && st.selfId && String(sel.id) === String(st.selfId);
-    const canSend = Boolean(getComposerFinalText(st));
-    const canSendNow = canSend && !editing;
-    const whenOnlineAllowed = sel.kind === "dm" && friendKnown && !friendOnline && !editing;
-    const items: ContextMenuItem[] = [
-      ...(!isSelf ? [{ id: "composer_send_silent", label: "Отправить без звука", icon: "🔕", disabled: !canSendNow }] : []),
-      { id: "composer_send_schedule", label: isSelf ? "Напомнить" : "Запланировать", icon: "🗓", disabled: !canSendNow },
-      ...(whenOnlineAllowed ? [{ id: "composer_send_when_online", label: "Когда будет онлайн", icon: "🕓", disabled: !canSend }] : []),
-    ];
     store.set({
       modal: {
-        kind: "context_menu",
-        payload: {
-          x,
-          y,
-          title: isSelf ? "Напоминание" : "Отправка",
-          target: { kind: "composer_send", id: sel.id },
-          items,
-        },
+        kind: "send_schedule",
+        target: sel,
+        text,
+        replyDraft: draft.replyDraft,
+        forwardDraft: draft.forwardDraft,
+        suggestedAt: Date.now() + 60 * 60 * 1000,
+        preserveComposer: draft.preserveComposer,
+        ...(isSelf ? { title: "Напоминание", confirmLabel: "Создать" } : {}),
       },
     });
   };
@@ -10831,35 +10908,9 @@ export function mountApp(root: HTMLElement) {
       store.set({ status: "Выберите контакт или чат слева" });
       return;
     }
-    if (!st.authed) {
-      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
-      return;
-    }
-    const key = conversationKey(sel);
-    const editing = st.editing && key && st.editing.key === key ? st.editing : null;
-    if (editing) {
-      store.set({ status: "Сначала завершите редактирование" });
-      return;
-    }
-    const text = getComposerFinalText(st);
-    if (!text) {
-      store.set({ status: "Введите сообщение" });
-      return;
-    }
-    const isSelf = sel.kind === "dm" && st.selfId && String(sel.id) === String(st.selfId);
-    const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
-    const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
-    store.set({
-      modal: {
-        kind: "send_schedule",
-        target: sel,
-        text,
-        replyDraft,
-        forwardDraft,
-        suggestedAt: Date.now() + 60 * 60 * 1000,
-        ...(isSelf ? { title: "Напоминание", confirmLabel: "Создать" } : {}),
-      },
-    });
+    const draft = buildSendMenuDraftFromComposer(st);
+    if (!draft) return;
+    openSendScheduleModalWithDraft(draft);
   };
 
   const openForwardModal = (draftInput: MessageHelperDraft | MessageHelperDraft[]) => {
@@ -11551,6 +11602,9 @@ export function mountApp(root: HTMLElement) {
   function closeModal() {
     const st = store.get();
     if (!st.modal) return;
+    if (st.modal.kind === "context_menu") {
+      sendMenuDraft = null;
+    }
     if (st.modal.kind === "file_send") {
       revokeFileSendPreviews(st.modal.previewUrls);
       if (st.modal.restoreInput) restoreComposerInput(st.modal.target, st.modal.restoreInput);
@@ -11892,22 +11946,42 @@ export function mountApp(root: HTMLElement) {
 
     const close = () => {
       msgContextSelection = null;
-      store.set({ modal: null });
+      closeModal();
     };
 
     if (itemId === "composer_send_when_online") {
+      const draft = (t.kind === "composer_send" ? sendMenuDraft : null) ?? buildSendMenuDraftFromComposer(st);
       close();
-      sendChat({ mode: "when_online" });
+      if (!draft) return;
+      sendChat({
+        mode: "when_online",
+        target: draft.target,
+        text: draft.text,
+        replyDraft: draft.replyDraft,
+        forwardDraft: draft.forwardDraft,
+        preserveComposer: draft.preserveComposer,
+      });
       return;
     }
     if (itemId === "composer_send_silent") {
+      const draft = (t.kind === "composer_send" ? sendMenuDraft : null) ?? buildSendMenuDraftFromComposer(st);
       close();
-      sendChat({ silent: true });
+      if (!draft) return;
+      sendChat({
+        silent: true,
+        target: draft.target,
+        text: draft.text,
+        replyDraft: draft.replyDraft,
+        forwardDraft: draft.forwardDraft,
+        preserveComposer: draft.preserveComposer,
+      });
       return;
     }
     if (itemId === "composer_send_schedule") {
+      const draft = (t.kind === "composer_send" ? sendMenuDraft : null) ?? buildSendMenuDraftFromComposer(st);
       close();
-      openSendScheduleModal();
+      if (!draft) return;
+      openSendScheduleModalWithDraft(draft);
       return;
     }
 
