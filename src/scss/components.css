@@ -285,7 +285,7 @@
 .sidebar:not(.sidebar-collapsed) .row.row-avatar-compact {
   --avatar-size: 42px;
   --avatar-font-size: 16px;
-  --row-min-h: 56px;
+  --row-min-h: 48px;
 }
 
 .avatar {
@@ -436,6 +436,43 @@
 }
 
 @media (max-width: 600px) {
+  /* tweb parity: на handhelds "active row" для чатлиста не инвертируем/не подсвечиваем как на desktop. */
+  .sidebar .row-sel[data-ctx-kind] {
+    background: var(--row-bg);
+    color: var(--row-text);
+  }
+
+  .sidebar .row-sel[data-ctx-kind]:hover {
+    background: var(--row-bg-hover);
+    color: var(--row-text);
+  }
+
+  .sidebar .row-sel[data-ctx-kind] .row-sub,
+  .sidebar .row-sel[data-ctx-kind] .row-time,
+  .sidebar .row-sel[data-ctx-kind] .row-prefix,
+  .sidebar .row-sel[data-ctx-kind] .row-id {
+    color: var(--muted);
+  }
+
+  .sidebar .row-sel[data-ctx-kind] .row-unread,
+  .sidebar .row-sel[data-ctx-kind] .row-mention,
+  .sidebar .row-sel[data-ctx-kind] .row-reaction {
+    background: color-mix(in srgb, var(--focus), transparent 12%);
+    color: #fff;
+    box-shadow: 0 10px 22px color-mix(in srgb, var(--focus), transparent 78%);
+  }
+
+  .sidebar .row-sel[data-ctx-kind] .row-pin {
+    color: var(--row-pin-color);
+  }
+
+  .sidebar .row-sel[data-ctx-kind] .row-muted {
+    border-color: color-mix(in srgb, var(--muted), transparent 60%);
+    color: var(--muted);
+    background: color-mix(in srgb, var(--muted), transparent 92%);
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--muted), transparent 88%);
+  }
+
   .sidebar .row-sel:not([data-ctx-kind]) {
     background: var(--row-bg-hover);
     color: var(--row-text);
@@ -559,8 +596,8 @@
   }
 
   .sidebar .row-sub {
-    font-size: 14px;
-    line-height: 18px;
+    font-size: 12px;
+    line-height: 16px;
     letter-spacing: 0;
   }
 
@@ -673,7 +710,7 @@
 
 @media (min-width: 601px) {
   .sidebar .row[data-ctx-kind] {
-    --avatar-size: 54px;
+    --avatar-size: 3.5rem;
     --avatar-font-size: 16px;
     --row-min-h: 72px;
     --row-pad-y: 9px;

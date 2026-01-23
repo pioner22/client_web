@@ -371,7 +371,8 @@
 
     --chat-pad: 8px;
     --messages-container-width: 100%;
-    --message-handhelds-margin: 4.5rem;
+    /* tweb parity: keep original handhelds margin (100% - 89px bubble max). */
+    --message-handhelds-margin: 5.5625rem;
     --msg-body-max-width: min(100%, calc(100% - var(--message-handhelds-margin)));
     --chat-line-gap: 7px;
     --msg-pad-y: 0px;

@@ -331,8 +331,10 @@
   --row-gap: 10px;
   --row-radius: 12px;
   --row-tail-min: 136px;
-  --row-bg-hover: color-mix(in srgb, var(--muted), transparent 90%);
-  --row-bg-menu-open: color-mix(in srgb, var(--muted) 8%, var(--sidebar-bg));
+  /* tweb parity token (used for hover/menu-open row background). */
+  --light-filled-secondary-text-color: color-mix(in srgb, var(--muted), transparent 90%);
+  --row-bg-hover: var(--light-filled-secondary-text-color);
+  --row-bg-menu-open: var(--light-filled-secondary-text-color);
   --row-bg-selected: var(--focus);
   --row-text-selected: #ffffff;
   --row-text-selected-muted: rgba(255, 255, 255, 0.85);

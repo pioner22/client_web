@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.643",
+    date: "2026-01-23",
+    improved: [
+      "Чатлист: tweb parity — menu-open фон выровнен с hover (filled-secondary), subtitle на desktop = 12px",
+      "Чатлист: на мобильных активная строка не инвертирует цвета (как в Telegram)",
+      "Сообщения: max-width bubble на handhelds выровнен под tweb (calc(100% - 89px))",
+    ],
+  },
+  {
     version: "0.1.642",
     date: "2026-01-23",
     improved: ["Info: «История изменений» обновлена — добавлены последние релизы 0.1.638–0.1.641"],

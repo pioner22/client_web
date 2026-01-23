@@ -60,6 +60,7 @@
   display: grid;
   grid-template-columns: var(--grid-cols);
   gap: var(--grid-gap);
+  height: 100%;
   min-height: 0;
 }
 
