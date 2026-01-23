@@ -101,6 +101,18 @@ export function renderForwardModal(
   const preview = primaryDraft ? String(primaryDraft.preview || primaryDraft.text || "Сообщение").trim() : "Сообщение";
   const previewLabel = draftCount > 1 ? `${draftCount} сообщений` : preview;
   const previewLine = el("div", { class: "modal-line forward-preview" }, [`Переслать: ${previewLabel}`]);
+  const showSenderInput = el("input", { type: "checkbox", id: "forward-show-sender", checked: "checked" }) as HTMLInputElement;
+  const showCaptionInput = el("input", { type: "checkbox", id: "forward-show-caption", checked: "checked" }) as HTMLInputElement;
+  const hasCaption = safeDrafts.some((d) => {
+    if (d.attachment?.kind !== "file") return false;
+    const text = String(d.text || "").trim();
+    return Boolean(text && !text.startsWith("[file]"));
+  });
+  showCaptionInput.toggleAttribute("disabled", !hasCaption);
+  const options = el("div", { class: "forward-options" }, [
+    el("label", { class: "forward-option" }, [showSenderInput, el("span", {}, ["Показывать отправителя"])]),
+    el("label", { class: "forward-option" }, [showCaptionInput, el("span", {}, ["Показывать подпись"])]),
+  ]);
   const warnLine = el("div", { class: "modal-warn" }, [message || ""]);
 
   const listWrap = el("div", { class: "forward-list" });
@@ -197,6 +209,7 @@ export function renderForwardModal(
     el("div", { class: "modal-title" }, ["Переслать сообщение"]),
     el("div", { class: "modal-body" }, [
       previewLine,
+      options,
       queryInput,
       selectionLine,
       listWrap,

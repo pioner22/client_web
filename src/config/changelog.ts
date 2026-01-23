@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.654",
+    date: "2026-01-23",
+    improved: [
+      "Reply: добавлено меню в helper bar — «показать сообщение», «цитировать», «не отвечать» (tweb‑like)",
+      "Forward: в окне выбора получателей добавлены опции «показывать отправителя/подпись»",
+    ],
+  },
+  {
     version: "0.1.653",
     date: "2026-01-23",
     improved: ["Отправка: подготовлен переиспользуемый flow для send‑menu/попапов (draft + preserveComposer) — без изменения поведения"],

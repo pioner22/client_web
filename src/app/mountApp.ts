@@ -10756,6 +10756,48 @@ export function mountApp(root: HTMLElement) {
 
   layout.boardPublishBtn.addEventListener("click", () => sendChat());
 
+  function resolveComposerHelperDraft(st: AppState): { kind: "reply" | "forward"; key: string; draft: MessageHelperDraft } | null {
+    const sel = st.selected;
+    const key = sel ? conversationKey(sel) : "";
+    if (!key) return null;
+    const editing = Boolean(st.editing && st.editing.key === key);
+    if (editing) return null;
+    const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
+    if (replyDraft) return { kind: "reply", key, draft: replyDraft };
+    const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
+    if (forwardDraft) return { kind: "forward", key, draft: forwardDraft };
+    return null;
+  }
+
+  function openComposerHelperMenu(x: number, y: number) {
+    const st = store.get();
+    if (st.modal) return;
+    const helper = resolveComposerHelperDraft(st);
+    if (!helper) return;
+    markUserActivity();
+    const items: ContextMenuItem[] =
+      helper.kind === "reply"
+        ? [
+            { id: "composer_helper_show_message", label: "Показать сообщение", icon: "↥" },
+            { id: "composer_helper_reply_another", label: "Ответить на другое", icon: "↩" },
+            { id: "composer_helper_quote", label: "Цитировать", icon: "❝" },
+            { id: "composer_helper_cancel", label: "Не отвечать", icon: "×", danger: true },
+          ]
+        : [{ id: "composer_helper_cancel", label: "Отменить", icon: "×", danger: true }];
+    store.set({
+      modal: {
+        kind: "context_menu",
+        payload: {
+          x,
+          y,
+          title: helper.kind === "forward" ? "Переслано" : "Ответ",
+          target: { kind: "composer_helper", id: st.selected?.id || helper.key },
+          items,
+        },
+      },
+    });
+  }
+
   let sendMenuClickSuppression: CtxClickSuppressionState = { key: null, until: 0 };
   let sendMenuLongPressTimer: number | null = null;
   let sendMenuLongPressStartX = 0;
@@ -10955,9 +10997,24 @@ export function mountApp(root: HTMLElement) {
       return true;
     });
     if (!uniqueTargets.length) return;
+    const showSender = (document.getElementById("forward-show-sender") as HTMLInputElement | null)?.checked ?? true;
+    const showCaption = (document.getElementById("forward-show-caption") as HTMLInputElement | null)?.checked ?? true;
+    const applyForwardOptions = (draft: MessageHelperDraft): MessageHelperDraft => {
+      let next = draft;
+      if (!showSender && next.from) {
+        next = { ...next, from: "" };
+      }
+      if (!showCaption && next.attachment?.kind === "file") {
+        const text = String(next.text || "").trim();
+        if (text && !text.startsWith("[file]")) {
+          next = { ...next, text: "" };
+        }
+      }
+      return next;
+    };
     uniqueTargets.forEach((target) => {
       drafts.forEach((draft) => {
-        sendChat({ target, text: "", forwardDraft: draft });
+        sendChat({ target, text: "", forwardDraft: applyForwardOptions(draft) });
       });
     });
     const total = uniqueTargets.length * drafts.length;
@@ -11225,6 +11282,14 @@ export function mountApp(root: HTMLElement) {
     if (btn) {
       e.preventDefault();
       cancelEditing();
+      return;
+    }
+
+    const helperMenuBtn = target?.closest("button[data-action='composer-helper-menu']") as HTMLButtonElement | null;
+    if (helperMenuBtn) {
+      e.preventDefault();
+      const rect = helperMenuBtn.getBoundingClientRect();
+      openComposerHelperMenu(rect.right, rect.bottom);
       return;
     }
 
@@ -11948,6 +12013,102 @@ export function mountApp(root: HTMLElement) {
       msgContextSelection = null;
       closeModal();
     };
+
+    if (itemId === "composer_helper_cancel") {
+      close();
+      clearComposerHelper();
+      scheduleFocusComposer();
+      return;
+    }
+
+    if (itemId === "composer_helper_reply_another") {
+      close();
+      clearComposerHelper();
+      showToast("Выберите сообщение и нажмите «Ответить»", { kind: "info" });
+      scheduleFocusComposer();
+      return;
+    }
+
+    if (itemId === "composer_helper_show_message") {
+      const helper = resolveComposerHelperDraft(st);
+      close();
+      if (!helper || helper.kind !== "reply") return;
+      const selKey = st.selected ? conversationKey(st.selected) : "";
+      if (!selKey || helper.key !== selKey) {
+        showToast("Откройте чат, где вы отвечаете", { kind: "warn" });
+        return;
+      }
+      const conv = st.conversations[selKey] || [];
+      const msgId = typeof helper.draft.id === "number" && Number.isFinite(helper.draft.id) ? Math.trunc(helper.draft.id) : null;
+      const localId = typeof helper.draft.localId === "string" ? helper.draft.localId.trim() : "";
+      const idx = msgId !== null ? conv.findIndex((m) => typeof m.id === "number" && m.id === msgId) : localId ? conv.findIndex((m) => String(m.localId || "") === localId) : -1;
+      if (idx < 0) {
+        showToast("Сообщение пока не загружено", { kind: "info" });
+        return;
+      }
+      const searchActive = Boolean(st.chatSearchOpen && st.chatSearchQuery.trim());
+      if (shouldVirtualize(conv.length, searchActive, historyVirtualThreshold)) {
+        const maxStart = getVirtualMaxStart(conv.length, historyVirtualWindow);
+        const targetStart = Math.max(0, Math.min(maxStart, idx - Math.floor(historyVirtualWindow / 2)));
+        store.set((prev) => ({ ...prev, historyVirtualStart: { ...prev.historyVirtualStart, [selKey]: targetStart } }));
+      }
+      jumpToChatMsgIdx(idx);
+      return;
+    }
+
+    if (itemId === "composer_helper_quote") {
+      const helper = resolveComposerHelperDraft(st);
+      close();
+      if (!helper || helper.kind !== "reply") return;
+      const selKey = st.selected ? conversationKey(st.selected) : "";
+      if (!selKey || helper.key !== selKey) {
+        showToast("Откройте чат, где вы отвечаете", { kind: "warn" });
+        return;
+      }
+      if (st.editing) {
+        showToast("Сначала завершите редактирование", { kind: "warn" });
+        return;
+      }
+      const conv = st.conversations[selKey] || [];
+      const msgId = typeof helper.draft.id === "number" && Number.isFinite(helper.draft.id) ? Math.trunc(helper.draft.id) : null;
+      const localId = typeof helper.draft.localId === "string" ? helper.draft.localId.trim() : "";
+      const idx = msgId !== null ? conv.findIndex((m) => typeof m.id === "number" && m.id === msgId) : localId ? conv.findIndex((m) => String(m.localId || "") === localId) : -1;
+      const msg = idx >= 0 ? conv[idx] : null;
+      if (!msg) {
+        showToast("Сообщение пока не загружено", { kind: "info" });
+        return;
+      }
+      const rawText = String(msg.text || "").replace(/\r\n?/g, "\n");
+      const trimmedText = rawText.trimEnd();
+      const text = trimmedText && !trimmedText.startsWith("[file]") ? trimmedText : "";
+      const fileName = msg.attachment?.kind === "file" ? String(msg.attachment.name || "").trim() : "";
+      const quoteBody = text || fileName;
+      if (!quoteBody) {
+        showToast("Нечего цитировать", { kind: "warn" });
+        return;
+      }
+      const quoted = quoteBody
+        .split("\n")
+        .map((line) => `> ${line}`)
+        .join("\n");
+      const prevValue = String(layout.input.value || "");
+      const base = prevValue.trimEnd();
+      const nextInput = base ? `${base}\n\n${quoted}\n` : `${quoted}\n`;
+      try {
+        layout.input.value = nextInput;
+        pendingInputValue = nextInput;
+        scheduleAutosize();
+        scheduleBoardEditorPreview();
+        updateComposerTypingUi();
+        commitInputUpdate();
+      } catch {
+        store.set({ input: nextInput });
+        scheduleSaveDrafts(store);
+      }
+      clearComposerHelper();
+      scheduleFocusComposer();
+      return;
+    }
 
     if (itemId === "composer_send_when_online") {
       const draft = (t.kind === "composer_send" ? sendMenuDraft : null) ?? buildSendMenuDraftFromComposer(st);

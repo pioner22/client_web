@@ -96,17 +96,31 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
       el("div", { class: "composer-helper-title", id: "composer-helper-title" }, ["Ответ"]),
       el("div", { class: "composer-helper-text", id: "composer-helper-text" }, [""]),
     ]),
-    el(
-      "button",
-      {
-        class: "btn composer-helper-cancel",
-        type: "button",
-        "data-action": "composer-helper-cancel",
-        title: "Отменить",
-        "aria-label": "Отменить",
-      },
-      ["×"]
-    ),
+    el("div", { class: "composer-helper-actions" }, [
+      el(
+        "button",
+        {
+          class: "btn composer-helper-menu",
+          type: "button",
+          id: "composer-helper-menu",
+          "data-action": "composer-helper-menu",
+          title: "Меню",
+          "aria-label": "Меню",
+        },
+        ["⋯"]
+      ),
+      el(
+        "button",
+        {
+          class: "btn composer-helper-cancel",
+          type: "button",
+          "data-action": "composer-helper-cancel",
+          title: "Отменить",
+          "aria-label": "Отменить",
+        },
+        ["×"]
+      ),
+    ]),
   ]);
   const composerMeta = el("div", { class: "composer-meta" }, [
     el("span", { class: "composer-hint", "aria-hidden": "true" }, ["Shift+Enter — новая строка"]),

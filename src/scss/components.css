@@ -5012,6 +5012,14 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
   line-height: 1.2;
 }
 
+.composer-helper-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn.composer-helper-menu,
 .btn.composer-helper-cancel {
   width: var(--composer-helper-action-size);
   height: var(--composer-helper-action-size);
@@ -5021,16 +5029,21 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
   place-items: center;
   font-size: calc(var(--composer-helper-action-size) * var(--phi-inv));
   line-height: 1;
-  margin-left: auto;
   background: transparent;
   border: 0;
   color: var(--composer-helper-accent);
 }
 
+.btn.composer-helper-menu.is-menu-open {
+  background: color-mix(in srgb, var(--composer-helper-accent), transparent 85%);
+}
+
+.btn.composer-helper-menu:hover,
 .btn.composer-helper-cancel:hover {
   background: color-mix(in srgb, var(--composer-helper-accent), transparent 85%);
 }
 
+.btn.composer-helper-menu:active,
 .btn.composer-helper-cancel:active {
   background: color-mix(in srgb, var(--composer-helper-accent), transparent 72%);
 }

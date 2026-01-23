@@ -452,6 +452,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const helperIcon = layout.inputWrap.querySelector("#composer-helper-icon") as HTMLElement | null;
   const helperTitle = layout.inputWrap.querySelector("#composer-helper-title") as HTMLElement | null;
   const helperText = layout.inputWrap.querySelector("#composer-helper-text") as HTMLElement | null;
+  const helperMenuBtn = layout.inputWrap.querySelector("#composer-helper-menu") as HTMLButtonElement | null;
   if (helperBar) {
     helperBar.classList.toggle("hidden", !helperDraft);
     helperBar.classList.toggle("composer-helper-forward", helperKind === "forward");
@@ -462,6 +463,10 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       helperTitle.textContent = sender ? `${titleBase}: ${sender}` : titleBase;
     }
     if (helperText) helperText.textContent = helperDraft?.preview || "";
+  }
+  if (helperMenuBtn) {
+    const open = Boolean(state.modal && state.modal.kind === "context_menu" && state.modal.payload.target.kind === "composer_helper");
+    helperMenuBtn.classList.toggle("is-menu-open", open);
   }
 
   renderHeader(layout, state);

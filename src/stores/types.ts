@@ -81,6 +81,7 @@ export type ContextMenuTargetKind =
   | "auth_in"
   | "auth_out"
   | "message"
+  | "composer_helper"
   | "composer_send"
   | "sidebar_tools";
 
