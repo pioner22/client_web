@@ -88,6 +88,7 @@ export interface ModalActions {
   onMembersRemove: () => void;
   onRename: () => void;
   onSendSchedule: () => void;
+  onSendScheduleWhenOnline: () => void;
   onInviteUser: () => void;
   onFileSendConfirm: (captionText: string) => void;
   onAuthAccept: (peer: string) => void;
@@ -139,8 +140,18 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     });
   }
   if (kind === "send_schedule") {
+    const canWhenOnline = (() => {
+      const t = modal.target;
+      if (modal.edit) return false;
+      if (!t || t.kind !== "dm") return false;
+      const peerId = String(t.id || "").trim();
+      if (!peerId) return false;
+      const friend = (state.friends || []).find((f) => String(f.id || "").trim() === peerId);
+      return Boolean(friend && !friend.online);
+    })();
     return renderSendScheduleModal(modal.text, modal.suggestedAt, modal.message, modal.title, modal.confirmLabel, {
       onSchedule: actions.onSendSchedule,
+      ...(canWhenOnline ? { onWhenOnline: actions.onSendScheduleWhenOnline } : {}),
       onCancel: actions.onClose,
     });
   }

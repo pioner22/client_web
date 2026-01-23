@@ -56,6 +56,7 @@ import {
   savePinnedMessagesForUser,
   togglePinnedMessage,
 } from "../helpers/chat/pinnedMessages";
+import { MESSAGE_SCHEDULE_MAX_DAYS, maxMessageScheduleDelayMs } from "../helpers/chat/messageSchedule";
 import { cleanupFileCache, getCachedFileBlob, isImageLikeFile, putCachedFileBlob } from "../helpers/files/fileBlobCache";
 import { fileBadge } from "../helpers/files/fileBadge";
 import { loadFileCachePrefs, saveFileCachePrefs } from "../helpers/files/fileCachePrefs";
@@ -6438,13 +6439,13 @@ export function mountApp(root: HTMLElement) {
       return;
     }
     const now = Date.now();
-    const maxAt = now + maxBoardScheduleDelayMs();
+    const maxAt = now + maxMessageScheduleDelayMs();
     if (when <= now) {
       store.set({ modal: { ...modal, message: "Время уже прошло — выберите будущее" } });
       return;
     }
     if (when > maxAt) {
-      store.set({ modal: { ...modal, message: "Максимум — 7 дней вперёд" } });
+      store.set({ modal: { ...modal, message: `Максимум — ${MESSAGE_SCHEDULE_MAX_DAYS} дней вперёд` } });
       return;
     }
     const edit = modal.edit;
@@ -6481,6 +6482,42 @@ export function mountApp(root: HTMLElement) {
     sendChat({
       mode: "schedule",
       scheduleAt: when,
+      target: modal.target,
+      text: modal.text,
+      replyDraft: modal.replyDraft ?? null,
+      forwardDraft: modal.forwardDraft ?? null,
+    });
+  }
+
+  function sendScheduleWhenOnlineSubmit() {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "send_schedule") return;
+    if (!st.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    if (modal.edit) {
+      store.set({ modal: { ...modal, message: "Кнопка доступна только при создании нового сообщения" } });
+      return;
+    }
+    if (modal.target.kind !== "dm") {
+      store.set({ modal: { ...modal, message: "Доступно только в личном чате" } });
+      return;
+    }
+    const peerId = String(modal.target.id || "").trim();
+    const friend = (st.friends || []).find((f) => String(f.id || "").trim() === peerId);
+    if (!friend) {
+      store.set({ modal: { ...modal, message: "Нет статуса контакта: «когда будет онлайн» недоступно" } });
+      return;
+    }
+    if (friend.online) {
+      store.set({ modal: { ...modal, message: "Контакт уже онлайн" } });
+      return;
+    }
+    store.set({ modal: null });
+    sendChat({
+      mode: "when_online",
       target: modal.target,
       text: modal.text,
       replyDraft: modal.replyDraft ?? null,
@@ -10763,12 +10800,13 @@ export function mountApp(root: HTMLElement) {
     const friend = sel.kind === "dm" ? st.friends.find((f) => f.id === sel.id) : null;
     const friendKnown = Boolean(friend);
     const friendOnline = Boolean(friend?.online);
+    const isSelf = sel.kind === "dm" && st.selfId && String(sel.id) === String(st.selfId);
     const canSend = Boolean(getComposerFinalText(st));
     const canSendNow = canSend && !editing;
     const whenOnlineAllowed = sel.kind === "dm" && friendKnown && !friendOnline && !editing;
     const items: ContextMenuItem[] = [
-      { id: "composer_send_silent", label: "Отправить без звука", icon: "🔕", disabled: !canSendNow },
-      { id: "composer_send_schedule", label: "Запланировать", icon: "🗓", disabled: !canSendNow },
+      ...(!isSelf ? [{ id: "composer_send_silent", label: "Отправить без звука", icon: "🔕", disabled: !canSendNow }] : []),
+      { id: "composer_send_schedule", label: isSelf ? "Напомнить" : "Запланировать", icon: "🗓", disabled: !canSendNow },
       ...(whenOnlineAllowed ? [{ id: "composer_send_when_online", label: "Когда будет онлайн", icon: "🕓", disabled: !canSend }] : []),
     ];
     store.set({
@@ -10777,7 +10815,7 @@ export function mountApp(root: HTMLElement) {
         payload: {
           x,
           y,
-          title: "Отправка",
+          title: isSelf ? "Напоминание" : "Отправка",
           target: { kind: "composer_send", id: sel.id },
           items,
         },
@@ -10808,6 +10846,7 @@ export function mountApp(root: HTMLElement) {
       store.set({ status: "Введите сообщение" });
       return;
     }
+    const isSelf = sel.kind === "dm" && st.selfId && String(sel.id) === String(st.selfId);
     const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
     const forwardDraft = st.forwardDraft && st.forwardDraft.key === key ? st.forwardDraft : null;
     store.set({
@@ -10818,6 +10857,7 @@ export function mountApp(root: HTMLElement) {
         replyDraft,
         forwardDraft,
         suggestedAt: Date.now() + 60 * 60 * 1000,
+        ...(isSelf ? { title: "Напоминание", confirmLabel: "Создать" } : {}),
       },
     });
   };
@@ -14510,6 +14550,7 @@ export function mountApp(root: HTMLElement) {
     onMembersRemove: () => membersRemoveSubmit(),
     onRename: () => renameSubmit(),
     onSendSchedule: () => sendScheduleSubmit(),
+    onSendScheduleWhenOnline: () => sendScheduleWhenOnlineSubmit(),
     onForwardSend: (targets: TargetRef[]) => sendForwardToTargets(targets),
     onInviteUser: () => inviteUserSubmit(),
     onAuthRequest: (peer: string) => requestAuth(peer),

@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.652",
+    date: "2026-01-23",
+    improved: [
+      "Запланированная отправка: окно планирования теперь поддерживает до 365 дней вперёд (tweb‑like)",
+      "Запланированная отправка: в личном чате (когда контакт offline) доступна кнопка «Когда будет онлайн» прямо в окне планирования",
+      "Saved/self: планирование отображается как «Напоминание» (если чат с самим собой используется как Saved)",
+    ],
+  },
+  {
     version: "0.1.651",
     date: "2026-01-23",
     improved: [

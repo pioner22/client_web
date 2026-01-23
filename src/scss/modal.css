@@ -1327,6 +1327,22 @@ input.modal-input[type="file"]::file-selector-button:active {
   background: color-mix(in srgb, var(--focus), #000000 12%);
 }
 
+.btn.btn-secondary {
+  background: color-mix(in srgb, var(--focus), transparent 88%);
+  border-color: color-mix(in srgb, var(--focus), transparent 70%);
+  color: var(--btn-text);
+}
+
+.btn.btn-secondary:hover {
+  background: color-mix(in srgb, var(--focus), transparent 82%);
+  border-color: color-mix(in srgb, var(--focus), transparent 62%);
+  color: var(--btn-text-hover);
+}
+
+.btn.btn-secondary:active {
+  background: color-mix(in srgb, var(--focus), transparent 78%);
+}
+
 .btn.btn-danger {
   background: var(--bad);
   border-color: transparent;

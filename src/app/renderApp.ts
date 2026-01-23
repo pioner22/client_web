@@ -202,6 +202,7 @@ export interface RenderActions {
   onMembersRemove: () => void;
   onRename: () => void;
   onSendSchedule: () => void;
+  onSendScheduleWhenOnline: () => void;
   onForwardSend: (targets: TargetRef[]) => void;
   onInviteUser: () => void;
   onAuthRequest: (peer: string) => void;
@@ -569,6 +570,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     onMembersRemove: actions.onMembersRemove,
     onRename: actions.onRename,
     onSendSchedule: actions.onSendSchedule,
+    onSendScheduleWhenOnline: actions.onSendScheduleWhenOnline,
     onInviteUser: actions.onInviteUser,
     onAuthAccept: actions.onAuthAccept,
     onAuthDecline: actions.onAuthDecline,
