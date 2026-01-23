@@ -586,6 +586,100 @@ test("viewport var: installAppViewportHeightVar переключается на 
   }
 });
 
+test("viewport var: iOS keyboard resize+offset не завышает --app-vv-bottom (без зазора у композера)", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const root = { style };
+
+    const vvListeners = new Map();
+    const windowListeners = new Map();
+    const rafQueue = [];
+    const active = { tagName: "TEXTAREA", isContentEditable: false };
+
+    globalThis.document = { activeElement: null, documentElement: { clientHeight: 700 } };
+    globalThis.window = {
+      innerHeight: 700,
+      screen: { height: 0 },
+      visualViewport: {
+        height: 700,
+        offsetTop: 0,
+        addEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          list.push(cb);
+          vvListeners.set(type, list);
+        },
+        removeEventListener(type, cb) {
+          const list = vvListeners.get(type) || [];
+          vvListeners.set(
+            type,
+            list.filter((x) => x !== cb)
+          );
+        },
+      },
+      requestAnimationFrame(cb) {
+        rafQueue.push(cb);
+        return rafQueue.length;
+      },
+      cancelAnimationFrame() {},
+      addEventListener(type, cb) {
+        const list = windowListeners.get(type) || [];
+        list.push(cb);
+        windowListeners.set(type, list);
+      },
+      removeEventListener(type, cb) {
+        const list = windowListeners.get(type) || [];
+        windowListeners.set(
+          type,
+          list.filter((x) => x !== cb)
+        );
+      },
+    };
+
+    const cleanup = helper.fn(root);
+    while (rafQueue.length) rafQueue.shift()();
+    assert.equal(style._props.get("--app-vh"), "700px");
+    assert.equal(style._props.has("--app-vv-bottom"), false);
+
+    // Simulate a tricky iOS case: keyboard opens, layout viewport shrinks to vvHeight but vvTop shifts (>0).
+    globalThis.document.activeElement = active;
+    globalThis.document.documentElement.clientHeight = 390;
+    globalThis.window.innerHeight = 390;
+    globalThis.window.visualViewport.height = 390;
+    globalThis.window.visualViewport.offsetTop = 10;
+
+    const resizeListeners = windowListeners.get("resize") || [];
+    for (const cb of resizeListeners) cb();
+    while (rafQueue.length) rafQueue.shift()();
+
+    assert.equal(style._props.get("--app-vh"), "390px");
+    assert.equal(style._props.get("--safe-bottom-pad"), "0px");
+    // Important: do NOT set a huge --app-vv-bottom here, otherwise the app height collapses
+    // and the composer floats above the keyboard with a visible gap.
+    assert.equal(style._props.has("--app-vv-bottom"), false);
+
+    cleanup();
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+  }
+});
+
 test("viewport var: при фокусе на input/textarea переключается на visualViewport при меньшей разнице", async () => {
   const helper = await loadInstall();
   const prev = {

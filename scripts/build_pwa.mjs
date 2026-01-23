@@ -661,8 +661,33 @@ async function handleStreamFetch(event) {
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
-      const cache = await caches.open(CACHE);
-      await cache.addAll(PRECACHE_URLS);
+      let cache = null;
+      try {
+        cache = await caches.open(CACHE);
+      } catch {
+        cache = null;
+      }
+      if (cache) {
+        // Keep app shell version-consistent: ensure index.html is cached first.
+        // Never fail the whole SW install on cache errors: some clients may have broken/quota-limited CacheStorage.
+        try {
+          await cache.add("./index.html");
+        } catch {}
+        const urls = PRECACHE_URLS.filter((u) => u !== "./index.html");
+        try {
+          await cache.addAll(urls);
+        } catch {
+          // Best-effort fallback: cache files individually to avoid a full install failure
+          // due to a single transient request (race during deploy / flaky network).
+          await Promise.all(
+            urls.map(async (u) => {
+              try {
+                await cache.add(u);
+              } catch {}
+            })
+          );
+        }
+      }
       // Telegram-like: activate the new SW immediately, but *do not* force reload here.
       // The app decides when it's safe to restart (idle / no transfers / no focused input).
       await self.skipWaiting();
@@ -682,6 +707,16 @@ self.addEventListener("activate", (event) => {
         );
       } catch {}
       await self.clients.claim();
+      // Proactively notify clients of the active BUILD_ID (helps older app versions).
+      try {
+        const payload = { type: "BUILD_ID", buildId: BUILD_ID };
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        for (const c of clients) {
+          try {
+            c.postMessage(payload);
+          } catch {}
+        }
+      } catch {}
     })()
   );
 });
@@ -837,9 +872,11 @@ self.addEventListener("fetch", (event) => {
   if (isNavigationRequest(req)) {
     event.respondWith(
       (async () => {
-        const cache = await caches.open(CACHE);
-        const cachedIndex = await cache.match("./index.html");
-        if (cachedIndex) return cachedIndex;
+        try {
+          const cache = await caches.open(CACHE);
+          const cachedIndex = await cache.match("./index.html");
+          if (cachedIndex) return cachedIndex;
+        } catch {}
         return fetch(req);
       })()
     );
@@ -850,14 +887,21 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     (async () => {
-      const precache = await caches.open(CACHE);
-      const cachedPre = await precache.match(req);
-      if (cachedPre) return cachedPre;
-      const cache = await caches.open(RUNTIME_CACHE);
-      const cached = await cache.match(req);
-      if (cached) return cached;
+      try {
+        const precache = await caches.open(CACHE);
+        const cachedPre = await precache.match(req);
+        if (cachedPre) return cachedPre;
+      } catch {}
+      let cache = null;
+      try {
+        cache = await caches.open(RUNTIME_CACHE);
+        const cached = await cache.match(req);
+        if (cached) return cached;
+      } catch {
+        cache = null;
+      }
       const res = await fetch(req);
-      if (isCacheableResponse(res)) {
+      if (cache && isCacheableResponse(res)) {
         try {
           cache.put(req, res.clone());
           trimRuntimeCache(cache);

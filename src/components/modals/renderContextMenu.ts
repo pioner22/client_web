@@ -68,10 +68,8 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
 
   const reactionBar =
     payload.reactionBar && Array.isArray(payload.reactionBar.emojis) && payload.reactionBar.emojis.length
-      ? el(
-          "div",
-          { class: "ctx-reacts", role: "group", "aria-label": "Реакции" },
-          payload.reactionBar.emojis.map((emoji) => {
+      ? (() => {
+          const btns = payload.reactionBar.emojis.map((emoji) => {
             const active = payload.reactionBar?.active === emoji;
             const btn = el(
               "button",
@@ -85,8 +83,16 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
             ) as HTMLButtonElement;
             btn.addEventListener("click", () => actions.onSelect(`react:${emoji}`));
             return btn;
-          })
-        )
+          });
+          const pickerBtn = el(
+            "button",
+            { class: "ctx-react", type: "button", title: "Другая реакция", "aria-label": "Другая реакция" },
+            ["＋"]
+          ) as HTMLButtonElement;
+          pickerBtn.addEventListener("click", () => actions.onSelect("react_picker"));
+          btns.push(pickerBtn);
+          return el("div", { class: "ctx-reacts", role: "group", "aria-label": "Реакции" }, btns);
+        })()
       : null;
 
   const nodes = payload.items.map((it) => {

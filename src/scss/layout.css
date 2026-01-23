@@ -16,11 +16,14 @@
 .hdr {
   background: var(--header-bg);
   border-bottom: var(--header-border-width) solid var(--header-border-color);
+  box-shadow: var(--header-shadow);
   padding: var(--header-pad-y) var(--header-pad-x);
   padding-top: calc(var(--header-pad-y) + env(safe-area-inset-top));
   display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(var(--header-topbar-height), auto) auto;
+  min-height: var(--header-topbar-height);
+  align-items: center;
   gap: var(--header-gap-y) var(--header-gap-x);
 }
 
@@ -29,6 +32,10 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
 }
 
 .hdr-right {
@@ -124,7 +131,7 @@ body.has-right-col .right-col {
 .sidebar {
   --avatar-size: 54px;
   --avatar-font-size: 20px;
-  --row-pad-x: 16px;
+  --row-pad-x: 14px;
   background:
     linear-gradient(var(--layer-2), var(--layer-2)),
     var(--sidebar-bg);
@@ -140,7 +147,7 @@ body.has-right-col .right-col {
 }
 
 .sidebar .row {
-  padding-inline-end: 12px;
+  padding-inline-end: var(--row-pad-x);
 }
 
 .sidebar.sidebar-collapsed {
@@ -183,17 +190,13 @@ body.has-right-col .right-col {
 
 @media (min-width: 601px) {
   /* Tweb-like grid alignment for sidebar rows on desktop. */
-  .sidebar:not(.sidebar-collapsed) {
-    --row-ava-col: 56px;
-  }
-
   .sidebar:not(.sidebar-collapsed) .row[data-ctx-kind] {
     display: grid;
-    grid-template-columns: var(--row-ava-col) minmax(0, 1fr) auto;
+    grid-template-columns: var(--avatar-size) minmax(0, 1fr) minmax(var(--row-tail-min, 96px), max-content);
     grid-template-rows: auto auto;
     grid-template-areas: "ava title tail" "ava sub tail";
     column-gap: var(--row-gap);
-    row-gap: 2px;
+    row-gap: 3px;
     align-items: center;
   }
 
@@ -226,7 +229,8 @@ body.has-right-col .right-col {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 4px;
+    gap: 6px;
+    min-height: calc(var(--row-min-h) - (var(--row-pad-y) * 2));
   }
 
 }
@@ -272,6 +276,7 @@ body.has-right-col .right-col {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
   padding-inline: var(--sidebar-list-pad);
   padding-bottom: max(var(--sp-2), var(--safe-bottom-pad), var(--app-gap-bottom, 0px));
   scroll-padding-bottom: max(var(--sp-2), var(--safe-bottom-pad), var(--app-gap-bottom, 0px));
@@ -311,6 +316,7 @@ body.has-right-col .right-col {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
   overflow-anchor: none;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -364,7 +370,16 @@ body.has-right-col .right-col {
 .input-wrap > .composer-meta {
   max-width: var(--chat-input-max-width);
   width: 100%;
-  margin-left: auto;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+:root[data-msg-wide="1"] .input-wrap > .composer-edit,
+:root[data-msg-wide="1"] .input-wrap > .composer-helper,
+:root[data-msg-wide="1"] .input-wrap > .board-editor,
+:root[data-msg-wide="1"] .input-wrap > .composer-row,
+:root[data-msg-wide="1"] .input-wrap > .composer-meta {
+  margin-left: 0;
   margin-right: auto;
 }
 
@@ -806,6 +821,7 @@ body.has-right-col .right-col {
   padding: var(--footer-pad-y) var(--footer-pad-x);
   padding-bottom: calc(var(--footer-pad-y) + var(--safe-bottom-layout-pad));
   border-top: var(--footer-border-width) solid var(--footer-border-color);
+  box-shadow: var(--footer-shadow);
   background: var(--footer-bg);
   color: var(--footer-color);
   white-space: nowrap;

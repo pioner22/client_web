@@ -1,7 +1,5 @@
 {
   "skins": [
-    { "id": "telegram-exact", "title": "Telegram (точный)" },
-    { "id": "dark-premium", "title": "Тёмная премиум" },
-    { "id": "amber", "title": "Amber" }
+    { "id": "telegram-exact", "title": "Telegram (точный)" }
   ]
 }

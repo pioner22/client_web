@@ -10,12 +10,68 @@ import { renderRenameModal } from "./renderRenameModal";
 import { renderConfirmModal } from "./renderConfirmModal";
 import { renderFileSendModal } from "./renderFileSendModal";
 import { renderFileViewerModal } from "./renderFileViewerModal";
+import type { FileViewerMeta } from "./renderFileViewerModal";
 import { renderInviteUserModal } from "./renderInviteUserModal";
 import { renderActionModal } from "./renderActionModal";
 import { renderContextMenu } from "./renderContextMenu";
 import { renderBoardPostModal } from "./renderBoardPostModal";
 import { renderSendScheduleModal } from "./renderSendScheduleModal";
 import { renderForwardModal } from "./renderForwardModal";
+
+function formatUserLabel(displayName: string, handle: string, fallback: string): string {
+  const dn = String(displayName || "").trim();
+  if (dn) return dn;
+  const h = String(handle || "").trim();
+  if (h) return h.startsWith("@") ? h : `@${h}`;
+  return fallback || "—";
+}
+
+function normalizeHandle(value: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return raw.startsWith("@") ? raw : `@${raw}`;
+}
+
+function resolveUserLabel(state: AppState, id: string): { label: string; handle: string } {
+  const pid = String(id || "").trim();
+  if (!pid) return { label: "—", handle: "" };
+  const p = state.profiles?.[pid];
+  if (p) {
+    return {
+      label: formatUserLabel(p.display_name || "", p.handle || "", pid),
+      handle: normalizeHandle(String(p.handle || "")),
+    };
+  }
+  const friend = (state.friends || []).find((f) => f.id === pid);
+  if (friend) {
+    return {
+      label: formatUserLabel(friend.display_name || "", friend.handle || "", pid),
+      handle: normalizeHandle(String(friend.handle || "")),
+    };
+  }
+  return { label: pid, handle: "" };
+}
+
+function buildFileViewerMeta(state: AppState, modal: Extract<AppState["modal"], { kind: "file_viewer" }>): FileViewerMeta | null {
+  const chatKey = modal.chatKey ? String(modal.chatKey) : "";
+  const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
+  if (!chatKey || msgIdx === null) return null;
+  const conv = state.conversations[chatKey] || [];
+  if (msgIdx < 0 || msgIdx >= conv.length) return null;
+  const msg = conv[msgIdx];
+  if (!msg || msg.kind === "sys") return null;
+  const authorId = String((msg.kind === "out" ? state.selfId || msg.from : msg.from) || "").trim();
+  if (!authorId) return null;
+  const identity = resolveUserLabel(state, authorId);
+  const ts = Number(msg.ts);
+  return {
+    authorId,
+    authorLabel: identity.label,
+    authorHandle: identity.handle,
+    authorKind: "dm",
+    timestamp: Number.isFinite(ts) ? ts : null,
+  };
+}
 
 export interface ModalActions {
   onAuthLogin: () => void;
@@ -47,6 +103,7 @@ export interface ModalActions {
   onFileOfferReject: (fileId: string) => void;
   onContextMenuAction: (itemId: string) => void;
   onFileViewerNavigate: (dir: "prev" | "next") => void;
+  onFileViewerJump: () => void;
   onForwardSend: (targets: TargetRef[]) => void;
 }
 
@@ -142,10 +199,13 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
   if (kind === "file_viewer") {
     const canPrev = typeof modal.prevIdx === "number" && Number.isFinite(modal.prevIdx);
     const canNext = typeof modal.nextIdx === "number" && Number.isFinite(modal.nextIdx);
-    return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, modal.caption ?? null, {
+    const canJump = Boolean(modal.chatKey && typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx));
+    const meta = buildFileViewerMeta(state, modal);
+    return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, modal.caption ?? null, meta, {
       onClose: actions.onClose,
       ...(canPrev ? { onPrev: () => actions.onFileViewerNavigate("prev") } : {}),
       ...(canNext ? { onNext: () => actions.onFileViewerNavigate("next") } : {}),
+      ...(canJump ? { onJump: () => actions.onFileViewerJump() } : {}),
     });
   }
   if (kind === "invite_user") {

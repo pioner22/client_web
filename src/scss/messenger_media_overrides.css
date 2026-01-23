@@ -1,0 +1,173 @@
+/* Messenger-only (not boards) media/emoji overrides.
+ *
+ * Purpose:
+ * - Keep changes isolated from the base component styles.
+ * - Reduce accidental conflicts with board UI and other pages.
+ */
+
+/* 1) Bubble sizing: avoid "stretched" message frames.
+ * Use inline-flex instead of grid to make shrink-to-fit reliable.
+ */
+:root[data-msg-view="bubble"] .chat:not(.chat-board) .msg-body {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 1 auto;
+  width: fit-content;
+  max-width: min(100%, var(--msg-body-max-width));
+}
+
+.chat:not(.chat-board) .msg-body {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 1 auto;
+  width: fit-content;
+  max-width: min(100%, var(--msg-body-max-width));
+}
+
+/* 2) Emoji: bigger + more contrast.
+ * We keep it subtle to avoid looking "outlined".
+ */
+.chat:not(.chat-board) .msg-text.msg-emoji-only {
+  font-size: clamp(2.1em, 4vw, 3.2em);
+  line-height: 1;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.22),
+    0 2px 10px rgba(0, 0, 0, 0.16);
+}
+
+/* Telegram-exact: emoji-only doesn't use inline meta; remove extra bottom padding. */
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg[data-msg-emoji-only="1"]:not([data-msg-attach]) .msg-body {
+  padding-bottom: var(--msg-in-pad-y);
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-only="1"]:not([data-msg-attach]) .msg-body {
+  padding-bottom: var(--msg-out-pad-y);
+}
+
+.msg-react-emoji {
+  font-size: 1.1em;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+}
+
+/* 3) Media: reduce "frames" by removing implicit background blocks. */
+.chat:not(.chat-board) .chat-file-preview {
+  background: transparent;
+  padding: 0;
+  border-color: transparent;
+}
+
+.chat:not(.chat-board) .chat-file-img {
+  background: transparent;
+}
+
+/* Media width on handhelds: avoid edge-to-edge "frames" in history. */
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --chat-media-frame-width: min(75%, var(--chat-media-frame-max), var(--msg-body-max-width));
+  }
+}
+
+/* Outgoing attachments: keep media in the right "zone" (avoid centered look). */
+.chat:not(.chat-board) .msg-out.msg-attach .file-row-chat.file-row-image,
+.chat:not(.chat-board) .msg-out.msg-attach .chat-album-grid,
+.chat:not(.chat-board) .msg-out.msg-attach .msg-text.msg-caption {
+  margin-left: auto;
+}
+
+/* Albums: avoid visible "frames" between tiles (gap shows chat background). */
+.chat:not(.chat-board) .chat-album-item {
+  background: transparent;
+}
+
+/* Visual attachments: avoid a too-wide bubble ("aura") around media when right-aligned.
+ * We pin the bubble width to the media frame (relative to chat width), and let the preview fill it.
+ */
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .msg-body,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .msg-body {
+  width: var(--chat-media-frame-width);
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .file-row-chat.file-row-image,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .file-row-chat.file-row-image,
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .msg-text.msg-caption,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .msg-text.msg-caption {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .file-row-chat.file-row-image > .chat-file-preview,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .file-row-chat.file-row-image > .chat-file-preview {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Albums: same idea, but use the album frame max. */
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .msg-body {
+  width: min(100%, var(--chat-album-frame-max), var(--msg-body-max-width));
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .chat-album-grid {
+  width: 100%;
+  max-width: 100%;
+  align-self: stretch;
+}
+
+/* Outgoing albums: keep the album block pinned to the right edge. */
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .msg-body {
+  align-items: flex-end;
+}
+
+/* Outgoing albums: when the last row isn't full, avoid a "right gap" by shifting tiles to the rightmost columns. */
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-grid[data-count="7"] .chat-album-item:last-child,
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-grid[data-count="10"] .chat-album-item:last-child {
+  grid-column: 3;
+}
+
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-grid[data-count="8"] .chat-album-item:nth-last-child(2),
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-grid[data-count="11"] .chat-album-item:nth-last-child(2) {
+  grid-column: 2;
+}
+
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-grid[data-count="8"] .chat-album-item:last-child,
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-grid[data-count="11"] .chat-album-item:last-child {
+  grid-column: 3;
+}
+
+/* Frameless: image/video/audio messages should not draw a "card" bubble behind media. */
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .msg-body,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .msg-body,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .msg-body {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* 4) Attachments: meta overlay only makes sense for visual media.
+ * For audio/files without caption, avoid positioning time over the content.
+ */
+.chat:not(.chat-board) .msg-attach:not([data-msg-has-caption="1"]):not([data-msg-file="image"]):not([data-msg-file="video"]) .msg-meta {
+  position: static;
+  right: auto;
+  bottom: auto;
+  margin-top: calc(var(--msg-meta-offset-y, 0px) + var(--sp-2));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 5) Audio: remove card background/border; keep layout. */
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio {
+  background: transparent;
+  border: 0;
+  min-height: auto;
+}

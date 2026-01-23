@@ -278,6 +278,83 @@ test("renderChat: file-attachment рендерит preview первым, ико�
   }
 });
 
+test("renderChat: avatarsRev инвалидирует рендер (аватар в шапке обновляется без перезагрузки)", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const prevLocalStorage = globalThis.localStorage;
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(String(k)) ? store.get(String(k)) : null),
+        setItem: (k, v) => void store.set(String(k), String(v)),
+        removeItem: (k) => void store.delete(String(k)),
+      };
+
+      try {
+        const chat = document.createElement("div");
+        const chatTop = document.createElement("div");
+        const chatSearchResults = document.createElement("div");
+        const chatSearchFooter = document.createElement("div");
+        const chatHost = document.createElement("div");
+        const chatJump = document.createElement("button");
+        const chatSelectionBar = document.createElement("div");
+        chat.className = "chat";
+        chatTop.className = "chat-top";
+        chatSearchResults.className = "chat-search-results";
+        chatSearchFooter.className = "chat-search-footer";
+        chatHost.className = "chat-host";
+        chatJump.className = "btn chat-jump hidden";
+        chatSelectionBar.className = "chat-selection-bar hidden";
+        chatHost.clientHeight = 120;
+        chatHost.scrollHeight = 2000;
+
+        const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+        const state = {
+          page: "main",
+          selected: { kind: "dm", id: "123-456-789" },
+          conversations: {
+            "dm:123-456-789": [{ kind: "in", from: "123-456-789", to: "854-432-319", room: null, text: "привет", ts: 1700000000, id: 1 }],
+          },
+          historyHasMore: {},
+          historyLoading: {},
+          chatSearchOpen: false,
+          chatSearchQuery: "",
+          chatSearchHits: [],
+          chatSearchPos: 0,
+          pinnedMessages: {},
+          pinnedMessageActive: {},
+          fileTransfers: [],
+          fileOffersIn: [],
+          groups: [],
+          boards: [],
+          profiles: {},
+          avatarsRev: 0,
+        };
+
+        helper.renderChat(layout, state);
+
+        const avatar1 = findFirst(chatTop, (n) => hasClass(n, "avatar"));
+        assert.ok(avatar1, "avatar node not found");
+        assert.ok(!hasClass(avatar1, "avatar-img"), "avatar should start without avatar-img");
+
+        store.set("yagodka_avatar:dm:123-456-789", "data:image/png;base64,AAAA");
+        state.avatarsRev += 1;
+
+        helper.renderChat(layout, state);
+
+        const avatar2 = findFirst(chatTop, (n) => hasClass(n, "avatar"));
+        assert.ok(avatar2, "avatar node not found after rerender");
+        assert.ok(hasClass(avatar2, "avatar-img"), "avatar should become avatar-img after avatarsRev");
+      } finally {
+        if (prevLocalStorage === undefined) delete globalThis.localStorage;
+        else globalThis.localStorage = prevLocalStorage;
+      }
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("renderChat: sys action message рендерит кнопки действий", async () => {
   const helper = await loadRenderChat();
   try {

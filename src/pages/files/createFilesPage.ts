@@ -1,7 +1,13 @@
 import { el } from "../../helpers/dom/el";
 import type { AppState, FileOfferIn, FileTransferEntry, TargetRef } from "../../stores/types";
 import { safeUrl } from "../../helpers/security/safeUrl";
-import { clearFileCache, cleanupFileCache, getCachedFileBlob, getFileCacheStats } from "../../helpers/files/fileBlobCache";
+import {
+  clearFileCache,
+  cleanupFileCache,
+  getCachedFileBlob,
+  getFileCacheStats,
+  listFileCacheEntries,
+} from "../../helpers/files/fileBlobCache";
 import { fileBadge, type FileBadgeKind } from "../../helpers/files/fileBadge";
 import { CACHE_CLEAN_PRESETS, CACHE_SIZE_PRESETS, loadFileCachePrefs, saveFileCachePrefs } from "../../helpers/files/fileCachePrefs";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
@@ -49,6 +55,49 @@ function formatGroupTime(ts: number): string {
   return dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }) + ` · ${time}`;
 }
 
+function triggerBrowserDownload(url: string, name: string) {
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.rel = "noopener";
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch {
+    // ignore
+  }
+}
+
+async function openCachedFile(userId: string, fileId: string, name: string, mode: "download" | "open") {
+  const cached = await getCachedFileBlob(userId, fileId);
+  if (!cached) return;
+  let url: string | null = null;
+  try {
+    url = URL.createObjectURL(cached.blob);
+  } catch {
+    url = null;
+  }
+  if (!url) return;
+  if (mode === "download") {
+    triggerBrowserDownload(url, name);
+  } else {
+    try {
+      window.open(url, "_blank", "noopener");
+    } catch {
+      // ignore
+    }
+  }
+  window.setTimeout(() => {
+    try {
+      URL.revokeObjectURL(url!);
+    } catch {
+      // ignore
+    }
+  }, 60_000);
+}
+
 function targetValue(target: TargetRef): string {
   return `${target.kind}:${target.id}`;
 }
@@ -71,9 +120,8 @@ function roomLabel(roomId: string, state: AppState): string {
 }
 
 function transferStatus(entry: FileTransferEntry): string {
-  const pct = Math.max(0, Math.min(100, Math.round(entry.progress || 0)));
-  if (entry.status === "uploading") return `Загрузка на сервер (${pct}%)`;
-  if (entry.status === "downloading") return `Скачивание (${pct}%)`;
+  if (entry.status === "uploading") return "Загрузка";
+  if (entry.status === "downloading") return "Скачивание";
   if (entry.status === "uploaded") return "Файл загружен";
   if (entry.status === "complete") return "Готово";
   if (entry.status === "rejected") return "Отклонено";
@@ -190,9 +238,22 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     cacheActions,
   ]);
 
+  const cachedTitle = el("div", { class: "pane-section" }, ["Кэшированные файлы"]);
+  const cachedHint = el("div", { class: "file-cache-hint" }, ["Это список файлов, которые реально лежат локально в кэше (CacheStorage)."]);
+  const cachedList = el("div", { class: "files-list" });
+  const cachedBlock = el("div", { class: "page-card files-section" }, [cachedTitle, cachedHint, cachedList]);
+
   const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["F7 — файлы | Esc — назад"]);
 
-  const root = el("div", { class: "page page-files" }, [title, sendBlock, offersBlock, transfersBlock, cacheBlock, ...(hint ? [hint] : [])]);
+  const root = el("div", { class: "page page-files" }, [
+    title,
+    sendBlock,
+    offersBlock,
+    transfersBlock,
+    cacheBlock,
+    cachedBlock,
+    ...(hint ? [hint] : []),
+  ]);
 
   for (const opt of CACHE_SIZE_PRESETS) {
     cacheLimitSelect.append(el("option", { value: String(opt.bytes) }, [opt.label]));
@@ -319,7 +380,8 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   }
 
   function renderTransfer(entry: FileTransferEntry, state: AppState): HTMLElement {
-    const statusLine = transferStatus(entry);
+    const hideProgressText = entry.status === "uploading" || entry.status === "downloading";
+    const statusLine = hideProgressText ? "" : transferStatus(entry);
     const base = typeof location !== "undefined" ? location.href : "http://localhost/";
     const safeHref = entry.url ? safeUrl(entry.url, { base, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
     const fileId = String(entry.id || "").trim();
@@ -332,7 +394,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       metaLines.push(`От:`);
     }
     metaLines.push(`Размер: ${formatBytes(entry.size)}`);
-    metaLines.push(statusLine);
+    if (statusLine) metaLines.push(statusLine);
     if (entry.acceptedBy?.length) metaLines.push(`Приняли: ${entry.acceptedBy.join(", ")}`);
     if (entry.receivedBy?.length) metaLines.push(`Получили: ${entry.receivedBy.join(", ")}`);
     const metaEls = metaLines.map((line) => {
@@ -349,9 +411,25 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     icon.style.setProperty("--file-h", String(badge.hue));
     const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [entry.name || "файл"])]), ...metaEls];
     if (entry.status === "uploading" || entry.status === "downloading") {
-      const bar = el("div", { class: "file-progress-bar" });
-      bar.style.width = `${Math.max(0, Math.min(100, Math.round(entry.progress || 0)))}%`;
-      mainChildren.push(el("div", { class: "file-progress" }, [bar]));
+      const progress = Math.max(0, Math.min(100, Math.round(entry.progress || 0)));
+      const label = entry.status === "uploading" ? `Загрузка ${progress}%` : `Скачивание ${progress}%`;
+      const candy = el("span", { class: "file-progress-candy", "aria-hidden": "true" });
+      candy.style.setProperty("--file-progress", `${progress}%`);
+      mainChildren.push(
+        el(
+          "div",
+          {
+            class: "file-progress",
+            role: "progressbar",
+            title: label,
+            "aria-label": label,
+            "aria-valuemin": "0",
+            "aria-valuemax": "100",
+            "aria-valuenow": String(progress),
+          },
+          [candy]
+        )
+      );
     }
     const actionsList: HTMLElement[] = [];
     const canDownload = entry.status === "complete" || entry.status === "uploaded";
@@ -377,13 +455,18 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       const media =
         badge.kind === "video"
           ? previewUrl
-            ? el("video", {
-                class: "file-preview-media file-preview-video",
-                src: previewUrl,
-                preload: "metadata",
-                muted: "true",
-                playsinline: "true",
-              })
+            ? (() => {
+                const video = el("video", {
+                  class: "file-preview-media file-preview-video",
+                  src: previewUrl,
+                  preload: "metadata",
+                  muted: "true",
+                  playsinline: "true",
+                }) as HTMLVideoElement;
+                video.muted = true;
+                video.defaultMuted = true;
+                return video;
+              })()
             : el("div", { class: "file-preview-placeholder" }, ["Видео"])
           : previewUrl
             ? el("img", {
@@ -562,6 +645,50 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     } else {
       const groups = groupTransfers(state.fileTransfers);
       transfersList.replaceChildren(...groups.map((group) => renderTransferGroup(group, state)));
+    }
+
+    if (!canUseCache || !userId) {
+      cachedList.replaceChildren(
+        el("div", { class: "page-empty" }, [
+          el("div", { class: "page-empty-title" }, ["Кэш недоступен"]),
+          el("div", { class: "page-empty-sub" }, ["Войдите, чтобы увидеть локально закэшированные файлы"]),
+        ])
+      );
+    } else {
+      const cached = listFileCacheEntries(userId, { limit: 240 });
+      const inTransfers = new Set(state.fileTransfers.map((e) => String(e.id || "").trim()).filter(Boolean));
+      const extra = cached.filter((e) => Boolean(e.fileId) && !inTransfers.has(e.fileId));
+      if (!extra.length) {
+        cachedList.replaceChildren(
+          el("div", { class: "page-empty" }, [
+            el("div", { class: "page-empty-title" }, ["Нет отдельных кэшированных файлов"]),
+            el("div", { class: "page-empty-sub" }, ["Кэшированные файлы обычно видны в «Передачи» после загрузки"]),
+          ])
+        );
+      } else {
+        cachedList.replaceChildren(
+          ...extra.map((entry) => {
+            const name = entry.name || entry.fileId;
+            const badge = fileBadge(name, entry.mime);
+            const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
+            icon.style.setProperty("--file-h", String(badge.hue));
+            const meta = [
+              entry.ts ? `Кэш: ${formatGroupTime(entry.ts)}` : "",
+              entry.size > 0 ? `Размер: ${formatBytes(entry.size)}` : "",
+            ]
+              .filter(Boolean)
+              .map((line) => el("div", { class: "file-meta" }, [line]));
+            const btnOpen = el("button", { class: "btn", type: "button" }, ["Открыть"]);
+            const btnDownload = el("button", { class: "btn btn-primary", type: "button" }, ["Скачать"]);
+            btnOpen.addEventListener("click", () => void openCachedFile(userId, entry.fileId, name || "файл", "open"));
+            btnDownload.addEventListener("click", () => void openCachedFile(userId, entry.fileId, name || "файл", "download"));
+            return el("div", { class: "file-row" }, [
+              el("div", { class: "file-main" }, [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [name])]), ...meta]),
+              el("div", { class: "file-actions" }, [btnOpen, btnDownload]),
+            ]);
+          })
+        );
+      }
     }
 
     const validPreviewIds = new Set(state.fileTransfers.map((entry) => String(entry.id || "").trim()).filter(Boolean));

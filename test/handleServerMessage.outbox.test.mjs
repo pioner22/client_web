@@ -58,7 +58,7 @@ test("handleServerMessage: message_delivered снимает запись из ou
     handleServerMessage({ type: "message_delivered", to: peer, id: 55 }, getState(), { send() {} }, patch);
 
     const st = getState();
-    assert.equal(st.conversations[key][0].status, "delivered");
+    assert.equal(st.conversations[key][0].status, "sent");
     assert.equal(st.conversations[key][0].id, 55);
     assert.equal(st.outbox[key], undefined);
   } finally {
@@ -94,9 +94,8 @@ test("handleServerMessage: history_result дедупит pending outbox и не 
     assert.equal(st.outbox[key], undefined);
     assert.equal(st.conversations[key].length, 1);
     assert.equal(st.conversations[key][0].id, 55);
-    assert.equal(st.conversations[key][0].status, "delivered");
+    assert.equal(st.conversations[key][0].status, "sent");
   } finally {
     await cleanup();
   }
 });
-

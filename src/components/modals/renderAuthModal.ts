@@ -86,7 +86,14 @@ export function renderAuthModal(
     return wrap;
   }
 
-  const box = el("div", { class: "modal modal-auth" });
+  const root = el("div", { id: "auth-pages" });
+  const scrollable = el("div", { class: "scrollable" });
+  const placeholderTop = el("div", { class: "auth-placeholder" }, [""]);
+  const placeholderBottom = el("div", { class: "auth-placeholder" }, [""]);
+  const tabsContainer = el("div", { class: "tabs-container" });
+  const tabsTab = el("div", { class: "tabs-tab active" });
+  const pageClass = mode === "register" ? "page-signUp" : "page-sign";
+  const container = el("div", { class: `container modal-auth ${pageClass}` });
   const tabRegister = el("button", { class: "btn auth-tab", type: "button" }, ["Регистрация"]);
   const tabLogin = el("button", { class: "btn auth-tab", type: "button" }, ["Войти по ID/@логину"]);
   const btnClose = el("button", { class: "btn auth-close", type: "button", title: "Закрыть", "aria-label": "Закрыть" }, [
@@ -98,9 +105,10 @@ export function renderAuthModal(
     mode === "auto"
       ? null
       : el("button", { class: "btn btn-primary", type: "submit", form: formId }, [btnOkLabel]);
+  const authImage = el("div", { class: "auth-image", "aria-hidden": "true" }, [""]);
   const header = el("div", { class: "auth-header" }, [
     el("div", { class: "auth-header-top" }, [el("div", { class: "auth-brand" }, ["Ягодка"]), btnClose]),
-    el("div", { class: "auth-subtitle" }, ["Вход и синхронизация"]),
+    el("div", { class: "subtitle auth-subtitle" }, ["Вход и синхронизация"]),
     el("div", { class: "auth-note" }, ["Сессия сохранится на этом устройстве. Пароль мы не сохраняем."]),
   ]);
 
@@ -120,8 +128,8 @@ export function renderAuthModal(
 
   const body =
     mode === "auto"
-      ? el("div", { class: "modal-body" })
-      : (el("form", { class: "modal-body", id: formId, autocomplete: "off", method: "post" }) as HTMLFormElement);
+      ? el("div", { class: "modal-body input-wrapper" })
+      : (el("form", { class: "modal-body input-wrapper", id: formId, autocomplete: "off", method: "post" }) as HTMLFormElement);
   if (mode === "auto") {
     body.append(
       el("div", { class: "modal-title" }, ["Вход"]),
@@ -202,7 +210,8 @@ export function renderAuthModal(
     );
   }
 
-  box.append(
+  container.append(
+    authImage,
     header,
     tabs,
     body,
@@ -210,6 +219,10 @@ export function renderAuthModal(
     message ? el("div", { class: "modal-warn" }, [message]) : el("div", { class: "modal-warn" }),
     mode === "auto" ? el("div", { class: "modal-actions" }) : el("div", { class: "modal-actions" }, btnOk ? [btnOk] : [])
   );
+  tabsTab.append(container);
+  tabsContainer.append(tabsTab);
+  scrollable.append(placeholderTop, tabsContainer, placeholderBottom);
+  root.append(scrollable);
 
   tabRegister.addEventListener("click", () => actions.onModeChange("register"));
   tabLogin.addEventListener("click", () => actions.onModeChange("login"));
@@ -223,5 +236,5 @@ export function renderAuthModal(
       else actions.onLogin();
     });
   }
-  return box;
+  return root;
 }

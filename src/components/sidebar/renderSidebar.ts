@@ -378,6 +378,7 @@ export function renderSidebar(
         isMobile: boolean;
         mobileUi: boolean;
         disableSearchWhileTyping: boolean;
+        avatarsRev: number;
         friendsRef: AppState["friends"];
         groupsRef: AppState["groups"];
         boardsRef: AppState["boards"];
@@ -410,6 +411,7 @@ export function renderSidebar(
     isMobile,
     mobileUi,
     disableSearchWhileTyping,
+    avatarsRev: Math.max(0, Math.trunc(Number((state as any).avatarsRev || 0) || 0)),
     friendsRef: state.friends,
     groupsRef: state.groups,
     boardsRef: state.boards,
@@ -439,6 +441,7 @@ export function renderSidebar(
     prevRender.isMobile === renderState.isMobile &&
     prevRender.mobileUi === renderState.mobileUi &&
     prevRender.disableSearchWhileTyping === renderState.disableSearchWhileTyping &&
+    prevRender.avatarsRev === renderState.avatarsRev &&
     prevRender.friendsRef === renderState.friendsRef &&
     prevRender.groupsRef === renderState.groupsRef &&
     prevRender.boardsRef === renderState.boardsRef &&
@@ -691,9 +694,20 @@ export function renderSidebar(
     const conv = state.conversations[key] || [];
     const last = conv.length ? conv[conv.length - 1] : null;
     if (!last) return false;
+    if (last.kind !== "in") return false;
     const from = String(last.from || "").trim();
     if (from && state.selfId && from === state.selfId) return false;
-    return hasSelfMention(String(last.text || ""), selfMentionHandles);
+    const mentioned = hasSelfMention(String(last.text || ""), selfMentionHandles);
+    if (!mentioned) return false;
+    if (!key.startsWith("room:")) return true;
+    const marker = state.lastRead?.[key];
+    const lastReadId = Number(marker?.id ?? 0);
+    const lastReadTs = Number(marker?.ts ?? 0);
+    const msgId = Number(last.id ?? 0);
+    const msgTs = Number(last.ts ?? 0);
+    if (lastReadId > 0 && Number.isFinite(msgId) && msgId > 0 && msgId <= lastReadId) return false;
+    if (lastReadId <= 0 && lastReadTs > 0 && msgTs > 0 && msgTs <= lastReadTs) return false;
+    return true;
   };
   const friendMap = new Map<string, FriendEntry>();
   for (const f of state.friends || []) {
@@ -709,7 +723,12 @@ export function renderSidebar(
   const sidebarQuery = sidebarQueryRaw.toLowerCase();
   const hasSidebarQuery = Boolean(sidebarQuery);
   const sidebarChatFilter: SidebarChatFilter =
-    state.sidebarChatFilter === "unread" || state.sidebarChatFilter === "mentions" ? state.sidebarChatFilter : "all";
+    state.sidebarChatFilter === "unread" ||
+    state.sidebarChatFilter === "mentions" ||
+    state.sidebarChatFilter === "dms" ||
+    state.sidebarChatFilter === "groups"
+      ? state.sidebarChatFilter
+      : "all";
   const effectiveChatFilter: SidebarChatFilter = hasSidebarQuery ? "all" : sidebarChatFilter;
   const body = (() => {
     const existing =
@@ -830,6 +849,16 @@ export function renderSidebar(
     opts.unread > 0 || Boolean(opts.mention) || Boolean(opts.attention);
   const isMentionDialog = (opts: { mention?: boolean; attention?: boolean }): boolean =>
     Boolean(opts.mention) || Boolean(opts.attention);
+  const passesSidebarChatFilter = (
+    mode: SidebarChatFilter,
+    opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }
+  ): boolean => {
+    if (mode === "unread") return isUnreadDialog(opts);
+    if (mode === "mentions") return isMentionDialog(opts);
+    if (mode === "dms") return opts.kind === "dm";
+    if (mode === "groups") return opts.kind === "group";
+    return true;
+  };
 
   const unreadDialogsCount = (() => {
     let count = 0;
@@ -888,6 +917,8 @@ export function renderSidebar(
       makeBtn("all", "Все"),
       makeBtn("unread", "Непрочитанные", badgeText || undefined),
       makeBtn("mentions", "Упоминания", mentionText || undefined),
+      makeBtn("dms", "Личные"),
+      makeBtn("groups", "Группы"),
     ]);
   };
 
@@ -1164,11 +1195,8 @@ export function renderSidebar(
       ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount)
       : null;
     const chatFilterMode: SidebarChatFilter = showChatFilters ? effectiveChatFilter : "all";
-    const passesChatFilter = (opts: { unread: number; mention?: boolean; attention?: boolean }): boolean => {
-      if (chatFilterMode === "unread") return isUnreadDialog(opts);
-      if (chatFilterMode === "mentions") return isMentionDialog(opts);
-      return true;
-    };
+    const passesChatFilter = (opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean =>
+      passesSidebarChatFilter(chatFilterMode, opts);
     const mountMobile = (children: HTMLElement[]) => {
       setBodyChatlistClass(children);
       body.replaceChildren(...children);
@@ -1209,7 +1237,7 @@ export function renderSidebar(
         const k = dmKey(f.id);
         const unread = Math.max(0, Number(f.unread || 0) || 0);
         const attention = attnSet.has(f.id);
-        if (!passesChatFilter({ unread, attention })) continue;
+        if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention);
         pinnedContactRows.push(row);
@@ -1225,7 +1253,7 @@ export function renderSidebar(
           const meta = previewForConversation(state, k, "room", drafts[k]);
           const unread = computeRoomUnread(k);
           const mention = mentionForKey(k);
-          if (!passesChatFilter({ unread, mention })) continue;
+          if (!passesChatFilter({ kind: "group", unread, mention })) continue;
           pinnedChatRows.push(
             roomRow(
               null,
@@ -1278,7 +1306,7 @@ export function renderSidebar(
         const label = displayNameForFriend(state, f);
         const unread = Math.max(0, Number(f.unread || 0) || 0);
         const attention = attnSet.has(id);
-        if (!passesChatFilter({ unread, attention })) continue;
+        if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
         dialogItems.push({
           sortTs: lastTsForKey(k),
           priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
@@ -1294,7 +1322,7 @@ export function renderSidebar(
         const unread = computeRoomUnread(k);
         const mention = mentionForKey(k);
         const label = String(g.name || g.id);
-        if (!passesChatFilter({ unread, mention })) continue;
+        if (!passesChatFilter({ kind: "group", unread, mention })) continue;
         dialogItems.push({
           sortTs: lastTsForKey(k),
           priority: dialogPriority({ hasDraft: meta.hasDraft, mention, unread }),
@@ -1575,11 +1603,8 @@ export function renderSidebar(
       ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount)
       : null;
     const chatFilterMode: SidebarChatFilter = showChatFilters ? effectiveChatFilter : "all";
-    const passesChatFilter = (opts: { unread: number; mention?: boolean; attention?: boolean }): boolean => {
-      if (chatFilterMode === "unread") return isUnreadDialog(opts);
-      if (chatFilterMode === "mentions") return isMentionDialog(opts);
-      return true;
-    };
+    const passesChatFilter = (opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean =>
+      passesSidebarChatFilter(chatFilterMode, opts);
 
     const pinnedChatRows: HTMLElement[] = [];
     const pinnedBoardRows: HTMLElement[] = [];
@@ -1594,7 +1619,7 @@ export function renderSidebar(
         const k = dmKey(f.id);
         const unread = Math.max(0, Number(f.unread || 0) || 0);
         const attention = attnSet.has(f.id);
-        if (!passesChatFilter({ unread, attention })) continue;
+        if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
         const meta = previewForConversation(state, k, "dm", drafts[k]);
         pinnedContactRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention));
         pinnedContactEntries.push(f);
@@ -1609,7 +1634,7 @@ export function renderSidebar(
           const meta = previewForConversation(state, k, "room", drafts[k]);
           const unread = computeRoomUnread(k);
           const mention = mentionForKey(k);
-          if (!passesChatFilter({ unread, mention })) continue;
+          if (!passesChatFilter({ kind: "group", unread, mention })) continue;
           pinnedChatRows.push(
             roomRow(
               null,
@@ -1690,7 +1715,7 @@ export function renderSidebar(
         const label = displayNameForFriend(state, f);
         const unread = Math.max(0, Number(f.unread || 0) || 0);
         const attention = attnSet.has(id);
-        if (!passesChatFilter({ unread, attention })) continue;
+        if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
         dialogItems.push({
           sortTs: lastTsForKey(k),
           priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
@@ -1706,7 +1731,7 @@ export function renderSidebar(
         const unread = computeRoomUnread(k);
         const mention = mentionForKey(k);
         const label = String(g.name || g.id);
-        if (!passesChatFilter({ unread, mention })) continue;
+        if (!passesChatFilter({ kind: "group", unread, mention })) continue;
         dialogItems.push({
           sortTs: lastTsForKey(k),
           priority: dialogPriority({ hasDraft: meta.hasDraft, mention, unread }),
@@ -1980,14 +2005,11 @@ export function renderSidebar(
       : [searchBar]),
   ]);
   const header = el("div", { class: "sidebar-header" }, [headerStack]);
-  const showChatFilters = false;
-  const chatFiltersRow = null;
+  const showChatFilters = activeDesktopTab === "chats" && !hasSidebarQuery;
+  const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount) : null;
   const chatFilterMode: SidebarChatFilter = showChatFilters ? effectiveChatFilter : "all";
-  const passesChatFilter = (opts: { unread: number; mention?: boolean; attention?: boolean }): boolean => {
-    if (chatFilterMode === "unread") return isUnreadDialog(opts);
-    if (chatFilterMode === "mentions") return isMentionDialog(opts);
-    return true;
-  };
+  const passesChatFilter = (opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean =>
+    passesSidebarChatFilter(chatFilterMode, opts);
 
   const pinnedDmRows: HTMLElement[] = [];
   const pinnedChatRows: HTMLElement[] = [];
@@ -2001,7 +2023,7 @@ export function renderSidebar(
       const k = dmKey(f.id);
       const unread = Math.max(0, Number(f.unread || 0) || 0);
       const attention = attnSet.has(f.id);
-      if (!passesChatFilter({ unread, attention })) continue;
+      if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       pinnedDmRows.push(friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention));
       continue;
@@ -2015,7 +2037,7 @@ export function renderSidebar(
       const meta = previewForConversation(state, k, "room", drafts[k]);
       const unread = computeRoomUnread(k);
       const mention = mentionForKey(k);
-      if (!passesChatFilter({ unread, mention })) continue;
+      if (!passesChatFilter({ kind: "group", unread, mention })) continue;
       pinnedChatRows.push(
         roomRow(
           null,
@@ -2191,7 +2213,7 @@ export function renderSidebar(
       const label = displayNameForFriend(state, f);
       const unread = Math.max(0, Number(f.unread || 0) || 0);
       const attention = attnSet.has(id);
-      if (!passesChatFilter({ unread, attention })) continue;
+      if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
       dialogItems.push({
         sortTs: lastTsForKey(k),
         priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
@@ -2207,7 +2229,7 @@ export function renderSidebar(
       const unread = computeRoomUnread(k);
       const mention = mentionForKey(k);
       const label = String(g.name || g.id);
-      if (!passesChatFilter({ unread, mention })) continue;
+      if (!passesChatFilter({ kind: "group", unread, mention })) continue;
       dialogItems.push({
         sortTs: lastTsForKey(k),
         priority: dialogPriority({ hasDraft: meta.hasDraft, mention, unread }),

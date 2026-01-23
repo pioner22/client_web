@@ -152,6 +152,12 @@ export interface FileTransferEntry {
   receivedBy?: string[];
 }
 
+export interface FileThumbEntry {
+  url: string;
+  mime: string | null;
+  ts: number;
+}
+
 export type ModalState =
   | { kind: "auth"; message?: string }
   | { kind: "welcome" }
@@ -219,7 +225,7 @@ export type PageKind =
 export type AuthMode = "auto" | "register" | "login";
 
 export type MobileSidebarTab = "chats" | "contacts" | "boards" | "menu";
-export type SidebarChatFilter = "all" | "unread" | "mentions";
+export type SidebarChatFilter = "all" | "unread" | "mentions" | "dms" | "groups";
 
 export type TargetKind = "dm" | "group" | "board";
 
@@ -276,7 +282,7 @@ export interface ChatMessage {
   room?: string;
   localId?: string | null;
   id?: number | null;
-  status?: "sending" | "queued" | "delivered" | "read" | "error";
+  status?: "sending" | "queued" | "sent" | "delivered" | "read" | "error";
   edited?: boolean;
   edited_ts?: number;
   kind: "in" | "out" | "sys";
@@ -438,6 +444,7 @@ export interface AppState {
   pendingBoardInvites: ActionModalBoardInvite[];
   fileOffersIn: FileOfferIn[];
   fileTransfers: FileTransferEntry[];
+  fileThumbs: Record<string, FileThumbEntry>;
 
   groups: GroupEntry[];
   boards: BoardEntry[];

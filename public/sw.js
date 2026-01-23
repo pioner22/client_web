@@ -515,10 +515,7 @@ self.addEventListener("install", (event) => {
           "./icons/icon-192.png",
           "./icons/icon-512.png",
           "./skins/skins.json",
-          "./skins/default.css",
-          "./skins/amber.css",
-          "./skins/green.css",
-          "./skins/showcase.css",
+          "./skins/telegram-exact.css",
         ])
       )
       .catch(() => {})

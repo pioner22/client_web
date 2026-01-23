@@ -37,6 +37,11 @@ import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { loadLastReadMarkers, saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
 import { playNotificationSound } from "../helpers/notify/notifySound";
+import { buildClientInfoTags, getOrCreateInstanceId } from "../helpers/device/clientTags";
+import { getTabNotifier } from "../helpers/notify/tabNotifier";
+
+const HISTORY_PAGE_SIZE = 200;
+const tabNotifier = getTabNotifier(getOrCreateInstanceId);
 
 function upsertConversationByLocalId(state: any, key: string, msg: ChatMessage, localId: string): any {
   const convMap = state?.conversations && typeof state.conversations === "object" ? state.conversations : {};
@@ -140,7 +145,8 @@ function parseAttachment(raw: any): ChatAttachment | null {
   const kind = String((raw as any).kind ?? "");
   if (kind !== "file") return null;
   const fileIdRaw = (raw as any).file_id ?? (raw as any).fileId ?? (raw as any).id ?? null;
-  const fileId = typeof fileIdRaw === "string" && fileIdRaw.trim() ? fileIdRaw.trim() : null;
+  const fileIdText = fileIdRaw === null || fileIdRaw === undefined ? "" : String(fileIdRaw).trim();
+  const fileId = fileIdText ? fileIdText : null;
   const name = String((raw as any).name ?? "файл");
   const size = Number((raw as any).size ?? 0) || 0;
   const mimeRaw = (raw as any).mime;
@@ -206,10 +212,10 @@ function notifyPermission(): "default" | "granted" | "denied" {
   }
 }
 
-function showInAppNotification(state: AppState, title: string, body: string, tag: string): void {
+function showInAppNotification(state: AppState, notifKey: string, title: string, body: string, tag: string): void {
   if (!state.notifyInAppEnabled) return;
-  if (!isDocHidden()) return;
   if (notifyPermission() !== "granted") return;
+  if (!tabNotifier.shouldShowSystemNotification(notifKey)) return;
   try {
     // We control notification sound ourselves (see notifySound toggle). Ask the OS to keep it silent
     // to avoid double sounds / inconsistent platform behavior.
@@ -219,9 +225,15 @@ function showInAppNotification(state: AppState, title: string, body: string, tag
   }
 }
 
-function maybePlaySound(state: AppState, kind: Parameters<typeof playNotificationSound>[0], shouldPlay: boolean): void {
+function maybePlaySound(
+  state: AppState,
+  kind: Parameters<typeof playNotificationSound>[0],
+  notifKey: string,
+  shouldPlay: boolean
+): void {
   if (!shouldPlay) return;
   if (!state.notifySoundEnabled) return;
+  if (!tabNotifier.shouldPlaySound(notifKey)) return;
   void playNotificationSound(kind).catch(() => {});
 }
 
@@ -286,7 +298,7 @@ export function handleServerMessage(
       status: "Connected",
       lastRead,
     });
-    gateway.send({ type: "client_info", client: "web", version: state.clientVersion });
+    gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
     gateway.send({ type: "group_list" });
     gateway.send({ type: "board_list" });
     gateway.send({ type: "profile_get" });
@@ -359,7 +371,7 @@ export function handleServerMessage(
       modal: null,
       status: "Registered",
     });
-    gateway.send({ type: "client_info", client: "web", version: state.clientVersion });
+    gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
     gateway.send({ type: "group_list" });
     gateway.send({ type: "board_list" });
     gateway.send({ type: "profile_get" });
@@ -635,8 +647,15 @@ export function handleServerMessage(
       return dn || handle || from;
     })();
     const note = String(msg?.note ?? "").trim();
-    showInAppNotification(state, "Запрос авторизации", note ? `${fromLabel}: ${note}` : `От: ${fromLabel}`, `yagodka:authz_request:${from}`);
-    maybePlaySound(state, "auth", hidden || !viewingSame);
+    const notifKey = `authz_request:${from}:${note ? note.slice(0, 60) : ""}`;
+    showInAppNotification(
+      state,
+      notifKey,
+      "Запрос авторизации",
+      note ? `${fromLabel}: ${note}` : `От: ${fromLabel}`,
+      `yagodka:authz_request:${from}`
+    );
+    maybePlaySound(state, "auth", notifKey, hidden || !viewingSame);
     patch((prev) => {
       const prevPending = Array.isArray((prev as any).pendingIn) ? (prev as any).pendingIn : [];
       const nextPending = prevPending.includes(from) ? prevPending : [...prevPending, from];
@@ -1475,8 +1494,9 @@ export function handleServerMessage(
       const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
       return dn || handle || from;
     })();
-    showInAppNotification(state, `Приглашение в чат: ${label}`, `От: ${fromLabel}`, `yagodka:group_invite:${groupId}:${from}`);
-    maybePlaySound(state, "invite", hidden || !viewingSame);
+    const notifKey = `group_invite:${groupId}:${from}`;
+    showInAppNotification(state, notifKey, `Приглашение в чат: ${label}`, `От: ${fromLabel}`, `yagodka:group_invite:${groupId}:${from}`);
+    maybePlaySound(state, "invite", notifKey, hidden || !viewingSame);
     const entry: ActionModalGroupInvite = {
       kind: "group_invite",
       groupId,
@@ -1526,8 +1546,9 @@ export function handleServerMessage(
       const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
       return dn || handle || from;
     })();
-    showInAppNotification(state, `Запрос на вступление: ${label}`, `От: ${fromLabel}`, `yagodka:group_join_request:${groupId}:${from}`);
-    maybePlaySound(state, "auth", hidden || !viewingSame);
+    const notifKey = `group_join_request:${groupId}:${from}`;
+    showInAppNotification(state, notifKey, `Запрос на вступление: ${label}`, `От: ${fromLabel}`, `yagodka:group_join_request:${groupId}:${from}`);
+    maybePlaySound(state, "auth", notifKey, hidden || !viewingSame);
     const entry: ActionModalGroupJoinRequest = {
       kind: "group_join_request",
       groupId,
@@ -1592,8 +1613,9 @@ export function handleServerMessage(
       const handle = h ? (h.startsWith("@") ? h : `@${h}`) : "";
       return dn || handle || from;
     })();
-    showInAppNotification(state, `Приглашение в доску: ${label}`, `От: ${fromLabel}`, `yagodka:board_invite:${boardId}:${from}`);
-    maybePlaySound(state, "invite", hidden || !viewingSame);
+    const notifKey = `board_invite:${boardId}:${from}`;
+    showInAppNotification(state, notifKey, `Приглашение в доску: ${label}`, `От: ${fromLabel}`, `yagodka:board_invite:${boardId}:${from}`);
+    maybePlaySound(state, "invite", notifKey, hidden || !viewingSame);
     const entry: ActionModalBoardInvite = {
       kind: "board_invite",
       boardId,
@@ -1888,6 +1910,7 @@ export function handleServerMessage(
     const key = room ? roomKey(room) : dmKey(from === state.selfId ? String(to ?? "") : from);
     if (!key || key.endsWith(":")) return;
     const kind = from === state.selfId ? "out" : "in";
+    const deliveredId = typeof msg?.id === "number" && Number.isFinite(msg.id) ? Math.trunc(msg.id) : null;
     const attachment = parseAttachment(msg?.attachment);
     const reply = parseMessageRef((msg as any)?.reply);
     const forward = parseMessageRef((msg as any)?.forward);
@@ -1915,8 +1938,11 @@ export function handleServerMessage(
         title = group ? `Чат: ${roomLabel}` : board ? `Доска: ${roomLabel}` : `Чат: ${roomLabel}`;
         if (fromLabel) body = `${fromLabel}: ${body}`;
       }
-      showInAppNotification(state, title, body, room ? `yagodka:room:${room}` : `yagodka:dm:${from}`);
-      maybePlaySound(state, "message", hidden || !viewingSame);
+      const idKey =
+        typeof msg?.id === "number" && Number.isFinite(msg.id) ? String(Math.trunc(msg.id)) : String(Math.round(ts || nowTs()));
+      const notifKey = room ? `message:room:${room}:${idKey}` : `message:dm:${from}:${idKey}`;
+      showInAppNotification(state, notifKey, title, body, room ? `yagodka:room:${room}` : `yagodka:dm:${from}`);
+      maybePlaySound(state, "message", notifKey, hidden || !viewingSame);
     }
     patch((prev) =>
       upsertConversation(prev, key, {
@@ -1934,6 +1960,11 @@ export function handleServerMessage(
         ...(edited && edited_ts ? { edited_ts } : {}),
       })
     );
+
+    // delivered_to_device: подтверждаем факт доставки события на устройство (DM).
+    if (!room && kind === "in" && deliveredId !== null) {
+      gateway.send({ type: "message_delivered_to_device", peer: from, id: deliveredId });
+    }
 
     // If we're actively viewing this DM, mark as read immediately to keep unread counters consistent.
     if (!room && kind === "in" && state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from) {
@@ -1957,16 +1988,41 @@ export function handleServerMessage(
         if (idx >= 0) {
           const cur = conv[idx];
           const next = [...conv];
-          next[idx] = { ...cur, status: "delivered" };
+          const candidate: ChatMessage["status"] = room ? "delivered" : "sent";
+          const status: ChatMessage["status"] =
+            cur.status === "read" || cur.status === "delivered" ? cur.status : candidate;
+          next[idx] = { ...cur, status };
           const lid = typeof cur.localId === "string" && cur.localId.trim() ? cur.localId.trim() : null;
           const outbox = lid ? removeOutboxEntry(curOutbox, key, lid) : curOutbox;
           return { ...prev, conversations: { ...prev.conversations, [key]: next }, outbox };
         }
       }
-      const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, id, status: "delivered" }));
+      const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, id, status: room ? "delivered" : "sent" }));
       const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
       const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
       return { ...updated.state, outbox };
+    });
+    return;
+  }
+  if (t === "message_delivered_to_device") {
+    const to = msg?.to ? String(msg.to) : undefined;
+    const room = msg?.room ? String(msg.room) : undefined;
+    if (room) return;
+    if (!to) return;
+    const rawId = msg?.id;
+    const id = typeof rawId === "number" && Number.isFinite(rawId) ? rawId : null;
+    if (id === null) return;
+    const key = dmKey(to);
+    patch((prev) => {
+      const conv = prev.conversations[key];
+      if (!Array.isArray(conv) || !conv.length) return prev;
+      const idx = conv.findIndex((m) => m.kind === "out" && typeof m.id === "number" && m.id === id);
+      if (idx < 0) return prev;
+      const cur = conv[idx] as ChatMessage;
+      if (cur.status === "read" || cur.status === "delivered") return prev;
+      const next = [...conv];
+      next[idx] = { ...cur, status: "delivered" as const };
+      return { ...prev, conversations: { ...prev.conversations, [key]: next } };
     });
     return;
   }
@@ -2219,10 +2275,13 @@ export function handleServerMessage(
     const isPreview = Boolean(msg?.preview);
     const beforeIdRaw = msg?.before_id;
     const hasBefore = beforeIdRaw !== undefined && beforeIdRaw !== null;
-    const hasMore = hasBefore ? Boolean(msg?.has_more) : undefined;
     const readUpToRaw = msg?.read_up_to_id;
     const readUpToId = Number(readUpToRaw);
     const rows = Array.isArray(msg?.rows) ? msg.rows : [];
+    const rawHasMore = msg?.has_more;
+    // Fallback: if server omits has_more, keep loading while we still receive rows.
+    const fallbackHasMore = rows.length > 0;
+    const hasMore = rawHasMore === undefined || rawHasMore === null ? fallbackHasMore : Boolean(rawHasMore);
     const incoming: ChatMessage[] = [];
     for (const r of rows) {
       const from = String(r?.from ?? "");
@@ -2240,7 +2299,7 @@ export function handleServerMessage(
       const editedTsRaw = (r as any)?.edited_ts;
       const edited_ts = typeof editedTsRaw === "number" && Number.isFinite(editedTsRaw) ? editedTsRaw : undefined;
       const status: ChatMessage["status"] | undefined =
-        !room && kind === "out" && hasId ? (read ? "read" : delivered ? "delivered" : "queued") : undefined;
+        !room && kind === "out" && hasId ? (read ? "read" : delivered ? "sent" : "queued") : undefined;
       const attachment = parseAttachment(r?.attachment);
       const reply = parseMessageRef((r as any)?.reply);
       const forward = parseMessageRef((r as any)?.forward);
@@ -2326,6 +2385,14 @@ export function handleServerMessage(
       const prevVirtualStart = (prev as any).historyVirtualStart ? (prev as any).historyVirtualStart[key] : undefined;
       const shouldShiftVirtual = hasBefore && typeof prevVirtualStart === "number" && Number.isFinite(prevVirtualStart) && delta > 0;
       const nextVirtualStart = shouldShiftVirtual ? Math.max(0, prevVirtualStart + delta) : prevVirtualStart;
+      const prevCursorValue = prevCursor ? Number(prevCursor[key]) : NaN;
+      const cursorStalled =
+        hasBefore &&
+        delta <= 0 &&
+        cursor !== null &&
+        Number.isFinite(prevCursorValue) &&
+        prevCursorValue > 0 &&
+        cursor === prevCursorValue;
       if (resultRoom && Number.isFinite(readUpToId) && readUpToId > 0) {
         const prevEntry = (nextLastRead || {})[key] || {};
         if (!prevEntry.id || readUpToId > prevEntry.id) {
@@ -2343,13 +2410,15 @@ export function handleServerMessage(
         };
         return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
       }
+      const shouldSetHasMore = hasBefore || rawHasMore !== undefined || rows.length > 0 || cursorStalled;
+      const resolvedHasMore = cursorStalled ? false : hasMore;
       const base = {
         ...prev,
         conversations: { ...prev.conversations, [key]: nextConv },
         outbox,
         historyLoaded: { ...prev.historyLoaded, [key]: true },
         historyCursor: cursor !== null ? { ...prevCursor, [key]: cursor } : prevCursor,
-        historyHasMore: hasBefore ? { ...prevHasMoreMap, [key]: Boolean(hasMore) } : prevHasMoreMap,
+        historyHasMore: shouldSetHasMore ? { ...prevHasMoreMap, [key]: Boolean(resolvedHasMore) } : prevHasMoreMap,
         historyLoading: { ...prevLoadingMap, [key]: false },
         ...(shouldShiftVirtual ? { historyVirtualStart: { ...(prev as any).historyVirtualStart, [key]: nextVirtualStart } } : {}),
       };
@@ -2367,13 +2436,37 @@ export function handleServerMessage(
         return false;
       }
     })();
-    const isBuildId = /-[a-f0-9]{12}$/i.test(latest);
-    if (hasSw && isBuildId) {
+    if (hasSw) {
       if (state.updateLatest !== latest) {
         patch({ updateLatest: latest, status: "Доступно обновление веб-клиента (применится автоматически)" });
       }
       try {
-        void navigator.serviceWorker.getRegistration().then((reg) => reg?.update()).catch(() => {});
+        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent !== "undefined") {
+          window.dispatchEvent(new CustomEvent("yagodka:pwa-build", { detail: { buildId: latest } }));
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        void navigator.serviceWorker
+          .getRegistration()
+          .then(async (reg) => {
+            let nextReg = reg ?? null;
+            if (!nextReg) {
+              try {
+                nextReg = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+              } catch {
+                patch({ status: "Service Worker не зарегистрирован. Перезапустите приложение.", modal: { kind: "update" } });
+                return;
+              }
+            }
+            try {
+              await nextReg.update();
+            } catch {
+              // ignore
+            }
+          })
+          .catch(() => {});
       } catch {
         // ignore
       }

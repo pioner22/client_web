@@ -19,9 +19,9 @@ export function isMessageContinuation(
   const curRoom = String(cur.room || "").trim();
   if (prevRoom !== curRoom) return false;
 
-  const maxGap = Math.max(10, Math.min(30 * 60, Number(opts?.maxGapSeconds) || 5 * 60));
+  // Telegram Web groups bubbles within ~2 minutes (121s).
+  const maxGap = Math.max(10, Math.min(30 * 60, Number(opts?.maxGapSeconds) || 121));
   const dt = Number(cur.ts) - Number(prev.ts);
   if (!Number.isFinite(dt) || dt < 0) return false;
   return dt <= maxGap;
 }
-

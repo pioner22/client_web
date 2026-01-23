@@ -4,6 +4,7 @@ let updatePollTimer: number | null = null;
 let lastBuildId = "";
 let shareReadySent = false;
 let registerStarted = false;
+const SW_READY_TIMEOUT_MS = 1500;
 
 function emitSwError(err: unknown) {
   try {
@@ -34,9 +35,56 @@ export function hasPwaUpdate(): boolean {
   return Boolean(updateRegistration?.waiting);
 }
 
+async function waitForServiceWorkerReady(timeoutMs = SW_READY_TIMEOUT_MS): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  try {
+    const ready = navigator.serviceWorker.ready;
+    if (!ready) return null;
+    return await new Promise((resolve) => {
+      let done = false;
+      let timer: number | null = null;
+      const finish = (reg: ServiceWorkerRegistration | null) => {
+        if (done) return;
+        done = true;
+        if (timer !== null) {
+          try {
+            window.clearTimeout(timer);
+          } catch {
+            // ignore
+          }
+          timer = null;
+        }
+        resolve(reg);
+      };
+      timer = window.setTimeout(() => finish(null), timeoutMs);
+      ready
+        .then((reg) => finish(reg))
+        .catch(() => finish(null));
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function resolveUpdateRegistration(timeoutMs = SW_READY_TIMEOUT_MS): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  if (updateRegistration) return updateRegistration;
+  let reg: ServiceWorkerRegistration | null = null;
+  try {
+    reg = (await navigator.serviceWorker.getRegistration()) ?? null;
+  } catch {
+    reg = null;
+  }
+  if (!reg) {
+    reg = await waitForServiceWorkerReady(timeoutMs);
+  }
+  if (reg) updateRegistration = reg;
+  return reg;
+}
+
 export async function activatePwaUpdate(): Promise<boolean> {
   if (!("serviceWorker" in navigator)) return false;
-  const reg = updateRegistration;
+  const reg = updateRegistration ?? (await resolveUpdateRegistration());
   const waiting = reg?.waiting;
   if (!reg || !waiting) return false;
 

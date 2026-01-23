@@ -26,7 +26,7 @@ const HELP_ROWS: Array<{ key: string; label: string }> = [
   { key: "Esc", label: "назад/закрыть" },
 ];
 
-const CHANGELOG_PAGE_SIZE = 20;
+const CHANGELOG_PAGE_SIZE = 5;
 
 function renderChangelogEntry(entry: ChangelogEntry, currentVersion: string): HTMLElement {
   const isCurrent = entry.version === currentVersion;
@@ -127,62 +127,17 @@ export function createHelpPage(): HelpPage {
 
   const changelogTitle = el("div", { class: "info-h" }, ["История изменений"]);
   const changelogWrap = el("div", { class: "changelog" }, []);
-  const changelogSentinel = el("div", { class: "changelog-sentinel", "aria-hidden": "true" }, [""]);
-  const changelogMoreBtn = el("button", { class: "btn changelog-more", type: "button" }, ["Показать ещё"]);
 
   let lastVersionShown = "";
   let changelogCurrentVersion = "";
-  let visibleCount = CHANGELOG_PAGE_SIZE;
-  let io: IntersectionObserver | null = null;
 
   const renderChangelog = (currentVersion: string) => {
     changelogCurrentVersion = currentVersion;
     const all = CHANGELOG || [];
-    if (visibleCount < CHANGELOG_PAGE_SIZE) visibleCount = CHANGELOG_PAGE_SIZE;
-    const slice = all.slice(0, Math.min(all.length, visibleCount));
+    const slice = all.slice(0, CHANGELOG_PAGE_SIZE);
     const nodes = slice.map((e) => renderChangelogEntry(e, currentVersion));
-    const hasMore = visibleCount < all.length;
-
-    changelogMoreBtn.classList.toggle("hidden", !hasMore);
-    changelogMoreBtn.disabled = !hasMore;
-    changelogWrap.replaceChildren(...nodes, ...(hasMore ? [changelogMoreBtn, changelogSentinel] : []));
-
-    if (hasMore) {
-      if (typeof IntersectionObserver === "function") {
-        if (!io) {
-          io = new IntersectionObserver(
-            (entries) => {
-              if (!entries.some((x) => x.isIntersecting)) return;
-              if (visibleCount >= all.length) return;
-              visibleCount = Math.min(all.length, visibleCount + CHANGELOG_PAGE_SIZE);
-              renderChangelog(changelogCurrentVersion);
-            },
-            { root: null, rootMargin: "600px 0px" }
-          );
-        }
-        try {
-          io.disconnect();
-          io.observe(changelogSentinel);
-        } catch {
-          // ignore
-        }
-      }
-    } else if (io) {
-      try {
-        io.disconnect();
-      } catch {
-        // ignore
-      }
-      io = null;
-    }
+    changelogWrap.replaceChildren(...nodes);
   };
-
-  changelogMoreBtn.addEventListener("click", () => {
-    const all = CHANGELOG || [];
-    if (visibleCount >= all.length) return;
-    visibleCount = Math.min(all.length, visibleCount + CHANGELOG_PAGE_SIZE);
-    renderChangelog(lastVersionShown || "");
-  });
 
   const changelogSection = el("div", { class: "info-section" }, [changelogTitle, changelogWrap]);
 

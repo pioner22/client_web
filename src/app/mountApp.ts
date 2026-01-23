@@ -26,7 +26,9 @@ import type {
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { messageSelectionKey } from "../helpers/chat/chatSelection";
 import { newestServerMessageId } from "../helpers/chat/historySync";
+import { mergeMessages } from "../helpers/chat/mergeMessages";
 import {
+  HISTORY_VIRTUAL_THRESHOLD,
   HISTORY_VIRTUAL_OVERSCAN,
   HISTORY_VIRTUAL_WINDOW,
   clampVirtualAvg,
@@ -35,6 +37,8 @@ import {
   shouldVirtualize,
 } from "../helpers/chat/virtualHistory";
 import { loadDraftsForUser, sanitizeDraftMap, saveDraftsForUser, updateDraftMap } from "../helpers/chat/drafts";
+import { loadHistoryCacheForUser, saveHistoryCacheForUser } from "../helpers/chat/historyCache";
+import { clampMediaAspectRatio, getCachedMediaAspectRatio, setCachedMediaAspectRatio } from "../helpers/chat/mediaAspectCache";
 import {
   clampChatSearchPos,
   computeChatSearchCounts,
@@ -55,6 +59,7 @@ import {
 import { cleanupFileCache, getCachedFileBlob, isImageLikeFile, putCachedFileBlob } from "../helpers/files/fileBlobCache";
 import { fileBadge } from "../helpers/files/fileBadge";
 import { loadFileCachePrefs, saveFileCachePrefs } from "../helpers/files/fileCachePrefs";
+import { resumableHttpDownload } from "../helpers/files/fileHttpDownload";
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { addOutboxEntry, loadOutboxForUser, makeOutboxLocalId, removeOutboxEntry, saveOutboxForUser, updateOutboxEntry, type OutboxMap } from "../helpers/chat/outbox";
@@ -64,6 +69,8 @@ import { clearOutboxForUser, requestOutboxSnapshot, syncOutboxToServiceWorker } 
 import { setPushOptOut } from "../helpers/pwa/pushPrefs";
 import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { installNotificationSoundUnlock } from "../helpers/notify/notifySound";
+import { getTabNotifier } from "../helpers/notify/tabNotifier";
+import { buildClientInfoTags, getOrCreateInstanceId } from "../helpers/device/clientTags";
 import { shouldReloadForBuild } from "../helpers/pwa/shouldReloadForBuild";
 import {
   clearPwaInstallDismissed,
@@ -139,6 +146,8 @@ let outboxLoadedForUser: string | null = null;
 let outboxSyncPendingForUser: string | null = null;
 let outboxSwReadyForUser: string | null = null;
 let boardScheduleLoadedForUser: string | null = null;
+let historyCacheSaveTimer: number | null = null;
+let historyCacheLoadedForUser: string | null = null;
 
 function scheduleSaveDrafts(store: Store<AppState>) {
   if (draftsSaveTimer !== null) {
@@ -206,6 +215,61 @@ function flushOutbox(store: Store<AppState>) {
   } catch {
     // ignore
   }
+}
+
+function scheduleSaveHistoryCache(store: Store<AppState>) {
+  if (historyCacheSaveTimer !== null) {
+    window.clearTimeout(historyCacheSaveTimer);
+    historyCacheSaveTimer = null;
+  }
+  historyCacheSaveTimer = window.setTimeout(() => {
+    historyCacheSaveTimer = null;
+    try {
+      const st = store.get();
+      if (!st.authed || !st.selfId) return;
+      saveHistoryCacheForUser(st.selfId, {
+        conversations: st.conversations,
+        historyCursor: st.historyCursor,
+        historyHasMore: st.historyHasMore,
+        historyLoaded: st.historyLoaded,
+      });
+    } catch {
+      // ignore
+    }
+  }, 650);
+}
+
+function flushHistoryCache(store: Store<AppState>) {
+  if (historyCacheSaveTimer !== null) {
+    window.clearTimeout(historyCacheSaveTimer);
+    historyCacheSaveTimer = null;
+  }
+  try {
+    const st = store.get();
+    if (!st.authed || !st.selfId) return;
+    saveHistoryCacheForUser(st.selfId, {
+      conversations: st.conversations,
+      historyCursor: st.historyCursor,
+      historyHasMore: st.historyHasMore,
+      historyLoaded: st.historyLoaded,
+    });
+  } catch {
+    // ignore
+  }
+}
+
+function mergeConversationMaps(
+  base: Record<string, ChatMessage[]>,
+  incoming: Record<string, ChatMessage[]>
+): Record<string, ChatMessage[]> {
+  const next: Record<string, ChatMessage[]> = { ...base };
+  for (const [key, list] of Object.entries(incoming || {})) {
+    const current = Array.isArray(list) ? list : [];
+    if (!current.length) continue;
+    const cached = next[key];
+    next[key] = Array.isArray(cached) && cached.length ? mergeMessages(cached, current) : current;
+  }
+  return next;
 }
 
 
@@ -309,6 +373,7 @@ interface DownloadState {
   from: string;
   room?: string | null;
   mime?: string | null;
+  etag?: string | null;
   chunks: ArrayBuffer[];
   received: number;
   lastProgress: number;
@@ -405,6 +470,20 @@ export function mountApp(root: HTMLElement) {
   const debugHud = installDebugHud({ mount: root, chatHost: layout.chatHost, getState: () => store.get() });
   installSidebarLeftResize(layout.sidebar, layout.sidebarResizeHandle);
   installNotificationSoundUnlock();
+  const tabNotifier = getTabNotifier(getOrCreateInstanceId);
+  tabNotifier.install();
+  const flushCachesOnHide = () => {
+    if (document.visibilityState !== "hidden") return;
+    flushHistoryCache(store);
+    flushFileTransfers(store);
+    flushOutbox(store);
+  };
+  document.addEventListener("visibilitychange", flushCachesOnHide);
+  window.addEventListener("pagehide", () => {
+    flushHistoryCache(store);
+    flushFileTransfers(store);
+    flushOutbox(store);
+  });
   type PwaSharePayload = {
     files: File[];
     title: string;
@@ -432,6 +511,74 @@ export function mountApp(root: HTMLElement) {
       return null;
     }
   })();
+  const deviceCaps = (() => {
+    const clamp = (min: number, value: number, max: number) => Math.max(min, Math.min(max, value));
+    const cores = (() => {
+      try {
+        const raw = Number((navigator as any)?.hardwareConcurrency ?? 0);
+        return Number.isFinite(raw) && raw > 0 ? Math.min(12, Math.max(2, raw)) : 4;
+      } catch {
+        return 4;
+      }
+    })();
+    const memoryGb = (() => {
+      try {
+        const raw = Number((navigator as any)?.deviceMemory ?? 0);
+        return Number.isFinite(raw) && raw > 0 ? raw : 4;
+      } catch {
+        return 4;
+      }
+    })();
+    const connection = (() => {
+      try {
+        return (navigator as any)?.connection ?? null;
+      } catch {
+        return null;
+      }
+    })();
+    const saveData = Boolean(connection && (connection as any).saveData);
+    const effectiveType = String((connection as any)?.effectiveType || "").toLowerCase();
+    const slowNetwork = saveData || effectiveType.includes("2g") || effectiveType.includes("3g");
+    const mobileLike = isMobileLikeUi();
+    const constrained = mobileLike || memoryGb <= 4 || slowNetwork;
+    const fileGetMax = constrained ? (slowNetwork ? 5 : 7) : 10;
+    const fileGetPrefetch = clamp(slowNetwork ? 3 : 5, Math.round(fileGetMax * 0.7), slowNetwork ? 4 : 7);
+    const historyWarmupConcurrency = clamp(
+      slowNetwork ? 3 : 5,
+      Math.round(cores * (constrained ? 0.6 : 0.75)),
+      slowNetwork ? 5 : 7
+    );
+    return {
+      constrained,
+      saveData,
+      slowNetwork,
+      prefetchAllowed: !saveData,
+      fileGetMax,
+      fileGetPrefetch,
+      fileGetTimeoutMs: slowNetwork ? 45_000 : constrained ? 35_000 : 25_000,
+      historyPrefetchLimit: slowNetwork ? 180 : constrained ? 240 : 320,
+      historyWarmupLimit: slowNetwork ? 220 : constrained ? 280 : 360,
+      historyWarmupConcurrency,
+      historyWarmupQueueMax: slowNetwork ? 40 : constrained ? 60 : 80,
+      historyWarmupDelayMs: slowNetwork ? 160 : constrained ? 110 : 70,
+      historyRequestTimeoutMs: slowNetwork ? 18_000 : constrained ? 14_000 : 12_000,
+    };
+  })();
+  const historyVirtualThreshold = deviceCaps.slowNetwork
+    ? 200
+    : deviceCaps.constrained
+      ? 240
+      : HISTORY_VIRTUAL_THRESHOLD;
+  const historyVirtualWindow = deviceCaps.slowNetwork
+    ? 160
+    : deviceCaps.constrained
+      ? 200
+      : HISTORY_VIRTUAL_WINDOW;
+  const historyVirtualOverscan = deviceCaps.slowNetwork
+    ? 45
+    : deviceCaps.constrained
+      ? 60
+      : HISTORY_VIRTUAL_OVERSCAN;
 
   function maybeApplyIosInputAssistant(target: EventTarget | null) {
     if (!iosStandalone) return;
@@ -740,7 +887,7 @@ export function mountApp(root: HTMLElement) {
       streamId,
       streaming: true,
     });
-    gateway.send({ type: "file_get", file_id: req.fileId });
+    enqueueFileGet(req.fileId, { priority: "high" });
     store.set({ status: `Скачивание: ${req.name || "файл"}` });
   });
   window.addEventListener("yagodka:pwa-notification-click", (e: Event) => {
@@ -1128,8 +1275,8 @@ export function mountApp(root: HTMLElement) {
   });
   let sharePrevConn: ConnStatus = store.get().conn;
   let sharePrevAuthed = store.get().authed;
-  const initialSelected = store.get().selected;
-  let sharePrevSelKey = initialSelected ? conversationKey(initialSelected) : "";
+  const initialShareSelected = store.get().selected;
+  let sharePrevSelKey = initialShareSelected ? conversationKey(initialShareSelected) : "";
   store.subscribe(() => {
     if (!pendingShareQueue.length) {
       const st = store.get();
@@ -1196,6 +1343,9 @@ export function mountApp(root: HTMLElement) {
     previewBoardsSig = nextBoardsSig;
     previewConn = st.conn;
     previewAuthed = st.authed;
+    if (connChanged && st.authed && st.conn === "connected") {
+      drainFileGetQueue();
+    }
     if (!st.authed || st.conn !== "connected") return;
     if (!friendsChanged && !groupsChanged && !boardsChanged && !connChanged) return;
     for (const f of st.friends || []) {
@@ -1242,16 +1392,259 @@ export function mountApp(root: HTMLElement) {
     drainOutbox();
   });
   const historyRequested = new Set<string>();
+  const historyDeltaRequested = new Set<string>();
   const historyDeltaRequestedAt = new Map<string, number>();
   const historyPreviewRequested = new Set<string>();
   const historyPreviewLastAt = new Map<string, number>();
   const historyPreviewQueue: TargetRef[] = [];
   let historyPreviewTimer: number | null = null;
+  const historyPrefetchRequested = new Set<string>();
+  const historyPrefetchTimers = new Map<string, number>();
+  const historyPrefetchBootstrap = new Set<string>();
+  const HISTORY_REQUEST_TIMEOUT_MS = deviceCaps.historyRequestTimeoutMs;
+  const HISTORY_REQUEST_RETRY_LIMIT = 2;
+  const HISTORY_AUTO_RETRY_MS = 30_000;
+  const HISTORY_PREFETCH_TIMEOUT_MS = 10_000;
+  const HISTORY_PREFETCH_LIMIT = deviceCaps.historyPrefetchLimit;
+  const HISTORY_WARMUP_LIMIT = deviceCaps.historyWarmupLimit;
+  const HISTORY_WARMUP_CONCURRENCY = deviceCaps.historyWarmupConcurrency;
+  const HISTORY_WARMUP_TIMEOUT_MS = 12_000;
+  const HISTORY_WARMUP_QUEUE_MAX = deviceCaps.historyWarmupQueueMax;
+  const HISTORY_WARMUP_DELAY_MS = deviceCaps.historyWarmupDelayMs;
+  const historyRequestTimers = new Map<string, number>();
+  const historyRequestAttempts = new Map<string, number>();
+  const historyAutoRetryAt = new Map<string, number>();
+  const historyWarmupQueue: TargetRef[] = [];
+  const historyWarmupQueued = new Set<string>();
+  const historyWarmupRequested = new Set<string>();
+  const historyWarmupInFlight = new Set<string>();
+  const historyWarmupTimers = new Map<string, number>();
+  let historyWarmupTimer: number | null = null;
+
+  type HistoryRequestMode = "before" | "delta";
+
+  const historyRequestTimerKey = (key: string, mode: HistoryRequestMode) => `${key}:${mode}`;
+
+  const clearHistoryRequestTimer = (key: string, mode: HistoryRequestMode, opts?: { resetAttempts?: boolean }) => {
+    const timerKey = historyRequestTimerKey(key, mode);
+    const timer = historyRequestTimers.get(timerKey);
+    if (timer !== undefined) {
+      historyRequestTimers.delete(timerKey);
+      try {
+        window.clearTimeout(timer);
+      } catch {
+        // ignore
+      }
+    }
+    if (opts?.resetAttempts) historyRequestAttempts.delete(timerKey);
+  };
+
+  const clearHistoryRequestTimers = (key: string, opts?: { resetAttempts?: boolean }) => {
+    clearHistoryRequestTimer(key, "before", opts);
+    clearHistoryRequestTimer(key, "delta", opts);
+  };
+
+  const clearHistoryPrefetchTimer = (key: string) => {
+    const timer = historyPrefetchTimers.get(key);
+    if (timer !== undefined) {
+      historyPrefetchTimers.delete(key);
+      try {
+        window.clearTimeout(timer);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const armHistoryPrefetchTimeout = (key: string) => {
+    clearHistoryPrefetchTimer(key);
+    const timer = window.setTimeout(() => {
+      historyPrefetchTimers.delete(key);
+      historyPrefetchRequested.delete(key);
+    }, HISTORY_PREFETCH_TIMEOUT_MS);
+    historyPrefetchTimers.set(key, timer);
+  };
+
+  const armHistoryRequestTimeout = (key: string, mode: HistoryRequestMode) => {
+    clearHistoryRequestTimer(key, mode);
+    const timerKey = historyRequestTimerKey(key, mode);
+    const timer = window.setTimeout(() => {
+      historyRequestTimers.delete(timerKey);
+      const attempts = (historyRequestAttempts.get(timerKey) ?? 0) + 1;
+      historyRequestAttempts.set(timerKey, attempts);
+      const canRetry = attempts <= HISTORY_REQUEST_RETRY_LIMIT;
+      if (mode === "before") {
+        if (!historyRequested.has(key)) return;
+        historyRequested.delete(key);
+        historyPreviewRequested.delete(key);
+        store.set((prev) => {
+          if (!prev.historyLoading?.[key]) return prev;
+          if (canRetry) {
+            const status = "История не отвечает, повторяем…";
+            return prev.status === status ? prev : { ...prev, status };
+          }
+          return { ...prev, historyLoading: { ...prev.historyLoading, [key]: false }, status: "История не отвечает. Повторите позже." };
+        });
+      } else {
+        if (!historyDeltaRequested.has(key)) return;
+        historyDeltaRequested.delete(key);
+      }
+      if (!canRetry) return;
+      const st = store.get();
+      if (!st.authed || st.conn !== "connected") return;
+      if (!st.selected || conversationKey(st.selected) !== key) return;
+      if (mode === "before") {
+        if (st.historyLoaded?.[key]) {
+          requestMoreHistory();
+        } else {
+          requestHistory(st.selected, { force: true, deltaLimit: 2000 });
+        }
+        return;
+      }
+      requestHistory(st.selected, { force: true, deltaLimit: 2000 });
+    }, HISTORY_REQUEST_TIMEOUT_MS);
+    historyRequestTimers.set(timerKey, timer);
+  };
+
+  const clearHistoryWarmupTimer = (key: string) => {
+    const timer = historyWarmupTimers.get(key);
+    if (timer === undefined) return;
+    historyWarmupTimers.delete(key);
+    try {
+      window.clearTimeout(timer);
+    } catch {
+      // ignore
+    }
+  };
+
+  const armHistoryWarmupTimer = (key: string) => {
+    clearHistoryWarmupTimer(key);
+    const timer = window.setTimeout(() => {
+      historyWarmupTimers.delete(key);
+      historyWarmupInFlight.delete(key);
+      scheduleHistoryWarmup();
+    }, HISTORY_WARMUP_TIMEOUT_MS);
+    historyWarmupTimers.set(key, timer);
+  };
+
+  const shouldWarmupHistoryTarget = (st: AppState, key: string): boolean => {
+    if (!key) return false;
+    if (st.selected && conversationKey(st.selected) === key) return false;
+    if (st.historyLoaded?.[key]) return false;
+    if (st.historyLoading?.[key]) return false;
+    if (historyRequested.has(key) || historyDeltaRequested.has(key) || historyPrefetchRequested.has(key)) return false;
+    if (historyWarmupRequested.has(key) || historyWarmupQueued.has(key) || historyWarmupInFlight.has(key)) return false;
+    if ((st.conversations[key] || []).length) return false;
+    return true;
+  };
+
+  const collectHistoryWarmupTargets = (st: AppState): TargetRef[] => {
+    const targets: TargetRef[] = [];
+    const seen = new Set<string>();
+    const add = (kind: TargetRef["kind"], idRaw: unknown) => {
+      const id = String(idRaw || "").trim();
+      if (!id) return;
+      const target: TargetRef = { kind, id };
+      const key = conversationKey(target);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      targets.push(target);
+    };
+    const topPeers = Array.isArray(st.topPeers) ? st.topPeers : [];
+    if (topPeers.length) {
+      for (const entry of topPeers) add("dm", entry?.id);
+    } else {
+      for (const friend of st.friends || []) add("dm", friend?.id);
+    }
+    for (const group of st.groups || []) add("group", group?.id);
+    for (const board of st.boards || []) add("board", board?.id);
+    return targets;
+  };
+
+  const fillHistoryWarmupQueue = (st: AppState) => {
+    if (historyWarmupQueue.length >= HISTORY_WARMUP_QUEUE_MAX) return;
+    const targets = collectHistoryWarmupTargets(st);
+    for (const target of targets) {
+      if (historyWarmupQueue.length >= HISTORY_WARMUP_QUEUE_MAX) break;
+      const key = conversationKey(target);
+      if (!key) continue;
+      if (!shouldWarmupHistoryTarget(st, key)) continue;
+      historyWarmupQueue.push(target);
+      historyWarmupQueued.add(key);
+    }
+  };
+
+  const drainHistoryWarmupQueue = () => {
+    historyWarmupTimer = null;
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") {
+      historyWarmupQueue.length = 0;
+      historyWarmupQueued.clear();
+      historyWarmupInFlight.clear();
+      return;
+    }
+    if (st.page !== "main") return;
+    if (st.modal && st.modal.kind !== "context_menu") return;
+    const selectedKey = st.selected ? conversationKey(st.selected) : "";
+    if (selectedKey && (!st.historyLoaded?.[selectedKey] || st.historyLoading?.[selectedKey])) return;
+    if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") {
+      if (historyWarmupQueue.length) {
+        historyWarmupTimer = window.setTimeout(drainHistoryWarmupQueue, HISTORY_WARMUP_DELAY_MS);
+      }
+      return;
+    }
+    if (!historyWarmupQueue.length) fillHistoryWarmupQueue(st);
+    let slots = Math.max(0, HISTORY_WARMUP_CONCURRENCY - historyWarmupInFlight.size);
+    while (historyWarmupQueue.length && slots > 0) {
+      const target = historyWarmupQueue.shift();
+      if (!target) continue;
+      const key = conversationKey(target);
+      if (!key) continue;
+      historyWarmupQueued.delete(key);
+      if (!shouldWarmupHistoryTarget(st, key)) continue;
+      historyWarmupInFlight.add(key);
+      historyWarmupRequested.add(key);
+      armHistoryWarmupTimer(key);
+      if (target.kind === "dm") {
+        gateway.send({ type: "history", peer: target.id, before_id: 0, limit: HISTORY_WARMUP_LIMIT });
+      } else {
+        gateway.send({ type: "history", room: target.id, before_id: 0, limit: HISTORY_WARMUP_LIMIT });
+      }
+      slots -= 1;
+    }
+    if (historyWarmupQueue.length) {
+      historyWarmupTimer = window.setTimeout(drainHistoryWarmupQueue, HISTORY_WARMUP_DELAY_MS);
+    }
+  };
+
+  const scheduleHistoryWarmup = () => {
+    if (historyWarmupTimer !== null) return;
+    historyWarmupTimer = window.setTimeout(drainHistoryWarmupQueue, 200);
+  };
   const clearPendingHistoryRequests = () => {
-    if (!historyRequested.size && !historyPreviewRequested.size) return;
-    const pending = new Set<string>([...historyRequested, ...historyPreviewRequested]);
+    if (
+      !historyRequested.size &&
+      !historyDeltaRequested.size &&
+      !historyPreviewRequested.size &&
+      !historyPrefetchRequested.size &&
+      !historyWarmupQueue.length &&
+      !historyWarmupInFlight.size &&
+      !historyWarmupRequested.size &&
+      !historyWarmupQueued.size
+    ) {
+      return;
+    }
+    const pendingBefore = new Set<string>(historyRequested);
+    const pendingAll = new Set<string>([...historyRequested, ...historyDeltaRequested, ...historyPreviewRequested, ...historyPrefetchRequested]);
     historyRequested.clear();
+    historyDeltaRequested.clear();
     historyPreviewRequested.clear();
+    historyPrefetchRequested.clear();
+    historyPrefetchBootstrap.clear();
+    historyWarmupQueue.length = 0;
+    historyWarmupQueued.clear();
+    historyWarmupRequested.clear();
+    historyWarmupInFlight.clear();
     historyPreviewQueue.length = 0;
     if (historyPreviewTimer !== null) {
       try {
@@ -1261,11 +1654,31 @@ export function mountApp(root: HTMLElement) {
       }
       historyPreviewTimer = null;
     }
+    if (historyWarmupTimer !== null) {
+      try {
+        window.clearTimeout(historyWarmupTimer);
+      } catch {
+        // ignore
+      }
+      historyWarmupTimer = null;
+    }
+    for (const key of pendingAll) {
+      clearHistoryRequestTimers(key);
+      clearHistoryPrefetchTimer(key);
+    }
+    for (const timer of historyWarmupTimers.values()) {
+      try {
+        window.clearTimeout(timer);
+      } catch {
+        // ignore
+      }
+    }
+    historyWarmupTimers.clear();
     store.set((prev) => {
-      if (!pending.size) return prev;
+      if (!pendingBefore.size) return prev;
       let nextLoading = prev.historyLoading;
       let changed = false;
-      for (const key of pending) {
+      for (const key of pendingBefore) {
         if (!prev.historyLoading?.[key]) continue;
         if (!changed) {
           nextLoading = { ...prev.historyLoading };
@@ -1440,9 +1853,25 @@ export function mountApp(root: HTMLElement) {
   let previewConn: ConnStatus = store.get().conn;
   let previewAuthed = store.get().authed;
   const uploadQueue: UploadState[] = [];
-  let activeUpload: UploadState | null = null;
+  const uploadInFlightByLocalId = new Map<string, UploadState>();
   const uploadByFileId = new Map<string, UploadState>();
   const downloadByFileId = new Map<string, DownloadState>();
+  const FILE_UPLOAD_MAX_CONCURRENCY = deviceCaps.slowNetwork || deviceCaps.constrained ? 1 : 2;
+  const FILE_GET_MAX_CONCURRENCY = deviceCaps.fileGetMax;
+  const FILE_GET_PREFETCH_CONCURRENCY = deviceCaps.fileGetPrefetch;
+  const FILE_GET_TIMEOUT_MS = deviceCaps.fileGetTimeoutMs;
+  const fileGetQueueHigh: string[] = [];
+  const fileGetQueuePrefetch: string[] = [];
+  const fileGetQueueMeta = new Map<string, { priority: "high" | "prefetch"; silent: boolean }>();
+  const fileGetInFlight = new Map<string, { priority: "high" | "prefetch"; silent: boolean }>();
+  const fileGetPrefetchInFlight = new Set<string>();
+  const fileGetTimeouts = new Map<string, number>();
+  const fileGetTimeoutTouchedAt = new Map<string, number>();
+  const httpDownloadInFlight = new Set<string>();
+  const httpFileUrlWaiters = new Map<
+    string,
+    { promise: Promise<string>; resolve: (url: string) => void; reject: (err: Error) => void; timer: number | null }
+  >();
   const pendingStreamRequests = new Map<string, { fileId: string; name: string; size: number; mime: string | null }>();
   let pendingFileViewer: {
     fileId: string;
@@ -1456,17 +1885,302 @@ export function mountApp(root: HTMLElement) {
   const pendingFileDownloads = new Map<string, { name: string }>();
   let transferSeq = 0;
   let localChatMsgSeq = 0;
-  const cachedPreviewsAttempted = new Set<string>();
+  const cachedPreviewsAttempted = new Map<string, number>();
   const previewPrefetchAttempted = new Map<string, number>();
   const silentFileGets = new Set<string>();
   let previewWarmupTimer: number | null = null;
   let previewWarmupInFlight = false;
   let previewWarmupLastKey = "";
   let previewWarmupLastSig = "";
-  const PREVIEW_AUTO_MAX_BYTES = 20 * 1024 * 1024;
-  const PREVIEW_AUTO_OVERSCAN = 160;
+  const PREVIEW_AUTO_MAX_BYTES = deviceCaps.slowNetwork
+    ? 12 * 1024 * 1024
+    : deviceCaps.constrained
+      ? 20 * 1024 * 1024
+      : 32 * 1024 * 1024;
+  const PREVIEW_AUTO_RESTORE_MAX_BYTES = deviceCaps.slowNetwork
+    ? 18 * 1024 * 1024
+    : deviceCaps.constrained
+      ? 28 * 1024 * 1024
+      : 40 * 1024 * 1024;
+  const PREVIEW_AUTO_OVERSCAN = deviceCaps.slowNetwork ? 90 : deviceCaps.constrained ? 120 : 160;
   const PREVIEW_AUTO_RETRY_MS = 15_000;
+  const PREVIEW_AUTO_FAIL_RETRY_MS = 3_000;
+  const PREVIEW_CACHE_RETRY_MS = deviceCaps.slowNetwork ? 20_000 : deviceCaps.constrained ? 12_000 : 8_000;
   let previewAutoFetchRaf: number | null = null;
+  const cachedThumbsAttempted = new Map<string, number>();
+  const FILE_THUMB_CACHE_PREFIX = "thumb:";
+  const FILE_THUMB_MAX_ENTRIES = deviceCaps.constrained ? 160 : deviceCaps.slowNetwork ? 120 : 260;
+  const thumbCacheId = (fileId: string): string => {
+    const fid = String(fileId || "").trim();
+    return fid ? `${FILE_THUMB_CACHE_PREFIX}${fid}` : FILE_THUMB_CACHE_PREFIX;
+  };
+  const isFileGetQueued = (fileId: string): boolean =>
+    fileGetQueueMeta.has(fileId) || fileGetQueueHigh.includes(fileId) || fileGetQueuePrefetch.includes(fileId);
+  const shouldAttemptCachedPreview = (cacheKey: string): boolean => {
+    const now = Date.now();
+    const last = cachedPreviewsAttempted.get(cacheKey) ?? 0;
+    if (last && now - last < PREVIEW_CACHE_RETRY_MS) return false;
+    cachedPreviewsAttempted.set(cacheKey, now);
+    return true;
+  };
+  const shouldAttemptCachedThumb = (cacheKey: string): boolean => {
+    const now = Date.now();
+    const last = cachedThumbsAttempted.get(cacheKey) ?? 0;
+    if (last && now - last < PREVIEW_CACHE_RETRY_MS) return false;
+    cachedThumbsAttempted.set(cacheKey, now);
+    return true;
+  };
+
+  function clearFileThumb(fileId: string) {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    store.set((prev) => {
+      const existing = prev.fileThumbs?.[fid] || null;
+      if (!existing) return prev;
+      try {
+        if (existing.url) URL.revokeObjectURL(existing.url);
+      } catch {
+        // ignore
+      }
+      const nextThumbs = { ...(prev.fileThumbs || {}) };
+      delete nextThumbs[fid];
+      return { ...prev, fileThumbs: nextThumbs };
+    });
+  }
+
+  function setFileThumb(fileId: string, url: string, mime: string | null) {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    const nextUrl = String(url || "").trim();
+    if (!nextUrl) return;
+    const ts = Date.now();
+    store.set((prev) => {
+      const existing = prev.fileThumbs?.[fid] || null;
+      if (existing?.url && existing.url !== nextUrl) {
+        try {
+          URL.revokeObjectURL(existing.url);
+        } catch {
+          // ignore
+        }
+      }
+      let nextThumbs: Record<string, { url: string; mime: string | null; ts: number }> = {
+        ...(prev.fileThumbs || {}),
+        [fid]: { url: nextUrl, mime: mime ?? null, ts },
+      };
+      const keys = Object.keys(nextThumbs);
+      if (keys.length > FILE_THUMB_MAX_ENTRIES) {
+        const sorted = keys
+          .map((k) => ({ k, ts: Number(nextThumbs[k]?.ts ?? 0) || 0 }))
+          .sort((a, b) => a.ts - b.ts);
+        const drop = sorted.slice(0, Math.max(0, keys.length - FILE_THUMB_MAX_ENTRIES)).map((x) => x.k);
+        if (drop.length) {
+          nextThumbs = { ...nextThumbs };
+          for (const k of drop) {
+            const entry = nextThumbs[k];
+            if (entry?.url) {
+              try {
+                URL.revokeObjectURL(entry.url);
+              } catch {
+                // ignore
+              }
+            }
+            delete nextThumbs[k];
+          }
+        }
+      }
+      return { ...prev, fileThumbs: nextThumbs };
+    });
+  }
+
+  const dropFileGetQueue = (fileId: string) => {
+    fileGetQueueMeta.delete(fileId);
+    const highIdx = fileGetQueueHigh.indexOf(fileId);
+    if (highIdx >= 0) fileGetQueueHigh.splice(highIdx, 1);
+    const prefIdx = fileGetQueuePrefetch.indexOf(fileId);
+    if (prefIdx >= 0) fileGetQueuePrefetch.splice(prefIdx, 1);
+  };
+
+  const clearFileGetTimeout = (fileId: string) => {
+    const timer = fileGetTimeouts.get(fileId);
+    if (timer !== undefined) {
+      fileGetTimeouts.delete(fileId);
+      try {
+        window.clearTimeout(timer);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const armFileGetTimeout = (fileId: string) => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    clearFileGetTimeout(fid);
+    const timer = window.setTimeout(() => {
+      fileGetTimeouts.delete(fid);
+      if (fileGetInFlight.has(fid)) {
+        fileGetInFlight.delete(fid);
+        fileGetPrefetchInFlight.delete(fid);
+        silentFileGets.delete(fid);
+        fileGetTimeoutTouchedAt.delete(fid);
+        drainFileGetQueue();
+      }
+    }, FILE_GET_TIMEOUT_MS);
+    fileGetTimeouts.set(fid, timer);
+  };
+
+  const touchFileGetTimeout = (fileId: string) => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    if (!fileGetInFlight.has(fid)) return;
+    const now = Date.now();
+    const last = fileGetTimeoutTouchedAt.get(fid) ?? 0;
+    if (last && now - last < 1500) return;
+    fileGetTimeoutTouchedAt.set(fid, now);
+    armFileGetTimeout(fid);
+  };
+
+  const finishFileGet = (fileId: string) => {
+    const meta = fileGetInFlight.get(fileId);
+    if (!meta) return;
+    fileGetInFlight.delete(fileId);
+    if (meta.priority === "prefetch") fileGetPrefetchInFlight.delete(fileId);
+    clearFileGetTimeout(fileId);
+    fileGetTimeoutTouchedAt.delete(fileId);
+    drainFileGetQueue();
+  };
+
+  const startFileGet = (fileId: string, priority: "high" | "prefetch") => {
+    if (!fileId) return;
+    if (fileGetInFlight.has(fileId)) return;
+    const meta = fileGetQueueMeta.get(fileId);
+    const silent = Boolean(meta?.silent);
+    fileGetQueueMeta.delete(fileId);
+    fileGetInFlight.set(fileId, { priority, silent });
+    if (priority === "prefetch") fileGetPrefetchInFlight.add(fileId);
+    if (silent) silentFileGets.add(fileId);
+    gateway.send({ type: "file_get", file_id: fileId, transport: "http" });
+    armFileGetTimeout(fileId);
+  };
+
+  const drainFileGetQueue = () => {
+    const st = store.get();
+    if (st.conn !== "connected" || !st.authed) return;
+    const canPrefetch = deviceCaps.prefetchAllowed && document.visibilityState !== "hidden";
+    while (fileGetQueueHigh.length && fileGetInFlight.size < FILE_GET_MAX_CONCURRENCY) {
+      const fileId = fileGetQueueHigh.shift();
+      if (!fileId) continue;
+      startFileGet(fileId, "high");
+    }
+    while (
+      fileGetQueuePrefetch.length &&
+      canPrefetch &&
+      fileGetInFlight.size < FILE_GET_MAX_CONCURRENCY &&
+      fileGetPrefetchInFlight.size < FILE_GET_PREFETCH_CONCURRENCY
+    ) {
+      const fileId = fileGetQueuePrefetch.shift();
+      if (!fileId) continue;
+      startFileGet(fileId, "prefetch");
+    }
+  };
+
+  const enqueueFileGet = (fileId: string, opts?: { priority?: "high" | "prefetch"; silent?: boolean }) => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    if (fileGetInFlight.has(fid) || isFileGetQueued(fid)) return;
+    const priority = opts?.priority ?? "high";
+    if (priority === "prefetch" && (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden")) return;
+    const silent = Boolean(opts?.silent);
+    fileGetQueueMeta.set(fid, { priority, silent });
+    if (priority === "prefetch") fileGetQueuePrefetch.push(fid);
+    else fileGetQueueHigh.push(fid);
+    drainFileGetQueue();
+  };
+
+  const HTTP_FILE_URL_REFRESH_TIMEOUT_MS = 12_000;
+  const requestFreshHttpDownloadUrl = (fileId: string): Promise<string> => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return Promise.reject(new Error("missing_file_id"));
+    const existing = httpFileUrlWaiters.get(fid);
+    if (existing) return existing.promise;
+    let resolveRef: ((url: string) => void) | null = null;
+    let rejectRef: ((err: Error) => void) | null = null;
+    const promise = new Promise<string>((resolve, reject) => {
+      resolveRef = resolve;
+      rejectRef = reject;
+    });
+    const entry = {
+      promise,
+      resolve: (url: string) => resolveRef?.(url),
+      reject: (err: Error) => rejectRef?.(err),
+      timer: null as number | null,
+    };
+    const timer = window.setTimeout(() => {
+      const cur = httpFileUrlWaiters.get(fid);
+      if (cur) httpFileUrlWaiters.delete(fid);
+      try {
+        cur?.reject(new Error("file_url_refresh_timeout"));
+      } catch {
+        // ignore
+      }
+    }, HTTP_FILE_URL_REFRESH_TIMEOUT_MS);
+    entry.timer = timer;
+    httpFileUrlWaiters.set(fid, entry);
+    try {
+      gateway.send({ type: "file_get", file_id: fid, transport: "http" });
+    } catch {
+      window.clearTimeout(timer);
+      httpFileUrlWaiters.delete(fid);
+      return Promise.reject(new Error("file_url_refresh_send_failed"));
+    }
+    return promise;
+  };
+
+  const FILE_ACCEPT_RETRY_BASE_MS = 1200;
+  const FILE_ACCEPT_RETRY_MAX = 4;
+  const FILE_ACCEPT_RETRY_MAX_MS = 15_000;
+  const fileAcceptRetries = new Map<string, { attempts: number; timer: number | null }>();
+
+  const clearFileAcceptRetry = (fileId: string) => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    const entry = fileAcceptRetries.get(fid);
+    if (entry?.timer) {
+      try {
+        window.clearTimeout(entry.timer);
+      } catch {
+        // ignore
+      }
+    }
+    fileAcceptRetries.delete(fid);
+  };
+
+  const scheduleFileAcceptRetry = (fileId: string, attempts = 0) => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    if (attempts > FILE_ACCEPT_RETRY_MAX) {
+      clearFileAcceptRetry(fid);
+      return;
+    }
+    clearFileAcceptRetry(fid);
+    const delay =
+      attempts <= 0
+        ? FILE_ACCEPT_RETRY_BASE_MS
+        : Math.min(FILE_ACCEPT_RETRY_MAX_MS, FILE_ACCEPT_RETRY_BASE_MS * Math.pow(2, attempts));
+    const timer = window.setTimeout(() => {
+      const st = store.get();
+      const transfer = st.fileTransfers.find((t) => String(t.id || "").trim() === fid);
+      const active = downloadByFileId.has(fid) || transfer?.status === "downloading" || transfer?.status === "complete";
+      if (active) {
+        clearFileAcceptRetry(fid);
+        return;
+      }
+      enqueueFileGet(fid, { priority: "high" });
+      fileAcceptRetries.set(fid, { attempts: attempts + 1, timer: null });
+    }, delay);
+    fileAcceptRetries.set(fid, { attempts, timer });
+  };
+
   const mobileSidebarMq = window.matchMedia("(max-width: 600px)");
   const floatingSidebarMq = window.matchMedia("(min-width: 601px) and (max-width: 925px)");
   const coarsePointerMq = window.matchMedia("(pointer: coarse)");
@@ -1511,10 +2225,12 @@ export function mountApp(root: HTMLElement) {
   window.addEventListener("pagehide", () => {
     flushDrafts(store);
     flushFileTransfers(store);
+    flushHistoryCache(store);
   });
   window.addEventListener("beforeunload", () => {
     flushDrafts(store);
     flushFileTransfers(store);
+    flushHistoryCache(store);
   });
 
   function nextLocalChatMsgId(): number {
@@ -1564,6 +2280,16 @@ export function mountApp(root: HTMLElement) {
       minId = minId === null ? id : Math.min(minId, id);
     }
     return { list: next, cursor: minId };
+  }
+
+  function oldestServerMessageId(msgs: ChatMessage[]): number | null {
+    let min: number | null = null;
+    for (const m of msgs) {
+      const id = m?.id;
+      if (typeof id !== "number" || !Number.isFinite(id) || id <= 0) continue;
+      min = min === null ? id : Math.min(min, id);
+    }
+    return min;
   }
 
   function applyConversationLimits(prev: AppState, activeKey: string): { conversations: Record<string, ChatMessage[]>; historyCursor: Record<string, number> } | null {
@@ -1706,6 +2432,8 @@ export function mountApp(root: HTMLElement) {
   function maybeAutoLoadMoreHistory(scrollTop: number, scrollingUp: boolean) {
     const now = Date.now();
     if (now < historyAutoBlockUntil) return;
+    const userScrollRecent = now - lastChatUserScrollAt < 1500;
+    if (!userScrollRecent) return;
 
     const st = store.get();
     if (!st.authed || st.conn !== "connected") return;
@@ -1716,7 +2444,7 @@ export function mountApp(root: HTMLElement) {
     const key = conversationKey(st.selected);
     if (!key) return;
     if (!st.historyLoaded[key]) return;
-    if (!st.historyHasMore[key]) return;
+    if (st.historyHasMore[key] === false) return;
     if (st.historyLoading[key]) return;
     if (historyRequested.has(key)) return;
     const cursor = st.historyCursor[key];
@@ -1749,7 +2477,7 @@ export function mountApp(root: HTMLElement) {
     const key = conversationKey(st.selected);
     if (!key) return;
     if (!st.historyLoaded[key]) return;
-    if (!st.historyHasMore[key]) return;
+    if (st.historyHasMore[key] === false) return;
     if (st.historyLoading[key]) return;
     if (historyRequested.has(key)) return;
     const cursor = st.historyCursor[key];
@@ -1764,6 +2492,27 @@ export function mountApp(root: HTMLElement) {
     requestMoreHistory();
   }
 
+  function maybeAutoRetryHistory() {
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") return;
+    if (st.page !== "main") return;
+    if (st.modal && st.modal.kind !== "context_menu") return;
+    if (!st.selected) return;
+
+    const key = conversationKey(st.selected);
+    if (!key) return;
+    if (st.historyLoaded[key]) return;
+    if (st.historyLoading[key]) return;
+    if (historyRequested.has(key)) return;
+
+    const now = Date.now();
+    const last = historyAutoRetryAt.get(key) || 0;
+    if (now - last < HISTORY_AUTO_RETRY_MS) return;
+    historyAutoRetryAt.set(key, now);
+    clearHistoryRequestTimers(key, { resetAttempts: true });
+    requestHistory(st.selected, { force: true, deltaLimit: 2000 });
+  }
+
   let lastVirtualWindowUpdateAt = 0;
   function maybeUpdateVirtualWindow(scrollTop: number) {
     const st = store.get();
@@ -1773,21 +2522,21 @@ export function mountApp(root: HTMLElement) {
     const key = conversationKey(st.selected);
     if (!key) return;
     const msgs = st.conversations[key] || [];
-    if (!shouldVirtualize(msgs.length, false)) return;
+    if (!shouldVirtualize(msgs.length, false, historyVirtualThreshold)) return;
 
     const hostState = layout.chatHost as any;
     const avgMap: Map<string, number> | undefined = hostState.__chatVirtualAvgHeights;
     const avg = clampVirtualAvg(avgMap?.get(key));
-    const maxStart = getVirtualMaxStart(msgs.length);
-    let targetStart = Math.floor(scrollTop / avg) - HISTORY_VIRTUAL_OVERSCAN;
+    const maxStart = getVirtualMaxStart(msgs.length, historyVirtualWindow);
+    let targetStart = Math.floor(scrollTop / avg) - historyVirtualOverscan;
     targetStart = Math.max(0, Math.min(maxStart, targetStart));
     const stick = hostState.__stickBottom;
     if (stick && stick.active && stick.key === key) {
       targetStart = maxStart;
     }
-    const currentStart = getVirtualStart(msgs.length, st.historyVirtualStart?.[key]);
+    const currentStart = getVirtualStart(msgs.length, st.historyVirtualStart?.[key], historyVirtualWindow);
     const delta = Math.abs(targetStart - currentStart);
-    if (delta < Math.max(8, Math.floor(HISTORY_VIRTUAL_OVERSCAN / 2))) return;
+    if (delta < Math.max(8, Math.floor(historyVirtualOverscan / 2))) return;
     const now = Date.now();
     if (now - lastVirtualWindowUpdateAt < 120) return;
     lastVirtualWindowUpdateAt = now;
@@ -1897,6 +2646,115 @@ export function mountApp(root: HTMLElement) {
       if (atBottom) maybeRecordLastRead(key);
     },
     { passive: true }
+  );
+
+  layout.chatHost.addEventListener("yagodka:chat-rendered", () => {
+    scheduleAutoFetchVisiblePreviews();
+    maybeAutoFillHistoryViewport();
+  });
+
+  const applyMediaAspectRatio = (el: HTMLElement, ratio: number) => {
+    const button = el.closest("button.chat-file-preview") as HTMLButtonElement | null;
+    if (!button) return;
+    if (button.getAttribute("data-media-fixed") === "1") return;
+    const clamped = clampMediaAspectRatio(ratio);
+    button.style.aspectRatio = String(clamped);
+    const fileId = String(button.getAttribute("data-file-id") || "").trim();
+    if (fileId) setCachedMediaAspectRatio(fileId, clamped);
+  };
+
+  layout.chatHost.addEventListener(
+    "load",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLImageElement)) return;
+      if (!target.classList.contains("chat-file-img")) return;
+      const ratio = (target.naturalWidth || 0) / Math.max(1, target.naturalHeight || 0);
+      applyMediaAspectRatio(target, ratio);
+    },
+    true
+  );
+  layout.chatHost.addEventListener(
+    "loadedmetadata",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLVideoElement)) return;
+      if (!target.classList.contains("chat-file-video")) return;
+      const ratio = (target.videoWidth || 0) / Math.max(1, target.videoHeight || 0);
+      applyMediaAspectRatio(target, ratio);
+    },
+    true
+  );
+  const setInlineVideoState = (video: HTMLVideoElement, state: "playing" | "paused") => {
+    const preview = video.closest("button.chat-file-preview") as HTMLButtonElement | null;
+    if (!preview || !preview.classList.contains("chat-file-preview-video")) return;
+    preview.dataset.videoState = state;
+  };
+  const shouldForceVideoMute = (video: HTMLVideoElement): boolean => {
+    if (video.dataset.allowAudio === "1") return false;
+    if (video.dataset.userUnmuted === "1") return false;
+    return true;
+  };
+  const ensureVideoMutedDefault = (video: HTMLVideoElement) => {
+    if (!shouldForceVideoMute(video)) return;
+    if (!video.muted) video.muted = true;
+    if (!video.defaultMuted) video.defaultMuted = true;
+    if (!video.hasAttribute("muted")) video.setAttribute("muted", "");
+  };
+  const markVideoUserUnmuted = (video: HTMLVideoElement) => {
+    if (video.dataset.userUnmuted === "1") return;
+    if (!video.muted && video.volume > 0) {
+      video.dataset.userUnmuted = "1";
+    }
+  };
+  if (typeof document !== "undefined") {
+    const handleVideoAutoMute = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLVideoElement) ensureVideoMutedDefault(target);
+    };
+    const handleVideoVolumeChange = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLVideoElement) markVideoUserUnmuted(target);
+    };
+    const handleExclusiveMediaPlay = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLAudioElement || target instanceof HTMLVideoElement)) return;
+      const nodes = document.querySelectorAll("audio, video");
+      for (const node of Array.from(nodes)) {
+        if (!(node instanceof HTMLAudioElement || node instanceof HTMLVideoElement)) continue;
+        if (node === target) continue;
+        if (node.paused) continue;
+        try {
+          node.pause();
+        } catch {
+          // ignore
+        }
+      }
+    };
+    document.addEventListener("play", handleVideoAutoMute, true);
+    document.addEventListener("loadedmetadata", handleVideoAutoMute, true);
+    document.addEventListener("volumechange", handleVideoVolumeChange, true);
+    document.addEventListener("play", handleExclusiveMediaPlay, true);
+  }
+  layout.chatHost.addEventListener(
+    "play",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLVideoElement)) return;
+      if (!target.classList.contains("chat-file-video")) return;
+      setInlineVideoState(target, "playing");
+    },
+    true
+  );
+  layout.chatHost.addEventListener(
+    "pause",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLVideoElement)) return;
+      if (!target.classList.contains("chat-file-video")) return;
+      setInlineVideoState(target, "paused");
+    },
+    true
   );
 
   // Detect user-driven scroll gestures (wheel/touch/drag) to distinguish from async layout shifts.
@@ -2109,7 +2967,7 @@ export function mountApp(root: HTMLElement) {
     const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime, caption, chatKey, msgIdx });
     if (opened) return;
     pendingFileViewer = { fileId, name, size, mime, caption, chatKey, msgIdx };
-    gateway.send({ type: "file_get", file_id: fileId });
+    enqueueFileGet(fileId, { priority: "high" });
     store.set({ status: `Скачивание: ${name}` });
   }
 
@@ -2123,6 +2981,19 @@ export function mountApp(root: HTMLElement) {
     void openFileViewerFromMessageIndex(chatKey, targetIdx);
   }
 
+  function jumpFromFileViewer() {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "file_viewer") return;
+    const chatKey = modal.chatKey ? String(modal.chatKey) : "";
+    const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
+    if (!chatKey || msgIdx === null) return;
+    const selectedKey = st.selected ? conversationKey(st.selected) : "";
+    if (!selectedKey || selectedKey !== chatKey) return;
+    closeModal();
+    window.setTimeout(() => jumpToChatMsgIdx(msgIdx), 0);
+  }
+
   layout.chat.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
 
@@ -2133,6 +3004,23 @@ export function mountApp(root: HTMLElement) {
         e.stopPropagation();
         return;
       }
+    }
+
+    const mediaToggle = target?.closest("[data-action='media-toggle']") as HTMLElement | null;
+    if (mediaToggle) {
+      const preview = mediaToggle.closest("button.chat-file-preview") as HTMLButtonElement | null;
+      const video = preview?.querySelector("video.chat-file-video") as HTMLVideoElement | null;
+      if (video) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (video.paused) {
+          ensureVideoMutedDefault(video);
+          void video.play().catch(() => {});
+        } else {
+          video.pause();
+        }
+      }
+      return;
     }
 
     const stForSelection = store.get();
@@ -2220,6 +3108,22 @@ export function mountApp(root: HTMLElement) {
     if (historyMoreBtn) {
       e.preventDefault();
       requestMoreHistory();
+      return;
+    }
+
+    const historyRetryBtn = target?.closest("button[data-action='chat-history-retry']") as HTMLButtonElement | null;
+    if (historyRetryBtn) {
+      e.preventDefault();
+      const st = store.get();
+      if (!st.selected) return;
+      const key = conversationKey(st.selected);
+      if (key) {
+        historyRequested.delete(key);
+        historyDeltaRequested.delete(key);
+        historyPreviewRequested.delete(key);
+        clearHistoryRequestTimers(key, { resetAttempts: true });
+      }
+      requestHistory(st.selected, { force: true, deltaLimit: 2000 });
       return;
     }
 
@@ -2548,7 +3452,7 @@ export function mountApp(root: HTMLElement) {
           return;
         }
         pendingFileDownloads.set(fileId, { name: meta.name || "файл" });
-        gateway.send({ type: "file_get", file_id: fileId });
+        enqueueFileGet(fileId, { priority: "high" });
         store.set({ status: `Скачивание: ${meta.name || fileId}` });
       })();
       return;
@@ -2609,7 +3513,7 @@ export function mountApp(root: HTMLElement) {
           return;
         }
         pendingFileViewer = { fileId, name, size, mime, caption: captionText, chatKey: null, msgIdx: null };
-        gateway.send({ type: "file_get", file_id: fileId });
+        enqueueFileGet(fileId, { priority: "high" });
         store.set({ status: `Скачивание: ${name}` });
       })();
       return;
@@ -2870,7 +3774,7 @@ export function mountApp(root: HTMLElement) {
     if (!isIOS()) return;
     const isStandalone = isStandaloneDisplayMode();
     if (!shouldOfferPwaInstall({ storage: localStorage, now: Date.now(), isStandalone })) return;
-    showToast("iPhone/iPad: установить → Поделиться → «На экран Домой»", {
+    showToast("iOS: Поделиться → На экран Домой", {
       kind: "info",
       timeoutMs: 14000,
       placement: "center",
@@ -3047,7 +3951,7 @@ export function mountApp(root: HTMLElement) {
       markSidebarResetScroll();
       scheduleSidebarScrollReset();
       queueMicrotask(() => {
-        const autoFocusSearch = !coarsePointerMq.matches;
+        const autoFocusSearch = hoverMq.matches && anyFinePointerMq.matches;
         const searchInput = layout.sidebar.querySelector(".sidebar-search-input") as HTMLInputElement | null;
         if (autoFocusSearch && searchInput && !searchInput.disabled) {
           searchInput.focus();
@@ -3454,8 +4358,32 @@ export function mountApp(root: HTMLElement) {
       if (t === "history_result") {
         const key = msg?.room ? roomKey(String(msg.room)) : msg?.peer ? dmKey(String(msg.peer)) : "";
         if (key) {
-          historyRequested.delete(key);
-          historyPreviewRequested.delete(key);
+          const isPreview = Boolean(msg?.preview);
+          const isBefore = msg?.before_id !== undefined && msg?.before_id !== null;
+          if (isPreview) {
+            historyPreviewRequested.delete(key);
+          } else {
+            if (isBefore) {
+              if (historyRequested.has(key)) {
+                historyRequested.delete(key);
+                clearHistoryRequestTimer(key, "before", { resetAttempts: true });
+              } else if (historyPrefetchRequested.has(key)) {
+                historyPrefetchRequested.delete(key);
+                clearHistoryPrefetchTimer(key);
+              } else {
+                clearHistoryRequestTimer(key, "before", { resetAttempts: true });
+              }
+            } else {
+              historyDeltaRequested.delete(key);
+              clearHistoryRequestTimer(key, "delta", { resetAttempts: true });
+            }
+            historyPreviewRequested.delete(key);
+          }
+          if (historyWarmupInFlight.has(key)) {
+            historyWarmupInFlight.delete(key);
+            clearHistoryWarmupTimer(key);
+            scheduleHistoryWarmup();
+          }
         }
       }
       if (t === "error") clearPendingHistoryRequests();
@@ -3467,7 +4395,7 @@ export function mountApp(root: HTMLElement) {
 
       if (t === "auth_ok" || t === "register_ok") {
         const st = store.get();
-        if (st.selected) requestHistory(st.selected, { force: true, deltaLimit: 2000 });
+        if (st.selected) requestHistory(st.selected, { force: true, deltaLimit: 2000, prefetchBefore: true });
         drainOutbox();
       }
     },
@@ -3691,36 +4619,58 @@ export function mountApp(root: HTMLElement) {
     }
   });
 
-	  function requestHistory(t: TargetRef, opts?: { force?: boolean; deltaLimit?: number }) {
-	    const st = store.get();
-	    if (!st.authed) return;
-	    if (st.conn !== "connected") return;
-	    const key = conversationKey(t);
-	    if (!key) return;
-	    if (historyRequested.has(key)) return;
+  function requestHistory(t: TargetRef, opts?: { force?: boolean; deltaLimit?: number; prefetchBefore?: boolean }) {
+    const st = store.get();
+    if (!st.authed) return;
+    if (st.conn !== "connected") return;
+    const key = conversationKey(t);
+    if (!key) return;
 
-	    // 1) Первый заход в чат: забираем "хвост" (последние сообщения), чтобы быстро заполнить экран.
-	    if (!st.historyLoaded[key]) {
-	      // UX: не ждём флага historyLoaded, чтобы сразу активировать pinned-bottom (особенно важно для медиа,
-	      // которое догружает высоту позже на iOS/WebKit).
-	      markChatAutoScroll(key, false);
-	      historyRequested.add(key);
-	      store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
-	      if (t.kind === "dm") {
-	        gateway.send({ type: "history", peer: t.id, before_id: 0, limit: 200 });
-	      } else {
+    const cachedList = st.conversations?.[key] || [];
+    const cachedCursor = st.historyCursor?.[key];
+    const cachedHasServer =
+      cachedList.some((m) => typeof m?.id === "number" && Number.isFinite(m.id) && m.id > 0) ||
+      (typeof cachedCursor === "number" && Number.isFinite(cachedCursor) && cachedCursor > 0);
+
+    if (!st.historyLoaded[key] && cachedHasServer) {
+      const derivedCursor =
+        typeof cachedCursor === "number" && Number.isFinite(cachedCursor) && cachedCursor > 0
+          ? Math.floor(cachedCursor)
+          : oldestServerMessageId(cachedList);
+      store.set((prev) => ({
+        ...prev,
+        historyLoaded: { ...prev.historyLoaded, [key]: true },
+        ...(prev.historyLoading?.[key] ? { historyLoading: { ...prev.historyLoading, [key]: false } } : {}),
+        ...(derivedCursor ? { historyCursor: { ...prev.historyCursor, [key]: derivedCursor } } : {}),
+      }));
+    }
+
+    // 1) Первый заход в чат: забираем "хвост" (последние сообщения), чтобы быстро заполнить экран.
+    if (!st.historyLoaded[key] && !cachedHasServer) {
+      if (historyRequested.has(key)) return;
+      const cached = cachedList.length > 0;
+      // UX: ждём историю, если в кеше пусто, чтобы не дергать скролл на слабых устройствах.
+      markChatAutoScroll(key, !cached);
+      historyRequested.add(key);
+      armHistoryRequestTimeout(key, "before");
+      store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+      if (t.kind === "dm") {
+        gateway.send({ type: "history", peer: t.id, before_id: 0, limit: 200 });
+      } else {
         gateway.send({ type: "history", room: t.id, before_id: 0, limit: 200 });
       }
       return;
     }
 
     // 2) Уже загружено: тихо синхронизируем "дельту" после reconnect/долгой паузы.
+    if (historyDeltaRequested.has(key)) return;
     const since = newestServerMessageId(st.conversations[key] ?? []);
     const now = Date.now();
     const last = historyDeltaRequestedAt.get(key) ?? 0;
     if (!opts?.force && now - last < 1500) return;
     historyDeltaRequestedAt.set(key, now);
-    historyRequested.add(key);
+    historyDeltaRequested.add(key);
+    armHistoryRequestTimeout(key, "delta");
 
     // Если в локальном кэше нет ни одного серверного id (чат был пуст), "дельта" не применима —
     // забираем хвост ещё раз (это и поймает новые сообщения).
@@ -3739,6 +4689,22 @@ export function mountApp(root: HTMLElement) {
       gateway.send({ type: "history", peer: t.id, since_id: since, limit });
     } else {
       gateway.send({ type: "history", room: t.id, since_id: since, limit });
+    }
+
+    if (!opts?.prefetchBefore) return;
+    if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") return;
+    if (st.historyHasMore[key] === false) return;
+    if (historyPrefetchRequested.has(key)) return;
+    if (historyRequested.has(key)) return;
+    if (st.historyLoading?.[key]) return;
+    const before = st.historyCursor[key];
+    if (!before || !Number.isFinite(before) || before <= 0) return;
+    historyPrefetchRequested.add(key);
+    armHistoryPrefetchTimeout(key);
+    if (t.kind === "dm") {
+      gateway.send({ type: "history", peer: t.id, before_id: before, limit: HISTORY_PREFETCH_LIMIT });
+    } else {
+      gateway.send({ type: "history", room: t.id, before_id: before, limit: HISTORY_PREFETCH_LIMIT });
     }
   }
 
@@ -3770,21 +4736,21 @@ export function mountApp(root: HTMLElement) {
       return;
     }
     let sent = 0;
-    while (historyPreviewQueue.length && sent < 6) {
+    while (historyPreviewQueue.length && sent < 20) {
       const t = historyPreviewQueue.shift();
       if (!t) continue;
       requestHistoryPreview(t);
       sent += 1;
     }
     if (historyPreviewQueue.length) {
-      historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 350);
+      historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 120);
     }
   }
 
   function enqueueHistoryPreview(t: TargetRef) {
     historyPreviewQueue.push(t);
     if (historyPreviewTimer !== null) return;
-    historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 200);
+    historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 120);
   }
 
   type HistoryPrependAnchor = {
@@ -3870,13 +4836,14 @@ export function mountApp(root: HTMLElement) {
       return;
     }
     if (historyRequested.has(key)) return;
-    const hasMore = Boolean(st.historyHasMore[key]);
-    if (!hasMore) return;
+    const hasMore = st.historyHasMore[key];
+    if (hasMore === false) return;
     const before = st.historyCursor[key];
     if (!before || !Number.isFinite(before) || before <= 0) return;
 
     historyPrependAnchor = makeHistoryPrependAnchor(key);
     historyRequested.add(key);
+    armHistoryRequestTimeout(key, "before");
     store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
     if (st.selected.kind === "dm") {
       gateway.send({ type: "history", peer: st.selected.id, before_id: before, limit: 200 });
@@ -3966,9 +4933,10 @@ export function mountApp(root: HTMLElement) {
     const prevKey = prev.selected ? conversationKey(prev.selected) : "";
     const nextKey = conversationKey(t);
     if (nextKey) {
-      // UX: открываем чат сразу "внизу" (Telegram-like), не завязываясь на historyLoaded,
-      // чтобы даже медиа-последнее сообщение не "съедало" автоскролл.
-      markChatAutoScroll(nextKey, false);
+      const cached = (prev.conversations?.[nextKey] || []).length > 0;
+      const loaded = Boolean(prev.historyLoaded?.[nextKey]);
+      // UX: если истории ещё нет, ждём загрузки, чтобы избежать лишней тряски на mobile.
+      markChatAutoScroll(nextKey, !(loaded || cached));
     }
     const leavingEdit = Boolean(prev.editing && prevKey && prev.editing.key === prevKey && prevKey !== nextKey);
     const prevText = leavingEdit ? prev.editing?.prevDraft || "" : layout.input.value || "";
@@ -4027,7 +4995,7 @@ export function mountApp(root: HTMLElement) {
       // ignore
     }
     scheduleSaveDrafts(store);
-    requestHistory(t);
+    requestHistory(t, { prefetchBefore: true });
     if (t.kind === "dm") {
       maybeSendMessageRead(t.id);
     }
@@ -4249,9 +5217,9 @@ export function mountApp(root: HTMLElement) {
       return;
     }
     const searchActive = Boolean(st.chatSearchOpen && st.chatSearchQuery.trim());
-    if (shouldVirtualize(msgs.length, searchActive)) {
-      const maxStart = getVirtualMaxStart(msgs.length);
-      const targetStart = Math.max(0, Math.min(maxStart, idx - Math.floor(HISTORY_VIRTUAL_WINDOW / 2)));
+    if (shouldVirtualize(msgs.length, searchActive, historyVirtualThreshold)) {
+      const maxStart = getVirtualMaxStart(msgs.length, historyVirtualWindow);
+      const targetStart = Math.max(0, Math.min(maxStart, idx - Math.floor(historyVirtualWindow / 2)));
       store.set((prev) => ({
         ...prev,
         historyVirtualStart: { ...prev.historyVirtualStart, [key]: targetStart },
@@ -5853,16 +6821,30 @@ export function mountApp(root: HTMLElement) {
     const bytes = Number(size ?? 0) || 0;
     if (bytes <= 0) return false;
     if (!isMediaLikeFile(name, mime)) return false;
-    // Keep it small and safe for iOS storage limits; prefetch only small media.
-    const cap = Math.min(6 * 1024 * 1024, prefs.maxBytes > 0 ? prefs.maxBytes : 6 * 1024 * 1024);
+    // Keep it reasonably small for mobile, but large enough for most media previews.
+    const cap = Math.min(24 * 1024 * 1024, prefs.maxBytes > 0 ? prefs.maxBytes : 24 * 1024 * 1024);
     return bytes <= cap;
+  }
+
+  const VIDEO_NAME_HINT_RE =
+    /^(?:video|vid|movie|clip|screencast|screen[_\-\s]?(?:rec|record|recording)|видео|ролик)([_\-\s]|\d|$)/;
+  const AUDIO_NAME_HINT_RE =
+    /^(?:audio|voice|sound|music|song|track|record|rec|memo|note|voice[_\-\s]?note|аудио|звук|музык|песня|голос|запис|диктофон|заметк)([_\-\s]|\d|$)/;
+
+  function normalizeFileName(value: string): string {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const noQuery = raw.split(/[?#]/)[0];
+    const leaf = noQuery.split(/[\\/]/).pop() || "";
+    return leaf.trim().toLowerCase();
   }
 
   function isMediaLikeFile(name: string, mime: string | null | undefined): boolean {
     const mt = String(mime || "").toLowerCase();
     if (mt.startsWith("image/") || mt.startsWith("video/") || mt.startsWith("audio/")) return true;
-    const n = String(name || "").toLowerCase();
+    const n = normalizeFileName(name);
     if (isImageLikeFile(n, mt)) return true;
+    if (VIDEO_NAME_HINT_RE.test(n) || AUDIO_NAME_HINT_RE.test(n)) return true;
     return /\.(mp4|m4v|mov|webm|ogv|mkv|mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n);
   }
 
@@ -6018,6 +7000,80 @@ export function mountApp(root: HTMLElement) {
     return true;
   }
 
+  async function restoreCachedThumbsIntoStateBatch(fileIds: string[]): Promise<Set<string>> {
+    const st = store.get();
+    if (!st.authed || !st.selfId) return new Set();
+    const uid = st.selfId;
+    const existingWithUrl = new Set(
+      Object.entries(st.fileThumbs || {})
+        .filter(([, entry]) => Boolean(entry?.url))
+        .map(([fid]) => fid)
+    );
+
+    const restored = new Map<string, { url: string; mime: string | null }>();
+    for (const fileId of fileIds) {
+      const fid = String(fileId || "").trim();
+      if (!fid || restored.has(fid) || existingWithUrl.has(fid)) continue;
+      const cacheKey = `thumb:${uid}:${fid}`;
+      if (!shouldAttemptCachedThumb(cacheKey)) continue;
+      const cached = await getCachedFileBlob(uid, thumbCacheId(fid));
+      if (!cached) continue;
+      let url: string | null = null;
+      try {
+        url = URL.createObjectURL(cached.blob);
+      } catch {
+        url = null;
+      }
+      if (!url) continue;
+      restored.set(fid, { url, mime: cached.mime || null });
+      if (restored.size >= 18) break;
+    }
+
+    if (!restored.size) return new Set();
+    const restoredIds = new Set(restored.keys());
+
+    store.set((prev) => {
+      const now = Date.now();
+      let nextThumbs: Record<string, { url: string; mime: string | null; ts: number }> = { ...(prev.fileThumbs || {}) };
+      for (const fid of restoredIds) {
+        const nextUrl = restored.get(fid)?.url || "";
+        if (!nextUrl) continue;
+        const existing = nextThumbs[fid];
+        if (existing?.url && existing.url !== nextUrl) {
+          try {
+            URL.revokeObjectURL(existing.url);
+          } catch {
+            // ignore
+          }
+        }
+        nextThumbs[fid] = { url: nextUrl, mime: restored.get(fid)?.mime ?? null, ts: now };
+      }
+      const keys = Object.keys(nextThumbs);
+      if (keys.length > FILE_THUMB_MAX_ENTRIES) {
+        const sorted = keys
+          .map((k) => ({ k, ts: Number(nextThumbs[k]?.ts ?? 0) || 0 }))
+          .sort((a, b) => a.ts - b.ts);
+        const drop = sorted.slice(0, Math.max(0, keys.length - FILE_THUMB_MAX_ENTRIES)).map((x) => x.k);
+        if (drop.length) {
+          nextThumbs = { ...nextThumbs };
+          for (const k of drop) {
+            const entry = nextThumbs[k];
+            if (entry?.url) {
+              try {
+                URL.revokeObjectURL(entry.url);
+              } catch {
+                // ignore
+              }
+            }
+            delete nextThumbs[k];
+          }
+        }
+      }
+      return { ...prev, fileThumbs: nextThumbs };
+    });
+    return restoredIds;
+  }
+
   async function restoreCachedPreviewIntoTransfers(opts: {
     key: string;
     fileId: string;
@@ -6032,8 +7088,7 @@ export function mountApp(root: HTMLElement) {
     if (!st.authed || !st.selfId) return false;
     const uid = st.selfId;
     const cacheKey = `${uid}:${opts.fileId}`;
-    if (cachedPreviewsAttempted.has(cacheKey)) return false;
-    cachedPreviewsAttempted.add(cacheKey);
+    if (!shouldAttemptCachedPreview(cacheKey)) return false;
 
     const cached = await getCachedFileBlob(uid, opts.fileId);
     if (!cached) return false;
@@ -6080,6 +7135,117 @@ export function mountApp(root: HTMLElement) {
     return true;
   }
 
+  async function restoreCachedPreviewsIntoTransfersBatch(
+    items: Array<{
+      fileId: string;
+      name: string;
+      size: number;
+      mime: string | null;
+      direction: "in" | "out";
+      peer: string;
+      room: string | null;
+    }>
+  ): Promise<Set<string>> {
+    const st = store.get();
+    if (!st.authed || !st.selfId) return new Set();
+    const uid = st.selfId;
+
+    const existingWithUrl = new Set(
+      (st.fileTransfers || [])
+        .filter((t) => String(t.id || "").trim() && Boolean(t.url))
+        .map((t) => String(t.id || "").trim())
+    );
+
+    const restored = new Map<
+      string,
+      {
+        url: string;
+        item: {
+          fileId: string;
+          name: string;
+          size: number;
+          mime: string | null;
+          direction: "in" | "out";
+          peer: string;
+          room: string | null;
+        };
+      }
+    >();
+    for (const item of items) {
+      const fid = String(item.fileId || "").trim();
+      if (!fid || restored.has(fid) || existingWithUrl.has(fid)) continue;
+      const cacheKey = `${uid}:${fid}`;
+      if (!shouldAttemptCachedPreview(cacheKey)) continue;
+      const cached = await getCachedFileBlob(uid, fid);
+      if (!cached) continue;
+      let url: string | null = null;
+      try {
+        url = URL.createObjectURL(cached.blob);
+      } catch {
+        url = null;
+      }
+      if (!url) continue;
+      restored.set(fid, { url, item: { ...item, fileId: fid } });
+      if (restored.size >= 14) break;
+    }
+
+    if (!restored.size) return new Set();
+    const restoredIds = new Set(restored.keys());
+
+    store.set((prev) => {
+      let changed = false;
+      const nextTransfers = prev.fileTransfers.map((t): FileTransferEntry => {
+        const fid = String(t.id || "").trim();
+        if (!fid || !restoredIds.has(fid)) return t;
+        const nextUrl = restored.get(fid)?.url || "";
+        if (!nextUrl) return t;
+        if (t.url && t.url !== nextUrl) {
+          try {
+            URL.revokeObjectURL(t.url);
+          } catch {
+            // ignore
+          }
+        }
+        const meta = restored.get(fid)?.item || null;
+        changed = true;
+        return {
+          ...t,
+          status: "complete",
+          progress: 100,
+          ...(meta && (!t.name || t.name === "файл") ? { name: meta.name } : {}),
+          ...(meta && (!t.size || t.size <= 0) ? { size: meta.size } : {}),
+          ...(meta && (!t.mime || !t.mime.trim()) ? { mime: meta.mime } : {}),
+          url: nextUrl,
+        };
+      });
+      const present = new Set(nextTransfers.map((t) => String(t.id || "").trim()).filter(Boolean));
+      const added: FileTransferEntry[] = [];
+      for (const fid of restoredIds) {
+        if (present.has(fid)) continue;
+        const meta = restored.get(fid)?.item || null;
+        const url = restored.get(fid)?.url || "";
+        if (!meta || !url) continue;
+        added.push({
+          localId: `ft-cache-${fid}`,
+          id: fid,
+          name: meta.name || "файл",
+          size: Number(meta.size || 0) || 0,
+          mime: meta.mime || null,
+          direction: meta.direction,
+          peer: meta.peer || "—",
+          room: meta.room,
+          status: "complete",
+          progress: 100,
+          url,
+        });
+      }
+      if (!changed && !added.length) return prev;
+      return { ...prev, fileTransfers: added.length ? [...added, ...nextTransfers] : nextTransfers };
+    });
+    scheduleSaveFileTransfers(store);
+    return restoredIds;
+  }
+
   function scheduleWarmupCachedPreviews() {
     if (previewWarmupTimer !== null) return;
     previewWarmupTimer = window.setTimeout(() => {
@@ -6088,42 +7254,251 @@ export function mountApp(root: HTMLElement) {
     }, 120);
   }
 
-  function shouldAutoFetchPreview(name: string, mime: string | null, size: number): boolean {
-    if (!isMediaLikeFile(name, mime)) return false;
+  function shouldAutoFetchPreview(
+    name: string,
+    mime: string | null,
+    size: number,
+    forceMedia = false,
+    kindHint?: string | null
+  ): boolean {
+    const hint = String(kindHint || "").trim().toLowerCase();
+    const hintIsMedia = hint === "image" || hint === "video" || hint === "audio";
+    if (!forceMedia && !hintIsMedia && !isMediaLikeFile(name, mime)) return false;
     if (size > 0 && size > PREVIEW_AUTO_MAX_BYTES) return false;
     return true;
   }
 
-  function autoFetchVisiblePreviews() {
+  async function autoFetchVisiblePreviews() {
     const st = store.get();
     if (!st.authed || st.conn !== "connected") return;
     if (st.page !== "main" || !st.selected) return;
     if (!st.selfId) return;
+    if (document.visibilityState === "hidden") return;
     const now = Date.now();
+    const convoKey = conversationKey(st.selected);
+    if (convoKey && st.historyLoading?.[convoKey]) return;
     const host = layout.chatHost;
     const hostRect = host.getBoundingClientRect();
-    const nodes = host.querySelectorAll("button.chat-file-preview-empty[data-file-id]");
-    if (!nodes.length) return;
+    const inlineVideos = host.querySelectorAll("video.chat-file-video");
+    if (inlineVideos.length) {
+      for (const node of Array.from(inlineVideos)) {
+        if (!(node instanceof HTMLVideoElement)) continue;
+        if (node.paused) continue;
+        const rect = node.getBoundingClientRect();
+        if (rect.bottom < hostRect.top - PREVIEW_AUTO_OVERSCAN || rect.top > hostRect.bottom + PREVIEW_AUTO_OVERSCAN) {
+          try {
+            node.pause();
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+    const nodes = host.querySelectorAll("button.chat-file-preview[data-file-id]");
+    const audioNodes = host.querySelectorAll("[data-file-kind='audio'][data-file-id]");
+    if (!nodes.length && !audioNodes.length) return;
+    const restoreTaskById = new Map<
+      string,
+      {
+        fileId: string;
+        kind: "image" | "video" | "audio";
+        name: string;
+        size: number;
+        mime: string | null;
+        direction: "in" | "out";
+        peer: string;
+        room: string | null;
+        prefetch: boolean;
+        retryWindowMs: number;
+      }
+    >();
+    const upsertRestoreTask = (task: {
+      fileId: string;
+      kind: "image" | "video" | "audio";
+      name: string;
+      size: number;
+      mime: string | null;
+      direction: "in" | "out";
+      peer: string;
+      room: string | null;
+      prefetch: boolean;
+      retryWindowMs: number;
+    }) => {
+      const fid = String(task.fileId || "").trim();
+      if (!fid) return;
+      const prev = restoreTaskById.get(fid);
+      if (!prev) {
+        restoreTaskById.set(fid, { ...task, fileId: fid });
+        return;
+      }
+      restoreTaskById.set(fid, {
+        ...prev,
+        kind: prev.kind || task.kind,
+        ...(task.prefetch && !prev.prefetch ? { prefetch: true } : {}),
+        retryWindowMs: Math.min(prev.retryWindowMs, task.retryWindowMs),
+      });
+    };
     for (const node of Array.from(nodes)) {
       if (!(node instanceof HTMLButtonElement)) continue;
+      const isFixed = node.getAttribute("data-media-fixed") === "1";
+      const fileId = String(node.getAttribute("data-file-id") || "").trim();
+      if (fileId) {
+        const cachedRatio = getCachedMediaAspectRatio(fileId);
+        if (cachedRatio && !node.style.aspectRatio && !isFixed) {
+          node.style.aspectRatio = String(cachedRatio);
+        }
+      }
+      const isEmpty = node.classList.contains("chat-file-preview-empty");
+      const img = node.querySelector("img.chat-file-img");
+      const video = node.querySelector("video.chat-file-video");
+      const mediaFailed =
+        (img instanceof HTMLImageElement && img.complete && img.naturalWidth === 0) ||
+        (video instanceof HTMLVideoElement && Boolean(video.error));
+      if (!isEmpty && !mediaFailed) continue;
+      if (mediaFailed) {
+        node.classList.add("chat-file-preview-empty");
+        if (!node.querySelector(".chat-file-placeholder")) {
+          const label = node.classList.contains("chat-file-preview-video") ? "Видео" : "Фото";
+          const placeholder = document.createElement("div");
+          placeholder.className = "chat-file-placeholder";
+          placeholder.setAttribute("aria-hidden", "true");
+          placeholder.textContent = label;
+          node.appendChild(placeholder);
+        }
+        if (img instanceof HTMLImageElement) img.remove();
+        if (video instanceof HTMLVideoElement) video.remove();
+      }
       const rect = node.getBoundingClientRect();
       if (rect.bottom < hostRect.top - PREVIEW_AUTO_OVERSCAN || rect.top > hostRect.bottom + PREVIEW_AUTO_OVERSCAN) continue;
-      const fileId = String(node.getAttribute("data-file-id") || "").trim();
       if (!fileId) continue;
-      if ((st.fileOffersIn || []).some((offer) => String(offer?.id || "").trim() === fileId)) continue;
       const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
-      if (existing?.url || existing?.status === "downloading") continue;
+      if (existing?.status === "downloading") continue;
+      const thumb = st.fileThumbs?.[fileId] || null;
+      if (mediaFailed && thumb?.url) {
+        clearFileThumb(fileId);
+      }
+      if (mediaFailed && existing?.url) {
+        // Clear broken blob previews so the next fetch can replace them.
+        updateTransferByFileId(fileId, (entry) => {
+          if (entry.url && entry.url.startsWith("blob:")) {
+            try {
+              URL.revokeObjectURL(entry.url);
+            } catch {
+              // ignore
+            }
+          }
+          return { ...entry, url: null };
+        });
+      }
+      if ((existing?.url || thumb?.url) && !mediaFailed) continue;
       const name = String(node.getAttribute("data-name") || "");
       const mimeRaw = node.getAttribute("data-mime");
       const mime = mimeRaw ? String(mimeRaw) : null;
       const size = Number(node.getAttribute("data-size") || 0) || 0;
-      if (!shouldAutoFetchPreview(name, mime, size)) continue;
-      const key = `${st.selfId}:${fileId}`;
-      const lastAttempt = previewPrefetchAttempted.get(key) || 0;
-      if (lastAttempt && now - lastAttempt < PREVIEW_AUTO_RETRY_MS) continue;
-      previewPrefetchAttempted.set(key, now);
-      silentFileGets.add(fileId);
-      gateway.send({ type: "file_get", file_id: fileId });
+      const kindHint =
+        String(node.getAttribute("data-file-kind") || "").trim().toLowerCase() ||
+        (node.classList.contains("chat-file-preview-video") ? "video" : "image");
+      const shouldPrefetch = deviceCaps.prefetchAllowed && shouldAutoFetchPreview(name, mime, size, false, kindHint);
+      const isMediaHint = kindHint === "image" || kindHint === "video" || kindHint === "audio";
+      const shouldAttemptRestore = isMediaHint && (shouldPrefetch || !mime || size <= 0 || size <= PREVIEW_AUTO_RESTORE_MAX_BYTES);
+      if (shouldAttemptRestore && convoKey) {
+        const msgIdx = Number(node.getAttribute("data-msg-idx") || NaN);
+        const msg = Number.isFinite(msgIdx) ? st.conversations[convoKey]?.[msgIdx] : null;
+        const msgEl = node.closest(".msg");
+        const msgKind = msg?.kind || (msgEl?.classList.contains("msg-out") ? "out" : "in");
+        const direction = msgKind === "out" ? "out" : "in";
+        const peer = msg
+          ? String(msgKind === "out" ? (msg.to || msg.room || "") : (msg.from || "")) || "—"
+          : "—";
+        const room = typeof msg?.room === "string" ? msg.room : null;
+        upsertRestoreTask({
+          fileId,
+          kind: kindHint === "video" ? "video" : "image",
+          name: name || "файл",
+          size,
+          mime,
+          direction,
+          peer,
+          room,
+          prefetch: shouldPrefetch,
+          retryWindowMs: mediaFailed ? PREVIEW_AUTO_FAIL_RETRY_MS : PREVIEW_AUTO_RETRY_MS,
+        });
+        continue;
+      }
+      if (shouldPrefetch) {
+        upsertRestoreTask({
+          fileId,
+          kind: kindHint === "video" ? "video" : "image",
+          name: name || "файл",
+          size,
+          mime,
+          direction: "in",
+          peer: "—",
+          room: null,
+          prefetch: true,
+          retryWindowMs: mediaFailed ? PREVIEW_AUTO_FAIL_RETRY_MS : PREVIEW_AUTO_RETRY_MS,
+        });
+      }
+    }
+    for (const node of Array.from(audioNodes)) {
+      if (!(node instanceof HTMLElement)) continue;
+      const rect = node.getBoundingClientRect();
+      if (rect.bottom < hostRect.top - PREVIEW_AUTO_OVERSCAN || rect.top > hostRect.bottom + PREVIEW_AUTO_OVERSCAN) continue;
+      const fileId = String(node.getAttribute("data-file-id") || "").trim();
+      if (!fileId) continue;
+      const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+      if (existing?.status === "downloading") continue;
+      if (existing?.url) continue;
+      const name = String(node.getAttribute("data-name") || "Аудио");
+      const mimeRaw = node.getAttribute("data-mime");
+      const mime = mimeRaw ? String(mimeRaw) : null;
+      const size = Number(node.getAttribute("data-size") || 0) || 0;
+      const shouldPrefetch = deviceCaps.prefetchAllowed && shouldAutoFetchPreview(name, mime, size, true, "audio");
+      if (shouldPrefetch && convoKey) {
+        const msgIdx = Number(node.getAttribute("data-msg-idx") || NaN);
+        const msg = Number.isFinite(msgIdx) ? st.conversations[convoKey]?.[msgIdx] : null;
+        const msgEl = node.closest(".msg");
+        const msgKind = msg?.kind || (msgEl?.classList.contains("msg-out") ? "out" : "in");
+        const direction = msgKind === "out" ? "out" : "in";
+        const peer = msg
+          ? String(msgKind === "out" ? (msg.to || msg.room || "") : (msg.from || "")) || "—"
+          : "—";
+        const room = typeof msg?.room === "string" ? msg.room : null;
+        upsertRestoreTask({
+          fileId,
+          kind: "audio",
+          name: name || "Аудио",
+          size,
+          mime,
+          direction,
+          peer,
+          room,
+          prefetch: true,
+          retryWindowMs: PREVIEW_AUTO_RETRY_MS,
+        });
+      }
+    }
+
+    const restoreTasks = Array.from(restoreTaskById.values());
+    const mediaIds = restoreTasks
+      .filter((t) => t.kind === "image" || t.kind === "video")
+      .map((t) => t.fileId);
+    const audioTasks = restoreTasks.filter((t) => t.kind === "audio");
+    const restoredThumbIds = mediaIds.length ? await restoreCachedThumbsIntoStateBatch(mediaIds) : new Set<string>();
+    const restoredAudioIds = audioTasks.length
+      ? await restoreCachedPreviewsIntoTransfersBatch(
+          audioTasks.map((t) => ({ fileId: t.fileId, name: t.name, size: t.size, mime: t.mime, direction: t.direction, peer: t.peer, room: t.room }))
+        )
+      : new Set<string>();
+    const restoredIds = new Set<string>([...restoredThumbIds, ...restoredAudioIds]);
+    for (const t of restoreTasks) {
+      if (restoredIds.has(t.fileId)) continue;
+      if (!t.prefetch) continue;
+      const k = `${st.selfId}:${t.fileId}`;
+      const lastAttempt = previewPrefetchAttempted.get(k) || 0;
+      if (lastAttempt && now - lastAttempt < t.retryWindowMs) continue;
+      previewPrefetchAttempted.set(k, now);
+      enqueueFileGet(t.fileId, { priority: "prefetch", silent: true });
     }
   }
 
@@ -6131,7 +7506,7 @@ export function mountApp(root: HTMLElement) {
     if (previewAutoFetchRaf !== null) return;
     previewAutoFetchRaf = window.requestAnimationFrame(() => {
       previewAutoFetchRaf = null;
-      autoFetchVisiblePreviews();
+      void autoFetchVisiblePreviews();
     });
   }
 
@@ -6148,9 +7523,10 @@ export function mountApp(root: HTMLElement) {
     if (st.page !== "main") return;
     if (!st.selected) return;
     if (st.modal && st.modal.kind !== "context_menu") return;
+    if (document.visibilityState === "hidden") return;
     const key = conversationKey(st.selected);
     if (!key) return;
-    if (!st.historyLoaded[key] || st.historyLoading[key]) return;
+    if (st.historyLoading[key]) return;
 
     const msgs = st.conversations[key] || [];
     if (!msgs.length) return;
@@ -6161,13 +7537,13 @@ export function mountApp(root: HTMLElement) {
 
     previewWarmupInFlight = true;
     try {
-      const MAX_SCAN = 80;
-      const MAX_TASKS = 12;
-      const PREFETCH_MAX_BYTES = 6 * 1024 * 1024;
-      const RESTORE_MAX_BYTES = 24 * 1024 * 1024;
+      const MAX_SCAN = 160;
+      const MAX_TASKS = 30;
+      const PREFETCH_MAX_BYTES = 24 * 1024 * 1024;
       const tail = msgs.slice(Math.max(0, msgs.length - MAX_SCAN));
       const tasks: Array<{
         fileId: string;
+        kind: "image" | "video" | "audio";
         name: string;
         size: number;
         mime: string | null;
@@ -6185,14 +7561,18 @@ export function mountApp(root: HTMLElement) {
         const name = String(att.name || "");
         const mime = typeof att.mime === "string" ? att.mime : null;
         const size = Number(att.size ?? 0) || 0;
-        const shouldPrefetch = shouldCachePreview(name, mime, size);
-        const shouldAttemptRestore = shouldPrefetch || !mime || (isMediaLikeFile(name, mime) && size > 0 && size <= RESTORE_MAX_BYTES);
+        const isMedia = isMediaLikeFile(name, mime);
+        const shouldPrefetch = deviceCaps.prefetchAllowed && shouldCachePreview(name, mime, size);
+        const shouldAttemptRestore = isMedia && (shouldPrefetch || !mime || size <= 0 || size <= PREVIEW_AUTO_RESTORE_MAX_BYTES);
         if (!shouldAttemptRestore) continue;
+        const kind = isImageLikeFile(name, mime) ? "image" : isVideoLikeFile(name, mime) ? "video" : "audio";
+        if ((kind === "image" || kind === "video") && st.fileThumbs?.[fid]?.url) continue;
         const already = st.fileTransfers.find((t) => String(t.id || "").trim() === fid && Boolean(t.url));
         if (already) continue;
         seen.add(fid);
         tasks.push({
           fileId: fid,
+          kind,
           name: name || "файл",
           size,
           mime,
@@ -6204,9 +7584,18 @@ export function mountApp(root: HTMLElement) {
         if (tasks.length >= MAX_TASKS) break;
       }
       const now = Date.now();
+      const mediaIds = tasks.filter((t) => t.kind === "image" || t.kind === "video").map((t) => t.fileId);
+      const audioTasks = tasks.filter((t) => t.kind === "audio");
+      const restoredThumbIds = mediaIds.length ? await restoreCachedThumbsIntoStateBatch(mediaIds) : new Set<string>();
+      const restoredAudioIds = audioTasks.length
+        ? await restoreCachedPreviewsIntoTransfersBatch(
+            audioTasks.map((t) => ({ fileId: t.fileId, name: t.name, size: t.size, mime: t.mime, direction: t.direction, peer: t.peer, room: t.room }))
+          )
+        : new Set<string>();
+      const restoredIds = new Set<string>([...restoredThumbIds, ...restoredAudioIds]);
       for (const t of tasks) {
-        const restored = await restoreCachedPreviewIntoTransfers({ key, ...t });
-        if (!restored && t.prefetch) {
+        if (restoredIds.has(t.fileId)) continue;
+        if (t.prefetch) {
           try {
             const latest = store.get();
             const uid = latest.selfId;
@@ -6218,8 +7607,7 @@ export function mountApp(root: HTMLElement) {
             const lastAttempt = previewPrefetchAttempted.get(k) || 0;
             if (lastAttempt && now - lastAttempt < PREVIEW_AUTO_RETRY_MS) continue;
             previewPrefetchAttempted.set(k, now);
-            silentFileGets.add(t.fileId);
-            gateway.send({ type: "file_get", file_id: t.fileId });
+            enqueueFileGet(t.fileId, { priority: "prefetch", silent: true });
           } catch {
             // ignore
           }
@@ -6406,37 +7794,45 @@ export function mountApp(root: HTMLElement) {
       lastProgress: 0,
       aborted: false,
     });
-    startNextUpload();
+    pumpUploadQueue();
   }
 
-  function startNextUpload() {
-    if (activeUpload || uploadQueue.length === 0) return;
-    const next = uploadQueue.shift();
-    if (!next) return;
-    activeUpload = next;
-    const payload: Record<string, unknown> = {
+  function finishUpload(upload: UploadState) {
+    if (upload.fileId) uploadByFileId.delete(upload.fileId);
+    uploadInFlightByLocalId.delete(upload.localId);
+    pumpUploadQueue();
+  }
+
+  function pumpUploadQueue() {
+    while (uploadInFlightByLocalId.size < FILE_UPLOAD_MAX_CONCURRENCY && uploadQueue.length > 0) {
+      const next = uploadQueue.shift();
+      if (!next) return;
+      uploadInFlightByLocalId.set(next.localId, next);
+      const payload: Record<string, unknown> = {
       type: "file_offer",
+      transport: "http",
+      local_id: next.localId,
       name: next.file.name || "файл",
       size: next.file.size || 0,
     };
-    const mime = typeof next.file.type === "string" ? next.file.type.trim() : "";
-    if (mime) payload.mime = mime;
-    if (next.caption) payload.text = next.caption;
-    if (next.target.kind === "dm") {
-      payload.to = next.target.id;
-    } else {
-      payload.room = next.target.id;
+      const mime = typeof next.file.type === "string" ? next.file.type.trim() : "";
+      if (mime) payload.mime = mime;
+      if (next.caption) payload.text = next.caption;
+      if (next.target.kind === "dm") {
+        payload.to = next.target.id;
+      } else {
+        payload.room = next.target.id;
+      }
+      gateway.send(payload);
+      store.set({ status: `Предложение файла: ${next.file.name || "файл"}` });
     }
-    gateway.send(payload);
-    store.set({ status: `Предложение файла: ${next.file.name || "файл"}` });
   }
 
   async function uploadFileChunks(upload: UploadState) {
     const fileId = upload.fileId;
     if (!fileId) {
       updateTransferByLocalId(upload.localId, (entry) => ({ ...entry, status: "error", error: "missing_file_id" }));
-      activeUpload = null;
-      startNextUpload();
+      finishUpload(upload);
       return;
     }
     try {
@@ -6465,9 +7861,133 @@ export function mountApp(root: HTMLElement) {
       updateTransferByLocalId(upload.localId, (entry) => ({ ...entry, status: "error", error: "upload_failed" }));
       store.set({ status: `Ошибка загрузки: ${upload.file.name || "файл"}` });
     } finally {
-      uploadByFileId.delete(fileId);
-      activeUpload = null;
-      startNextUpload();
+      finishUpload(upload);
+    }
+  }
+
+  async function uploadFileHttp(upload: UploadState, uploadUrl: string) {
+    const fileId = upload.fileId;
+    if (!fileId) {
+      updateTransferByLocalId(upload.localId, (entry) => ({ ...entry, status: "error", error: "missing_file_id" }));
+      finishUpload(upload);
+      return;
+    }
+    const url = String(uploadUrl || "").trim();
+    if (!url) {
+      updateTransferByLocalId(upload.localId, (entry) => ({ ...entry, status: "error", error: "missing_upload_url" }));
+      finishUpload(upload);
+      return;
+    }
+    try {
+      const size = upload.file.size || 0;
+      const chunkSize = 512 * 1024;
+      const MAX_RETRIES = 6;
+      const baseDelayMs = deviceCaps.slowNetwork ? 900 : deviceCaps.constrained ? 650 : 400;
+      const maxDelayMs = 8000;
+      const waitMs = (ms: number) =>
+        new Promise<void>((resolve) => {
+          window.setTimeout(resolve, ms);
+        });
+      const parseRetryAfterMs = (value: string | null): number => {
+        if (!value) return 0;
+        const s = Number(String(value).trim());
+        if (!Number.isFinite(s) || s <= 0) return 0;
+        return Math.min(60, Math.max(0, Math.trunc(s))) * 1000;
+      };
+      let offset = 0;
+      const resyncOffset = async () => {
+        try {
+          const head = await fetch(url, { method: "HEAD" });
+          if (head.ok) {
+            const off = Number(head.headers.get("Upload-Offset") || "0");
+            if (Number.isFinite(off) && off >= 0) offset = Math.max(0, Math.min(Math.trunc(off), size));
+          }
+        } catch {
+          // ignore
+        }
+      };
+      await resyncOffset();
+      upload.bytesSent = offset;
+      upload.lastProgress = 0;
+      while (!upload.aborted && offset < size) {
+        const slice = upload.file.slice(offset, Math.min(size, offset + chunkSize));
+        let attempt = 0;
+        let progressed = false;
+        while (!upload.aborted && !progressed) {
+          try {
+            const res = await fetch(url, {
+              method: "PATCH",
+              headers: {
+                "Tus-Resumable": "1.0.0",
+                "Upload-Offset": String(offset),
+                "Content-Type": "application/offset+octet-stream",
+              },
+              body: slice,
+            });
+            if (upload.aborted) break;
+            if (res.status === 409) {
+              const cur = Number(res.headers.get("Upload-Offset") || "");
+              if (Number.isFinite(cur) && cur >= 0) {
+                offset = Math.max(0, Math.min(Math.trunc(cur), size));
+                upload.bytesSent = offset;
+                progressed = true;
+                break;
+              }
+              throw new Error("upload_offset_conflict");
+            }
+            if (res.status === 429 || res.status === 503) {
+              if (attempt >= MAX_RETRIES) throw new Error(`upload_http_${res.status}`);
+              const retryAfterMs = parseRetryAfterMs(res.headers.get("Retry-After"));
+              const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
+              const jitter = Math.round(backoff * (0.15 + Math.random() * 0.15));
+              attempt += 1;
+              await waitMs(Math.max(retryAfterMs, backoff + jitter));
+              continue;
+            }
+            if (!res.ok) {
+              if (res.status >= 500 && res.status < 600 && attempt < MAX_RETRIES) {
+                const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
+                const jitter = Math.round(backoff * (0.15 + Math.random() * 0.15));
+                attempt += 1;
+                await waitMs(backoff + jitter);
+                continue;
+              }
+              throw new Error(`upload_http_${res.status}`);
+            }
+            const nextOff = Number(res.headers.get("Upload-Offset") || "");
+            if (Number.isFinite(nextOff) && nextOff >= 0) {
+              offset = Math.max(offset, Math.min(Math.trunc(nextOff), size));
+            } else {
+              offset = Math.min(size, offset + slice.size);
+            }
+            upload.bytesSent = offset;
+            progressed = true;
+          } catch (err) {
+            if (upload.aborted) break;
+            if (attempt >= MAX_RETRIES) throw err;
+            attempt += 1;
+            await resyncOffset();
+            const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
+            const jitter = Math.round(backoff * (0.15 + Math.random() * 0.15));
+            await waitMs(backoff + jitter);
+          }
+        }
+        const pct = size > 0 ? Math.min(100, Math.round((upload.bytesSent / size) * 100)) : 0;
+        if (pct !== upload.lastProgress) {
+          upload.lastProgress = pct;
+          updateTransferByLocalId(upload.localId, (entry) => ({ ...entry, progress: pct, status: "uploading" }));
+        }
+      }
+      if (!upload.aborted) {
+        gateway.send({ type: "file_upload_complete", file_id: fileId });
+        updateTransferByLocalId(upload.localId, (entry) => ({ ...entry, status: "uploaded", progress: 100 }));
+        store.set({ status: `Файл загружен: ${upload.file.name || "файл"}` });
+      }
+    } catch {
+      updateTransferByLocalId(upload.localId, (entry) => ({ ...entry, status: "error", error: "upload_failed" }));
+      store.set({ status: `Ошибка загрузки: ${upload.file.name || "файл"}` });
+    } finally {
+      finishUpload(upload);
     }
   }
 
@@ -6590,34 +8110,44 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
-  function acceptFileOffer(fileId: string) {
-    const offer = store.get().fileOffersIn.find((entry) => entry.id === fileId);
-    gateway.send({ type: "file_accept", file_id: fileId });
+  function acceptFileOffer(
+    fileId: string,
+    offerOverride?: FileOfferIn | null,
+    opts?: { silent?: boolean; closeModal?: boolean }
+  ) {
+    const offer = offerOverride ?? store.get().fileOffersIn.find((entry) => entry.id === fileId) ?? null;
+    const silent = Boolean(opts?.silent);
+    const closeModal = opts?.closeModal !== false;
+    gateway.send({ type: "file_accept", file_id: fileId, transport: "http" });
     store.set((prev) => {
       const transfers = [...prev.fileTransfers];
       if (offer) {
-        transfers.unshift({
-          localId: nextTransferId(),
-          id: offer.id,
+        const idx = transfers.findIndex((entry) => entry.id === fileId && entry.direction === "in");
+        const base = {
+          localId: idx >= 0 ? transfers[idx].localId : nextTransferId(),
+          id: fileId,
           name: offer.name || "файл",
           size: offer.size || 0,
           mime: offer.mime || null,
-          direction: "in",
+          direction: "in" as const,
           peer: offer.from || "—",
           room: offer.room ?? null,
-          status: "offering",
+          status: "offering" as const,
           progress: 0,
-        });
+        };
+        if (idx >= 0) transfers[idx] = { ...transfers[idx], ...base };
+        else transfers.unshift(base);
       }
       return {
         ...prev,
         fileOffersIn: prev.fileOffersIn.filter((entry) => entry.id !== fileId),
         fileTransfers: transfers,
-        modal: null,
-        status: offer ? `Принят файл: ${offer.name || "файл"}` : "Файл принят",
+        ...(closeModal ? { modal: null } : {}),
+        ...(silent ? {} : { status: offer ? `Принят файл: ${offer.name || "файл"}` : "Файл принят" }),
       };
     });
     scheduleSaveFileTransfers(store);
+    scheduleFileAcceptRetry(fileId, 0);
   }
 
   function rejectFileOffer(fileId: string) {
@@ -6704,19 +8234,76 @@ export function mountApp(root: HTMLElement) {
           ...(mime ? { mime } : {}),
         },
       };
-      store.set((prev) => {
-        const offers = prev.fileOffersIn.some((entry) => entry.id === offer.id) ? prev.fileOffersIn : [...prev.fileOffersIn, offer];
-        const withOffer = offers === prev.fileOffersIn ? prev : { ...prev, fileOffersIn: offers };
-        const withMsg = upsertConversation(withOffer, key, inMsg);
-        return {
-          ...withMsg,
-          status: `Входящий файл: ${offer.name}`,
-        };
-      });
+      store.set((prev) => upsertConversation(prev, key, inMsg));
+      const stNow = store.get();
+      const roomId = offer.room ? String(offer.room) : "";
+      const notifKey = roomId ? `file_offer:room:${roomId}:${fileId}` : `file_offer:dm:${offer.from}:${fileId}`;
+      const viewingSame =
+        Boolean(stNow.page === "main" && !stNow.modal && roomId && stNow.selected && stNow.selected.id === roomId) ||
+        Boolean(stNow.page === "main" && !stNow.modal && !roomId && stNow.selected?.kind === "dm" && stNow.selected.id === offer.from);
+      try {
+        if (stNow.notifyInAppEnabled && Notification?.permission === "granted" && tabNotifier.shouldShowSystemNotification(notifKey)) {
+          const profile = stNow.profiles?.[offer.from];
+          let fromLabel = String(profile?.display_name || "").trim();
+          if (!fromLabel) {
+            const handle = String(profile?.handle || "").trim();
+            fromLabel = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : offer.from;
+          }
+          const label = String(offer.name || "файл").replace(/\s+/g, " ").trim();
+          let title = `Файл от ${fromLabel || offer.from}`;
+          if (roomId) {
+            const group = (stNow.groups || []).find((g) => g.id === roomId);
+            const board = !group ? (stNow.boards || []).find((b) => b.id === roomId) : null;
+            const roomLabel = group ? String(group.name || group.id) : board ? String(board.name || board.id) : roomId;
+            title = group ? `Чат: ${roomLabel}` : board ? `Доска: ${roomLabel}` : `Чат: ${roomLabel}`;
+          }
+          const body = roomId
+            ? `${fromLabel || offer.from}: ${label ? `Файл: ${label}` : "Файл"}`
+            : label
+              ? `Файл: ${label}`
+              : "Файл";
+          const tag = roomId ? `yagodka:room:${roomId}` : `yagodka:dm:${offer.from}`;
+          new Notification(title, { body, tag, silent: true });
+        }
+      } catch {
+        // ignore
+      }
+      if (!viewingSame && tabNotifier.shouldShowToast(notifKey)) {
+        const raw = String(offer.name || "файл")
+          .replace(/\s+/g, " ")
+          .trim();
+        const label = raw.length > 80 ? `${raw.slice(0, 77)}…` : raw;
+        showToast(`Входящий файл: ${label || "файл"}`, { kind: "info", timeoutMs: 7000 });
+      }
+      if (viewingSame) {
+        if (roomId) {
+          recordRoomLastReadEntry(key, inMsg);
+        } else {
+          const upToId = msgId ?? undefined;
+          maybeSendMessageRead(offer.from, upToId);
+        }
+      }
+      // Modern UX: auto-accept incoming offers so they don't stick as "Входящий файл" and can download in background.
+      try {
+        const hasTransfer = stNow.fileTransfers.some((t) => t.direction === "in" && String(t.id || "").trim() === fileId);
+        const snap = tabNotifier.getSnapshot();
+        const focused = typeof document.hasFocus === "function" ? document.hasFocus() : false;
+        const canAutoAccept = focused || (snap.leader && !snap.anyFocused);
+        if (!hasTransfer && canAutoAccept && stNow.conn === "connected" && stNow.authed) {
+          acceptFileOffer(fileId, offer, { silent: true, closeModal: false });
+        }
+      } catch {
+        // ignore
+      }
       return true;
     }
     if (t === "file_offer_result") {
-      const upload = activeUpload;
+      const rawLocalId = msg?.local_id ?? msg?.localId ?? "";
+      const msgLocalId = typeof rawLocalId === "string" ? String(rawLocalId).trim() : "";
+      let upload = msgLocalId ? uploadInFlightByLocalId.get(msgLocalId) : undefined;
+      if (!upload && uploadInFlightByLocalId.size === 1) {
+        upload = Array.from(uploadInFlightByLocalId.values())[0];
+      }
       if (!upload) return true;
       const ok = Boolean(msg?.ok);
       if (!ok) {
@@ -6743,16 +8330,14 @@ export function mountApp(root: HTMLElement) {
           store.set({ status: `Отправка отклонена: ${readable}` });
         }
         updateTransferByLocalId(localId, (entry) => ({ ...entry, status: "error", error: readable }));
-        activeUpload = null;
-        startNextUpload();
+        finishUpload(upload);
         return true;
       }
       const fileId = String(msg?.file_id ?? "").trim();
       if (!fileId) {
         const localId = upload.localId;
         updateTransferByLocalId(localId, (entry) => ({ ...entry, status: "error", error: "missing_file_id" }));
-        activeUpload = null;
-        startNextUpload();
+        finishUpload(upload);
         return true;
       }
       const rawMsgId = msg?.msg_id;
@@ -6779,14 +8364,21 @@ export function mountApp(root: HTMLElement) {
       try {
         const st = store.get();
         if (st.selfId && shouldCacheFile(upload.file.name || "файл", upload.file.type || null, upload.file.size || 0)) {
-          void putCachedFileBlob(st.selfId, fileId, upload.file, { mime: upload.file.type || null, size: upload.file.size || 0 });
+          void putCachedFileBlob(st.selfId, fileId, upload.file, {
+            name: upload.file.name || "файл",
+            mime: upload.file.type || null,
+            size: upload.file.size || 0,
+          });
           void enforceFileCachePolicy(st.selfId, { force: true });
+          cachedPreviewsAttempted.delete(`${st.selfId}:${fileId}`);
         }
       } catch {
         // ignore
       }
       store.set({ status: `Загрузка на сервер: ${upload.file.name || "файл"}` });
-      void uploadFileChunks(upload);
+      const uploadUrl = typeof msg?.upload_url === "string" ? String(msg.upload_url).trim() : "";
+      if (uploadUrl) void uploadFileHttp(upload, uploadUrl);
+      else void uploadFileChunks(upload);
       return true;
     }
     if (t === "file_accept_notice") {
@@ -6823,6 +8415,7 @@ export function mountApp(root: HTMLElement) {
     if (t === "file_download_begin") {
       const fileId = String(msg?.file_id ?? "").trim();
       if (!fileId) return true;
+      clearFileAcceptRetry(fileId);
       const name = String(msg?.name ?? "файл");
       const size = Number(msg?.size ?? 0) || 0;
       const from = String(msg?.from ?? "").trim() || "—";
@@ -6883,6 +8476,269 @@ export function mountApp(root: HTMLElement) {
       });
       return true;
     }
+    if (t === "file_url") {
+      const fileId = String(msg?.file_id ?? "").trim();
+      const url = typeof msg?.url === "string" ? String(msg.url).trim() : "";
+      const thumbUrl = typeof msg?.thumb_url === "string" ? String(msg.thumb_url).trim() : "";
+      if (!fileId) return true;
+
+      const waiter = httpFileUrlWaiters.get(fileId);
+      if (waiter) {
+        httpFileUrlWaiters.delete(fileId);
+        if (waiter.timer) {
+          try {
+            window.clearTimeout(waiter.timer);
+          } catch {
+            // ignore
+          }
+        }
+        try {
+          if (url) waiter.resolve(url);
+          else waiter.reject(new Error("missing_url"));
+        } catch {
+          // ignore
+        }
+        return true;
+      }
+
+      const silent = silentFileGets.has(fileId);
+      if (!url && !(silent && thumbUrl)) {
+        finishFileGet(fileId);
+        return true;
+      }
+      clearFileAcceptRetry(fileId);
+      try {
+        const mw = Number(msg?.media_w ?? 0);
+        const mh = Number(msg?.media_h ?? 0);
+        const tw = Number(msg?.thumb_w ?? 0);
+        const th = Number(msg?.thumb_h ?? 0);
+        const w = mw > 0 ? mw : tw;
+        const h = mh > 0 ? mh : th;
+        if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+          setCachedMediaAspectRatio(fileId, w / Math.max(1, h));
+        }
+      } catch {
+        // ignore
+      }
+      const metaFallback = resolveFileMeta(fileId);
+      const name = typeof msg?.name === "string" && msg.name.trim() ? String(msg.name) : metaFallback.name;
+      const size = Number(msg?.size ?? 0) || metaFallback.size || 0;
+      const mimeRaw = msg?.mime;
+      const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? mimeRaw.trim() : metaFallback.mime;
+      const thumbMimeRaw = msg?.thumb_mime;
+      const thumbMime = typeof thumbMimeRaw === "string" && thumbMimeRaw.trim() ? String(thumbMimeRaw).trim() : null;
+
+      if (silent && thumbUrl) {
+        void (async () => {
+          try {
+            const res = await fetch(thumbUrl, { method: "GET" });
+            if (!res.ok) throw new Error(`http_${res.status}`);
+            const blob = await res.blob();
+            const finalMime = thumbMime || blob.type || "image/jpeg";
+            const objectUrl = URL.createObjectURL(blob);
+            setFileThumb(fileId, objectUrl, finalMime);
+            try {
+              const st = store.get();
+              if (st.selfId && shouldCachePreview(name || "файл", finalMime, blob.size || 0)) {
+                void putCachedFileBlob(st.selfId, thumbCacheId(fileId), blob, {
+                  name: name || "файл",
+                  mime: finalMime,
+                  size: blob.size || 0,
+                });
+                void enforceFileCachePolicy(st.selfId, { force: true });
+              }
+            } catch {
+              // ignore
+            }
+          } catch {
+            // ignore
+          } finally {
+            silentFileGets.delete(fileId);
+            finishFileGet(fileId);
+          }
+        })();
+        return true;
+      }
+
+      if (httpDownloadInFlight.has(fileId)) {
+        return true;
+      }
+
+      const existing = downloadByFileId.get(fileId);
+      const streamId = existing?.streamId ? String(existing.streamId) : null;
+      const streaming = Boolean(existing?.streaming && streamId);
+      downloadByFileId.set(fileId, {
+        fileId,
+        name,
+        size,
+        from: existing?.from || "—",
+        room: existing?.room ?? null,
+        mime: mime ?? null,
+        etag: existing?.etag ?? null,
+        chunks: [],
+        received: 0,
+        lastProgress: 0,
+        streamId: streamId || null,
+        streaming,
+      });
+      updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "downloading", progress: 0, ...(mime ? { mime } : {}) }));
+      if (!silent) store.set({ status: `Скачивание: ${name || fileId}` });
+
+      httpDownloadInFlight.add(fileId);
+      void (async () => {
+        try {
+          const baseDelayMs = deviceCaps.slowNetwork ? 900 : deviceCaps.constrained ? 650 : 400;
+          const download = downloadByFileId.get(fileId);
+          if (!download) throw new Error("missing_download_state");
+
+          const result = await resumableHttpDownload({
+            url,
+            offset: download.received,
+            etag: download.etag ?? null,
+            expectedSize: size || 0,
+            maxRetries: 6,
+            baseDelayMs,
+            maxDelayMs: 8000,
+            maxUrlRefresh: 2,
+            refreshUrl: async () => await requestFreshHttpDownloadUrl(fileId),
+            onReset: (reason) => {
+              const cur = downloadByFileId.get(fileId);
+              if (!cur) return;
+              if (cur.streaming && cur.streamId) throw new Error(`http_download_reset_${reason}`);
+              cur.chunks = [];
+              cur.received = 0;
+              cur.lastProgress = 0;
+              cur.etag = null;
+              updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "downloading", progress: 0, ...(mime ? { mime } : {}) }));
+            },
+            onChunk: (chunk) => {
+              const cur = downloadByFileId.get(fileId);
+              if (!cur) throw new Error("missing_download_state");
+              if (cur.streaming && cur.streamId) {
+                const okPost = postStreamChunk(cur.streamId, chunk);
+                if (!okPost) throw new Error("stream_post_failed");
+                return;
+              }
+              const buf = (chunk.buffer as ArrayBuffer).slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
+              cur.chunks.push(buf);
+            },
+            onProgress: ({ received, total }) => {
+              const cur = downloadByFileId.get(fileId);
+              if (!cur) return;
+              cur.received = received;
+              if (typeof total === "number" && Number.isFinite(total) && total > 0 && (!cur.size || cur.size <= 0)) {
+                cur.size = Math.trunc(total);
+              }
+              touchFileGetTimeout(fileId);
+              const denom = cur.size > 0 ? cur.size : typeof total === "number" && total > 0 ? total : 0;
+              const pct = denom > 0 ? Math.min(100, Math.round((cur.received / denom) * 100)) : 0;
+              if (pct !== cur.lastProgress) {
+                cur.lastProgress = pct;
+                updateTransferByFileId(fileId, (entry) => ({ ...entry, progress: pct, status: "downloading" }));
+              }
+            },
+          });
+
+          const final = downloadByFileId.get(fileId);
+          if (!final) throw new Error("missing_download_state");
+          final.etag = result.etag ?? null;
+
+          downloadByFileId.delete(fileId);
+          silentFileGets.delete(fileId);
+          finishFileGet(fileId);
+          if (!silent) {
+            try {
+              gateway.send({ type: "file_downloaded", file_id: fileId });
+            } catch {
+              // ignore
+            }
+          }
+
+          if (final.streaming && final.streamId) {
+            postStreamEnd(final.streamId);
+            updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "complete", progress: 100, ...(mime ? { mime } : {}) }));
+            if (!silent) store.set({ status: `Скачивание завершено: ${name}` });
+            if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
+            return;
+          }
+
+          const finalMime = mime || final.mime || result.mime || guessMimeTypeByName(name);
+          const blob = new Blob(final.chunks, { type: finalMime || undefined });
+          const objectUrl = URL.createObjectURL(blob);
+          updateTransferByFileId(fileId, (entry) => ({
+            ...entry,
+            status: "complete",
+            progress: 100,
+            url: objectUrl,
+            ...(finalMime ? { mime: finalMime } : {}),
+          }));
+          if (!silent) store.set({ status: `Файл готов: ${name}` });
+          try {
+            const st = store.get();
+            if (st.selfId && shouldCacheFile(name || "файл", finalMime, size || blob.size || 0)) {
+              void putCachedFileBlob(st.selfId, fileId, blob, {
+                name: name || "файл",
+                mime: finalMime,
+                size: size || blob.size || 0,
+              });
+              void enforceFileCachePolicy(st.selfId, { force: true });
+              cachedPreviewsAttempted.delete(`${st.selfId}:${fileId}`);
+            }
+          } catch {
+            // ignore
+          }
+          const pending = pendingFileDownloads.get(fileId);
+          if (pending) {
+            pendingFileDownloads.delete(fileId);
+            triggerBrowserDownload(objectUrl, pending.name || name || "файл");
+          }
+          if (pendingFileViewer && pendingFileViewer.fileId === fileId) {
+            const pv = pendingFileViewer;
+            pendingFileViewer = null;
+            store.set({
+              modal: buildFileViewerModalState({
+                url: objectUrl,
+                name: pv.name,
+                size: pv.size,
+                mime: pv.mime,
+                caption: pv.caption || null,
+                chatKey: pv.chatKey,
+                msgIdx: pv.msgIdx,
+              }),
+            });
+          }
+        } catch {
+          const waiter = httpFileUrlWaiters.get(fileId);
+          if (waiter) {
+            httpFileUrlWaiters.delete(fileId);
+            if (waiter.timer) {
+              try {
+                window.clearTimeout(waiter.timer);
+              } catch {
+                // ignore
+              }
+            }
+            try {
+              waiter.reject(new Error("download_failed"));
+            } catch {
+              // ignore
+            }
+          }
+          silentFileGets.delete(fileId);
+          finishFileGet(fileId);
+          pendingFileDownloads.delete(fileId);
+          if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
+          const download = downloadByFileId.get(fileId);
+          if (download?.streamId) postStreamError(download.streamId, "http_download_failed");
+          downloadByFileId.delete(fileId);
+          updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "error", error: "download_failed" }));
+          if (!silent) store.set({ status: "Ошибка файла: download_failed" });
+        } finally {
+          httpDownloadInFlight.delete(fileId);
+        }
+      })();
+      return true;
+    }
     if (t === "file_chunk") {
       const fileId = String(msg?.file_id ?? "").trim();
       const download = fileId ? downloadByFileId.get(fileId) : null;
@@ -6899,6 +8755,7 @@ export function mountApp(root: HTMLElement) {
           postStreamError(download.streamId, "stream_post_failed");
           downloadByFileId.delete(fileId);
           silentFileGets.delete(fileId);
+          finishFileGet(fileId);
           updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "error", error: "stream_failed" }));
           if (!silent) store.set({ status: "Ошибка файла: stream_failed" });
           return true;
@@ -6908,6 +8765,7 @@ export function mountApp(root: HTMLElement) {
         download.chunks.push(buf);
       }
       download.received += chunkLen;
+      touchFileGetTimeout(fileId);
       const pct = download.size > 0 ? Math.min(100, Math.round((download.received / download.size) * 100)) : 0;
       if (pct !== download.lastProgress) {
         download.lastProgress = pct;
@@ -6918,6 +8776,8 @@ export function mountApp(root: HTMLElement) {
     if (t === "file_download_complete") {
       const fileId = String(msg?.file_id ?? "").trim();
       if (!fileId) return true;
+      clearFileAcceptRetry(fileId);
+      finishFileGet(fileId);
       const silent = silentFileGets.has(fileId);
       const download = downloadByFileId.get(fileId);
       if (download) {
@@ -6950,8 +8810,13 @@ export function mountApp(root: HTMLElement) {
         try {
           const st = store.get();
           if (st.selfId && shouldCacheFile(download.name || "файл", mime, download.size || blob.size || 0)) {
-            void putCachedFileBlob(st.selfId, fileId, blob, { mime, size: download.size || blob.size || 0 });
+            void putCachedFileBlob(st.selfId, fileId, blob, {
+              name: download.name || "файл",
+              mime,
+              size: download.size || blob.size || 0,
+            });
             void enforceFileCachePolicy(st.selfId, { force: true });
+            cachedPreviewsAttempted.delete(`${st.selfId}:${fileId}`);
           }
         } catch {
           // ignore
@@ -6988,8 +8853,12 @@ export function mountApp(root: HTMLElement) {
       const peer = String(msg?.peer ?? "").trim();
       const detail = peer ? `${reason} (${peer})` : reason;
       const silent = fileId ? silentFileGets.has(fileId) : false;
+      const pendingAccept = fileId ? fileAcceptRetries.get(fileId) : null;
+      const canRetryAccept = Boolean(pendingAccept) && reason === "not_found";
       if (fileId) {
         silentFileGets.delete(fileId);
+        finishFileGet(fileId);
+        dropFileGetQueue(fileId);
         const uid = store.get().selfId;
         if (uid) previewPrefetchAttempted.delete(`${uid}:${fileId}`);
         pendingFileDownloads.delete(fileId);
@@ -6999,6 +8868,17 @@ export function mountApp(root: HTMLElement) {
         const download = downloadByFileId.get(fileId);
         if (download?.streamId) postStreamError(download.streamId, detail);
         if (download) downloadByFileId.delete(fileId);
+        if (!canRetryAccept) clearFileAcceptRetry(fileId);
+        if (canRetryAccept) {
+          const attempts = pendingAccept?.attempts ?? 0;
+          if (attempts <= FILE_ACCEPT_RETRY_MAX) {
+            updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "offering", error: null }));
+            scheduleFileAcceptRetry(fileId, attempts);
+            if (!silent) store.set({ status: "Ожидаем файл от отправителя" });
+            return true;
+          }
+          clearFileAcceptRetry(fileId);
+        }
         updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "error", error: detail }));
       }
       if (!silent) store.set({ status: `Ошибка файла: ${detail}` });
@@ -7011,6 +8891,7 @@ export function mountApp(root: HTMLElement) {
     flushDrafts(store);
     flushPinnedMessages(store);
     flushOutbox(store);
+    flushHistoryCache(store);
     clearToast();
     const st = store.get();
     const id = String(st.selfId || "").trim();
@@ -7031,11 +8912,24 @@ export function mountApp(root: HTMLElement) {
     historyPreviewLastAt.clear();
     lastReadSentAt.clear();
     cachedPreviewsAttempted.clear();
+    cachedThumbsAttempted.clear();
     previewPrefetchAttempted.clear();
     pushAutoAttemptUser = null;
     pushAutoAttemptAt = 0;
     store.set({ pwaPushSubscribed: false, pwaPushStatus: null });
     silentFileGets.clear();
+    fileGetQueueHigh.length = 0;
+    fileGetQueuePrefetch.length = 0;
+    fileGetQueueMeta.clear();
+    for (const fid of fileGetInFlight.keys()) {
+      clearFileGetTimeout(fid);
+    }
+    fileGetInFlight.clear();
+    fileGetPrefetchInFlight.clear();
+    fileGetTimeouts.clear();
+    for (const fid of fileAcceptRetries.keys()) {
+      clearFileAcceptRetry(fid);
+    }
     pendingFileDownloads.clear();
     previewWarmupLastKey = "";
     previewWarmupLastSig = "";
@@ -7049,6 +8943,16 @@ export function mountApp(root: HTMLElement) {
       .map((entry) => entry.url)
       .filter((url): url is string => Boolean(url));
     for (const url of toRevoke) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    }
+    const thumbToRevoke = Object.values(st.fileThumbs || {})
+      .map((entry) => entry?.url)
+      .filter((url): url is string => Boolean(url));
+    for (const url of thumbToRevoke) {
       try {
         URL.revokeObjectURL(url);
       } catch {
@@ -7074,6 +8978,7 @@ export function mountApp(root: HTMLElement) {
       pendingBoardInvites: [],
       fileOffersIn: [],
       fileTransfers: [],
+      fileThumbs: {},
       groups: [],
       boards: [],
       selected: null,
@@ -7113,6 +9018,7 @@ export function mountApp(root: HTMLElement) {
     fileTransfersLoadedForUser = null;
     outboxLoadedForUser = null;
     boardScheduleLoadedForUser = null;
+    historyCacheLoadedForUser = null;
     clearBoardScheduleTimer();
     try {
       layout.input.value = "";
@@ -7902,6 +9808,9 @@ export function mountApp(root: HTMLElement) {
   const EMOJI_RECENTS_KEY = "yagodka:emoji_recents:v1";
   const EMOJI_RECENTS_MAX = 24;
   let emojiOpen = false;
+  type EmojiPickerMode = "composer" | "reaction";
+  let emojiPickerMode: EmojiPickerMode = "composer";
+  let emojiPickerReactionTarget: { key: string; msgId: number } | null = null;
   let emojiPopover: HTMLElement | null = null;
   let emojiTabs: HTMLElement | null = null;
   let emojiContent: HTMLElement | null = null;
@@ -7941,6 +9850,11 @@ export function mountApp(root: HTMLElement) {
       window.clearTimeout(emojiHideTimer);
       emojiHideTimer = null;
     }
+  }
+
+  function resetEmojiPickerMode() {
+    emojiPickerMode = "composer";
+    emojiPickerReactionTarget = null;
   }
 
   function ensureEmojiCatalog() {
@@ -8063,6 +9977,47 @@ export function mountApp(root: HTMLElement) {
       ev.preventDefault();
       const emoji = String(target.dataset.emoji || "");
       if (!emoji) return;
+      if (emojiPickerMode === "reaction") {
+        const st = store.get();
+        if (st.conn !== "connected") {
+          store.set({ status: "Нет соединения" });
+          closeEmojiPopover();
+          return;
+        }
+        if (!st.authed) {
+          store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+          return;
+        }
+        const targetInfo = emojiPickerReactionTarget;
+        if (!targetInfo || !targetInfo.key || !targetInfo.msgId) {
+          closeEmojiPopover();
+          return;
+        }
+        const conv = st.conversations?.[targetInfo.key] || [];
+        let msg: ChatMessage | null = null;
+        for (let i = conv.length - 1; i >= 0; i -= 1) {
+          const candidate = conv[i];
+          const mid = candidate && typeof candidate.id === "number" && Number.isFinite(candidate.id) ? candidate.id : null;
+          if (mid && mid === targetInfo.msgId) {
+            msg = candidate;
+            break;
+          }
+        }
+        if (!msg) {
+          closeEmojiPopover();
+          return;
+        }
+        const mine = typeof msg.reactions?.mine === "string" ? msg.reactions.mine : null;
+        const nextEmoji = mine === emoji ? null : emoji;
+        gateway.send({ type: "reaction_set", id: targetInfo.msgId, emoji: nextEmoji });
+
+        const recents = loadEmojiRecents();
+        const next = updateEmojiRecents(recents, emoji, EMOJI_RECENTS_MAX);
+        saveEmojiRecents(next);
+        closeEmojiPopover();
+        return;
+      }
+
       if (layout.input.disabled) return;
 
       const { value, caret } = insertTextAtSelection({
@@ -8215,6 +10170,20 @@ export function mountApp(root: HTMLElement) {
 
   function openEmojiPopover() {
     if (layout.input.disabled) return;
+    resetEmojiPickerMode();
+    emojiOpen = true;
+    layout.emojiBtn.classList.add("btn-active");
+    const pop = ensureEmojiPopover();
+    renderEmojiPopover();
+    clearEmojiHideTimer();
+    pop.classList.remove("hidden");
+    requestAnimationFrame(() => pop.classList.add("emoji-open"));
+  }
+
+  function openEmojiPopoverForReaction(target: { key: string; msgId: number }) {
+    if (!target.key || !target.msgId) return;
+    emojiPickerMode = "reaction";
+    emojiPickerReactionTarget = target;
     emojiOpen = true;
     layout.emojiBtn.classList.add("btn-active");
     const pop = ensureEmojiPopover();
@@ -8228,6 +10197,7 @@ export function mountApp(root: HTMLElement) {
     emojiOpen = false;
     layout.emojiBtn.classList.remove("btn-active");
     if (!emojiPopover) return;
+    resetEmojiPickerMode();
     emojiSearch = "";
     emojiLastQuery = "";
     if (emojiSearchInput) emojiSearchInput.value = "";
@@ -9549,6 +11519,34 @@ export function mountApp(root: HTMLElement) {
       return;
     }
 
+    if (itemId === "react_picker") {
+      if (t.kind !== "message") {
+        close();
+        return;
+      }
+      if (st.conn !== "connected") {
+        store.set({ status: "Нет соединения" });
+        close();
+        return;
+      }
+      if (!st.authed) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      const selKey = st.selected ? conversationKey(st.selected) : "";
+      const idx = Number.isFinite(Number(t.id)) ? Math.trunc(Number(t.id)) : -1;
+      const conv = selKey ? st.conversations[selKey] : null;
+      const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+      const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
+      if (!selKey || !msg || msgId === null || msgId <= 0) {
+        close();
+        return;
+      }
+      close();
+      openEmojiPopoverForReaction({ key: selKey, msgId });
+      return;
+    }
+
     if (itemId.startsWith("react:")) {
       if (t.kind !== "message") {
         close();
@@ -10133,7 +12131,25 @@ export function mountApp(root: HTMLElement) {
 
   async function applyPwaUpdateNow(opts?: { mode?: PwaUpdateMode; buildId?: string }) {
     const mode: PwaUpdateMode = opts?.mode === "manual" ? "manual" : "auto";
-    const buildId = String(opts?.buildId ?? pwaPendingBuildId ?? store.get().clientVersion ?? "").trim();
+    const updateLatest = String(store.get().updateLatest ?? "").trim();
+    let buildId = String(opts?.buildId ?? pwaPendingBuildId ?? updateLatest ?? store.get().clientVersion ?? "").trim();
+    let buildIdSource = opts?.buildId ? "opts" : pwaPendingBuildId ? "pending" : updateLatest ? "latest" : "client";
+    if (
+      updateLatest &&
+      buildIdSource !== "opts" &&
+      shouldReloadForBuild(APP_VERSION, updateLatest) &&
+      !shouldReloadForBuild(APP_VERSION, buildId)
+    ) {
+      buildId = updateLatest;
+      buildIdSource = "latest";
+    }
+    let hasNewBuild = shouldReloadForBuild(APP_VERSION, buildId);
+    const latestNeedsReload = updateLatest && shouldReloadForBuild(APP_VERSION, updateLatest);
+    if (!hasNewBuild && latestNeedsReload && mode === "manual") {
+      buildId = updateLatest;
+      buildIdSource = "latest";
+      hasNewBuild = true;
+    }
     flushDrafts(store);
     flushOutbox(store);
     saveRestartState(store.get());
@@ -10148,7 +12164,16 @@ export function mountApp(root: HTMLElement) {
     if (!activated) {
       const hasController = typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
       const hasWaiting = hasPwaUpdate();
-      if (mode === "manual" && !hasWaiting) {
+      const canReloadWithoutWaiting = hasNewBuild && !hasWaiting;
+      const shouldForceLatestReload =
+        mode === "manual" && !hasWaiting && !canReloadWithoutWaiting && hasController && buildIdSource === "latest" && updateLatest;
+      if (shouldForceLatestReload) {
+        logPwaUpdate("manual_force_latest", updateLatest);
+        storeActiveBuildId(updateLatest);
+        forceUpdateReload("manual_latest_force");
+        return;
+      }
+      if (mode === "manual" && !hasWaiting && !canReloadWithoutWaiting) {
         const msg = hasController
           ? "Новых обновлений нет."
           : "PWA обновление недоступно: нет активного Service Worker. Перезапустите приложение.";
@@ -10156,10 +12181,13 @@ export function mountApp(root: HTMLElement) {
         logPwaUpdate("manual_no_update", buildId || "unknown");
         return;
       }
-      const canReloadWithoutWaiting = Boolean(buildId) && hasController && !hasWaiting;
       if (canReloadWithoutWaiting) {
         logPwaUpdate(mode === "manual" ? "manual_reload_active" : "auto_reload_active", buildId || "unknown");
         storeActiveBuildId(buildId);
+        if (mode === "manual" && (buildIdSource === "latest" || buildIdSource === "opts")) {
+          forceUpdateReload(buildIdSource === "latest" ? "manual_latest" : "manual_opts");
+          return;
+        }
         try {
           sessionStorage.setItem("yagodka_updating", "1");
         } catch {
@@ -10203,6 +12231,167 @@ export function mountApp(root: HTMLElement) {
     window.location.reload();
   }
 
+  function forceUpdateReload(reason?: string) {
+    try {
+      sessionStorage.setItem("yagodka_updating", "1");
+      sessionStorage.setItem("yagodka_force_recover", "1");
+    } catch {
+      // ignore
+    }
+    if (reason) logPwaUpdate("force_reload", reason);
+    try {
+      window.location.replace(window.location.href);
+      return;
+    } catch {
+      // ignore
+    }
+    window.location.reload();
+  }
+
+  async function requestPwaBuildId(reg: ServiceWorkerRegistration | null, timeoutMs = 1200): Promise<string> {
+    if (!reg || !("serviceWorker" in navigator)) return "";
+    const target = navigator.serviceWorker.controller || reg.active || reg.waiting || reg.installing || null;
+    if (!target) return "";
+    return await new Promise((resolve) => {
+      let done = false;
+      let timer: number | null = null;
+      const finish = (id: string) => {
+        if (done) return;
+        done = true;
+        if (timer !== null) {
+          try {
+            window.clearTimeout(timer);
+          } catch {
+            // ignore
+          }
+          timer = null;
+        }
+        window.removeEventListener("yagodka:pwa-build", onBuild);
+        resolve(id);
+      };
+      const onBuild = (ev: Event) => {
+        const detail = (ev as CustomEvent<any>).detail;
+        const buildId = String(detail?.buildId ?? "").trim();
+        if (!buildId) return;
+        finish(buildId);
+      };
+      window.addEventListener("yagodka:pwa-build", onBuild);
+      timer = window.setTimeout(() => finish(""), timeoutMs);
+      try {
+        target.postMessage({ type: "GET_BUILD_ID" });
+      } catch {
+        finish("");
+      }
+    });
+  }
+
+  async function waitForServiceWorkerReady(timeoutMs = 1200): Promise<ServiceWorkerRegistration | null> {
+    if (!("serviceWorker" in navigator)) return null;
+    try {
+      const ready = navigator.serviceWorker.ready;
+      if (!ready) return null;
+      return await new Promise((resolve) => {
+        let done = false;
+        let timer: number | null = null;
+        const finish = (reg: ServiceWorkerRegistration | null) => {
+          if (done) return;
+          done = true;
+          if (timer !== null) {
+            try {
+              window.clearTimeout(timer);
+            } catch {
+              // ignore
+            }
+            timer = null;
+          }
+          resolve(reg);
+        };
+        timer = window.setTimeout(() => finish(null), timeoutMs);
+        ready
+          .then((reg) => finish(reg))
+          .catch(() => finish(null));
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async function fetchSwBuildId(timeoutMs = 1500): Promise<string> {
+    if (typeof fetch !== "function") return "";
+    const url = `./sw.js?ts=${Date.now()}`;
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    let timer: number | null = null;
+    if (controller) {
+      timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    }
+    try {
+      const res = await fetch(url, { cache: "no-store", ...(controller ? { signal: controller.signal } : {}) });
+      if (!res.ok) return "";
+      const text = await res.text();
+      const m = text.match(/BUILD_ID\\s*=\\s*\"([^\"]+)\"/);
+      return m ? m[1].trim() : "";
+    } catch {
+      return "";
+    } finally {
+      if (timer !== null) {
+        try {
+          window.clearTimeout(timer);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  async function resetPwaCachesAndServiceWorkers(reason: string): Promise<void> {
+    logPwaUpdate("manual_pwa_reset", reason || "unknown");
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(
+        regs.map(async (r) => {
+          try {
+            await r.unregister();
+          } catch {
+            // ignore
+          }
+        })
+      );
+    } catch {
+      // ignore
+    }
+    try {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith("yagodka-web-cache-") || k.startsWith("yagodka-web-cache-fallback-"))
+          .map(async (k) => {
+            try {
+              await caches.delete(k);
+            } catch {
+              // ignore
+            }
+          })
+      );
+    } catch {
+      // ignore
+    }
+    try {
+      localStorage.removeItem("yagodka_active_build_id_v1");
+    } catch {
+      // ignore
+    }
+    try {
+      sessionStorage.setItem("yagodka_force_recover", "1");
+      const u = new URL(window.location.href);
+      u.searchParams.set("__pwa_reset", String(Date.now()));
+      window.location.replace(u.toString());
+      return;
+    } catch {
+      // ignore
+    }
+    forceUpdateReload("manual_pwa_reset");
+  }
+
   async function forcePwaUpdate() {
     if (pwaForceInFlight) return;
     if (!("serviceWorker" in navigator)) {
@@ -10212,41 +12401,86 @@ export function mountApp(root: HTMLElement) {
     pwaForceInFlight = true;
     store.set({ status: "Принудительное обновление PWA…" });
     try {
+      let reg: ServiceWorkerRegistration | null = null;
       try {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) await reg.update();
+        reg = (await navigator.serviceWorker.getRegistration()) ?? null;
+      } catch {
+        reg = null;
+      }
+      if (!reg) {
+        reg = await waitForServiceWorkerReady(1200);
+      }
+      if (!reg) {
+        try {
+          reg = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+        } catch {
+          store.set({ status: "Service Worker не зарегистрирован. Перезапустите приложение." });
+          return;
+        }
+      }
+      try {
+        await reg.update();
       } catch {
         // ignore
       }
-      await applyPwaUpdateNow({ mode: "manual" });
+      const swBuildId = await requestPwaBuildId(reg);
+      const netBuildId = await fetchSwBuildId();
+      let buildId = swBuildId || netBuildId;
+      const latest = String(store.get().updateLatest ?? "").trim();
+      const latestNeedsReload = latest ? shouldReloadForBuild(APP_VERSION, latest) : false;
+      const netNeedsReload = netBuildId ? shouldReloadForBuild(APP_VERSION, netBuildId) : false;
+      if ((latestNeedsReload || netNeedsReload) && netBuildId && (!swBuildId || shouldReloadForBuild(swBuildId, netBuildId))) {
+        store.set({ status: "Найдена новая сборка, но Service Worker не обновляется. Сбрасываем кэш PWA…" });
+        await resetPwaCachesAndServiceWorkers(`stuck:${swBuildId || "none"}->${netBuildId}`);
+        return;
+      }
+      let buildNeedsReload = buildId ? shouldReloadForBuild(APP_VERSION, buildId) : false;
+      if (latestNeedsReload && !buildNeedsReload) {
+        buildId = latest;
+        buildNeedsReload = true;
+      }
+      await applyPwaUpdateNow({ mode: "manual", ...(buildId ? { buildId } : {}) });
+      if (!buildNeedsReload && !latestNeedsReload) {
+        logPwaUpdate("manual_force_reload", buildId || latest || "unknown");
+        store.set({ status: "Принудительная перезагрузка для обновления…" });
+        forceUpdateReload("manual_force");
+      }
     } finally {
       pwaForceInFlight = false;
     }
   }
 
-  function isSafeToAutoApplyUpdate(st: AppState): boolean {
-    const hasActiveTransfer = (st.fileTransfers || []).some((t) => t.status === "uploading" || t.status === "downloading");
-    if (hasActiveTransfer) return false;
-    if (st.modal) return false;
-    // Не перезапускаем приложение, пока пользователь находится в поле ввода (особенно на iOS).
-    // Исключение: пустой композер без активного редактирования/ответа.
-    const ae = document.activeElement as HTMLElement | null;
-    if (ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae.isContentEditable)) {
-      const isComposer = ae.getAttribute("data-ios-assistant") === "composer";
-      if (!isComposer) return false;
-      const value =
-        ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement ? ae.value : String(ae.textContent || "");
-      if (value.trim()) return false;
-      if (st.editing || st.replyDraft || st.forwardDraft || st.chatSelection) return false;
-    }
-    // Не дёргаем PWA/веб обновление, когда вкладка неактивна: на мобилках это часто даёт "чёрный экран" при возврате.
-    if (document.visibilityState !== "visible") return false;
-    const now = Date.now();
-    const idleFor = Math.max(0, now - (lastUserInputAt || 0));
-    // Даем пользователю чуть "тишины", чтобы не перезагружать в момент активного ввода/кликов.
-    if (idleFor < 3_000) return false;
-    return true;
-  }
+	  function isSafeToAutoApplyUpdate(st: AppState): boolean {
+	    const hasActiveTransfer = (st.fileTransfers || []).some((t) => t.status === "uploading" || t.status === "downloading");
+	    if (hasActiveTransfer) return false;
+	    if (Object.values(st.historyLoading || {}).some(Boolean)) return false;
+	    if (historyRequested.size || historyDeltaRequested.size || historyPrefetchRequested.size) return false;
+	    if (historyWarmupInFlight.size || historyWarmupQueue.length) return false;
+	    if (previewWarmupInFlight || previewAutoFetchRaf !== null) return false;
+	    if (st.modal) return false;
+	    const now = Date.now();
+	    const idleFor = Math.max(0, now - (lastUserInputAt || 0));
+	    // Не перезапускаем приложение, пока пользователь находится в поле ввода (особенно на iOS).
+	    // Исключение: пустой композер без активного редактирования/ответа.
+	    const ae = document.activeElement as HTMLElement | null;
+	    if (ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae.isContentEditable)) {
+	      const isComposer = ae.getAttribute("data-ios-assistant") === "composer";
+	      if (!isComposer) return false;
+	      if (st.editing || st.replyDraft || st.forwardDraft || st.chatSelection) return false;
+	      const value =
+	        ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement ? ae.value : String(ae.textContent || "");
+	      if (value.trim()) {
+	        // Desktop PWA: черновики сохраняем перед перезапуском, поэтому можно применить обновление после паузы.
+	        if (isIOS() || !isStandaloneDisplayMode()) return false;
+	        if (idleFor < 12_000) return false;
+	      }
+	    }
+	    // Не дёргаем PWA/веб обновление, когда вкладка неактивна: на мобилках это часто даёт "чёрный экран" при возврате.
+	    if (document.visibilityState !== "visible") return false;
+	    // Даем пользователю чуть "тишины", чтобы не перезагружать в момент активного ввода/кликов.
+	    if (idleFor < 3_000) return false;
+	    return true;
+	  }
 
   function scheduleAutoApplyPwaUpdate(delayMs = 800) {
     if (pwaAutoApplyTimer !== null) return;
@@ -10278,28 +12512,21 @@ export function mountApp(root: HTMLElement) {
     if (!buildId) return;
     const hasController = typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
     const hasWaiting = hasPwaUpdate();
-    const currentVersion = store.get().clientVersion;
-    const needReload = shouldReloadForBuild(currentVersion, buildId);
+    const storedVersion = store.get().clientVersion;
+    const needReload = shouldReloadForBuild(APP_VERSION, buildId);
     logPwaUpdate("build", `${buildId}${needReload ? "" : " ok"}`);
     if (hasController && !hasWaiting) {
       storeActiveBuildId(buildId);
-    }
-    if (needReload && hasController && !hasWaiting) {
-      clearPwaAutoApplyGuard();
-      pwaPendingBuildId = "";
-      pwaAutoApplySuppressed = false;
-      store.set({ clientVersion: buildId, pwaUpdateAvailable: false });
-      return;
     }
     if (!needReload) clearPwaAutoApplyGuard();
     if (!needReload && hasController && !hasWaiting) {
       store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, pwaUpdateAvailable: false } : prev));
     }
-    if (currentVersion === buildId) return;
+    if (storedVersion === buildId) return;
     store.set({ clientVersion: buildId });
     const st = store.get();
     if (st.conn === "connected" && st.authed) {
-      gateway.send({ type: "client_info", client: "web", version: buildId });
+      gateway.send({ type: "client_info", client: "web", version: buildId, ...buildClientInfoTags() });
     }
     // Если SW уже обновился до новой semver, а JS ещё старый — тихо перезапускаем приложение.
     if (needReload) {
@@ -11514,7 +13741,8 @@ export function mountApp(root: HTMLElement) {
     },
     onSetMobileSidebarTab: (tab: MobileSidebarTab) => setMobileSidebarTab(tab),
     onSetSidebarChatFilter: (filter: SidebarChatFilter) => {
-      const next = filter === "unread" || filter === "mentions" ? filter : "all";
+      const next =
+        filter === "unread" || filter === "mentions" || filter === "dms" || filter === "groups" ? filter : "all";
       if (store.get().sidebarChatFilter === next) return;
       store.set({ sidebarChatFilter: next });
     },
@@ -11537,7 +13765,7 @@ export function mountApp(root: HTMLElement) {
     onAuthModeChange: (mode: "register" | "login") => store.set({ authMode: mode, modal: { kind: "auth" } }),
     onCloseModal: () => closeModal(),
     onDismissUpdate: () => store.set({ modal: null, updateDismissedLatest: store.get().updateLatest }),
-    onReloadUpdate: () => window.location.reload(),
+    onReloadUpdate: () => forceUpdateReload("update_required"),
     onApplyPwaUpdate: () => void applyPwaUpdateNow({ mode: "manual" }),
     onSkinChange: (skinId: string) => setSkin(skinId),
     onThemeChange: (theme: ThemeMode) => setTheme(theme),
@@ -11563,6 +13791,7 @@ export function mountApp(root: HTMLElement) {
     onBoardInviteDecline: (boardId: string) => declineBoardInvite(boardId),
     onFileSendConfirm: (captionText: string) => confirmFileSend(captionText),
     onFileViewerNavigate: (dir: "prev" | "next") => navigateFileViewer(dir),
+    onFileViewerJump: () => jumpFromFileViewer(),
     onFileSend: (file: File | null, target: TargetRef | null) => {
       const st = store.get();
       if (st.conn !== "connected") {
@@ -11851,11 +14080,15 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
+  const initialSelected = store.get().selected;
   let prevAuthed = store.get().authed;
   let prevEditing: { key: string; id: number } | null = (() => {
     const e = store.get().editing;
     return e ? { key: e.key, id: e.id } : null;
   })();
+  let prevAutoFetchKey = initialSelected ? conversationKey(initialSelected) : "";
+  let prevAutoFetchSig = prevAutoFetchKey ? convoSig(store.get().conversations[prevAutoFetchKey] ?? []) : "";
+  let prevAutoFetchTransfersRef = store.get().fileTransfers;
 
   store.subscribe(() => {
     const st = store.get();
@@ -11878,25 +14111,28 @@ export function mountApp(root: HTMLElement) {
 	    if (
 	      st.authed &&
 	      st.selfId &&
-	      (draftsLoadedForUser !== st.selfId ||
-	        pinsLoadedForUser !== st.selfId ||
-	        pinnedMessagesLoadedForUser !== st.selfId ||
-	        fileTransfersLoadedForUser !== st.selfId ||
-	        outboxLoadedForUser !== st.selfId ||
-          boardScheduleLoadedForUser !== st.selfId)
-	    ) {
+      (draftsLoadedForUser !== st.selfId ||
+        pinsLoadedForUser !== st.selfId ||
+        pinnedMessagesLoadedForUser !== st.selfId ||
+        fileTransfersLoadedForUser !== st.selfId ||
+        outboxLoadedForUser !== st.selfId ||
+          boardScheduleLoadedForUser !== st.selfId ||
+          historyCacheLoadedForUser !== st.selfId)
+    ) {
 	      const needDrafts = draftsLoadedForUser !== st.selfId;
 	      const needPins = pinsLoadedForUser !== st.selfId;
-	      const needPinnedMessages = pinnedMessagesLoadedForUser !== st.selfId;
-	      const needFileTransfers = fileTransfersLoadedForUser !== st.selfId;
-	      const needOutbox = outboxLoadedForUser !== st.selfId;
-          const needBoardSchedule = boardScheduleLoadedForUser !== st.selfId;
+      const needPinnedMessages = pinnedMessagesLoadedForUser !== st.selfId;
+      const needFileTransfers = fileTransfersLoadedForUser !== st.selfId;
+      const needOutbox = outboxLoadedForUser !== st.selfId;
+      const needBoardSchedule = boardScheduleLoadedForUser !== st.selfId;
+      const needHistoryCache = historyCacheLoadedForUser !== st.selfId;
 	      if (needDrafts) draftsLoadedForUser = st.selfId;
 	      if (needPins) pinsLoadedForUser = st.selfId;
 	      if (needPinnedMessages) pinnedMessagesLoadedForUser = st.selfId;
 	      if (needFileTransfers) fileTransfersLoadedForUser = st.selfId;
-	      if (needOutbox) outboxLoadedForUser = st.selfId;
-          if (needBoardSchedule) boardScheduleLoadedForUser = st.selfId;
+      if (needOutbox) outboxLoadedForUser = st.selfId;
+      if (needBoardSchedule) boardScheduleLoadedForUser = st.selfId;
+      if (needHistoryCache) historyCacheLoadedForUser = st.selfId;
 
       const storedDrafts = needDrafts ? loadDraftsForUser(st.selfId) : {};
       const mergedDrafts = needDrafts ? { ...storedDrafts, ...st.drafts } : st.drafts;
@@ -11906,6 +14142,14 @@ export function mountApp(root: HTMLElement) {
 
       const storedPinnedMessages = needPinnedMessages ? loadPinnedMessagesForUser(st.selfId) : {};
       const mergedPinnedMessages = needPinnedMessages ? mergePinnedMessagesMaps(storedPinnedMessages, st.pinnedMessages) : st.pinnedMessages;
+
+      const storedHistory = needHistoryCache ? loadHistoryCacheForUser(st.selfId) : null;
+      const historyCacheConversations = storedHistory ? storedHistory.conversations : {};
+      const mergedHistoryCursor = storedHistory ? { ...storedHistory.historyCursor, ...st.historyCursor } : st.historyCursor;
+      const mergedHistoryHasMore = storedHistory ? { ...storedHistory.historyHasMore, ...st.historyHasMore } : st.historyHasMore;
+      const mergedHistoryLoaded = storedHistory ? { ...st.historyLoaded, ...storedHistory.historyLoaded } : st.historyLoaded;
+
+      const baseConversations = storedHistory ? mergeConversationMaps(historyCacheConversations, st.conversations) : st.conversations;
 
 	      const storedFileTransfers = needFileTransfers ? loadFileTransfersForUser(st.selfId) : [];
 	      const mergedFileTransfers = (() => {
@@ -11953,12 +14197,12 @@ export function mountApp(root: HTMLElement) {
 	          if (extras.length) out[k] = [...base, ...extras].sort((a, b) => a.ts - b.ts);
 	        }
 	        return out;
-	      })();
+      })();
 
 	      const mergedConversations = (() => {
-	        if (!needOutbox) return st.conversations;
+	        if (!needOutbox) return baseConversations;
 	        let changed = false;
-	        const next: typeof st.conversations = { ...st.conversations };
+	        const next: typeof st.conversations = { ...baseConversations };
 	        for (const [k, list] of Object.entries(mergedOutbox)) {
 	          const out = Array.isArray(list) ? list : [];
 	          if (!out.length) continue;
@@ -11987,7 +14231,7 @@ export function mountApp(root: HTMLElement) {
 	            return sa - sb;
 	          });
 	        }
-	        return changed ? next : st.conversations;
+	        return changed ? next : baseConversations;
 	      })();
 
       const selectedKey = st.selected ? conversationKey(st.selected) : "";
@@ -12018,7 +14262,10 @@ export function mountApp(root: HTMLElement) {
 	        fileTransfers: mergedFileTransfers,
 	        outbox: mergedOutbox,
 	        conversations: mergedConversations,
-          boardScheduledPosts: mergedBoardSchedule,
+	        ...(storedHistory
+          ? { historyLoaded: mergedHistoryLoaded, historyCursor: mergedHistoryCursor, historyHasMore: mergedHistoryHasMore }
+          : {}),
+	        boardScheduledPosts: mergedBoardSchedule,
 	        ...(restoredInput !== null ? { input: restoredInput } : {}),
 	      }));
 
@@ -12092,6 +14339,23 @@ export function mountApp(root: HTMLElement) {
         historyPrependAnchor = null;
       }
     }
+    const clampKey = st.selected ? conversationKey(st.selected) : "";
+    if (
+      clampKey &&
+      st.page === "main" &&
+      (!st.modal || st.modal.kind === "context_menu") &&
+      st.historyLoaded?.[clampKey] &&
+      st.historyHasMore?.[clampKey] === false
+    ) {
+      const currentStart = st.historyVirtualStart?.[clampKey];
+      if (layout.chatHost.scrollTop <= 2 && currentStart !== 0) {
+        store.set((prev) => ({
+          ...prev,
+          historyVirtualStart: { ...prev.historyVirtualStart, [clampKey]: 0 },
+        }));
+        return;
+      }
+    }
     const autoScrollKey = st.selected ? conversationKey(st.selected) : "";
     if (pendingChatAutoScroll && pendingChatAutoScroll.key !== autoScrollKey) {
       pendingChatAutoScroll = null;
@@ -12127,7 +14391,7 @@ export function mountApp(root: HTMLElement) {
     }
     if (st.authed && !prevAuthed) {
       if (st.selected) {
-        requestHistory(st.selected, { force: true, deltaLimit: 2000 });
+        requestHistory(st.selected, { force: true, deltaLimit: 2000, prefetchBefore: true });
         if (st.selected.kind === "dm") {
           maybeSendMessageRead(st.selected.id);
         }
@@ -12139,9 +14403,67 @@ export function mountApp(root: HTMLElement) {
     if (st.authed && st.selfId) {
       scheduleWarmupCachedPreviews();
       scheduleAutoFetchVisiblePreviews();
+      scheduleHistoryWarmup();
+      maybeAutoFillHistoryViewport();
+      maybeAutoRetryHistory();
+    }
+    if (st.authed && st.selfId && st.selected) {
+      const key = conversationKey(st.selected);
+      const cursor = key ? st.historyCursor?.[key] : null;
+      const hasMore = key ? st.historyHasMore?.[key] : undefined;
+      if (
+        key &&
+        st.historyLoaded?.[key] &&
+        hasMore !== false &&
+        typeof cursor === "number" &&
+        Number.isFinite(cursor) &&
+        cursor > 0 &&
+        !historyPrefetchBootstrap.has(key) &&
+        !historyPrefetchRequested.has(key) &&
+        !historyRequested.has(key) &&
+        !historyDeltaRequested.has(key) &&
+        !st.historyLoading?.[key]
+      ) {
+        historyPrefetchBootstrap.add(key);
+        requestHistory(st.selected, { prefetchBefore: true });
+      }
+    }
+    const selectedKey = st.selected ? conversationKey(st.selected) : "";
+    const selectedSig = selectedKey ? convoSig(st.conversations[selectedKey] ?? []) : "";
+    const autoFetchChanged =
+      selectedKey !== prevAutoFetchKey ||
+      selectedSig !== prevAutoFetchSig ||
+      st.fileTransfers !== prevAutoFetchTransfersRef;
+    prevAutoFetchKey = selectedKey;
+    prevAutoFetchSig = selectedSig;
+    prevAutoFetchTransfersRef = st.fileTransfers;
+    if (st.page === "main" && selectedKey && autoFetchChanged) {
+      scheduleAutoFetchVisiblePreviews();
       maybeAutoFillHistoryViewport();
     }
     prevAuthed = st.authed;
+  });
+
+  let prevHistoryCacheUser = store.get().selfId;
+  let prevHistoryCacheConversationsRef = store.get().conversations;
+  let prevHistoryCacheCursorRef = store.get().historyCursor;
+  let prevHistoryCacheHasMoreRef = store.get().historyHasMore;
+
+  store.subscribe(() => {
+    const st = store.get();
+    if (!st.authed || !st.selfId) return;
+    if (historyCacheLoadedForUser !== st.selfId) return;
+    const changed =
+      st.selfId !== prevHistoryCacheUser ||
+      st.conversations !== prevHistoryCacheConversationsRef ||
+      st.historyCursor !== prevHistoryCacheCursorRef ||
+      st.historyHasMore !== prevHistoryCacheHasMoreRef;
+    if (!changed) return;
+    prevHistoryCacheUser = st.selfId;
+    prevHistoryCacheConversationsRef = st.conversations;
+    prevHistoryCacheCursorRef = st.historyCursor;
+    prevHistoryCacheHasMoreRef = st.historyHasMore;
+    scheduleSaveHistoryCache(store);
   });
 
   renderApp(layout, store.get(), actions);

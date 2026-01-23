@@ -8,7 +8,8 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let lastEditableFocusTs = 0;
   let lastEditablePointerTs = 0;
   const isIos = isIOS();
-  const iosStandalone = isIos && isStandaloneDisplayMode();
+  const standalone = isStandaloneDisplayMode();
+  const iosStandalone = isIos && standalone;
   const docEl = typeof document !== "undefined" ? document.documentElement : null;
   const EDITABLE_INTENT_MS = 1200;
 
@@ -34,7 +35,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
   try {
     if (isIos && docEl?.classList) docEl.classList.add("is-ios");
-    if (iosStandalone && docEl?.classList) docEl.classList.add("is-standalone");
+    if (standalone && docEl?.classList) docEl.classList.add("is-standalone");
   } catch {
     // ignore
   }
@@ -135,7 +136,19 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const layoutClamp = Math.max(layout, iosEnv ? screenMax : 0);
     if (layoutClamp && vvHeight) vvTop = Math.max(0, Math.min(vvTop, Math.max(0, layoutClamp - vvHeight)));
     // Bottom area covered by keyboard (or other UI) in the *layout viewport* coordinate space.
-    const coveredBottom = layout && vvHeight ? Math.max(0, layout - (vvHeight + vvTop)) : 0;
+    //
+    // iOS/WebKit can report a mix of:
+    // - layout viewport that shrinks (resize) to match visualViewport (then coveredBottom should be ~0),
+    // - layout viewport that stays stable while only visualViewport shrinks (then coveredBottom is keyboard height),
+    // - visualViewport.offsetTop shifts while the layout also resizes (the tricky case).
+    //
+    // For keyboard detection we want a robust (often larger) estimate, but for positioning (app-vv-offset)
+    // we must avoid overestimating the inset, otherwise the composer floats above the keyboard with a visible gap.
+    const coveredBottomStable = layout && vvHeight ? Math.max(0, layout - (vvHeight + vvTop)) : 0;
+    const coveredBottomNow = layoutBase && vvHeight ? Math.max(0, layoutBase - (vvHeight + vvTop)) : 0;
+    const hasLayoutBase = layoutBase > 0;
+    const coveredBottomForKeyboard = hasLayoutBase ? Math.max(coveredBottomStable, coveredBottomNow) : coveredBottomStable;
+    const coveredBottomForLayout = hasLayoutBase ? Math.min(coveredBottomStable, coveredBottomNow) : coveredBottomStable;
     let activeEditable = false;
     try {
       const ae = typeof document !== "undefined" ? (document as any).activeElement : null;
@@ -148,8 +161,10 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const recentPointer = Boolean(lastEditablePointerTs && now - lastEditablePointerTs <= EDITABLE_INTENT_MS);
     const focusLikely = Boolean(activeEditable || (iosEnv && (recentFocus || recentPointer)));
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
-    const keyboardByViewport = Boolean(focusLikely && vvHeight && layout && coveredBottom >= USE_VISUAL_VIEWPORT_DIFF_PX);
-    const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottom >= keyboardThreshold);
+    const keyboardByViewport = Boolean(
+      focusLikely && vvHeight && layout && coveredBottomForKeyboard >= USE_VISUAL_VIEWPORT_DIFF_PX
+    );
+    const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottomForKeyboard >= keyboardThreshold);
     const innerDiff = lastStableLayout && inner ? Math.max(0, lastStableLayout - inner) : 0;
     const keyboardByInner = Boolean(iosEnv && focusLikely && innerDiff >= USE_VISUAL_VIEWPORT_DIFF_PX);
     const keyboardVisible = Boolean(keyboard || (iosEnv && (keyboardByViewport || keyboardByInner)));
@@ -172,7 +187,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       height: resolvedHeight > 0 ? resolvedHeight : 0,
       keyboard: keyboardVisible,
       vvTop,
-      vvBottom: Math.round(coveredBottom),
+      vvBottom: Math.round(coveredBottomForLayout),
       gapBottom,
       safeBottomRaw,
       vhHeight: resolvedVhHeight > 0 ? resolvedVhHeight : 0,
@@ -306,7 +321,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     }
     try {
       if (isIos && docEl?.classList) docEl.classList.remove("is-ios");
-      if (iosStandalone && docEl?.classList) docEl.classList.remove("is-standalone");
+      if (standalone && docEl?.classList) docEl.classList.remove("is-standalone");
     } catch {
       // ignore
     }

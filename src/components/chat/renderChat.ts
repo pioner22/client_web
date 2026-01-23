@@ -12,7 +12,16 @@ import { renderRichText } from "../../helpers/chat/richText";
 import { renderBoardPost } from "../../helpers/boards/boardPost";
 import type { Layout } from "../layout/types";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
-import { clampVirtualAvg, getVirtualEnd, getVirtualMaxStart, getVirtualStart, shouldVirtualize } from "../../helpers/chat/virtualHistory";
+import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
+import {
+  HISTORY_VIRTUAL_THRESHOLD,
+  HISTORY_VIRTUAL_WINDOW,
+  clampVirtualAvg,
+  getVirtualEnd,
+  getVirtualMaxStart,
+  getVirtualStart,
+  shouldVirtualize,
+} from "../../helpers/chat/virtualHistory";
 import { CHAT_SEARCH_FILTERS } from "../../helpers/chat/chatSearch";
 
 function dayKey(ts: number): string {
@@ -96,31 +105,51 @@ function resolveUserAccent(seed: string): string | null {
   return `hsl(${hue} 68% 58%)`;
 }
 
+function normalizeFileName(value: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const noQuery = raw.split(/[?#]/)[0];
+  const leaf = noQuery.split(/[\\/]/).pop() || "";
+  return leaf.trim().toLowerCase();
+}
+
+const IMAGE_NAME_HINT_RE =
+  /(?:^|[_\-\s\(\)\[\]])(?:img|image|photo|pic|picture|screenshot|screen[_\-\s]?shot|shot|dsc|pxl|selfie|scan|скрин(?:шот)?|фото|картин|изображ|снимок)(?:[_\-\s\(\)\[\]]|\d|$)/;
+const VIDEO_NAME_HINT_RE =
+  /(?:^|[_\-\s\(\)\[\]])(?:video|vid|movie|clip|screencast|screen[_\-\s]?(?:rec|record|recording)|видео|ролик)(?:[_\-\s\(\)\[\]]|\d|$)/;
+const AUDIO_NAME_HINT_RE =
+  /(?:^|[_\-\s\(\)\[\]])(?:audio|voice|sound|music|song|track|record|rec|memo|note|voice[_\-\s]?note|аудио|звук|музык|песня|голос|запис|диктофон|заметк)(?:[_\-\s\(\)\[\]]|\d|$)/;
+
 function isImageFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("image/")) return true;
-  const n = String(name || "").toLowerCase();
-  return /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n);
+  const n = normalizeFileName(name);
+  if (!n) return false;
+  if (/\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n)) return true;
+  return IMAGE_NAME_HINT_RE.test(n);
 }
 
 function isVideoFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("video/")) return true;
-  const n = String(name || "").toLowerCase();
-  return /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n);
+  const n = normalizeFileName(name);
+  if (!n) return false;
+  if (/\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n)) return true;
+  return VIDEO_NAME_HINT_RE.test(n);
 }
 
 function isAudioFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("audio/")) return true;
-  const n = String(name || "").toLowerCase();
-  return /\.(mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n);
+  const n = normalizeFileName(name);
+  if (!n) return false;
+  if (/\.(mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n)) return true;
+  return AUDIO_NAME_HINT_RE.test(n);
 }
 
 function transferStatus(entry: FileTransferEntry): string {
-  const pct = Math.max(0, Math.min(100, Math.round(entry.progress || 0)));
-  if (entry.status === "uploading") return `Загрузка (${pct}%)`;
-  if (entry.status === "downloading") return `Скачивание (${pct}%)`;
+  if (entry.status === "uploading") return "Загрузка";
+  if (entry.status === "downloading") return "Скачивание";
   if (entry.status === "uploaded") return "Файл загружен";
   if (entry.status === "complete") return "Готово";
   if (entry.status === "rejected") return "Отклонено";
@@ -134,6 +163,7 @@ function statusLabel(m: ChatMessage): string {
   const hasServerId = typeof m.id === "number" && Number.isFinite(m.id) && m.id > 0;
   if (status === "sending") return "…";
   if (status === "queued") return hasServerId ? "✓" : "…";
+  if (status === "sent") return "✓";
   if (status === "delivered") return "✓✓";
   if (status === "read") return "✓✓";
   if (status === "error") return "!";
@@ -155,6 +185,7 @@ function statusTitle(m: ChatMessage): string {
   const hasServerId = typeof m.id === "number" && Number.isFinite(m.id) && m.id > 0;
   if (status === "sending") return "Отправляется…";
   if (status === "queued") return m.whenOnline || hasServerId ? "В очереди (адресат оффлайн)" : "В очереди (нет соединения)";
+  if (status === "sent") return "Отправлено";
   if (status === "delivered") return "Доставлено";
   if (status === "read") return "Прочитано";
   if (status === "error") return "Ошибка отправки";
@@ -295,6 +326,7 @@ type FileAttachmentInfo = {
   mime: string | null;
   fileId: string | null;
   url: string | null;
+  thumbUrl: string | null;
   transfer: FileTransferEntry | null;
   offer: FileOfferIn | null;
   statusLine: string;
@@ -388,12 +420,15 @@ function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileU
   const offer = !transfer && att.fileId ? state.fileOffersIn.find((o) => o.id === att.fileId) ?? null : null;
   const name = String(transfer?.name || offer?.name || att.name || "файл");
   const size = Number(transfer?.size ?? offer?.size ?? att.size ?? 0) || 0;
-  const mime = att.mime || transfer?.mime || null;
+  const mime = att.mime || transfer?.mime || offer?.mime || null;
   const base = typeof location !== "undefined" ? location.href : "http://localhost/";
   const url = transfer?.url ? safeUrl(transfer.url, { base, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
   const mobileUi = opts?.mobileUi ?? false;
+  const hideProgressText = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
   const statusLine = transfer
-    ? transferStatus(transfer)
+    ? hideProgressText
+      ? ""
+      : transferStatus(transfer)
     : offer
       ? mobileUi
         ? "Входящий файл (принять в «Файлы»)"
@@ -403,12 +438,18 @@ function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileU
   const isVideo = isVideoFile(name, mime);
   const isAudio = isAudioFile(name, mime);
   const hasProgress = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
+  const fileId = att.fileId ? String(att.fileId) : transfer?.id ? String(transfer.id) : offer?.id ? String(offer.id) : null;
+  const thumbUrl =
+    fileId && state.fileThumbs?.[fileId]?.url
+      ? safeUrl(state.fileThumbs[fileId].url, { base, allowedProtocols: ["http:", "https:", "blob:"] })
+      : null;
   return {
     name,
     size,
     mime,
-    fileId: att.fileId ? String(att.fileId) : null,
+    fileId,
     url,
+    thumbUrl,
     transfer,
     offer,
     statusLine,
@@ -421,52 +462,88 @@ function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileU
 
 function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number; caption?: string | null }): HTMLElement | null {
   if (!info.isImage) return null;
-  if (!info.url && !info.fileId) return null;
-  const classes = info.url ? ["chat-file-preview"] : ["chat-file-preview", "chat-file-preview-empty"];
+  const previewUrl = info.url || info.thumbUrl;
+  if (!previewUrl && !info.fileId) return null;
+  const classes = previewUrl ? ["chat-file-preview"] : ["chat-file-preview", "chat-file-preview-empty"];
   if (opts?.className) classes.push(opts.className);
+  const fixedAspect = Boolean(opts?.className && opts.className.split(/\s+/).includes("chat-file-preview-album"));
   const attrs: Record<string, string | undefined> = {
     class: classes.join(" "),
     type: "button",
     "data-action": "open-file-viewer",
+    "data-file-kind": "image",
     "data-name": info.name,
     "data-size": String(info.size || 0),
+    ...(fixedAspect ? { "data-media-fixed": "1" } : {}),
     "aria-label": `Открыть: ${info.name}`,
   };
   if (info.url) attrs["data-url"] = info.url;
-  if (!info.url && info.fileId) attrs["data-file-id"] = info.fileId;
+  if (info.fileId) attrs["data-file-id"] = info.fileId;
   if (info.mime) attrs["data-mime"] = info.mime;
   if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
   if (opts?.caption) attrs["data-caption"] = opts.caption;
 
-  const child = info.url
-    ? el("img", { class: "chat-file-img", src: info.url, alt: info.name, loading: "lazy", decoding: "async" })
+  const child = previewUrl
+    ? el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" })
     : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
-  return el("button", attrs, [child]);
+  const btn = el("button", attrs, [child]) as HTMLButtonElement;
+  if (info.fileId && !fixedAspect) {
+    const cachedRatio = getCachedMediaAspectRatio(info.fileId);
+    if (cachedRatio) btn.style.aspectRatio = String(cachedRatio);
+  }
+  return btn;
 }
 
 function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number; caption?: string | null }): HTMLElement | null {
   if (!info.isVideo) return null;
-  if (!info.url && !info.fileId) return null;
-  const classes = info.url ? ["chat-file-preview", "chat-file-preview-video"] : ["chat-file-preview", "chat-file-preview-video", "chat-file-preview-empty"];
+  const previewUrl = info.url || info.thumbUrl;
+  if (!previewUrl && !info.fileId) return null;
+  const classes = previewUrl ? ["chat-file-preview", "chat-file-preview-video"] : ["chat-file-preview", "chat-file-preview-video", "chat-file-preview-empty"];
   if (opts?.className) classes.push(opts.className);
   const attrs: Record<string, string | undefined> = {
     class: classes.join(" "),
     type: "button",
     "data-action": "open-file-viewer",
+    ...(info.url ? { "data-video-state": "paused" } : {}),
+    "data-file-kind": "video",
     "data-name": info.name,
     "data-size": String(info.size || 0),
     "aria-label": `Открыть: ${info.name}`,
   };
   if (info.url) attrs["data-url"] = info.url;
-  if (!info.url && info.fileId) attrs["data-file-id"] = info.fileId;
+  if (info.fileId) attrs["data-file-id"] = info.fileId;
   if (info.mime) attrs["data-mime"] = info.mime;
   if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
   if (opts?.caption) attrs["data-caption"] = opts.caption;
 
-  const child = info.url
-    ? el("video", { class: "chat-file-video", src: info.url, preload: "metadata", playsinline: "true", muted: "true" })
-    : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Видео"]);
-  return el("button", attrs, [child]);
+	  const children: HTMLElement[] = [
+	    info.url
+	      ? (() => {
+	          const video = el("video", {
+	            class: "chat-file-video",
+	            src: info.url,
+	            preload: "auto",
+	            playsinline: "true",
+	            muted: "true",
+	            loop: "true",
+	          }) as HTMLVideoElement;
+	          video.muted = true;
+	          video.defaultMuted = true;
+	          return video;
+        })()
+      : previewUrl
+        ? (el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" }) as HTMLImageElement)
+      : (el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Видео"]) as HTMLDivElement),
+  ];
+  if (info.url) {
+    children.push(el("span", { class: "chat-file-video-toggle", "data-action": "media-toggle", "aria-hidden": "true" }, [""]));
+  }
+  const btn = el("button", attrs, children) as HTMLButtonElement;
+  if (info.fileId) {
+    const cachedRatio = getCachedMediaAspectRatio(info.fileId);
+    if (cachedRatio && btn.getAttribute("data-media-fixed") !== "1") btn.style.aspectRatio = String(cachedRatio);
+  }
+  return btn;
 }
 
 function isAlbumCandidate(msg: ChatMessage, info: FileAttachmentInfo | null): info is FileAttachmentInfo {
@@ -503,6 +580,65 @@ function skeletonMsg(kind: "in" | "out", seed: number): HTMLElement {
   children.push(el("div", { class: "msg-avatar" }, [el("span", { class: "avatar avatar-skel", "aria-hidden": "true" }, [""])]));
   children.push(body);
   return el("div", { class: `msg msg-${kind} msg-skel`, "aria-hidden": "true" }, children);
+}
+
+type ChatShiftAnchor = {
+  key: string;
+  msgKey?: string;
+  msgId?: number;
+  rectBottom: number;
+  scrollTop: number;
+};
+
+function captureChatShiftAnchor(host: HTMLElement, key: string): ChatShiftAnchor | null {
+  const lines = host.firstElementChild as HTMLElement | null;
+  if (!lines) return null;
+  const hostRect = host.getBoundingClientRect();
+  const children = Array.from(lines.children) as HTMLElement[];
+  let fallback: HTMLElement | null = null;
+  let lastVisible: { element: HTMLElement; rect: DOMRect } | null = null;
+  for (const child of children) {
+    if (!child.classList.contains("msg")) continue;
+    if (!fallback) fallback = child;
+    const rect = child.getBoundingClientRect();
+    if (rect.bottom >= hostRect.top && rect.top <= hostRect.bottom) {
+      lastVisible = { element: child, rect };
+    } else if (lastVisible && rect.top > hostRect.bottom) {
+      break;
+    }
+  }
+  const picked = lastVisible ?? (fallback ? { element: fallback, rect: fallback.getBoundingClientRect() } : null);
+  if (!picked) return null;
+  const msgKey = String(picked.element.getAttribute("data-msg-key") || "").trim();
+  const rawMsgId = picked.element.getAttribute("data-msg-id");
+  const msgId = rawMsgId ? Number(rawMsgId) : NaN;
+  return {
+    key,
+    msgKey: msgKey || undefined,
+    msgId: Number.isFinite(msgId) ? msgId : undefined,
+    rectBottom: picked.rect.bottom,
+    scrollTop: host.scrollTop,
+  };
+}
+
+function findChatShiftAnchorElement(host: HTMLElement, anchor: ChatShiftAnchor): HTMLElement | null {
+  const lines = host.firstElementChild as HTMLElement | null;
+  if (!lines) return null;
+  const children = Array.from(lines.children) as HTMLElement[];
+  for (const child of children) {
+    if (!child.classList.contains("msg")) continue;
+    if (anchor.msgKey) {
+      if (child.getAttribute("data-msg-key") === anchor.msgKey) return child;
+      continue;
+    }
+    if (anchor.msgId !== undefined) {
+      const raw = child.getAttribute("data-msg-id");
+      if (!raw) continue;
+      const msgId = Number(raw);
+      if (Number.isFinite(msgId) && msgId === anchor.msgId) return child;
+    }
+  }
+  return null;
 }
 
 const EMOJI_SEGMENT_RE = /\p{Extended_Pictographic}/u;
@@ -808,17 +944,51 @@ function messageLine(
     icon.style.setProperty("--file-h", String(badge.hue));
     const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [name])]), ...metaEls];
     if (transfer && (transfer.status === "uploading" || transfer.status === "downloading")) {
-      const bar = el("div", { class: "file-progress-bar" });
-      bar.style.width = `${Math.max(0, Math.min(100, Math.round(transfer.progress || 0)))}%`;
-      mainChildren.push(el("div", { class: "file-progress" }, [bar]));
+      const progress = Math.max(0, Math.min(100, Math.round(transfer.progress || 0)));
+      const label = transfer.status === "uploading" ? `Загрузка ${progress}%` : `Скачивание ${progress}%`;
+      const candy = el("span", { class: "file-progress-candy", "aria-hidden": "true" });
+      candy.style.setProperty("--file-progress", `${progress}%`);
+      mainChildren.push(
+        el(
+          "div",
+          {
+            class: "file-progress",
+            role: "progressbar",
+            title: label,
+            "aria-label": label,
+            "aria-valuemin": "0",
+            "aria-valuemax": "100",
+            "aria-valuenow": String(progress),
+          },
+          [candy]
+        )
+      );
     }
 
     const isImage = info.isImage;
     const isVideo = info.isVideo;
     const isAudio = info.isAudio;
 
-    if (isAudio && url) {
-      mainChildren.splice(1, 0, el("audio", { class: "chat-file-audio", src: url, controls: "true", preload: "metadata" }) as HTMLAudioElement);
+    if (isAudio) {
+      if (url) {
+        mainChildren.splice(
+          1,
+          0,
+          el("audio", { class: "chat-file-audio", src: url, controls: "true", preload: "metadata" }) as HTMLAudioElement
+        );
+      } else if (info.fileId) {
+        const placeholderAttrs: Record<string, string> = {
+          class: "chat-file-audio-placeholder",
+          "data-file-id": info.fileId,
+          "data-file-kind": "audio",
+          "data-name": info.name,
+          "data-size": String(info.size || 0),
+          "aria-hidden": "true",
+        };
+        if (info.mime) placeholderAttrs["data-mime"] = info.mime;
+        if (opts?.msgIdx !== undefined) placeholderAttrs["data-msg-idx"] = String(opts.msgIdx);
+        mainChildren.splice(1, 0, el("div", placeholderAttrs, ["Аудио"]));
+      }
     }
 
     const actions: HTMLElement[] = [];
@@ -1050,10 +1220,14 @@ export function renderChat(layout: Layout, state: AppState) {
   const atBottomBefore = scrollHost.scrollTop >= maxScrollTop() - 24;
   const sticky = hostState.__stickBottom;
   const stickyActive = Boolean(sticky && sticky.active && sticky.key === key);
+  const cachedMessages = key ? (state.conversations?.[key] ?? EMPTY_CHAT) : EMPTY_CHAT;
+  const allowSticky = Boolean(key && (state.historyLoaded?.[key] || cachedMessages.length));
   // NOTE: autoscroll-on-open/sent is handled in app/mountApp.ts (pendingChatAutoScroll).
   // Here we only keep pinned-bottom stable during re-renders/content growth for the *current* chat.
-  const shouldStick = Boolean(key && !keyChanged && (stickyActive || atBottomBefore));
+  const shouldStick = Boolean(key && !keyChanged && allowSticky && (stickyActive || atBottomBefore));
+  const preShiftAnchor = key && !keyChanged && !shouldStick ? captureChatShiftAnchor(scrollHost, key) : null;
   if (keyChanged && hostState.__stickBottom) hostState.__stickBottom = null;
+  if (keyChanged && hostState.__chatShiftAnchor) hostState.__chatShiftAnchor = null;
   else if (key) {
     if (shouldStick) hostState.__stickBottom = { key, active: true, at: Date.now() };
     else if (hostState.__stickBottom && hostState.__stickBottom.key === key) hostState.__stickBottom.active = false;
@@ -1087,9 +1261,14 @@ export function renderChat(layout: Layout, state: AppState) {
     friendLabels.set(String(f.id), formatUserLabel(f.display_name || "", f.handle || "", String(f.id || "")));
   }
 
-  const msgs = key ? (state.conversations[key] ?? EMPTY_CHAT) : EMPTY_CHAT;
-  const hasMore = Boolean(key && state.historyHasMore && state.historyHasMore[key]);
-  const loadingMore = Boolean(key && state.historyLoading && state.historyLoading[key]);
+  const msgs = cachedMessages;
+  const historyLoaded = Boolean(key && state.historyLoaded && state.historyLoaded[key]);
+  const historyLoading = Boolean(key && state.historyLoading && state.historyLoading[key]);
+  const historyCursor = key && state.historyCursor ? Number(state.historyCursor[key]) : NaN;
+  const rawHasMore = key && state.historyHasMore ? state.historyHasMore[key] : undefined;
+  const hasMore = Boolean(key && (rawHasMore ?? (historyLoaded && Number.isFinite(historyCursor) && historyCursor > 0)));
+  const loadingMore = Boolean(historyLoading && historyLoaded);
+  const loadingInitial = Boolean(historyLoading && !historyLoaded);
   const searchActive = Boolean(state.chatSearchOpen && state.chatSearchQuery.trim());
   const hits = searchActive ? state.chatSearchHits || EMPTY_HITS : EMPTY_HITS;
   const hitSet = searchActive && hits.length ? new Set(hits) : null;
@@ -1116,10 +1295,12 @@ export function renderChat(layout: Layout, state: AppState) {
         pinnedIdsRef: number[] | null;
         pinnedActive: number | null;
         lastRead: { id?: number; ts?: number } | null;
+        avatarsRev: number;
         profilesRef: AppState["profiles"];
         groupsRef: AppState["groups"];
         boardsRef: AppState["boards"];
         rightPanelRef: AppState["rightPanel"];
+        fileTransfersRef: AppState["fileTransfers"];
         messageView: AppState["messageView"];
         searchFilter: AppState["chatSearchFilter"];
         searchDate: AppState["chatSearchDate"];
@@ -1138,8 +1319,8 @@ export function renderChat(layout: Layout, state: AppState) {
     selectedId,
     page: state.page,
     msgsRef: msgs,
-    historyLoaded: Boolean(key && state.historyLoaded && state.historyLoaded[key]),
-    historyLoading: loadingMore,
+    historyLoaded,
+    historyLoading,
     historyHasMore: hasMore,
     historyVirtualStart,
     searchOpen: Boolean(state.chatSearchOpen),
@@ -1151,10 +1332,12 @@ export function renderChat(layout: Layout, state: AppState) {
     pinnedIdsRef: pinnedIds,
     pinnedActive: typeof activeRaw === "number" ? activeRaw : null,
     lastRead,
+    avatarsRev: Math.max(0, Math.trunc(Number((state as any).avatarsRev || 0) || 0)),
     profilesRef: state.profiles,
     groupsRef: state.groups,
     boardsRef: state.boards,
     rightPanelRef: state.rightPanel,
+    fileTransfersRef: state.fileTransfers,
     messageView: state.messageView,
     searchFilter: state.chatSearchFilter,
     searchDate: state.chatSearchDate,
@@ -1179,23 +1362,47 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.pinnedIdsRef === renderState.pinnedIdsRef &&
     prevRender.pinnedActive === renderState.pinnedActive &&
     prevRender.lastRead === renderState.lastRead &&
+    prevRender.avatarsRev === renderState.avatarsRev &&
     prevRender.profilesRef === renderState.profilesRef &&
     prevRender.groupsRef === renderState.groupsRef &&
     prevRender.boardsRef === renderState.boardsRef &&
     prevRender.rightPanelRef === renderState.rightPanelRef &&
+    prevRender.fileTransfersRef === renderState.fileTransfersRef &&
     prevRender.messageView === renderState.messageView &&
     prevRender.searchFilter === renderState.searchFilter &&
     prevRender.searchDate === renderState.searchDate;
   if (canSkipRender) return;
   hostState.__chatRenderState = renderState;
-  const virtualEnabled = Boolean(key && shouldVirtualize(msgs.length, searchActive));
+  const mobileLikeUi = isMobileLikeUi();
+  const memoryGb = (() => {
+    try {
+      const raw = Number((navigator as any)?.deviceMemory ?? 0);
+      return Number.isFinite(raw) && raw > 0 ? raw : 4;
+    } catch {
+      return 4;
+    }
+  })();
+  const connection = (() => {
+    try {
+      return (navigator as any)?.connection ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  const saveData = Boolean(connection && (connection as any).saveData);
+  const effectiveType = String((connection as any)?.effectiveType || "").toLowerCase();
+  const slowNetwork = saveData || effectiveType.includes("2g") || effectiveType.includes("3g");
+  const constrained = mobileLikeUi || memoryGb <= 4 || slowNetwork;
+  const virtualThreshold = slowNetwork ? 200 : constrained ? 240 : HISTORY_VIRTUAL_THRESHOLD;
+  const virtualWindow = slowNetwork ? 160 : constrained ? 200 : HISTORY_VIRTUAL_WINDOW;
+  const virtualEnabled = Boolean(key && shouldVirtualize(msgs.length, searchActive, virtualThreshold));
   const virtualAvgMap: Map<string, number> = hostState.__chatVirtualAvgHeights || new Map();
   hostState.__chatVirtualAvgHeights = virtualAvgMap;
   const avgHeight = clampVirtualAvg(key ? virtualAvgMap.get(key) : null);
-  const maxVirtualStart = getVirtualMaxStart(msgs.length);
+  const maxVirtualStart = getVirtualMaxStart(msgs.length, virtualWindow);
   const preferredStart = virtualEnabled && shouldStick ? maxVirtualStart : state.historyVirtualStart?.[key];
-  const virtualStart = virtualEnabled ? getVirtualStart(msgs.length, preferredStart) : 0;
-  const virtualEnd = virtualEnabled ? getVirtualEnd(msgs.length, virtualStart) : msgs.length;
+  const virtualStart = virtualEnabled ? getVirtualStart(msgs.length, preferredStart, virtualWindow) : 0;
+  const virtualEnd = virtualEnabled ? getVirtualEnd(msgs.length, virtualStart, virtualWindow) : msgs.length;
   const topSpacerHeight = virtualEnabled ? Math.max(0, virtualStart) * avgHeight : 0;
   const bottomSpacerHeight = virtualEnabled ? Math.max(0, msgs.length - virtualEnd) * avgHeight : 0;
   const lineItems: HTMLElement[] = [];
@@ -1241,9 +1448,9 @@ export function renderChat(layout: Layout, state: AppState) {
     if (curDay && nextDay && curDay !== nextDay) return true;
     return !isMessageContinuation(msg, nextMsg);
   };
-  const albumMin = 3;
+  const albumMin = 2;
   const albumMax = 12;
-  const albumGapSeconds = 3 * 60;
+  const albumGapSeconds = 121;
   for (let msgIdx = virtualStart; msgIdx < virtualEnd; msgIdx += 1) {
     const m = msgs[msgIdx];
     const dk = dayKey(m.ts);
@@ -1350,14 +1557,44 @@ export function renderChat(layout: Layout, state: AppState) {
     lineItems.unshift(el("div", { class: "chat-history-more-wrap" }, [btn]));
   }
 
+  if (key && !historyLoaded && !loadingInitial && lineItems.length) {
+    const retry = el(
+      "button",
+      {
+        class: "btn chat-history-more",
+        type: "button",
+        "data-action": "chat-history-retry",
+        "aria-label": "Повторить загрузку истории",
+      },
+      ["Повторить загрузку"]
+    );
+    lineItems.unshift(el("div", { class: "chat-history-more-wrap" }, [retry]));
+  }
+
+  let isEmptyState = false;
   if (!lineItems.length) {
-    const loaded = key ? Boolean(state.historyLoaded[key]) : true;
-    if (!loaded) {
-      for (let i = 0; i < 7; i += 1) {
-        lines.push(skeletonMsg(i % 2 === 0 ? "in" : "out", i));
+    if (!historyLoaded) {
+      if (loadingInitial) {
+        for (let i = 0; i < 7; i += 1) {
+          lines.push(skeletonMsg(i % 2 === 0 ? "in" : "out", i));
+        }
+      } else {
+        lines.push(
+          el("div", { class: "chat-empty chat-empty-retry" }, [
+            el("div", { class: "chat-empty-title" }, ["История не загружена"]),
+            el("div", { class: "chat-empty-sub" }, ["Проверьте соединение и попробуйте снова"]),
+            el(
+              "button",
+              { class: "btn chat-history-more", type: "button", "data-action": "chat-history-retry", "aria-label": "Повторить загрузку истории" },
+              ["Повторить загрузку"]
+            ),
+          ])
+        );
+        isEmptyState = true;
       }
     } else {
       lines.push(el("div", { class: "chat-empty" }, [el("div", { class: "chat-empty-title" }, ["Пока нет сообщений"])]));
+      isEmptyState = true;
     }
   } else {
     if (virtualEnabled && topSpacerHeight > 0) {
@@ -1704,7 +1941,13 @@ export function renderChat(layout: Layout, state: AppState) {
     layout.chatSelectionBar.classList.add("hidden");
     layout.chatSelectionBar.replaceChildren();
   }
-  scrollHost.replaceChildren(el("div", { class: "chat-lines" }, lines));
+  const linesClass = isEmptyState ? "chat-lines chat-lines-empty" : "chat-lines";
+  scrollHost.replaceChildren(el("div", { class: linesClass }, lines));
+  try {
+    scrollHost.dispatchEvent(new Event("yagodka:chat-rendered"));
+  } catch {
+    // ignore
+  }
 
   if (virtualEnabled && key) {
     const w = typeof window !== "undefined" ? window : null;
@@ -1739,7 +1982,7 @@ export function renderChat(layout: Layout, state: AppState) {
   }
 
   // iOS/WebKit: images and media previews may change the history height after render.
-  // Keep the chat pinned to bottom on content height changes, but only when pinned is active.
+  // Keep the chat pinned to bottom on content height changes, or preserve a visible anchor when not pinned.
   if (key && typeof ResizeObserver === "function") {
     try {
       if (!hostState.__chatLinesObserver) {
@@ -1752,13 +1995,30 @@ export function renderChat(layout: Layout, state: AppState) {
             const curKey = String(scrollHost.getAttribute("data-chat-key") || "");
             if (!curKey) return;
             const st = hostState.__stickBottom;
-          if (!st || !st.active || st.key !== curKey) return;
-          scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
-        };
-        if (w && typeof w.requestAnimationFrame === "function") {
-          hostState.__chatLinesObserverRaf = w.requestAnimationFrame(run);
-        } else {
-          hostState.__chatLinesObserverRaf = 1;
+            if (st && st.active && st.key === curKey) {
+              scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
+              return;
+            }
+            const anchor = hostState.__chatShiftAnchor as ChatShiftAnchor | null;
+            if (!anchor || anchor.key !== curKey) return;
+            if (Math.abs(scrollHost.scrollTop - anchor.scrollTop) > 2) {
+              hostState.__chatShiftAnchor = captureChatShiftAnchor(scrollHost, curKey);
+              return;
+            }
+            const anchorEl = findChatShiftAnchorElement(scrollHost, anchor);
+            if (!anchorEl) return;
+            const rect = anchorEl.getBoundingClientRect();
+            const delta = rect.bottom - anchor.rectBottom;
+            if (Math.abs(delta) >= 1) {
+              scrollHost.scrollTop += delta;
+            }
+            anchor.rectBottom = rect.bottom;
+            anchor.scrollTop = scrollHost.scrollTop;
+          };
+          if (w && typeof w.requestAnimationFrame === "function") {
+            hostState.__chatLinesObserverRaf = w.requestAnimationFrame(run);
+          } else {
+            hostState.__chatLinesObserverRaf = 1;
             run();
           }
         });
@@ -1775,12 +2035,23 @@ export function renderChat(layout: Layout, state: AppState) {
   }
 
   if (!shouldStick && !keyChanged) {
-    // Some browsers (notably iOS/WebKit) may reset scrollTop when we replace the chat DOM.
     // Preserve the user's position in history unless we explicitly want to stick to bottom.
+    // Some browsers may reset scrollTop when we replace the chat DOM; also keep the visible anchor stable on prepends.
     try {
       const maxTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
       const nextTop = Math.max(0, Math.min(maxTop, prevScrollTop));
       if (Math.abs(scrollHost.scrollTop - nextTop) >= 1) scrollHost.scrollTop = nextTop;
+      if (preShiftAnchor && (preShiftAnchor.msgKey || preShiftAnchor.msgId !== undefined)) {
+        const anchorEl = findChatShiftAnchorElement(scrollHost, preShiftAnchor);
+        if (anchorEl) {
+          const rect = anchorEl.getBoundingClientRect();
+          const delta = rect.bottom - preShiftAnchor.rectBottom;
+          if (Math.abs(delta) >= 1) {
+            const corrected = Math.max(0, Math.min(maxTop, scrollHost.scrollTop + delta));
+            if (Math.abs(scrollHost.scrollTop - corrected) >= 1) scrollHost.scrollTop = corrected;
+          }
+        }
+      }
     } catch {
       // ignore
     }
@@ -1796,5 +2067,10 @@ export function renderChat(layout: Layout, state: AppState) {
       scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
     };
     queueMicrotask(stickNow);
+  }
+  if (key && !shouldStick) {
+    hostState.__chatShiftAnchor = captureChatShiftAnchor(scrollHost, key);
+  } else if (hostState.__chatShiftAnchor) {
+    hostState.__chatShiftAnchor = null;
   }
 }

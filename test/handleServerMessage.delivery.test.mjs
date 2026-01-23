@@ -58,7 +58,7 @@ test("handleServerMessage: message_delivered обновляет queued-сооб�
     handleServerMessage({ type: "message_delivered", to: peer, id: 10 }, getState(), { send() {} }, patch);
 
     const st = getState();
-    assert.equal(st.conversations[key][0].status, "delivered");
+    assert.equal(st.conversations[key][0].status, "sent");
     assert.equal(st.conversations[key][0].id, 10);
   } finally {
     await cleanup();
@@ -87,8 +87,8 @@ test("handleServerMessage: message_delivered присваивает msg_id по 
     const conv = getState().conversations[key];
     assert.equal(conv[0].id, 101);
     assert.equal(conv[1].id, 102);
-    assert.equal(conv[0].status, "delivered");
-    assert.equal(conv[1].status, "delivered");
+    assert.equal(conv[0].status, "sent");
+    assert.equal(conv[1].status, "sent");
   } finally {
     await cleanup();
   }
@@ -125,11 +125,56 @@ test("handleServerMessage: history_result проставляет delivered/queue
 
     const st = getState();
     const conv = st.conversations[key];
-    assert.equal(conv[0].status, "delivered");
+    assert.equal(conv[0].status, "sent");
     assert.equal(conv[1].status, "queued");
     assert.equal(conv[2].status, "read");
     assert.equal(conv[3].kind, "in");
     assert.equal(conv[3].status, undefined);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: message_delivered не понижает read → sent", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      conversations: {
+        [key]: [{ kind: "out", from: "111-111-111", to: peer, text: "a", ts: 1, id: 10, status: "read" }],
+      },
+    });
+
+    handleServerMessage({ type: "message_delivered", to: peer, id: 10 }, getState(), { send() {} }, patch);
+
+    const st = getState();
+    assert.equal(st.conversations[key][0].status, "read");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: message_delivered_to_device повышает sent → delivered и не понижает read", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      conversations: {
+        [key]: [
+          { kind: "out", from: "111-111-111", to: peer, text: "a", ts: 1, id: 10, status: "sent" },
+          { kind: "out", from: "111-111-111", to: peer, text: "b", ts: 2, id: 11, status: "read" },
+        ],
+      },
+    });
+
+    handleServerMessage({ type: "message_delivered_to_device", to: peer, id: 10 }, getState(), { send() {} }, patch);
+    handleServerMessage({ type: "message_delivered_to_device", to: peer, id: 11 }, getState(), { send() {} }, patch);
+
+    const st = getState();
+    assert.equal(st.conversations[key][0].status, "delivered");
+    assert.equal(st.conversations[key][1].status, "read");
   } finally {
     await cleanup();
   }

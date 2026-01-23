@@ -2,6 +2,7 @@ import type { Layout } from "../components/layout/types";
 import type {
   ActionModalPayload,
   AppState,
+  ContextMenuPayload,
   MobileSidebarTab,
   PageKind,
   SearchResultEntry,
@@ -74,6 +75,48 @@ function parseDatetimeLocal(value: string): number | null {
   const d = new Date(y, mon - 1, day, h, min, 0, 0);
   const ts = d.getTime();
   return Number.isFinite(ts) ? ts : null;
+}
+
+function shouldRenderContextMenuAsSheet(): boolean {
+  try {
+    return Boolean(window.matchMedia?.("(pointer: coarse)")?.matches || window.matchMedia?.("(hover: none)")?.matches);
+  } catch {
+    return false;
+  }
+}
+
+function contextMenuPayloadKey(payload: ContextMenuPayload, sheet: boolean): string {
+  const title = String(payload?.title || "");
+  const pos = sheet
+    ? { x: 0, y: 0 }
+    : {
+        x: Number.isFinite(Number(payload?.x)) ? Math.round(Number(payload.x)) : 0,
+        y: Number.isFinite(Number(payload?.y)) ? Math.round(Number(payload.y)) : 0,
+      };
+  const items = Array.isArray(payload?.items)
+    ? payload.items.map((it) =>
+        it?.separator
+          ? { separator: 1 }
+          : {
+              id: String(it?.id || ""),
+              label: String(it?.label || ""),
+              icon: String(it?.icon || ""),
+              danger: it?.danger ? 1 : 0,
+              disabled: it?.disabled ? 1 : 0,
+            }
+      )
+    : [];
+  const reactionBar = payload?.reactionBar
+    ? {
+        emojis: Array.isArray(payload.reactionBar.emojis) ? payload.reactionBar.emojis : [],
+        active: String(payload.reactionBar.active || ""),
+      }
+    : null;
+  try {
+    return JSON.stringify({ v: 1, sheet: sheet ? 1 : 0, title, ...pos, items, reactionBar });
+  } catch {
+    return `${sheet ? 1 : 0}:${pos.x}:${pos.y}:${title}:${items.length}:${reactionBar ? 1 : 0}`;
+  }
 }
 
 function formatSenderLabel(state: AppState, senderId: string): string {
@@ -199,6 +242,7 @@ export interface RenderActions {
   onForcePwaUpdate: () => void;
   onContextMenuAction: (itemId: string) => void;
   onFileViewerNavigate: (dir: "prev" | "next") => void;
+  onFileViewerJump: () => void;
 }
 
 export function renderApp(layout: Layout, state: AppState, actions: RenderActions) {
@@ -522,6 +566,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     onFileOfferReject: actions.onFileOfferReject,
     onFileSendConfirm: actions.onFileSendConfirm,
     onFileViewerNavigate: actions.onFileViewerNavigate,
+    onFileViewerJump: actions.onFileViewerJump,
     onContextMenuAction: actions.onContextMenuAction,
     onForwardSend: actions.onForwardSend,
   };
@@ -535,16 +580,37 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onClose: actions.onCloseModal,
       })
     : null;
+  const overlayState = layout.overlay as any;
+  const reuseContextMenuNode =
+    state.modal?.kind === "context_menu"
+      ? (() => {
+          const existing = layout.overlay.firstElementChild as HTMLElement | null;
+          if (!existing || !existing.classList.contains("ctx-menu")) return null;
+          const sheet = shouldRenderContextMenuAsSheet();
+          const key = contextMenuPayloadKey(state.modal.payload, sheet);
+          const prevKey = String(overlayState.__ctxMenuKey || "");
+          overlayState.__ctxMenuKey = key;
+          return prevKey && prevKey === key ? existing : null;
+        })()
+      : null;
+  if (state.modal?.kind !== "context_menu") {
+    overlayState.__ctxMenuKey = null;
+  }
+
   const modalNode = fullScreenKind
     ? fullScreenKind === "auth"
       ? authModalNode
       : state.modal
-        ? renderModal(state, modalActions)
+        ? state.modal.kind === "context_menu" && reuseContextMenuNode
+          ? reuseContextMenuNode
+          : renderModal(state, modalActions)
         : null
     : state.modal
       ? state.modal.kind === "auth"
         ? authModalNode
-        : renderModal(state, modalActions)
+        : state.modal.kind === "context_menu" && reuseContextMenuNode
+          ? reuseContextMenuNode
+          : renderModal(state, modalActions)
       : null;
 
   // Большинство модалок рендерим inline (в теле чата), чтобы не перекрывать всё приложение.
@@ -824,7 +890,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.overlay.classList.remove("overlay-auth");
     layout.overlay.classList.add("overlay-context");
     layout.overlay.classList.toggle("overlay-context-sheet", modalNode.classList.contains("ctx-menu-sheet"));
-    layout.overlay.replaceChildren(modalNode);
+    if (layout.overlay.firstElementChild !== modalNode) {
+      layout.overlay.replaceChildren(modalNode);
+    }
   } else {
     layout.overlay.classList.add("hidden");
     layout.overlay.classList.remove("overlay-context");
@@ -832,6 +900,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.overlay.classList.remove("overlay-viewer");
     layout.overlay.classList.remove("overlay-auth");
     layout.overlay.replaceChildren();
+    overlayState.__ctxMenuKey = null;
   }
 
   if (authModalVisible) {

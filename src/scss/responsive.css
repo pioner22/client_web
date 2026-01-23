@@ -29,7 +29,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --app-row-footer: 0px;
+    --app-row-footer: auto;
     margin: 0;
     border: 0;
     border-radius: 0;
@@ -44,7 +44,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --app-row-footer: 0px;
+    --app-row-footer: auto;
   }
 
   .grid {
@@ -231,6 +231,38 @@
   .toast-host {
     bottom: calc(var(--safe-bottom-pad) + 86px);
   }
+
+  .toast-host[data-toast-placement="center"] .toast {
+    width: min(520px, 92vw);
+    max-width: min(520px, 92vw);
+    max-height: calc(100vh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
+    max-height: calc(100svh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
+    max-height: calc(100dvh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-2);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .toast-host[data-toast-placement="center"] .toast-msg {
+    white-space: normal;
+    text-overflow: clip;
+    overflow: visible;
+    text-align: center;
+    word-break: break-word;
+    hyphens: auto;
+  }
+
+  .toast-host[data-toast-placement="center"] .toast-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .toast-host[data-toast-placement="center"] .toast-btn {
+    flex: 1 1 120px;
+  }
 }
 
 @media (min-width: 601px) and (max-width: 925px) {
@@ -339,19 +371,27 @@
 
     --chat-pad: 8px;
     --messages-container-width: 100%;
+    --message-handhelds-margin: 4.5rem;
     --msg-body-max-width: min(100%, calc(100% - var(--message-handhelds-margin)));
-    --chat-line-gap: 2px;
+    --chat-line-gap: 7px;
     --msg-pad-y: 0px;
     --msg-avatar-size: 32px;
     --msg-avatar-font-size: 12px;
     --chat-title-avatar-size: 24px;
     --chat-title-avatar-font-size: 11px;
+    --msg-body-gap: 7px;
+    --msg-text-line: var(--line-height);
+    --msg-media-max-width: 380px;
 
+    --row-min-h: 56px;
     --row-pad-y: 7px;
-    --row-pad-x: 16px;
-    --row-gap: 16px;
-    --avatar-size: 40px;
-    --avatar-font-size: 14px;
+    --row-pad-x: 14px;
+    --row-gap: 10px;
+    --avatar-size: 42px;
+    --avatar-font-size: 15px;
+    --msg-meta-font-size: 11px;
+    --msg-meta-offset-y: calc(var(--msg-text-size, 16px) * 0.12 + var(--sp-2));
+    --row-tail-min: 104px;
 
     --pane-section-mt: 0px;
     --pane-section-mb: var(--sp-2);
@@ -395,18 +435,22 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 4px;
+    min-width: var(--row-tail-min, 88px);
   }
 
   .sidebar .row-title {
-    font-weight: 500;
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.2;
   }
 
   .sidebar .row-sub {
     font-size: 12px;
+    line-height: 1.2;
   }
 
   .sidebar .row-time {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .sidebar .row-unread {
@@ -414,6 +458,27 @@
     height: 22px;
     padding: 0 7px;
     font-size: 11px;
+  }
+
+  .chat:not(.chat-board) {
+    --chat-line-gap: 7px;
+    --msg-in-pad-y: 5px;
+    --msg-in-pad-x: 8px;
+    --msg-in-pad-bottom: 12px;
+    --msg-out-pad-y: 5px;
+    --msg-out-pad-x: 8px;
+    --msg-out-pad-bottom: 12px;
+    --msg-meta-offset-y: calc(var(--msg-text-size, 16px) * 0.12 + var(--sp-2));
+  }
+
+  .chat-file-video-toggle {
+    width: 40px;
+    height: 40px;
+  }
+
+  .chat-file-video-toggle::before {
+    width: 16px;
+    height: 16px;
   }
 
   /* Telegram-like header: title on top, status under it. */
@@ -564,7 +629,7 @@
     background: color-mix(in srgb, var(--composer-bg), transparent 10%);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
-    padding-bottom: max(var(--composer-pad-y), calc(var(--safe-bottom-layout-pad) - var(--sp-3)));
+    padding-bottom: max(var(--composer-pad-y), var(--safe-bottom-layout-pad));
   }
 
   /* iOS: blur/transparency can create an extra "dark strip" near the bottom safe-area. Keep the bar solid. */
@@ -620,6 +685,9 @@
 
   /* Telegram-like list rows in sidebar. */
   .sidebar {
+    --avatar-size: 42px;
+    --avatar-font-size: 15px;
+    --row-tail-min: 88px;
     --row-bg-hover: color-mix(in srgb, var(--panel), transparent 25%);
     --row-bg-selected: color-mix(in srgb, var(--focus), var(--panel) 92%);
     --row-bg-selected-hover: var(--row-bg-selected);
@@ -652,11 +720,11 @@
     min-height: var(--row-min-h);
     /* tweb-like "row-grid": stable columns (avatar / main / meta) and two rows (title + subtitle). */
     display: grid;
-    grid-template-columns: var(--avatar-size) minmax(0, 1fr) auto;
+    grid-template-columns: var(--avatar-size) minmax(0, 1fr) minmax(var(--row-tail-min, 88px), max-content);
     grid-template-rows: auto auto;
     grid-template-areas: "ava title tail" "ava sub tail";
     column-gap: var(--row-gap);
-    row-gap: 2px;
+    row-gap: 3px;
     align-items: center;
   }
 
@@ -700,7 +768,8 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 4px;
+    gap: 6px;
+    min-width: var(--row-tail-min, 88px);
   }
 
 
@@ -710,6 +779,20 @@
 
   .sidebar:not([data-sidebar-tab="menu"]) .row-sel {
     background: var(--row-bg);
+    color: var(--row-text);
+  }
+
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-sub,
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-time,
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-prefix,
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-id {
+    color: var(--muted);
+  }
+
+  .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-muted {
+    border-color: color-mix(in srgb, var(--muted), transparent 60%);
+    background: color-mix(in srgb, var(--muted), transparent 92%);
+    color: var(--muted);
   }
 
   .sidebar:not([data-sidebar-tab="menu"]) .row-sel .row-unread,
@@ -784,25 +867,39 @@
     margin-bottom: var(--sp-2);
   }
 
+  .footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
   .footer-nav {
-    width: 100%;
-    border-radius: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    width: min(100%, 420px);
+    padding: var(--footer-nav-pad);
+    border-radius: var(--footer-nav-radius);
+    background: var(--footer-nav-bg);
+    border: 1px solid var(--footer-nav-border);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(8px);
   }
 
   .footer-tab {
-    height: 56px;
+    height: var(--footer-tab-height);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    font-size: 11px;
+    gap: 4px;
+    font-size: var(--footer-tab-font-size);
   }
 
   .footer-tab::before {
     content: "";
-    width: 22px;
-    height: 22px;
+    width: var(--footer-tab-icon-size);
+    height: var(--footer-tab-icon-size);
     background: currentColor;
     opacity: 0.92;
     -webkit-mask: var(--footer-tab-icon) no-repeat center / contain;
@@ -902,6 +999,25 @@
   }
 }
 
+@media (max-width: 600px) {
+  .toast-host[data-toast-placement="center"] .toast {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .toast-host[data-toast-placement="center"] .toast-actions {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .toast-host[data-toast-placement="center"] .toast-btn {
+    flex: 1 1 140px;
+    width: auto;
+  }
+}
+
 @media (max-width: 600px) and (prefers-reduced-motion: reduce) {
   .sidebar {
     transition: none;
@@ -926,6 +1042,11 @@
   .hotkeys {
     display: none;
   }
+
+  .msg-date {
+    position: relative;
+    top: auto;
+  }
 }
 
 html.is-standalone {
@@ -944,4 +1065,9 @@ html.is-standalone .hdr-ver,
 html.is-standalone .hdr-sep,
 html.is-standalone .hotkeys {
   display: none;
+}
+
+html.is-standalone .msg-date {
+  position: relative;
+  top: auto;
 }

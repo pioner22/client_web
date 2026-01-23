@@ -83,6 +83,13 @@ function withDomStubs(run) {
       list.push(handler);
       this._listeners.set(key, list);
     }
+    removeEventListener(type, handler) {
+      const key = String(type);
+      const list = this._listeners.get(key) || [];
+      const next = handler ? list.filter((h) => h !== handler) : [];
+      if (next.length) this._listeners.set(key, next);
+      else this._listeners.delete(key);
+    }
     dispatchEvent(event) {
       const ev = event || {};
       const key = String(ev.type || "");
@@ -210,6 +217,67 @@ test("sidebar: Ctrl+Click/ПКМ не активирует строку (не м
       btn.dispatchEvent({ type: "click", ctrlKey: false, button: 0 });
       assert.equal(calls.length, 1);
       assert.deepEqual(calls[0], { kind: "dm", id: "123-456-789" });
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("sidebar: avatarsRev инвалидирует рендер (локальные аватары обновляются без перезагрузки)", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    withDomStubs(() => {
+      const prevLocalStorage = globalThis.localStorage;
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(String(k)) ? store.get(String(k)) : null),
+        setItem: (k, v) => void store.set(String(k), String(v)),
+        removeItem: (k) => void store.delete(String(k)),
+      };
+
+      try {
+        const target = document.createElement("div");
+        const state = {
+          friends: [{ id: "123-456-789", online: true, unread: 0 }],
+          groups: [],
+          boards: [],
+          pinned: [],
+          pendingIn: [],
+          pendingOut: [],
+          pendingGroupInvites: [],
+          pendingGroupJoinRequests: [],
+          pendingBoardInvites: [],
+          fileOffersIn: [],
+          selected: null,
+          page: "main",
+          mobileSidebarTab: "contacts",
+          conversations: { "dm:123-456-789": [{ ts: 1, from: "123-456-789", text: "привет", kind: "in" }] },
+          drafts: {},
+          avatarsRev: 0,
+        };
+
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+
+        const btn = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
+        assert.ok(btn, "row button not found");
+        const avatar1 = findFirst(btn, (n) => typeof n.className === "string" && String(n.className).split(/\s+/).includes("avatar"));
+        assert.ok(avatar1, "avatar node not found");
+        assert.ok(!String(avatar1.className).split(/\s+/).includes("avatar-img"), "avatar should start without avatar-img");
+
+        store.set("yagodka_avatar:dm:123-456-789", "data:image/png;base64,AAAA");
+        state.avatarsRev += 1;
+
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+
+        const btn2 = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
+        assert.ok(btn2, "row button not found after rerender");
+        const avatar2 = findFirst(btn2, (n) => typeof n.className === "string" && String(n.className).split(/\s+/).includes("avatar"));
+        assert.ok(avatar2, "avatar node not found after rerender");
+        assert.ok(String(avatar2.className).split(/\s+/).includes("avatar-img"), "avatar should become avatar-img after avatarsRev");
+      } finally {
+        if (prevLocalStorage === undefined) delete globalThis.localStorage;
+        else globalThis.localStorage = prevLocalStorage;
+      }
     });
   } finally {
     await helper.cleanup();

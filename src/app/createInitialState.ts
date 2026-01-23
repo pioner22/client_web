@@ -55,8 +55,6 @@ export function createInitialState(): AppState {
     skin,
     skins: [
       { id: "telegram-exact", title: "Telegram (точный)" },
-      { id: "dark-premium", title: "Тёмная премиум" },
-      { id: "amber", title: "Amber" },
     ],
     theme,
     messageView,
@@ -79,6 +77,7 @@ export function createInitialState(): AppState {
     pendingBoardInvites: [],
     fileOffersIn: [],
     fileTransfers: [],
+    fileThumbs: {},
     groups: [],
     boards: [],
     selected: null,

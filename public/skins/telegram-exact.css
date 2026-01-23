@@ -16,6 +16,8 @@
   --good: #3ba748;
   --warn: #f59e0b;
   --bad: #df3f40;
+  --layer-1: transparent;
+  --layer-2: transparent;
   --sel: rgba(51, 144, 236, 0.12);
   --focus: #3390ec;
   --overlay: rgba(0, 0, 0, 0.45);
@@ -70,14 +72,14 @@
 
   /* ===== Sidebar / grid ===== */
   --sidebar-width: 420px;
-  --sidebar-bg: var(--panel);
+  --sidebar-bg: #ffffff;
   --sidebar-border-color: var(--line);
   --sidebar-border-width: 1px;
   --sidebar-pad: 8px;
 
   /* ===== Chat ===== */
   --chat-bg: #e6ebee;
-  --chat-pad: calc(var(--space) * 2);
+  --chat-pad: 13px;
   --chat-title-color: var(--muted);
   --chat-line-gap: 6px;
 
@@ -85,9 +87,9 @@
   --composer-bg: var(--panel);
   --composer-border-color: var(--line);
   --composer-border-width: 1px;
-  --composer-pad-y: calc(var(--space) * 1.5);
+  --composer-pad-y: var(--space);
   --composer-pad-x: calc(var(--space) * 2);
-  --composer-gap: var(--space);
+  --composer-gap: var(--chat-input-btn-send-margin);
   --prompt-color: var(--muted);
 
   --composer-field-bg: #f5f7f8;
@@ -124,7 +126,7 @@
   --row-gap: 10px;
   --row-radius: 0px;
   --row-bg-hover: rgba(0, 0, 0, 0.04);
-  --row-bg-menu-open: rgba(0, 0, 0, 0.06);
+  --row-bg-menu-open: rgba(112, 117, 121, 0.08);
   --row-bg-selected: #3390ec;
   --row-bg-selected-hover: #2b6fc2;
   --row-text-selected: #ffffff;
@@ -145,7 +147,7 @@
   --avatar-text: #ffffff;
 
   /* ===== Chat messages ===== */
-  --msg-body-max-width: 100%;
+  --msg-body-max-width: 85%;
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-end;
   --msg-sys-justify: center;
@@ -158,22 +160,32 @@
   --msg-from-in-color: #2e7fd2;
   --msg-from-out-color: #2e7fd2;
   --msg-sep-color: rgba(112, 117, 121, 0.75);
+  --msg-bubble-radius: 15px;
+  --msg-bubble-pad-x: 8px;
+  --msg-bubble-pad-y: 4px;
+  --msg-bubble-pad-bottom: 5px;
+  --msg-body-gap: 2px;
+  --msg-bubble-in-border-color: rgba(0, 0, 0, 0.08);
+  --msg-bubble-out-border-color: rgba(77, 142, 80, 0.25);
+  --tg-bubble-gap: 2px;
+  --tg-bubble-gap-large: 6px;
+  --msg-meta-inline-pad: calc(var(--message-beside-button-size, 2.375rem) + 6px);
 
   --msg-in-bg: #ffffff;
-  --msg-in-border-color: rgba(0, 0, 0, 0.08);
+  --msg-in-border-color: var(--msg-bubble-in-border-color);
   --msg-in-border-width: 1px;
-  --msg-in-radius: 15px;
+  --msg-in-radius: var(--msg-bubble-radius);
   --msg-in-cont-corner: 5px;
-  --msg-in-pad-y: 5px;
-  --msg-in-pad-x: 8px;
+  --msg-in-pad-y: var(--msg-bubble-pad-y);
+  --msg-in-pad-x: var(--msg-bubble-pad-x);
 
   --msg-out-bg: #e7ffdb;
-  --msg-out-border-color: rgba(77, 142, 80, 0.25);
+  --msg-out-border-color: var(--msg-bubble-out-border-color);
   --msg-out-border-width: 1px;
-  --msg-out-radius: 15px;
+  --msg-out-radius: var(--msg-bubble-radius);
   --msg-out-cont-corner: 5px;
-  --msg-out-pad-y: 5px;
-  --msg-out-pad-x: 8px;
+  --msg-out-pad-y: var(--msg-bubble-pad-y);
+  --msg-out-pad-x: var(--msg-bubble-pad-x);
 
   /* ===== Modals ===== */
   --overlay-bg: rgba(0, 0, 0, 0.38);
@@ -324,6 +336,23 @@ html[data-skin="telegram-exact"] .sidebar .row[data-ctx-kind]::after {
   pointer-events: none;
 }
 
+html[data-skin="telegram-exact"][data-theme="light"] .chat:not(.chat-board) {
+  --msg-body-max-width: 85%;
+  --msg-card-shadow: none;
+  --msg-card-outline: none;
+  --msg-stripe-width: 0px;
+  --msg-in-bg: #ffffff;
+  --msg-in-bg-hi: #ffffff;
+  --msg-in-fill: #ffffff;
+  --msg-in-border-color: rgba(0, 0, 0, 0.08);
+  --msg-in-border-gradient: linear-gradient(180deg, var(--msg-in-border-color), var(--msg-in-border-color));
+  --msg-out-bg: #e7ffdb;
+  --msg-out-bg-hi: #e7ffdb;
+  --msg-out-fill: #e7ffdb;
+  --msg-out-border-color: rgba(77, 142, 80, 0.25);
+  --msg-out-border-gradient: linear-gradient(180deg, var(--msg-out-border-color), var(--msg-out-border-color));
+}
+
 html[data-skin="telegram-exact"] .msg-body {
   position: relative;
 }
@@ -339,12 +368,102 @@ html[data-skin="telegram-exact"] .msg-skel .msg-body::after {
   display: none;
 }
 
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-tail:not(.msg-attach) .msg-body::after {
+  width: 11px;
+  height: 20px;
+  bottom: -1px;
+  border-style: solid;
+  border-width: var(--msg-in-border-width, 1px);
+  border-color: transparent;
+  box-sizing: border-box;
+  border-radius: 0;
+  background: var(--msg-in-bg);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2011%2020%27%3E%3Cpath%20fill%3D%27black%27%20d%3D%27M1.00002881%2C1.03679295e-14%20L7%2C0%20L7%2C17%20C6.8069969%2C14.1607017%206.12380234%2C11.2332513%204.95041634%2C8.21764872%20C4.04604748%2C5.89342034%202.50413132%2C3.73337411%200.324667862%2C1.73751004%20L0.324652538%2C1.73752677%20C-0.0826597201%2C1.36452676%20-0.110475289%2C0.731958677%200.262524727%2C0.324646419%20C0.451952959%2C0.117792698%200.719544377%2C1.0985861e-14%201.00002881%2C1.04360964e-14%20Z%27/%3E%3C/svg%3E") no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2011%2020%27%3E%3Cpath%20fill%3D%27black%27%20d%3D%27M1.00002881%2C1.03679295e-14%20L7%2C0%20L7%2C17%20C6.8069969%2C14.1607017%206.12380234%2C11.2332513%204.95041634%2C8.21764872%20C4.04604748%2C5.89342034%202.50413132%2C3.73337411%200.324667862%2C1.73751004%20L0.324652538%2C1.73752677%20C-0.0826597201%2C1.36452676%20-0.110475289%2C0.731958677%200.262524727%2C0.324646419%20C0.451952959%2C0.117792698%200.719544377%2C1.0985861e-14%201.00002881%2C1.04360964e-14%20Z%27/%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-tail.msg-in:not(.msg-attach) .msg-body::after {
+  inset-inline-start: -8px;
+  background: var(--msg-in-bg);
+  border-color: var(--msg-in-border-color);
+  border-width: var(--msg-in-border-width, 1px);
+  transform: none;
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-tail.msg-out:not(.msg-attach) .msg-body::after {
+  inset-inline-end: -8px;
+  background: var(--msg-out-bg);
+  border-color: var(--msg-out-border-color);
+  border-width: var(--msg-out-border-width, 1px);
+  transform: scaleX(-1);
+}
+
 html[data-skin="telegram-exact"] .msg-meta {
   font-size: 11px;
 }
 
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg.msg-cont .msg-from,
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out .msg-from {
+  display: none;
+}
+
+html[data-skin="telegram-exact"] .chat.chat-dm .msg-from {
+  display: none;
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-in:not(.msg-tail) .msg-avatar {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out .msg-avatar {
+  display: none;
+}
+
+html[data-skin="telegram-exact"] .chat.chat-dm .msg-avatar {
+  display: none;
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg:not([data-msg-attach]):not([data-msg-has-ref]):not([data-msg-has-reacts]):not([data-msg-emoji-only]) .msg-text {
+  padding-right: var(--msg-meta-inline-pad);
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg:not([data-msg-attach]):not([data-msg-has-ref]):not([data-msg-has-reacts]):not([data-msg-emoji-only]) .msg-meta {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-attach .msg-text.msg-caption {
+  margin-top: 4px;
+}
+
 html[data-skin="telegram-exact"] .msg-out .msg-meta {
   color: rgba(77, 142, 80, 0.85);
+}
+
+html[data-skin="telegram-exact"] .chat-lines {
+  gap: 0;
+}
+
+html[data-skin="telegram-exact"] .chat-lines > .msg {
+  margin-top: var(--tg-bubble-gap-large);
+}
+
+html[data-skin="telegram-exact"] .chat-lines > .msg.msg-cont {
+  margin-top: var(--tg-bubble-gap);
+}
+
+html[data-skin="telegram-exact"] .chat-lines > .msg:first-child {
+  margin-top: 0;
+}
+
+html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg.msg-tail {
+  margin-bottom: 0;
 }
 
 html[data-skin="telegram-exact"] .input-wrap {
@@ -380,7 +499,7 @@ html[data-skin="telegram-exact"] .btn.composer-send::after {
     --header-pad-y: 8px;
     --header-pad-x: 12px;
     --sidebar-pad: 6px;
-    --chat-pad: 12px;
+    --chat-pad: 8px;
     --row-pad-y: 12px;
     --row-pad-x: 12px;
     --row-gap: 12px;

@@ -1,7 +1,14 @@
 import { el } from "../../helpers/dom/el";
+import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState } from "../../stores/types";
 
 export function renderFooter(target: HTMLElement, state: AppState) {
+  const mobileUi = isMobileLikeUi();
+  target.classList.toggle("hidden", mobileUi);
+  if (mobileUi) {
+    target.replaceChildren();
+    return;
+  }
   const tabMain = el(
     "button",
     {

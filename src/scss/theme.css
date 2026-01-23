@@ -138,11 +138,16 @@
   --right-column-border-color: var(--line);
   --right-column-border-width: var(--border-width);
 
-  --header-bg: var(--bg);
-  --header-border-color: var(--line);
+  --header-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--panel) 96%, #0f172a 4%),
+    color-mix(in srgb, var(--panel2) 90%, #0f172a 10%)
+  );
+  --header-border-color: color-mix(in srgb, var(--line), transparent 28%);
   --header-border-width: var(--border-width);
+  --header-topbar-height: 56px;
   --header-pad-y: 10px;
-  --header-pad-x: 12px;
+  --header-pad-x: 16px;
   --header-gap-y: 6px;
   --header-gap-x: 12px;
   --header-left-color: var(--text);
@@ -152,7 +157,12 @@
   --header-version-color: var(--muted);
   --header-sep-color: var(--muted);
   --header-title-color: var(--text);
-  --header-right-max-width: min(55vw, 520px);
+  --header-title-size: 16px;
+  --header-title-weight: 600;
+  --header-status-size: 12px;
+  --header-status-letter: 0.01em;
+  --header-right-max-width: min(42vw, 420px);
+  --header-shadow: 0 10px 24px rgba(12, 18, 28, 0.16);
 
   --hdr-action-size: 34px;
   --hdr-action-radius: 999px;
@@ -169,7 +179,7 @@
   --hotkeys-gap: var(--sp-2);
   --hotkeys-pad-b: 2px;
 
-  --sidebar-bg: var(--panel);
+  --sidebar-bg: color-mix(in srgb, var(--panel) 94%, #0f172a 6%);
   --sidebar-border-color: var(--line);
   --sidebar-border-width: var(--border-width);
   --sidebar-pad: 0px;
@@ -192,17 +202,29 @@
   --composer-divider-glow: color-mix(in srgb, var(--composer-bg), transparent 78%);
   --composer-divider-shadow: 0 -1px 0 var(--composer-divider-line),
     0 calc(-1 * var(--sp-4)) calc(var(--sp-5) * var(--phi)) var(--composer-divider-glow);
-  --composer-pad-y: calc(var(--space) * 1.5);
+  --composer-pad-y: var(--space);
   --composer-pad-x: calc(var(--space) * 2);
-  --composer-gap: calc(var(--space) * 0.75);
+  --composer-gap: var(--chat-input-btn-send-margin);
   --prompt-color: var(--muted);
 
-  --footer-bg: var(--panel);
-  --footer-border-color: var(--line);
+  --footer-bg: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--panel) 96%, #0f172a 4%),
+    color-mix(in srgb, var(--panel2) 90%, #0f172a 10%)
+  );
+  --footer-border-color: color-mix(in srgb, var(--line), transparent 28%);
   --footer-border-width: var(--border-width);
   --footer-pad-y: var(--sp-2);
   --footer-pad-x: var(--sp-4);
   --footer-color: var(--muted);
+  --footer-nav-bg: color-mix(in srgb, var(--panel2) 92%, transparent 8%);
+  --footer-nav-border: color-mix(in srgb, var(--line), transparent 35%);
+  --footer-nav-radius: 22px;
+  --footer-nav-pad: 8px;
+  --footer-tab-height: 52px;
+  --footer-tab-font-size: 11px;
+  --footer-tab-icon-size: 22px;
+  --footer-shadow: 0 -10px 24px rgba(12, 18, 28, 0.16);
 
   /* ===== Controls ===== */
   --field-bg: rgba(255, 255, 255, 0.02);
@@ -306,8 +328,9 @@
   --row-min-h: 56px;
   --row-pad-y: 7px;
   --row-pad-x: 16px;
-  --row-gap: 16px;
-  --row-radius: 10px;
+  --row-gap: 10px;
+  --row-radius: 12px;
+  --row-tail-min: 136px;
   --row-bg-hover: color-mix(in srgb, var(--muted), transparent 90%);
   --row-bg-menu-open: color-mix(in srgb, var(--muted) 8%, var(--sidebar-bg));
   --row-bg-selected: var(--focus);
@@ -343,22 +366,25 @@
   --chat-title-color: var(--muted);
   --chat-title-mb: var(--sp-3);
   --chat-line-gap: var(--sp-1);
+  --msg-date-top: calc(var(--chat-pad) + 6px);
   --msg-pad-y: 0px;
   --msg-status-read-color: var(--focus);
-  --messages-container-width: min(100%, 728px);
-  --chat-bubbles-max-width: min(100%, var(--messages-container-width));
-  --msg-body-max-width: min(100%, 68ch);
+  --messages-container-width: min(100%, 920px);
+  --chat-lines-max-width: var(--chat-input-max-width, var(--messages-container-width));
+  --chat-bubbles-max-width: min(100%, var(--chat-input-max-width, var(--messages-container-width)));
+  --msg-body-max-width: min(100%, 80ch);
+  --msg-media-max-width: 560px;
   --msg-avatar-size: 36px;
   --msg-avatar-font-size: 12px;
   --msg-avatar-gap: var(--sp-3);
   --msg-body-gap: var(--sp-3);
-  --msg-meta-font-size: 11px;
+  --msg-meta-font-size: 12px;
   --msg-card-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
   --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--msg-accent, var(--focus)) 12%, var(--line) 88%);
   --msg-stripe-width: 4px;
-  --msg-text-size: 15px;
-  --msg-text-line: 1.55;
-  --msg-from-size: 12px;
+  --msg-text-size: 16px;
+  --msg-text-line: var(--line-height);
+  --msg-from-size: 14px;
   --msg-from-letter: 0.08em;
   --msg-from-pad-y: 2px;
   --msg-from-pad-x: 8px;
@@ -377,6 +403,16 @@
   --message-beside-button-size: 2.375rem;
   --message-beside-button-margin: calc((var(--message-beside-button-size) + 0.5rem) * -1);
   --message-time-background: rgba(0, 0, 0, 0.35);
+  --msg-bubble-radius: calc(var(--space) * 2);
+  --msg-bubble-pad-x: calc(var(--space) * 2);
+  --msg-bubble-pad-y: calc(var(--space) * 1.5);
+  --msg-bubble-pad-bottom: calc(var(--space) * 1.5);
+  --msg-bubble-tail-size: 8px;
+  --msg-bubble-tail-offset: 2px;
+  --msg-bubble-tail-offset-x: 5px;
+  --msg-bubble-tail-offset-y: 2px;
+  --msg-bubble-in-border-color: color-mix(in srgb, var(--line), transparent 35%);
+  --msg-bubble-out-border-color: color-mix(in srgb, var(--accent), transparent 70%);
   --msg-in-justify: flex-start;
   --msg-out-justify: flex-end;
   --msg-sys-justify: flex-start;
@@ -463,35 +499,39 @@
 }
 
 :root[data-msg-wide="1"] {
-  --messages-container-width: min(100%, 728px);
+  --messages-container-width: min(100%, 1000px);
   --chat-bubbles-max-width: min(100%, var(--messages-container-width));
-  --msg-body-max-width: min(100%, calc(var(--messages-container-width) * 0.85));
+  --msg-date-top: calc(var(--chat-pad) + 6px);
 }
 
 :root[data-msg-view="bubble"] {
-  --messages-container-width: min(100%, 728px);
+  --messages-container-width: min(100%, 800px);
   --chat-input-max-width: var(--messages-container-width);
-  --chat-line-gap: var(--sp-1);
-  --msg-body-gap: calc(var(--space) * 0.5);
+  --chat-line-gap: 4px;
+  --msg-body-gap: 4px;
   --msg-text-line: var(--line-height);
-  --msg-body-max-width: min(100%, calc(var(--messages-container-width) * 0.85));
+  --msg-body-max-width: min(85%, var(--chat-bubbles-max-width));
   --msg-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
   --msg-card-outline: 0 0 0 0 transparent;
   --msg-time-color: var(--muted);
   --msg-meta-bg: transparent;
   --msg-meta-border: transparent;
-  --msg-in-radius: calc(var(--space) * 2);
-  --msg-in-radius-tail: calc(var(--space) * 2);
-  --msg-out-radius: calc(var(--space) * 2);
-  --msg-out-radius-tail: calc(var(--space) * 2);
-  --msg-in-pad-x: calc(var(--space) * 2);
-  --msg-in-pad-y: calc(var(--space) * 1.5);
-  --msg-in-pad-bottom: calc(var(--space) * 1.5);
-  --msg-out-pad-x: calc(var(--space) * 2);
-  --msg-out-pad-y: calc(var(--space) * 1.5);
-  --msg-out-pad-bottom: calc(var(--space) * 1.5);
-  --msg-in-border-color: color-mix(in srgb, var(--line), transparent 35%);
-  --msg-out-border-color: color-mix(in srgb, var(--accent), transparent 70%);
+  --msg-in-radius: var(--msg-bubble-radius);
+  --msg-in-radius-tail: var(--msg-bubble-radius);
+  --msg-out-radius: var(--msg-bubble-radius);
+  --msg-out-radius-tail: var(--msg-bubble-radius);
+  --msg-in-pad-x: var(--msg-bubble-pad-x);
+  --msg-in-pad-y: var(--msg-bubble-pad-y);
+  --msg-in-pad-bottom: var(--msg-bubble-pad-bottom);
+  --msg-out-pad-x: var(--msg-bubble-pad-x);
+  --msg-out-pad-y: var(--msg-bubble-pad-y);
+  --msg-out-pad-bottom: var(--msg-bubble-pad-bottom);
+  --msg-in-border-color: var(--msg-bubble-in-border-color);
+  --msg-out-border-color: var(--msg-bubble-out-border-color);
+  --msg-tail-size: var(--msg-bubble-tail-size);
+  --msg-tail-offset: var(--msg-bubble-tail-offset);
+  --msg-tail-offset-x: var(--msg-bubble-tail-offset-x);
+  --msg-tail-offset-y: var(--msg-bubble-tail-offset-y);
 }
 
 @media (min-width: 926px) {
