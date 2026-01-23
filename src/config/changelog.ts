@@ -10,6 +10,34 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.642",
+    date: "2026-01-23",
+    improved: ["Info: «История изменений» обновлена — добавлены последние релизы 0.1.638–0.1.641"],
+  },
+  {
+    version: "0.1.641",
+    date: "2026-01-23",
+    improved: ["Авторизация: экран входа стал full-page (tweb-like) — верстка через `#auth-pages`, без «маленькой модалки»"],
+    notes: ["Авторизация: размеры/брейкпоинты выровнены под tweb (max-width 720, высоты 810/760, брейк 721)"],
+  },
+  {
+    version: "0.1.640",
+    date: "2026-01-22",
+    improved: ["Сайдбар: фильтры чатов доступны на desktop browser и PWA standalone (не только mobile)"],
+    notes: ["Сайдбар: добавлены фильтры «Личные» и «Группы»"],
+  },
+  {
+    version: "0.1.639",
+    date: "2026-01-22",
+    improved: ["Реакции: в контекстном меню сообщений добавлен выбор «другая реакция» (через emoji-popover)"],
+    notes: ["Tweb parity: закрыт список pending UI-пунктов; device/PWA проверки можно выполнить позже"],
+  },
+  {
+    version: "0.1.638",
+    date: "2026-01-22",
+    improved: ["Аватары: загрузка/редактирование обновляет аватар в UI сразу (sidebar/chat) — без перезагрузки страницы"],
+  },
+  {
     version: "0.1.637",
     date: "2026-01-21",
     fixed: [
