@@ -10,6 +10,15 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.647",
+    date: "2026-01-23",
+    improved: [
+      "Выбор сообщений: добавлены чекбоксы в истории (selection mode)",
+      "Выбор сообщений: Shift+Click выбирает диапазон, drag по чекбоксам — массовый выбор/снятие",
+      "Выбор: клики по ссылкам/кнопкам/аудио/видео не ломаются в режиме выбора",
+    ],
+  },
+  {
     version: "0.1.646",
     date: "2026-01-23",
     improved: [

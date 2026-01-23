@@ -652,9 +652,13 @@ export function mountApp(root: HTMLElement) {
     scheduleSaveDrafts(store);
   }
 
+  let chatSelectionAnchorIdx: number | null = null;
+  let suppressMsgSelectToggleClickUntil = 0;
+
   function clearChatSelection() {
     const st = store.get();
     if (!st.chatSelection) return;
+    chatSelectionAnchorIdx = null;
     store.set({ chatSelection: null });
   }
 
@@ -674,6 +678,65 @@ export function mountApp(root: HTMLElement) {
       return { ...prev, chatSelection: ids.size ? { key, ids: Array.from(ids) } : null };
     });
   }
+
+  function addChatSelectionRange(key: string, fromIdx: number, toIdx: number) {
+    if (!key) return;
+    if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdx)) return;
+    const start = Math.max(0, Math.min(fromIdx, toIdx));
+    const end = Math.max(0, Math.max(fromIdx, toIdx));
+    store.set((prev) => {
+      const conv = prev.conversations[key] || [];
+      if (!Array.isArray(conv) || !conv.length) return prev;
+      const current = prev.chatSelection;
+      const ids = new Set(current && current.key === key ? current.ids || [] : []);
+      const boundedEnd = Math.min(end, conv.length - 1);
+      for (let i = start; i <= boundedEnd; i += 1) {
+        const msg = conv[i];
+        if (!msg || msg.kind === "sys") continue;
+        const selId = messageSelectionKey(msg);
+        if (selId) ids.add(selId);
+      }
+      return { ...prev, chatSelection: ids.size ? { key, ids: Array.from(ids) } : null };
+    });
+  }
+
+  function setChatSelectionValueAtIdx(key: string, idx: number, value: boolean) {
+    if (!key) return;
+    if (!Number.isFinite(idx) || idx < 0) return;
+    store.set((prev) => {
+      const conv = prev.conversations[key] || [];
+      if (!Array.isArray(conv) || !conv.length) return prev;
+      if (idx >= conv.length) return prev;
+      const msg = conv[idx];
+      if (!msg || msg.kind === "sys") return prev;
+      const selId = messageSelectionKey(msg);
+      if (!selId) return prev;
+      const current = prev.chatSelection;
+      const ids = new Set(current && current.key === key ? current.ids || [] : []);
+      const has = ids.has(selId);
+      if (value) {
+        if (has) return prev;
+        ids.add(selId);
+      } else {
+        if (!has) return prev;
+        ids.delete(selId);
+      }
+      return { ...prev, chatSelection: ids.size ? { key, ids: Array.from(ids) } : null };
+    });
+  }
+
+  type ChatSelectionDragState = {
+    key: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startIdx: number;
+    lastIdx: number;
+    mode: "add" | "remove";
+    started: boolean;
+  };
+
+  let chatSelectionDrag: ChatSelectionDragState | null = null;
 
   function resolveChatSelection(st: AppState): { key: string; messages: ChatMessage[]; ids: string[] } | null {
     const sel = st.selected;
@@ -3043,6 +3106,30 @@ export function mountApp(root: HTMLElement) {
       return;
     }
 
+    const msgSelectBtn = target?.closest("button[data-action='msg-select-toggle']") as HTMLButtonElement | null;
+    if (msgSelectBtn) {
+      if (Date.now() < suppressMsgSelectToggleClickUntil) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      const st = store.get();
+      const key = st.selected ? conversationKey(st.selected) : "";
+      if (!key) return;
+      const idxRaw = String(msgSelectBtn.getAttribute("data-msg-idx") || "").trim();
+      const idx = Number.isFinite(Number(idxRaw)) ? Math.trunc(Number(idxRaw)) : -1;
+      const conv = key ? st.conversations[key] : null;
+      const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+      if (!msg) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const shift = "shiftKey" in e ? Boolean((e as MouseEvent).shiftKey) : false;
+      if (shift && chatSelectionAnchorIdx !== null) addChatSelectionRange(key, chatSelectionAnchorIdx, idx);
+      else toggleChatSelection(key, msg);
+      chatSelectionAnchorIdx = idx;
+      return;
+    }
+
     const stForSelection = store.get();
     const selectionKey = stForSelection.selected ? conversationKey(stForSelection.selected) : "";
     const selectionActive =
@@ -3050,7 +3137,7 @@ export function mountApp(root: HTMLElement) {
       Boolean(stForSelection.chatSelection && stForSelection.chatSelection.key === selectionKey) &&
       Boolean(stForSelection.chatSelection?.ids?.length);
     if (selectionActive) {
-      if (target?.closest("button, a, input, textarea, [contenteditable='true']")) return;
+      if (target?.closest("button, a, input, textarea, select, audio, video, [contenteditable='true']")) return;
       const row = target?.closest("[data-msg-idx]") as HTMLElement | null;
       if (row) {
         const idx = Math.trunc(Number(row.getAttribute("data-msg-idx") || ""));
@@ -3059,7 +3146,10 @@ export function mountApp(root: HTMLElement) {
         if (msg) {
           e.preventDefault();
           e.stopPropagation();
-          toggleChatSelection(selectionKey, msg);
+          const shift = "shiftKey" in e ? Boolean((e as MouseEvent).shiftKey) : false;
+          if (shift && chatSelectionAnchorIdx !== null) addChatSelectionRange(selectionKey, chatSelectionAnchorIdx, idx);
+          else toggleChatSelection(selectionKey, msg);
+          chatSelectionAnchorIdx = idx;
           return;
         }
       }
@@ -13792,6 +13882,94 @@ export function mountApp(root: HTMLElement) {
     },
     true
   );
+
+  // Chat messages: selection drag (desktop) — start on checkbox.
+  layout.chat.addEventListener(
+    "pointerdown",
+    (e) => {
+      const st = store.get();
+      if (st.modal) return;
+      const ev = e as PointerEvent;
+      if (ev.pointerType !== "mouse") return;
+      if (ev.button !== 0) return;
+      const btn = (ev.target as HTMLElement | null)?.closest("button[data-action='msg-select-toggle']") as HTMLButtonElement | null;
+      if (!btn) return;
+      const key = st.selected ? conversationKey(st.selected) : "";
+      if (!key) return;
+      const selection = st.chatSelection;
+      if (!selection || selection.key !== key || !Array.isArray(selection.ids) || !selection.ids.length) return;
+      const idxRaw = String(btn.getAttribute("data-msg-idx") || "").trim();
+      const idx = Number.isFinite(Number(idxRaw)) ? Math.trunc(Number(idxRaw)) : -1;
+      const conv = key ? st.conversations[key] : null;
+      const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+      if (!msg || msg.kind === "sys") return;
+      const selId = messageSelectionKey(msg);
+      if (!selId) return;
+      const isSelected = selection.ids.includes(selId);
+      chatSelectionDrag = {
+        key,
+        pointerId: ev.pointerId,
+        startX: ev.clientX,
+        startY: ev.clientY,
+        startIdx: idx,
+        lastIdx: idx,
+        mode: isSelected ? "remove" : "add",
+        started: false,
+      };
+      chatSelectionAnchorIdx = idx;
+      try {
+        layout.chat.setPointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+    },
+    true
+  );
+
+  layout.chat.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!chatSelectionDrag) return;
+      const ev = e as PointerEvent;
+      if (ev.pointerId !== chatSelectionDrag.pointerId) return;
+      const dx = ev.clientX - chatSelectionDrag.startX;
+      const dy = ev.clientY - chatSelectionDrag.startY;
+      const moved = dx * dx + dy * dy;
+      if (!chatSelectionDrag.started) {
+        if (moved < 36) return;
+        chatSelectionDrag.started = true;
+        suppressMsgSelectToggleClickUntil = Date.now() + 600;
+        setChatSelectionValueAtIdx(chatSelectionDrag.key, chatSelectionDrag.startIdx, chatSelectionDrag.mode === "add");
+      }
+      const elAt = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      const row = elAt?.closest("[data-msg-idx]") as HTMLElement | null;
+      if (!row) return;
+      const idx = Math.trunc(Number(row.getAttribute("data-msg-idx") || ""));
+      if (!Number.isFinite(idx) || idx < 0) return;
+      if (idx === chatSelectionDrag.lastIdx) return;
+      chatSelectionDrag.lastIdx = idx;
+      setChatSelectionValueAtIdx(chatSelectionDrag.key, idx, chatSelectionDrag.mode === "add");
+      chatSelectionAnchorIdx = idx;
+      ev.preventDefault();
+    },
+    true
+  );
+
+  const stopChatSelectionDrag = (e: Event) => {
+    if (!chatSelectionDrag) return;
+    const ev = e as PointerEvent;
+    if (ev.pointerId !== chatSelectionDrag.pointerId) return;
+    if (chatSelectionDrag.started) suppressMsgSelectToggleClickUntil = Date.now() + 600;
+    try {
+      layout.chat.releasePointerCapture(ev.pointerId);
+    } catch {
+      // ignore
+    }
+    chatSelectionDrag = null;
+  };
+
+  layout.chat.addEventListener("pointerup", stopChatSelectionDrag, true);
+  layout.chat.addEventListener("pointercancel", stopChatSelectionDrag, true);
 
   // Chat messages: context menu (ПКМ / Ctrl+Click).
   layout.chat.addEventListener(

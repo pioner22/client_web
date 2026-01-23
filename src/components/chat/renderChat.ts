@@ -735,7 +735,7 @@ function messageLine(
   state: AppState,
   m: ChatMessage,
   friendLabels?: Map<string, string>,
-  opts?: { mobileUi: boolean; boardUi?: boolean; msgIdx?: number }
+  opts?: { mobileUi: boolean; boardUi?: boolean; msgIdx?: number; selectionMode?: boolean; selected?: boolean }
 ): HTMLElement {
   const actionBtn = (
     label: string,
@@ -1065,6 +1065,26 @@ function messageLine(
   bodyChildren.push(el("div", { class: "msg-meta" }, meta));
   const reacts = renderReactions(m);
   if (reacts) bodyChildren.push(reacts);
+  const selectionMode = Boolean(opts?.selectionMode);
+  const selected = Boolean(opts?.selected);
+  const selectionIdx = typeof opts?.msgIdx === "number" && Number.isFinite(opts.msgIdx) ? Math.trunc(opts.msgIdx) : null;
+  const selectionBtn =
+    selectionMode && selectionIdx !== null
+      ? el(
+          "button",
+          {
+            class: `btn msg-select${selected ? " msg-select-on" : ""}`,
+            type: "button",
+            "data-action": "msg-select-toggle",
+            "data-msg-idx": String(selectionIdx),
+            title: selected ? "Снять выбор" : "Выбрать",
+            "aria-label": selected ? "Снять выбор" : "Выбрать",
+            ...(selected ? { "aria-pressed": "true" } : { "aria-pressed": "false" }),
+          },
+          [selected ? "✓" : ""]
+        )
+      : null;
+
   const lineChildren: HTMLElement[] = [];
   if (displayFromId) {
     const avatarNode = avatar("dm", displayFromId);
@@ -1082,6 +1102,7 @@ function messageLine(
       lineChildren.push(el("div", { class: "msg-avatar" }, [avatarNode]));
     }
   }
+  if (selectionBtn) lineChildren.push(selectionBtn);
   lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
   const cls = m.attachment ? `msg msg-${m.kind} msg-attach` : `msg msg-${m.kind}`;
   const line = el("div", { class: cls }, lineChildren);
@@ -1104,7 +1125,12 @@ function messageLine(
   return line;
 }
 
-function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map<string, string>): HTMLElement {
+function renderAlbumLine(
+  state: AppState,
+  items: AlbumItem[],
+  friendLabels?: Map<string, string>,
+  opts?: { selectionMode?: boolean; selected?: boolean }
+): HTMLElement {
   const first = items[0];
   const last = items[items.length - 1];
   const fromId = String(first.msg.from || "").trim();
@@ -1162,6 +1188,26 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
   const reacts = renderReactions(last.msg);
   if (reacts) bodyChildren.push(reacts);
 
+  const selectionMode = Boolean(opts?.selectionMode);
+  const selected = Boolean(opts?.selected);
+  const selectionIdx = typeof last.idx === "number" && Number.isFinite(last.idx) ? Math.trunc(last.idx) : null;
+  const selectionBtn =
+    selectionMode && selectionIdx !== null
+      ? el(
+          "button",
+          {
+            class: `btn msg-select${selected ? " msg-select-on" : ""}`,
+            type: "button",
+            "data-action": "msg-select-toggle",
+            "data-msg-idx": String(selectionIdx),
+            title: selected ? "Снять выбор" : "Выбрать",
+            "aria-label": selected ? "Снять выбор" : "Выбрать",
+            ...(selected ? { "aria-pressed": "true" } : { "aria-pressed": "false" }),
+          },
+          [selected ? "✓" : ""]
+        )
+      : null;
+
   const lineChildren: HTMLElement[] = [];
   if (displayFromId) {
     const avatarNode = avatar("dm", displayFromId);
@@ -1179,6 +1225,7 @@ function renderAlbumLine(state: AppState, items: AlbumItem[], friendLabels?: Map
       lineChildren.push(el("div", { class: "msg-avatar" }, [avatarNode]));
     }
   }
+  if (selectionBtn) lineChildren.push(selectionBtn);
   lineChildren.push(el("div", { class: "msg-body" }, bodyChildren));
   const line = el("div", { class: `msg msg-${first.msg.kind} msg-attach msg-album` }, lineChildren);
   applyMessageDataset(line, first.msg.kind, {
@@ -1485,25 +1532,25 @@ export function renderChat(layout: Layout, state: AppState) {
         scan += 1;
         if (group.length >= albumMax) break;
       }
-      if (group.length >= albumMin) {
-        const line = renderAlbumLine(state, group, friendLabels);
-        if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
-        const lastItem = group[group.length - 1];
-        if (!boardUi && lastItem?.msg?.kind !== "sys" && isGroupTail(lastItem.idx, lastItem.msg)) line.classList.add("msg-tail");
-        const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
-        const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
-        if (selectionSet) {
-          const selected = group.some((item) => {
-            const selKey = messageSelectionKey(item.msg);
-            return selKey ? selectionSet.has(selKey) : false;
-          });
-          if (selected) line.classList.add("msg-selected");
-        }
-        line.setAttribute("data-msg-idx", String(group[group.length - 1].idx));
-        const groupMsgId = Number(group[group.length - 1].msg.id ?? NaN);
-        if (Number.isFinite(groupMsgId)) line.setAttribute("data-msg-id", String(groupMsgId));
-        const groupMsgKey = messageSelectionKey(group[group.length - 1].msg);
-        if (groupMsgKey) line.setAttribute("data-msg-key", groupMsgKey);
+	      if (group.length >= albumMin) {
+	        const selected = selectionSet
+	          ? group.some((item) => {
+	              const selKey = messageSelectionKey(item.msg);
+	              return selKey ? selectionSet.has(selKey) : false;
+	            })
+	          : false;
+	        const line = renderAlbumLine(state, group, friendLabels, { selectionMode: selectionCount > 0, selected });
+	        if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
+	        const lastItem = group[group.length - 1];
+	        if (!boardUi && lastItem?.msg?.kind !== "sys" && isGroupTail(lastItem.idx, lastItem.msg)) line.classList.add("msg-tail");
+	        const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
+	        const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
+	        if (selected) line.classList.add("msg-selected");
+	        line.setAttribute("data-msg-idx", String(group[group.length - 1].idx));
+	        const groupMsgId = Number(group[group.length - 1].msg.id ?? NaN);
+	        if (Number.isFinite(groupMsgId)) line.setAttribute("data-msg-id", String(groupMsgId));
+	        const groupMsgKey = messageSelectionKey(group[group.length - 1].msg);
+	        if (groupMsgKey) line.setAttribute("data-msg-key", groupMsgKey);
         if (hit) line.classList.add("msg-hit");
         if (active) line.classList.add("msg-hit-active");
         lineItems.push(line);
@@ -1513,23 +1560,21 @@ export function renderChat(layout: Layout, state: AppState) {
       }
     }
 
-    const line = messageLine(state, m, friendLabels, { mobileUi, boardUi, msgIdx });
-    if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
-    if (!boardUi && m.kind !== "sys" && isGroupTail(msgIdx, m)) line.classList.add("msg-tail");
-    line.setAttribute("data-msg-idx", String(msgIdx));
-    const msgId = Number(m.id ?? NaN);
-    if (Number.isFinite(msgId)) line.setAttribute("data-msg-id", String(msgId));
-    const msgKey = messageSelectionKey(m);
-    if (msgKey) line.setAttribute("data-msg-key", msgKey);
-    if (selectionSet) {
-      const selKey = messageSelectionKey(m);
-      if (selKey && selectionSet.has(selKey)) line.classList.add("msg-selected");
-    }
-    if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");
-    if (activeMsgIdx === msgIdx) line.classList.add("msg-hit-active");
-    lineItems.push(line);
-    prevMsg = m.kind === "sys" ? null : m;
-  }
+	    const msgKey = messageSelectionKey(m);
+	    const selected = Boolean(selectionSet && msgKey && selectionSet.has(msgKey));
+	    const line = messageLine(state, m, friendLabels, { mobileUi, boardUi, msgIdx, selectionMode: selectionCount > 0, selected });
+	    if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
+	    if (!boardUi && m.kind !== "sys" && isGroupTail(msgIdx, m)) line.classList.add("msg-tail");
+	    line.setAttribute("data-msg-idx", String(msgIdx));
+	    const msgId = Number(m.id ?? NaN);
+	    if (Number.isFinite(msgId)) line.setAttribute("data-msg-id", String(msgId));
+	    if (msgKey) line.setAttribute("data-msg-key", msgKey);
+	    if (selected) line.classList.add("msg-selected");
+	    if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");
+	    if (activeMsgIdx === msgIdx) line.classList.add("msg-hit-active");
+	    lineItems.push(line);
+	    prevMsg = m.kind === "sys" ? null : m;
+	  }
 
   if (key && hasMore) {
     const btn =
