@@ -6711,6 +6711,12 @@ export function mountApp(root: HTMLElement) {
       close();
       return;
     }
+    if (action.kind === "room_clear") {
+      gateway.send({ type: "room_clear", room: action.roomId });
+      store.set({ status: `Очистка истории: ${action.roomId}` });
+      close();
+      return;
+    }
     if (action.kind === "friend_remove") {
       gateway.send({ type: "friend_remove", peer: action.peer });
       store.set({ status: `Удаление контакта: ${action.peer}` });
@@ -11894,6 +11900,9 @@ export function mountApp(root: HTMLElement) {
         makeItem("avatar_set", hasAvatar ? "Сменить аватар…" : "Установить аватар…", "🖼️"),
         ...(hasAvatar ? [makeItem("avatar_remove", "Удалить аватар", "🗑️", { danger: true })] : []),
       ]);
+      if (isOwner) {
+        addGroup([makeItem("room_clear", "Очистить историю (для всех)", "🧹", { danger: true, disabled: !canAct })]);
+      }
       addGroup([
         isOwner
           ? makeItem("group_disband", "Удалить чат (для всех)", "🗑️", { danger: true, disabled: !canAct })
@@ -11929,6 +11938,9 @@ export function mountApp(root: HTMLElement) {
         makeItem("avatar_set", hasAvatar ? "Сменить аватар…" : "Установить аватар…", "🖼️"),
         ...(hasAvatar ? [makeItem("avatar_remove", "Удалить аватар", "🗑️", { danger: true })] : []),
       ]);
+      if (isOwner) {
+        addGroup([makeItem("room_clear", "Очистить историю (для всех)", "🧹", { danger: true, disabled: !canAct })]);
+      }
       addGroup([
         isOwner
           ? makeItem("board_disband", "Удалить доску (для всех)", "🗑️", { danger: true, disabled: !canAct })
@@ -12906,6 +12918,26 @@ export function mountApp(root: HTMLElement) {
         confirmLabel: "Очистить",
         danger: true,
         action: { kind: "chat_clear", peer: t.id },
+      });
+      return;
+    }
+    if (itemId === "room_clear" && (t.kind === "group" || t.kind === "board")) {
+      const entry = t.kind === "group" ? st.groups.find((x) => x.id === t.id) : st.boards.find((x) => x.id === t.id);
+      const name = String(entry?.name || t.id);
+      const ownerId = String(entry?.owner_id || "").trim();
+      const isOwner = Boolean(ownerId && st.selfId && ownerId === String(st.selfId));
+      if (!isOwner) {
+        store.set({ status: "Только владелец может очистить историю" });
+        close();
+        return;
+      }
+      const label = t.kind === "group" ? "чате" : "доске";
+      openConfirmModal({
+        title: "Очистить историю (для всех)?",
+        message: `Удалить всю историю в ${label} «${name}» для всех участников?`,
+        confirmLabel: "Очистить",
+        danger: true,
+        action: { kind: "room_clear", roomId: t.id },
       });
       return;
     }

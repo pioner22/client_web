@@ -110,6 +110,7 @@ export interface ContextMenuPayload {
 
 export type ConfirmAction =
   | { kind: "chat_clear"; peer: string }
+  | { kind: "room_clear"; roomId: string }
   | { kind: "friend_remove"; peer: string }
   | { kind: "group_member_remove"; groupId: string; memberId: string }
   | { kind: "board_member_remove"; boardId: string; memberId: string }

@@ -562,6 +562,47 @@ export function handleServerMessage(
     });
     return;
   }
+  if (t === "room_cleared") {
+    const ok = Boolean(msg?.ok);
+    const room = String(msg?.room ?? "").trim();
+    if (!room) return;
+    if (!ok) {
+      patch({ status: `Не удалось очистить историю: ${room}` });
+      return;
+    }
+    patch((prev) => {
+      const key = roomKey(room);
+      const conversations = { ...prev.conversations };
+      delete conversations[key];
+      const historyLoaded = { ...prev.historyLoaded };
+      delete historyLoaded[key];
+      const historyCursor = { ...prev.historyCursor };
+      delete historyCursor[key];
+      const historyHasMore = { ...prev.historyHasMore };
+      delete historyHasMore[key];
+      const historyLoading = { ...prev.historyLoading };
+      delete historyLoading[key];
+      const historyVirtualStart = { ...prev.historyVirtualStart };
+      delete historyVirtualStart[key];
+      const pinnedMessages = { ...prev.pinnedMessages };
+      delete pinnedMessages[key];
+      const pinnedMessageActive = { ...prev.pinnedMessageActive };
+      delete pinnedMessageActive[key];
+      return {
+        ...prev,
+        conversations,
+        historyLoaded,
+        historyCursor,
+        historyHasMore,
+        historyLoading,
+        historyVirtualStart,
+        pinnedMessages,
+        pinnedMessageActive,
+        status: `История очищена: ${room}`,
+      };
+    });
+    return;
+  }
   if (t === "friend_remove_result") {
     const ok = Boolean(msg?.ok);
     const peer = String(msg?.peer ?? "").trim();
