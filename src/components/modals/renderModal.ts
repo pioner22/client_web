@@ -17,6 +17,7 @@ import { renderContextMenu } from "./renderContextMenu";
 import { renderBoardPostModal } from "./renderBoardPostModal";
 import { renderSendScheduleModal } from "./renderSendScheduleModal";
 import { renderForwardModal } from "./renderForwardModal";
+import { renderReactionsModal } from "./renderReactionsModal";
 
 function formatUserLabel(displayName: string, handle: string, fallback: string): string {
   const dn = String(displayName || "").trim();
@@ -138,6 +139,9 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       onDismiss: actions.onClose,
       onApply: actions.onApplyPwaUpdate,
     });
+  }
+  if (kind === "reactions") {
+    return renderReactionsModal(state, modal, { onClose: actions.onClose });
   }
   if (kind === "send_schedule") {
     const canWhenOnline = (() => {

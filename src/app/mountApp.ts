@@ -3241,6 +3241,96 @@ export function mountApp(root: HTMLElement) {
       }
     }
 
+    const modalReactSetBtn = (e.target as HTMLElement | null)?.closest(
+      "button[data-action='modal-react-set'][data-emoji]"
+    ) as HTMLButtonElement | null;
+    if (modalReactSetBtn) {
+      const st = store.get();
+      const modal = st.modal;
+      if (!modal || modal.kind !== "reactions") return;
+      if (st.conn !== "connected") {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      if (!st.authed) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      const chatKey = String(modal.chatKey || "").trim();
+      const msgId = typeof modal.msgId === "number" && Number.isFinite(modal.msgId) ? Math.trunc(modal.msgId) : 0;
+      const emoji = String(modalReactSetBtn.getAttribute("data-emoji") || "").trim();
+      if (!chatKey || !msgId || !emoji) return;
+      const conv = st.conversations?.[chatKey] || [];
+      const msg = conv.find((m) => typeof m?.id === "number" && Number.isFinite(m.id) && m.id === msgId) || null;
+      const mine = typeof msg?.reactions?.mine === "string" ? msg.reactions.mine : null;
+      const nextEmoji = mine === emoji ? null : emoji;
+      e.preventDefault();
+      gateway.send({ type: "reaction_set", id: msgId, emoji: nextEmoji });
+      return;
+    }
+
+    const modalReactPickerBtn = (e.target as HTMLElement | null)?.closest(
+      "button[data-action='modal-react-picker']"
+    ) as HTMLButtonElement | null;
+    if (modalReactPickerBtn) {
+      const st = store.get();
+      const modal = st.modal;
+      if (!modal || modal.kind !== "reactions") return;
+      if (st.conn !== "connected") {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      if (!st.authed) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      const chatKey = String(modal.chatKey || "").trim();
+      const msgId = typeof modal.msgId === "number" && Number.isFinite(modal.msgId) ? Math.trunc(modal.msgId) : 0;
+      if (!chatKey || !msgId) return;
+      e.preventDefault();
+      closeModal();
+      openEmojiPopoverForReaction({ key: chatKey, msgId });
+      return;
+    }
+
+    const reactAddBtn = (e.target as HTMLElement | null)?.closest("button[data-action='msg-react-add']") as HTMLButtonElement | null;
+    if (reactAddBtn) {
+      const st = store.get();
+      if (st.conn !== "connected") {
+        store.set({ status: "Нет соединения" });
+        return;
+      }
+      if (!st.authed) {
+        store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+        return;
+      }
+      const row = target?.closest("[data-msg-idx]") as HTMLElement | null;
+      const idx = row ? Math.trunc(Number(row.getAttribute("data-msg-idx") || "")) : -1;
+      const key = st.selected ? conversationKey(st.selected) : "";
+      const conv = key ? st.conversations[key] : null;
+      const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+      const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
+      if (!key || !msg || msgId === null || msgId <= 0) return;
+      e.preventDefault();
+      openEmojiPopoverForReaction({ key, msgId });
+      return;
+    }
+
+    const reactMoreBtn = (e.target as HTMLElement | null)?.closest("button[data-action='msg-react-more']") as HTMLButtonElement | null;
+    if (reactMoreBtn) {
+      const st = store.get();
+      const row = target?.closest("[data-msg-idx]") as HTMLElement | null;
+      const idx = row ? Math.trunc(Number(row.getAttribute("data-msg-idx") || "")) : -1;
+      const key = st.selected ? conversationKey(st.selected) : "";
+      const conv = key ? st.conversations[key] : null;
+      const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
+      const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
+      if (!key || !msg || msgId === null || msgId <= 0) return;
+      e.preventDefault();
+      store.set({ modal: { kind: "reactions", chatKey: key, msgId } });
+      return;
+    }
+
     const reactBtn = target?.closest("button[data-action='msg-react'][data-emoji]") as HTMLButtonElement | null;
     if (reactBtn) {
       const st = store.get();
@@ -11937,6 +12027,9 @@ export function mountApp(root: HTMLElement) {
         }
         return count;
       })();
+      const hasReactions = Boolean(
+        msg?.reactions?.counts && typeof msg.reactions.counts === "object" && Object.keys(msg.reactions.counts).length
+      );
       const primary: ContextMenuItem[] = [];
       if (fromId) primary.push(makeItem("msg_profile", "Профиль отправителя", "👤", { disabled: !canAct }));
       primary.push(
@@ -11953,6 +12046,7 @@ export function mountApp(root: HTMLElement) {
       primary.push(makeItem("msg_reply", "Ответить", "↩", { disabled: !canReply || helperBlocked }));
       if (repliesCount > 0) primary.push(makeItem("msg_view_replies", `Ответы (${repliesCount})`, "🧵"));
       primary.push(makeItem("msg_forward", "Переслать", "↪", { disabled: !canReply || helperBlocked }));
+      if (hasReactions && msgId !== null && msgId > 0) primary.push(makeItem("msg_reactions", "Реакции…", "😊", { disabled: !msg }));
       if (translateText) primary.push(makeItem("msg_translate", "Перевести", "🌐"));
       addGroup(primary);
 
@@ -12370,6 +12464,16 @@ export function mountApp(root: HTMLElement) {
         const ok = await copyText(text);
         showToast(ok ? "Скопировано" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
         close();
+        return;
+      }
+
+      if (itemId === "msg_reactions") {
+        if (!selKey || !msg || msgId === null || msgId <= 0) {
+          close();
+          return;
+        }
+        close();
+        store.set({ modal: { kind: "reactions", chatKey: selKey, msgId } });
         return;
       }
 

@@ -165,6 +165,7 @@ export type ModalState =
   | { kind: "logout" }
   | { kind: "update" }
   | { kind: "pwa_update" }
+  | { kind: "reactions"; chatKey: string; msgId: number }
   | {
       kind: "send_schedule";
       target: TargetRef;

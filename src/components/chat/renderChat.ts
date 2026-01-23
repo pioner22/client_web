@@ -389,7 +389,8 @@ function renderReactions(m: ChatMessage): HTMLElement | null {
   });
 
   const mine = typeof (raw as any).mine === "string" ? String((raw as any).mine) : null;
-  const nodes = entries.slice(0, 12).map(({ emoji, count }) => {
+  const shown = entries.slice(0, 12);
+  const nodes = shown.map(({ emoji, count }) => {
     const active = mine === emoji;
     const label = `${emoji} ${count}`;
     const btn = el(
@@ -407,6 +408,35 @@ function renderReactions(m: ChatMessage): HTMLElement | null {
     btn.setAttribute("aria-label", label);
     return btn;
   });
+
+  const remaining = entries.length - shown.length;
+  if (remaining > 0) {
+    const more = el(
+      "button",
+      {
+        class: "msg-react msg-react-more",
+        type: "button",
+        "data-action": "msg-react-more",
+        title: "Показать все реакции",
+        "aria-label": "Показать все реакции",
+      },
+      [`+${remaining}`]
+    ) as HTMLButtonElement;
+    nodes.push(more);
+  }
+
+  const add = el(
+    "button",
+    {
+      class: "msg-react msg-react-add",
+      type: "button",
+      "data-action": "msg-react-add",
+      title: "Другая реакция",
+      "aria-label": "Другая реакция",
+    },
+    ["＋"]
+  ) as HTMLButtonElement;
+  nodes.push(add);
   return el("div", { class: "msg-reacts" }, nodes);
 }
 

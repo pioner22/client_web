@@ -10,6 +10,14 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.655",
+    date: "2026-01-23",
+    improved: [
+      "Реакции: добавлена кнопка «＋» рядом с реакциями (bubble UI) — выбор любой реакции",
+      "Реакции: добавлено окно «Реакции…» со списком всех реакций (tweb‑like)",
+    ],
+  },
+  {
     version: "0.1.654",
     date: "2026-01-23",
     improved: [
