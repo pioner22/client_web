@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.658",
+    date: "2026-01-26",
+    improved: ["Контакты: добавлен блок «Топ» (частые контакты; server top_peers)"],
+  },
+  {
     version: "0.1.657",
     date: "2026-01-23",
     improved: ["Лейаут (desktop): правая панель (info) в узком окне теперь открывается как оверлей и не «сжимает» чат"],

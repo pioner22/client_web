@@ -684,6 +684,28 @@ export function renderSidebar(
       })
     );
   };
+  const buildTopPeerContactRows = (items: FriendEntry[]): { ids: Set<string>; rows: HTMLElement[] } => {
+    const topPeers = Array.isArray(state.topPeers) ? state.topPeers : [];
+    if (!topPeers.length || !items.length) return { ids: new Set(), rows: [] };
+    const byId = new Map<string, FriendEntry>();
+    for (const f of items) {
+      const id = String(f?.id || "").trim();
+      if (!id || byId.has(id)) continue;
+      byId.set(id, f);
+    }
+    const ids = new Set<string>();
+    const entries: FriendEntry[] = [];
+    for (const entry of topPeers) {
+      const id = String((entry as any)?.id || "").trim();
+      if (!id || ids.has(id)) continue;
+      const f = byId.get(id);
+      if (!f) continue;
+      ids.add(id);
+      entries.push(f);
+      if (entries.length >= 12) break;
+    }
+    return { ids, rows: entries.length ? buildContactRows(entries, { sort: false }) : [] };
+  };
 
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
@@ -1416,7 +1438,8 @@ export function renderSidebar(
     if (activeTab === "contacts") {
       const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
       const contactRowsAll = buildContactRows(contactCandidates);
-      const activeContactRows = buildContactRows(activeContacts);
+      const { ids: topPeerIds, rows: topPeerRows } = buildTopPeerContactRows(activeContacts);
+      const activeContactRows = buildContactRows(activeContacts.filter((f) => !topPeerIds.has(f.id)));
       const archivedContactRows = buildContactRows(archivedContacts);
       const archiveBlock =
         archiveOpen && archivedContactRows.length
@@ -1442,6 +1465,9 @@ export function renderSidebar(
       }
       if (compactUnknownAttnRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
+      }
+      if (topPeerRows.length) {
+        contactFixedRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
       }
       if (activeContactRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
@@ -1815,7 +1841,8 @@ export function renderSidebar(
     if (activeTab === "contacts") {
       const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
       const contactRowsAll = buildContactRows(contactCandidates);
-      const activeContactRows = buildContactRows(activeContacts);
+      const { ids: topPeerIds, rows: topPeerRows } = buildTopPeerContactRows(activeContacts);
+      const activeContactRows = buildContactRows(activeContacts.filter((f) => !topPeerIds.has(f.id)));
       const archivedContactRows = buildContactRows(archivedContacts);
       const archiveBlock =
         archiveOpen && archivedContactRows.length
@@ -1864,6 +1891,9 @@ export function renderSidebar(
       }
       if (unknownAttnRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
+      }
+      if (topPeerRows.length) {
+        contactFixedRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
       }
       if (activeContactRows.length) {
         contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
@@ -2322,7 +2352,8 @@ export function renderSidebar(
   }
   const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
   const contactRowsAll = buildContactRows(contactCandidates);
-  const activeContactRows = buildContactRows(activeContacts);
+  const { ids: topPeerIds, rows: topPeerRows } = buildTopPeerContactRows(activeContacts);
+  const activeContactRows = buildContactRows(activeContacts.filter((f) => !topPeerIds.has(f.id)));
   const archivedContactRows = buildContactRows(archivedContacts);
   const archiveBlock =
     archiveOpen && archivedContactRows.length
@@ -2350,6 +2381,9 @@ export function renderSidebar(
   }
   if (compactUnknownAttnRows.length) {
     contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
+  }
+  if (topPeerRows.length) {
+    contactFixedRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
   }
   if (activeContactRows.length) {
     contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
