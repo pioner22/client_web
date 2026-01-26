@@ -2299,6 +2299,7 @@ export function mountApp(root: HTMLElement) {
 
   const mobileSidebarMq = window.matchMedia("(max-width: 600px)");
   const floatingSidebarMq = window.matchMedia("(min-width: 601px) and (max-width: 925px)");
+  const rightOverlayMq = window.matchMedia("(min-width: 601px) and (max-width: 1275px)");
   const coarsePointerMq = window.matchMedia("(pointer: coarse)");
   const anyFinePointerMq = window.matchMedia("(any-pointer: fine)");
   const hoverMq = window.matchMedia("(hover: hover)");
@@ -4149,7 +4150,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function shouldShowRightOverlay(st: AppState): boolean {
-    return Boolean(st.rightPanel && st.page === "main" && !st.modal && floatingSidebarMq.matches);
+    return Boolean(st.rightPanel && st.page === "main" && !st.modal && rightOverlayMq.matches && !isMobileLikeUi());
   }
 
   function syncNavOverlay() {
@@ -4573,6 +4574,9 @@ export function mountApp(root: HTMLElement) {
       floatingSidebarAutoOpened = false;
     }
   };
+  const onRightOverlayMqChange = () => {
+    syncNavOverlay();
+  };
   if (typeof mobileSidebarMq.addEventListener === "function") {
     mobileSidebarMq.addEventListener("change", onMobileSidebarMqChange);
   } else {
@@ -4584,6 +4588,12 @@ export function mountApp(root: HTMLElement) {
   } else {
     const legacy = floatingSidebarMq as MediaQueryList & { addListener?: (cb: (ev: MediaQueryListEvent) => void) => void };
     legacy.addListener?.(onFloatingSidebarMqChange);
+  }
+  if (typeof rightOverlayMq.addEventListener === "function") {
+    rightOverlayMq.addEventListener("change", onRightOverlayMqChange);
+  } else {
+    const legacy = rightOverlayMq as MediaQueryList & { addListener?: (cb: (ev: MediaQueryListEvent) => void) => void };
+    legacy.addListener?.(onRightOverlayMqChange);
   }
 
   async function initSkins() {

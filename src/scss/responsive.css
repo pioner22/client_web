@@ -342,6 +342,32 @@
   }
 }
 
+@media (min-width: 926px) and (max-width: 1275px) {
+  /* Narrow desktop: keep right panel as overlay to avoid squishing the chat to ~0px. */
+  body.has-right-col {
+    --grid-cols: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .nav-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--overlay-bg);
+    z-index: 40;
+    touch-action: none;
+  }
+
+  body.has-right-col .right-col {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--right-column-width);
+    max-width: 100%;
+    z-index: 42;
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.22);
+  }
+}
+
 @media (min-width: 1276px) and (max-width: 1680px) {
   :root {
     --app-max-width: 100%;
