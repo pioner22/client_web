@@ -10,6 +10,12 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.666",
+    date: "2026-01-26",
+    improved: ["Медиа: viewer открывает файлы cache-first и иначе по http-ссылке (stream), без ожидания полного скачивания"],
+    fixed: ["Медиа: корректный mime для viewer и скачиваний (используем mime из transfer/file_url + расширенный fallback по имени)"],
+  },
+  {
     version: "0.1.665",
     date: "2026-01-26",
     improved: ["Viewer: добавлена лента медиа (rail) и индикатор загрузки (preloader)"],

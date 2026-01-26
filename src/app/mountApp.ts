@@ -448,15 +448,37 @@ function base64ToBytes(data: string): Uint8Array | null {
 }
 
 function guessMimeTypeByName(name: string): string {
-  const n = String(name || "").toLowerCase();
+  const raw = String(name || "").trim();
+  const noQuery = raw.split(/[?#]/)[0];
+  const leaf = noQuery.split(/[\\/]/).pop() || "";
+  const n = leaf.trim().toLowerCase();
   if (n.endsWith(".png")) return "image/png";
   if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
   if (n.endsWith(".gif")) return "image/gif";
   if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".bmp")) return "image/bmp";
+  if (n.endsWith(".ico")) return "image/x-icon";
   if (n.endsWith(".heic")) return "image/heic";
   if (n.endsWith(".heif")) return "image/heif";
   if (n.endsWith(".svg")) return "image/svg+xml";
+  if (n.endsWith(".mp4") || n.endsWith(".m4v")) return "video/mp4";
+  if (n.endsWith(".mov")) return "video/quicktime";
+  if (n.endsWith(".webm")) return "video/webm";
+  if (n.endsWith(".ogv")) return "video/ogg";
+  if (n.endsWith(".mkv")) return "video/x-matroska";
+  if (n.endsWith(".avi")) return "video/x-msvideo";
+  if (n.endsWith(".3gp")) return "video/3gpp";
+  if (n.endsWith(".3g2")) return "video/3gpp2";
+  if (n.endsWith(".mp3")) return "audio/mpeg";
+  if (n.endsWith(".m4a")) return "audio/mp4";
+  if (n.endsWith(".aac")) return "audio/aac";
+  if (n.endsWith(".wav")) return "audio/wav";
+  if (n.endsWith(".ogg")) return "audio/ogg";
+  if (n.endsWith(".opus")) return "audio/opus";
+  if (n.endsWith(".flac")) return "audio/flac";
   if (n.endsWith(".pdf")) return "application/pdf";
+  if (n.endsWith(".txt")) return "text/plain";
+  if (n.endsWith(".json")) return "application/json";
   return "application/octet-stream";
 }
 
@@ -1985,9 +2007,28 @@ export function mountApp(root: HTMLElement) {
   const fileGetTimeouts = new Map<string, number>();
   const fileGetTimeoutTouchedAt = new Map<string, number>();
   const httpDownloadInFlight = new Set<string>();
+  type HttpFileUrlInfo = {
+    url: string;
+    name: string;
+    size: number;
+    mime: string | null;
+    sha256: string | null;
+    duration_s: number | null;
+    media_w: number | null;
+    media_h: number | null;
+    thumb_url: string | null;
+    thumb_mime: string | null;
+    thumb_w: number | null;
+    thumb_h: number | null;
+  };
   const httpFileUrlWaiters = new Map<
     string,
-    { promise: Promise<string>; resolve: (url: string) => void; reject: (err: Error) => void; timer: number | null }
+    {
+      promise: Promise<HttpFileUrlInfo>;
+      resolve: (info: HttpFileUrlInfo) => void;
+      reject: (err: Error) => void;
+      timer: number | null;
+    }
   >();
   const pendingStreamRequests = new Map<string, { fileId: string; name: string; size: number; mime: string | null }>();
   let pendingFileViewer: {
@@ -2215,20 +2256,20 @@ export function mountApp(root: HTMLElement) {
   };
 
   const HTTP_FILE_URL_REFRESH_TIMEOUT_MS = 12_000;
-  const requestFreshHttpDownloadUrl = (fileId: string): Promise<string> => {
+  const requestFreshHttpDownloadUrl = (fileId: string): Promise<HttpFileUrlInfo> => {
     const fid = String(fileId || "").trim();
     if (!fid) return Promise.reject(new Error("missing_file_id"));
     const existing = httpFileUrlWaiters.get(fid);
     if (existing) return existing.promise;
-    let resolveRef: ((url: string) => void) | null = null;
+    let resolveRef: ((info: HttpFileUrlInfo) => void) | null = null;
     let rejectRef: ((err: Error) => void) | null = null;
-    const promise = new Promise<string>((resolve, reject) => {
+    const promise = new Promise<HttpFileUrlInfo>((resolve, reject) => {
       resolveRef = resolve;
       rejectRef = reject;
     });
     const entry = {
       promise,
-      resolve: (url: string) => resolveRef?.(url),
+      resolve: (info: HttpFileUrlInfo) => resolveRef?.(info),
       reject: (err: Error) => rejectRef?.(err),
       timer: null as number | null,
     };
@@ -2998,24 +3039,29 @@ export function mountApp(root: HTMLElement) {
     return /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n);
   }
 
-  function isMediaAttachment(att: ChatMessage["attachment"] | null | undefined): att is {
-    kind: "file";
-    localId?: string | null;
-    fileId?: string | null;
-    name: string;
-    size: number;
-    mime?: string | null;
-  } {
+  function isVisualMediaMessage(st: AppState, msg: ChatMessage | null | undefined): boolean {
+    if (!msg || msg.kind === "sys") return false;
+    const att = msg.attachment;
     if (!att || att.kind !== "file") return false;
-    return isImageLikeFile(att.name, att.mime) || isVideoLikeFile(att.name, att.mime);
+    const fileId = typeof att.fileId === "string" && att.fileId.trim() ? att.fileId.trim() : "";
+    const localId = typeof att.localId === "string" && att.localId.trim() ? att.localId.trim() : "";
+    const entry = fileId
+      ? st.fileTransfers.find((t) => String(t.id || "").trim() === fileId)
+      : localId
+        ? st.fileTransfers.find((t) => String(t.localId || "").trim() === localId)
+        : null;
+    const name = String(att.name || entry?.name || "файл");
+    const mime = (att.mime ?? entry?.mime) || null;
+    const hasThumb = Boolean(fileId && st.fileThumbs?.[fileId]?.url);
+    return isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || hasThumb;
   }
 
-  function findNeighborMediaIndex(msgs: ChatMessage[], startIdx: number, direction: -1 | 1): number | null {
+  function findNeighborMediaIndex(st: AppState, msgs: ChatMessage[], startIdx: number, direction: -1 | 1): number | null {
     if (!Number.isFinite(startIdx) || startIdx < 0 || startIdx >= msgs.length) return null;
     for (let i = startIdx + direction; i >= 0 && i < msgs.length; i += direction) {
       const msg = msgs[i];
       if (!msg || msg.kind === "sys") continue;
-      if (isMediaAttachment(msg.attachment)) return i;
+      if (isVisualMediaMessage(st, msg)) return i;
     }
     return null;
   }
@@ -3033,8 +3079,8 @@ export function mountApp(root: HTMLElement) {
     const chatKey = params.chatKey ? String(params.chatKey) : null;
     const msgIdx = Number.isFinite(params.msgIdx) ? Math.trunc(Number(params.msgIdx)) : null;
     const msgs = chatKey ? st.conversations[chatKey] || [] : [];
-    const prevIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(msgs, msgIdx, -1) : null;
-    const nextIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(msgs, msgIdx, 1) : null;
+    const prevIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(st, msgs, msgIdx, -1) : null;
+    const nextIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(st, msgs, msgIdx, 1) : null;
     return {
       kind: "file_viewer" as const,
       url: params.url,
@@ -3059,20 +3105,24 @@ export function mountApp(root: HTMLElement) {
     if (!Number.isFinite(msgIdx) || msgIdx < 0 || msgIdx >= msgs.length) return;
     const msg = msgs[msgIdx];
     const att = msg?.attachment;
-    if (!isMediaAttachment(att)) return;
-    const name = String(att.name || fallback?.name || "файл");
-    const size = Number(att.size || fallback?.size || 0) || 0;
-    const mime = (att.mime ?? fallback?.mime) || null;
-    const rawCaption = String(msg.text || "").trim();
-    const captionText = rawCaption && !rawCaption.startsWith("[file]") ? rawCaption : String(fallback?.caption || "").trim();
-    const caption = captionText ? captionText : null;
-    const fileId = att.fileId ? String(att.fileId) : fallback?.fileId || null;
-    const localId = att.localId ? String(att.localId) : null;
+    if (!att || att.kind !== "file") return;
+    const fileIdRaw = typeof att.fileId === "string" && att.fileId.trim() ? att.fileId.trim() : String(fallback?.fileId || "").trim();
+    const fileId = fileIdRaw || null;
+    const localId = typeof att.localId === "string" && att.localId.trim() ? att.localId.trim() : null;
     const entry = fileId
       ? st.fileTransfers.find((t) => String(t.id || "").trim() === fileId)
       : localId
         ? st.fileTransfers.find((t) => String(t.localId || "").trim() === localId)
         : null;
+
+    const name = String(att.name || entry?.name || fallback?.name || "файл");
+    const size = Number(att.size || entry?.size || fallback?.size || 0) || 0;
+    const mime = (att.mime ?? entry?.mime ?? fallback?.mime) || null;
+    const hasThumb = Boolean(fileId && st.fileThumbs?.[fileId]?.url);
+    if (!(isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || hasThumb)) return;
+    const rawCaption = String(msg.text || "").trim();
+    const captionText = rawCaption && !rawCaption.startsWith("[file]") ? rawCaption : String(fallback?.caption || "").trim();
+    const caption = captionText ? captionText : null;
     const url = entry?.url || fallback?.url || null;
     if (url) {
       store.set({ modal: buildFileViewerModalState({ url, name, size, mime, caption, chatKey, msgIdx }) });
@@ -3084,9 +3134,36 @@ export function mountApp(root: HTMLElement) {
     }
     const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime, caption, chatKey, msgIdx });
     if (opened) return;
-    pendingFileViewer = { fileId, name, size, mime, caption, chatKey, msgIdx };
-    enqueueFileGet(fileId, { priority: "high" });
-    store.set({ status: `Скачивание: ${name}` });
+    const latest = store.get();
+    if (latest.conn !== "connected") {
+      store.set({ status: "Нет соединения" });
+      return;
+    }
+    if (!latest.authed) {
+      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      return;
+    }
+    try {
+      const info = await requestFreshHttpDownloadUrl(fileId);
+      const nextMime = mime || info.mime || null;
+      store.set({
+        modal: buildFileViewerModalState({
+          url: info.url,
+          name: name || info.name || "файл",
+          size: size || info.size || 0,
+          mime: nextMime,
+          caption,
+          chatKey,
+          msgIdx,
+        }),
+      });
+      return;
+    } catch {
+      // Fallback: download into cache and open when ready (slow but offline-friendly).
+      pendingFileViewer = { fileId, name, size, mime, caption, chatKey, msgIdx };
+      enqueueFileGet(fileId, { priority: "high" });
+      store.set({ status: `Скачивание: ${name}` });
+    }
   }
 
   function navigateFileViewer(dir: "prev" | "next") {
@@ -8970,10 +9047,48 @@ export function mountApp(root: HTMLElement) {
           }
         }
         try {
-          if (url) waiter.resolve(url);
-          else waiter.reject(new Error("missing_url"));
+          if (!url) throw new Error("missing_url");
+          const metaFallback = resolveFileMeta(fileId);
+          const nameRaw = typeof msg?.name === "string" ? msg.name.trim() : "";
+          const name = nameRaw || metaFallback.name || "файл";
+          const size = Number(msg?.size ?? 0) || metaFallback.size || 0;
+          const mimeRaw = msg?.mime;
+          const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? mimeRaw.trim() : metaFallback.mime;
+          const shaRaw = typeof msg?.sha256 === "string" ? msg.sha256.trim() : "";
+          const sha256 = shaRaw ? shaRaw.toLowerCase() : null;
+          const durNum = Number(msg?.duration_s ?? 0);
+          const duration_s = Number.isFinite(durNum) && durNum > 0 ? durNum : null;
+          const mw = Number(msg?.media_w ?? 0);
+          const mh = Number(msg?.media_h ?? 0);
+          const media_w = Number.isFinite(mw) && mw > 0 ? mw : null;
+          const media_h = Number.isFinite(mh) && mh > 0 ? mh : null;
+          const tw = Number(msg?.thumb_w ?? 0);
+          const th = Number(msg?.thumb_h ?? 0);
+          const thumb_w = Number.isFinite(tw) && tw > 0 ? tw : null;
+          const thumb_h = Number.isFinite(th) && th > 0 ? th : null;
+          const thumbMimeRaw = msg?.thumb_mime;
+          const thumb_mime =
+            typeof thumbMimeRaw === "string" && thumbMimeRaw.trim() ? String(thumbMimeRaw).trim() : null;
+          waiter.resolve({
+            url,
+            name,
+            size,
+            mime: mime ?? null,
+            sha256,
+            duration_s,
+            media_w,
+            media_h,
+            thumb_url: thumbUrl || null,
+            thumb_mime,
+            thumb_w,
+            thumb_h,
+          });
         } catch {
-          // ignore
+          try {
+            waiter.reject(new Error("missing_url"));
+          } catch {
+            // ignore
+          }
         }
         return true;
       }
@@ -9091,7 +9206,7 @@ export function mountApp(root: HTMLElement) {
             baseDelayMs,
             maxDelayMs: 8000,
             maxUrlRefresh: 2,
-            refreshUrl: async () => await requestFreshHttpDownloadUrl(fileId),
+            refreshUrl: async () => (await requestFreshHttpDownloadUrl(fileId)).url,
             onReset: (reason) => {
               const cur = downloadByFileId.get(fileId);
               if (!cur) return;
@@ -9186,12 +9301,15 @@ export function mountApp(root: HTMLElement) {
           if (pendingFileViewer && pendingFileViewer.fileId === fileId) {
             const pv = pendingFileViewer;
             pendingFileViewer = null;
+            const viewerName = pv.name || name || "файл";
+            const viewerSize = pv.size || size || blob.size || 0;
+            const viewerMime = finalMime || pv.mime || null;
             store.set({
               modal: buildFileViewerModalState({
                 url: objectUrl,
-                name: pv.name,
-                size: pv.size,
-                mime: pv.mime,
+                name: viewerName,
+                size: viewerSize,
+                mime: viewerMime,
                 caption: pv.caption || null,
                 chatKey: pv.chatKey,
                 msgIdx: pv.msgIdx,
@@ -9284,26 +9402,26 @@ export function mountApp(root: HTMLElement) {
             ...(download.mime ? { mime: download.mime } : {}),
           }));
           if (!silent) store.set({ status: `Скачивание завершено: ${download.name}` });
-          if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
-          return true;
-        }
-        const mime = download.mime || guessMimeTypeByName(download.name);
-        const blob = new Blob(download.chunks, { type: mime });
+        if (pendingFileViewer && pendingFileViewer.fileId === fileId) pendingFileViewer = null;
+        return true;
+      }
+        const finalMime = download.mime || guessMimeTypeByName(download.name);
+        const blob = new Blob(download.chunks, { type: finalMime || undefined });
         const url = URL.createObjectURL(blob);
         updateTransferByFileId(fileId, (entry) => ({
           ...entry,
           status: "complete",
           progress: 100,
           url,
-          ...(download.mime ? { mime: download.mime } : {}),
+          ...(finalMime ? { mime: finalMime } : {}),
         }));
         if (!silent) store.set({ status: `Файл готов: ${download.name}` });
         try {
           const st = store.get();
-          if (st.selfId && shouldCacheFile(download.name || "файл", mime, download.size || blob.size || 0)) {
+          if (st.selfId && shouldCacheFile(download.name || "файл", finalMime, download.size || blob.size || 0)) {
             void putCachedFileBlob(st.selfId, fileId, blob, {
               name: download.name || "файл",
-              mime,
+              mime: finalMime,
               size: download.size || blob.size || 0,
             });
             void enforceFileCachePolicy(st.selfId, { force: true });
@@ -9320,12 +9438,15 @@ export function mountApp(root: HTMLElement) {
         if (pendingFileViewer && pendingFileViewer.fileId === fileId) {
           const pv = pendingFileViewer;
           pendingFileViewer = null;
+          const viewerName = pv.name || download.name || "файл";
+          const viewerSize = pv.size || download.size || blob.size || 0;
+          const viewerMime = finalMime || pv.mime || null;
           store.set({
             modal: buildFileViewerModalState({
               url,
-              name: pv.name,
-              size: pv.size,
-              mime: pv.mime,
+              name: viewerName,
+              size: viewerSize,
+              mime: viewerMime,
               caption: pv.caption || null,
               chatKey: pv.chatKey,
               msgIdx: pv.msgIdx,
@@ -12934,7 +13055,7 @@ export function mountApp(root: HTMLElement) {
           return;
         }
         try {
-          const url = await requestFreshHttpDownloadUrl(fileId);
+          const { url } = await requestFreshHttpDownloadUrl(fileId);
           const ok = await copyText(url);
           showToast(ok ? "Ссылка скопирована" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
         } catch {
