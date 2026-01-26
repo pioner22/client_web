@@ -106,6 +106,9 @@ export interface ModalActions {
   onContextMenuAction: (itemId: string) => void;
   onFileViewerNavigate: (dir: "prev" | "next") => void;
   onFileViewerJump: () => void;
+  onFileViewerShare: () => void;
+  onFileViewerForward: () => void;
+  onFileViewerDelete: () => void;
   onForwardSend: (targets: TargetRef[]) => void;
 }
 
@@ -216,11 +219,33 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     const canNext = typeof modal.nextIdx === "number" && Number.isFinite(modal.nextIdx);
     const canJump = Boolean(modal.chatKey && typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx));
     const meta = buildFileViewerMeta(state, modal);
+    const viewerMessage = (() => {
+      const chatKey = modal.chatKey ? String(modal.chatKey) : "";
+      const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
+      if (!chatKey || msgIdx === null) return null;
+      const conv = state.conversations[chatKey] || [];
+      if (msgIdx < 0 || msgIdx >= conv.length) return null;
+      const msg = conv[msgIdx];
+      if (!msg || msg.kind === "sys") return null;
+      return { chatKey, msgIdx, msg };
+    })();
+    const canForward = Boolean(viewerMessage && !state.editing);
+    const canDelete = (() => {
+      if (!viewerMessage) return false;
+      const msg = viewerMessage.msg;
+      const msgId = typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : 0;
+      const canAct = state.conn === "connected" && state.authed;
+      const canOwner = Boolean(msg.kind === "out" && state.selfId && String(msg.from) === String(state.selfId));
+      return Boolean(canAct && canOwner && msgId > 0);
+    })();
     return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, modal.caption ?? null, meta, {
       onClose: actions.onClose,
       ...(canPrev ? { onPrev: () => actions.onFileViewerNavigate("prev") } : {}),
       ...(canNext ? { onNext: () => actions.onFileViewerNavigate("next") } : {}),
       ...(canJump ? { onJump: () => actions.onFileViewerJump() } : {}),
+      ...(actions.onFileViewerShare ? { onShare: () => actions.onFileViewerShare() } : {}),
+      ...(viewerMessage ? { onForward: () => actions.onFileViewerForward(), canForward } : {}),
+      ...(canDelete ? { onDelete: () => actions.onFileViewerDelete(), canDelete } : {}),
     });
   }
   if (kind === "invite_user") {

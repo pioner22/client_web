@@ -11176,6 +11176,97 @@ export function mountApp(root: HTMLElement) {
     });
   };
 
+  const shareFromFileViewer = async () => {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "file_viewer") return;
+    const url = String(modal.url || "").trim();
+    const name = String(modal.name || "файл").trim() || "файл";
+    if (!url) return;
+
+    const copyLink = async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast("Ссылка скопирована", { kind: "success" });
+      } catch {
+        showToast("Не удалось скопировать ссылку", { kind: "warn" });
+      }
+    };
+
+    const shareUrl = async () => {
+      try {
+        await navigator.share({ title: name, url });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const shareFile = async () => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return false;
+        const blob = await res.blob();
+        const mime = String(modal.mime || blob.type || "").trim() || "application/octet-stream";
+        const file = new File([blob], name, { type: mime });
+        const canShare = typeof navigator.canShare === "function" ? navigator.canShare({ files: [file] }) : false;
+        if (!canShare) return false;
+        await navigator.share({ title: name, files: [file] });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    if (typeof navigator.share !== "function") {
+      await copyLink();
+      return;
+    }
+
+    const shared = url.startsWith("blob:") ? await shareFile() : (await shareUrl()) || (await shareFile());
+    if (!shared) await copyLink();
+  };
+
+  const forwardFromFileViewer = () => {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "file_viewer") return;
+    if (st.editing) {
+      showToast("Сначала завершите редактирование", { kind: "warn" });
+      return;
+    }
+    const chatKey = modal.chatKey ? String(modal.chatKey) : "";
+    const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
+    if (!chatKey || msgIdx === null) return;
+    const conv = st.conversations[chatKey] || [];
+    if (msgIdx < 0 || msgIdx >= conv.length) return;
+    const msg = conv[msgIdx];
+    if (!msg || msg.kind === "sys") return;
+    const draft = buildHelperDraft(st, chatKey, msg);
+    if (!draft) return;
+    closeModal();
+    window.setTimeout(() => openForwardModal(draft), 0);
+  };
+
+  const deleteFromFileViewer = () => {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "file_viewer") return;
+    const chatKey = modal.chatKey ? String(modal.chatKey) : "";
+    const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
+    if (!chatKey || msgIdx === null) return;
+    const conv = st.conversations[chatKey] || [];
+    if (msgIdx < 0 || msgIdx >= conv.length) return;
+    const msg = conv[msgIdx];
+    const msgId = typeof msg?.id === "number" && Number.isFinite(msg.id) ? msg.id : 0;
+    const canAct = st.conn === "connected" && st.authed;
+    const canOwner = Boolean(msg && msg.kind === "out" && st.selfId && String(msg.from) === String(st.selfId));
+    if (!canAct || !canOwner || msgId <= 0) return;
+    closeModal();
+    gateway.send({ type: "message_delete", id: msgId });
+    store.set({ status: "Удаляем сообщение…" });
+  };
+
   const sendForwardToTargets = (targets: TargetRef[]) => {
     const st = store.get();
     const modal = st.modal;
@@ -15118,6 +15209,9 @@ export function mountApp(root: HTMLElement) {
     onFileSendConfirm: (captionText: string) => confirmFileSend(captionText),
     onFileViewerNavigate: (dir: "prev" | "next") => navigateFileViewer(dir),
     onFileViewerJump: () => jumpFromFileViewer(),
+    onFileViewerShare: () => void shareFromFileViewer(),
+    onFileViewerForward: () => forwardFromFileViewer(),
+    onFileViewerDelete: () => deleteFromFileViewer(),
     onFileSend: (file: File | null, target: TargetRef | null) => {
       const st = store.get();
       if (st.conn !== "connected") {

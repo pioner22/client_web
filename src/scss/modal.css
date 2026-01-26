@@ -1749,6 +1749,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   display: grid;
   place-items: center;
   overflow: hidden;
+  touch-action: none;
 }
 
 .modal.modal-viewer.viewer-visual.viewer-zoomed .viewer-img-scroll {

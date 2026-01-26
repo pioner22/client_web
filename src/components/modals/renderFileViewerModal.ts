@@ -16,6 +16,12 @@ export interface FileViewerModalActions {
   onPrev?: () => void;
   onNext?: () => void;
   onJump?: () => void;
+  onShare?: () => void;
+  onForward?: () => void;
+  onDelete?: () => void;
+  canShare?: boolean;
+  canForward?: boolean;
+  canDelete?: boolean;
 }
 
 function formatBytes(size: number): string {
@@ -303,6 +309,51 @@ export function renderFileViewerModal(
     btnJump.addEventListener("click", () => actions.onJump && actions.onJump());
     headerActions.append(btnJump);
   }
+  if (actions.onForward) {
+    const btnForward = el(
+      "button",
+      {
+        class: "btn viewer-action-btn viewer-forward-btn",
+        type: "button",
+        title: "Переслать",
+        "aria-label": "Переслать",
+      },
+      ["↪"]
+    ) as HTMLButtonElement;
+    btnForward.disabled = actions.canForward === false;
+    btnForward.addEventListener("click", () => actions.onForward && actions.onForward());
+    headerActions.append(btnForward);
+  }
+  if (actions.onDelete) {
+    const btnDelete = el(
+      "button",
+      {
+        class: "btn viewer-action-btn viewer-delete-btn",
+        type: "button",
+        title: "Удалить",
+        "aria-label": "Удалить",
+      },
+      ["🗑️"]
+    ) as HTMLButtonElement;
+    btnDelete.disabled = actions.canDelete === false;
+    btnDelete.addEventListener("click", () => actions.onDelete && actions.onDelete());
+    headerActions.append(btnDelete);
+  }
+  if (actions.onShare) {
+    const btnShare = el(
+      "button",
+      {
+        class: "btn viewer-action-btn viewer-share-btn",
+        type: "button",
+        title: "Поделиться",
+        "aria-label": "Поделиться",
+      },
+      ["⤴"]
+    ) as HTMLButtonElement;
+    btnShare.disabled = actions.canShare === false;
+    btnShare.addEventListener("click", () => actions.onShare && actions.onShare());
+    headerActions.append(btnShare);
+  }
   if (safeHref) {
     const btnDownload = el(
       "a",
@@ -363,10 +414,15 @@ export function renderFileViewerModal(
     zoomScroll = scroll;
     let panActive = false;
     let panMoved = false;
+    let pinchActive = false;
     let panStartX = 0;
     let panStartY = 0;
     let panStartLeft = 0;
     let panStartTop = 0;
+    let panPointerId: number | null = null;
+    const touchPoints = new Map<number, { x: number; y: number }>();
+    let pinchStartDist = 0;
+    let pinchStartScale = 1;
     img.addEventListener("click", (event) => {
       if (Date.now() < suppressImageClickUntil) return;
       if (event.detail > 1) return;
@@ -383,27 +439,84 @@ export function renderFileViewerModal(
       setZoom(IMAGE_ZOOM_DEFAULT_SCALE, { x, y });
     });
     scroll.addEventListener("pointerdown", (e) => {
-      if (!box.classList.contains("viewer-zoomed")) return;
       const ev = e as PointerEvent;
-      if (ev.button !== 0) return;
-      if (ev.pointerType !== "mouse") return;
-      panActive = true;
-      panMoved = false;
-      panStartX = ev.clientX;
-      panStartY = ev.clientY;
-      panStartLeft = scroll.scrollLeft;
-      panStartTop = scroll.scrollTop;
-      scroll.classList.add("viewer-panning");
+      const pt = ev.pointerType;
+      const isMouse = pt === "mouse";
+      const isTouch = pt === "touch";
+      const isPen = pt === "pen";
+      if (!isMouse && !isTouch && !isPen) return;
+      if (isMouse && !box.classList.contains("viewer-zoomed")) return;
+      if (isMouse && ev.button !== 0) return;
+      if (isTouch || isPen) {
+        touchPoints.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (touchPoints.size >= 2) {
+          pinchActive = true;
+          panActive = false;
+          panPointerId = null;
+          const pts = Array.from(touchPoints.values()).slice(0, 2);
+          const dx = pts[0].x - pts[1].x;
+          const dy = pts[0].y - pts[1].y;
+          pinchStartDist = Math.hypot(dx, dy);
+          pinchStartScale = zoomScale;
+        } else if (box.classList.contains("viewer-zoomed")) {
+          pinchActive = false;
+          panActive = true;
+          panPointerId = ev.pointerId;
+          panMoved = false;
+          panStartX = ev.clientX;
+          panStartY = ev.clientY;
+          panStartLeft = scroll.scrollLeft;
+          panStartTop = scroll.scrollTop;
+        } else {
+          pinchActive = false;
+          panActive = false;
+          panPointerId = null;
+        }
+      } else {
+        pinchActive = false;
+        panActive = true;
+        panPointerId = ev.pointerId;
+        panMoved = false;
+        panStartX = ev.clientX;
+        panStartY = ev.clientY;
+        panStartLeft = scroll.scrollLeft;
+        panStartTop = scroll.scrollTop;
+      }
+      if (panActive || pinchActive) scroll.classList.add("viewer-panning");
       try {
         scroll.setPointerCapture(ev.pointerId);
       } catch {
         // ignore
       }
-      e.preventDefault();
+      if (panActive || pinchActive) e.preventDefault();
     });
     scroll.addEventListener("pointermove", (e) => {
-      if (!panActive) return;
       const ev = e as PointerEvent;
+      if (ev.pointerType === "touch" || ev.pointerType === "pen") {
+        if (touchPoints.has(ev.pointerId)) touchPoints.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (pinchActive && touchPoints.size >= 2 && setZoom) {
+          const pts = Array.from(touchPoints.values()).slice(0, 2);
+          const dx = pts[0].x - pts[1].x;
+          const dy = pts[0].y - pts[1].y;
+          const dist = Math.hypot(dx, dy);
+          if (pinchStartDist > 0 && dist > 0) {
+            const mx = (pts[0].x + pts[1].x) * 0.5;
+            const my = (pts[0].y + pts[1].y) * 0.5;
+            const rect = img.getBoundingClientRect();
+            const relX = mx - rect.left;
+            const relY = my - rect.top;
+            const baseX = relX / Math.max(1, zoomScale);
+            const baseY = relY / Math.max(1, zoomScale);
+            const nextScale = pinchStartScale * (dist / pinchStartDist);
+            setZoom(nextScale, { x: baseX, y: baseY });
+            suppressImageClickUntil = Date.now() + 500;
+          }
+          e.preventDefault();
+          return;
+        }
+      }
+      if (!panActive) return;
+      if (panPointerId !== null && ev.pointerId !== panPointerId) return;
       const dx = ev.clientX - panStartX;
       const dy = ev.clientY - panStartY;
       if (!panMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) panMoved = true;
@@ -413,10 +526,37 @@ export function renderFileViewerModal(
       } catch {
         // ignore
       }
+      if (panMoved) e.preventDefault();
     });
     const stopPan = (e?: Event) => {
-      if (!panActive) return;
+      if (!panActive && !pinchActive && !touchPoints.size) return;
+      const wasPinch = pinchActive;
+      if (e && ((e as PointerEvent).pointerType === "touch" || (e as PointerEvent).pointerType === "pen")) {
+        const ev = e as PointerEvent;
+        touchPoints.delete(ev.pointerId);
+      }
+      if (pinchActive && touchPoints.size >= 2) {
+        if (e) e.preventDefault();
+        return;
+      }
+      pinchActive = false;
+      pinchStartDist = 0;
+      pinchStartScale = zoomScale;
+      if (wasPinch && touchPoints.size === 1 && box.classList.contains("viewer-zoomed")) {
+        const [id, pt] = Array.from(touchPoints.entries())[0];
+        panActive = true;
+        panPointerId = id;
+        panMoved = false;
+        panStartX = pt.x;
+        panStartY = pt.y;
+        panStartLeft = scroll.scrollLeft;
+        panStartTop = scroll.scrollTop;
+        scroll.classList.add("viewer-panning");
+        if (e) e.preventDefault();
+        return;
+      }
       panActive = false;
+      panPointerId = null;
       scroll.classList.remove("viewer-panning");
       if (panMoved) suppressImageClickUntil = Date.now() + 400;
       if (e) e.preventDefault();
