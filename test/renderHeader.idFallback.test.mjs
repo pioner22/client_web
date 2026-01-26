@@ -126,6 +126,21 @@ function findByClass(node, className) {
   return null;
 }
 
+function findByAttr(node, name, value) {
+  if (!node) return null;
+  if (node.nodeType === 3) return null;
+  if (typeof node.getAttribute === "function") {
+    const v = node.getAttribute(name);
+    if (v === value) return node;
+  }
+  const children = Array.isArray(node._children) ? node._children : [];
+  for (const ch of children) {
+    const found = findByAttr(ch, name, value);
+    if (found) return found;
+  }
+  return null;
+}
+
 function getText(node) {
   if (!node) return "";
   if (node.nodeType === 3) return String(node.textContent || "");
@@ -216,6 +231,35 @@ test("renderHeader: на страницах (не main) nav-toggle работа�
       const nav = findByClass(layout.headerLeft, "nav-toggle");
       assert.ok(nav, "nav-toggle button not found");
       assert.equal(nav.getAttribute("data-action"), "nav-back");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderHeader: в main чате показывает topbar меню чата (data-action=chat-topbar-menu)", async () => {
+  const helper = await loadRenderHeader();
+  try {
+    withDomStubs(() => {
+      const layout = {
+        headerLeft: globalThis.document.createElement("div"),
+        headerRight: globalThis.document.createElement("div"),
+        hotkeys: globalThis.document.createElement("div"),
+      };
+      helper.renderHeader(layout, {
+        page: "main",
+        conn: "connected",
+        authed: true,
+        selfId: "854-432-319",
+        authMode: "login",
+        authRememberedId: "854-432-319",
+        clientVersion: "0.1.658-test",
+        serverVersion: "0.0.0",
+        status: "",
+        selected: { kind: "dm", id: "123-456-789" },
+      });
+      const btn = findByAttr(layout.headerRight, "data-action", "chat-topbar-menu");
+      assert.ok(btn, "chat-topbar-menu button not found");
     });
   } finally {
     await helper.cleanup();

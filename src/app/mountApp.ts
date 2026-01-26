@@ -4562,6 +4562,20 @@ export function mountApp(root: HTMLElement) {
     }
   });
 
+  layout.headerRight.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement | null)?.closest("button[data-action='chat-topbar-menu']") as HTMLButtonElement | null;
+    if (!btn) return;
+    e.preventDefault();
+    const st = store.get();
+    if (st.modal) return;
+    const sel = st.selected;
+    if (!sel || st.page !== "main") return;
+    const rect = btn.getBoundingClientRect();
+    const x = Math.round(rect.left + rect.width / 2);
+    const y = Math.round(rect.bottom - 2);
+    openContextMenu({ kind: sel.kind, id: sel.id }, x, y);
+  });
+
   const onMobileSidebarMqChange = () => {
     if (!mobileSidebarMq.matches) {
       closeMobileSidebar();
@@ -11856,9 +11870,19 @@ export function mountApp(root: HTMLElement) {
       const isPinned = st.pinned.includes(pinKey);
       const isMuted = st.muted.includes(target.id);
       const isBlocked = st.blocked.includes(target.id);
+      const canSelectMessages = (() => {
+        const sel = st.selected;
+        if (!sel || st.page !== "main") return false;
+        if (sel.kind !== "dm" || sel.id !== target.id) return false;
+        const key = conversationKey(sel);
+        const conv = key ? st.conversations[key] : null;
+        if (!Array.isArray(conv) || !conv.length) return false;
+        return conv.some((m) => isChatMessageSelectable(m));
+      })();
       addGroup([
         makeItem("open", "Открыть", "💬"),
         makeItem("profile", "Профиль", "👤"),
+        ...(canSelectMessages ? [makeItem("chat_select_messages", "Выбрать сообщения", "✅")] : []),
         makeItem("pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌"),
       ]);
       addGroup([
@@ -11888,9 +11912,19 @@ export function mountApp(root: HTMLElement) {
       const pinKey = roomKey(target.id);
       const isPinned = st.pinned.includes(pinKey);
       const isMuted = st.muted.includes(target.id);
+      const canSelectMessages = (() => {
+        const sel = st.selected;
+        if (!sel || st.page !== "main") return false;
+        if (sel.kind !== "group" || sel.id !== target.id) return false;
+        const key = conversationKey(sel);
+        const conv = key ? st.conversations[key] : null;
+        if (!Array.isArray(conv) || !conv.length) return false;
+        return conv.some((m) => isChatMessageSelectable(m));
+      })();
       addGroup([
         makeItem("open", "Открыть", "💬"),
         makeItem("group_profile", "Профиль чата", "👥"),
+        ...(canSelectMessages ? [makeItem("chat_select_messages", "Выбрать сообщения", "✅")] : []),
       ]);
       addGroup([
         makeItem("pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌"),
@@ -11926,9 +11960,19 @@ export function mountApp(root: HTMLElement) {
       const pinKey = roomKey(target.id);
       const isPinned = st.pinned.includes(pinKey);
       const isMuted = st.muted.includes(target.id);
+      const canSelectMessages = (() => {
+        const sel = st.selected;
+        if (!sel || st.page !== "main") return false;
+        if (sel.kind !== "board" || sel.id !== target.id) return false;
+        const key = conversationKey(sel);
+        const conv = key ? st.conversations[key] : null;
+        if (!Array.isArray(conv) || !conv.length) return false;
+        return conv.some((m) => isChatMessageSelectable(m));
+      })();
       addGroup([
         makeItem("open", "Открыть", "💬"),
         makeItem("board_profile", "Профиль доски", "📋"),
+        ...(canSelectMessages ? [makeItem("chat_select_messages", "Выбрать сообщения", "✅")] : []),
       ]);
       addGroup([
         makeItem("pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌"),
@@ -12440,6 +12484,50 @@ export function mountApp(root: HTMLElement) {
       if (t.kind === "dm" || t.kind === "group" || t.kind === "board") {
         selectTarget({ kind: t.kind, id: t.id });
       }
+      close();
+      return;
+    }
+
+    if (itemId === "chat_select_messages") {
+      const sel = st.selected;
+      if (!sel || st.page !== "main") {
+        close();
+        return;
+      }
+      if (t.kind !== sel.kind || t.id !== sel.id) {
+        close();
+        return;
+      }
+      const key = conversationKey(sel);
+      const conv = key ? st.conversations[key] : null;
+      if (!key || !Array.isArray(conv) || !conv.length) {
+        showToast("Нет сообщений для выбора", { kind: "info" });
+        close();
+        return;
+      }
+      const selectionActive = Boolean(st.chatSelection && st.chatSelection.key === key && st.chatSelection.ids?.length);
+      if (selectionActive) {
+        close();
+        return;
+      }
+      let idx = -1;
+      let msg: ChatMessage | null = null;
+      for (let i = conv.length - 1; i >= 0; i -= 1) {
+        const candidate = conv[i];
+        if (isChatMessageSelectable(candidate)) {
+          idx = i;
+          msg = candidate;
+          break;
+        }
+      }
+      if (!msg || idx < 0) {
+        showToast("Нет сообщений для выбора", { kind: "info" });
+        close();
+        return;
+      }
+      toggleChatSelection(key, msg);
+      chatSelectionAnchorIdx = idx;
+      showToast("Выберите сообщения", { kind: "info" });
       close();
       return;
     }

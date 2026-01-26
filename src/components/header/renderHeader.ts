@@ -81,36 +81,55 @@ export function renderHeader(layout: Layout, state: AppState) {
     el("span", { class: "hdr-title" }, [title])
   );
   const showCallActions = Boolean(state.page === "main" && state.selected && state.selected.kind !== "board");
+  const showChatMenu = Boolean(state.page === "main" && state.selected);
   const statusLabel = state.status || "";
   const statusEl = el("span", { class: "hdr-status" }, [statusLabel]);
-  const actions = showCallActions
-    ? el("span", { class: "hdr-actions" }, [
-        el(
-          "button",
-          {
-            class: "hdr-action",
-            type: "button",
-            disabled: "true",
-            title: "Аудиозвонок (скоро)",
-            "aria-label": "Аудиозвонок (скоро)",
-            "data-icon": "call",
-          },
-          []
-        ),
-        el(
-          "button",
-          {
-            class: "hdr-action",
-            type: "button",
-            disabled: "true",
-            title: "Видеозвонок (скоро)",
-            "aria-label": "Видеозвонок (скоро)",
-            "data-icon": "video",
-          },
-          []
-        ),
-      ])
-    : null;
+  const actionButtons: HTMLElement[] = [];
+  if (showCallActions) {
+    actionButtons.push(
+      el(
+        "button",
+        {
+          class: "hdr-action",
+          type: "button",
+          disabled: "true",
+          title: "Аудиозвонок (скоро)",
+          "aria-label": "Аудиозвонок (скоро)",
+          "data-icon": "call",
+        },
+        []
+      ),
+      el(
+        "button",
+        {
+          class: "hdr-action",
+          type: "button",
+          disabled: "true",
+          title: "Видеозвонок (скоро)",
+          "aria-label": "Видеозвонок (скоро)",
+          "data-icon": "video",
+        },
+        []
+      )
+    );
+  }
+  if (showChatMenu) {
+    actionButtons.push(
+      el(
+        "button",
+        {
+          class: "hdr-action",
+          type: "button",
+          title: "Меню чата",
+          "aria-label": "Меню чата",
+          "data-action": "chat-topbar-menu",
+          "data-icon": "menu",
+        },
+        []
+      )
+    );
+  }
+  const actions = actionButtons.length ? el("span", { class: "hdr-actions" }, actionButtons) : null;
   if (actions) {
     layout.headerRight.replaceChildren(statusEl, actions);
   } else {
