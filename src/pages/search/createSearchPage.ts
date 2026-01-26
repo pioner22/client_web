@@ -5,6 +5,7 @@ import { focusElement } from "../../helpers/ui/focus";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { mapKeyboardLayout } from "../../helpers/search/keyboardLayout";
 import { deriveServerSearchQuery } from "../../helpers/search/serverSearchQuery";
+import { conversationKey } from "../../helpers/chat/conversationKey";
 import { fileBadge } from "../../helpers/files/fileBadge";
 import type { AppState, ChatMessage, SearchResultEntry, TargetRef } from "../../stores/types";
 
@@ -21,6 +22,7 @@ export interface SearchPageActions {
   onAuthCancel: (peer: string) => void;
   onGroupJoin: (groupId: string) => void;
   onBoardJoin: (boardId: string) => void;
+  onSearchPinToggle: (targets: TargetRef[]) => void;
   onSearchServerForward: (items: SearchResultEntry[]) => void;
 }
 
@@ -1034,6 +1036,19 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           const uniq = (ids: string[]) => Array.from(new Set(ids));
           const labelWithCount = (label: string, count: number) => (count > 1 ? `${label} (${count})` : label);
           const selectedStates = selectedItems.map((entry) => ({ entry, ...resolveServerState(entry) }));
+          const pinTargets = state.selfId
+            ? Array.from(
+                new Map(
+                  selectedStates
+                    .filter((s) => s.canOpen)
+                    .map((s) => inferTarget(s.entry))
+                    .map((t) => [`${t.kind}:${t.id}`, t] as const)
+                ).values()
+              )
+            : [];
+          const pinKeys = pinTargets.map(conversationKey);
+          const pinnedSet = new Set(state.pinned || []);
+          const allPinned = Boolean(pinKeys.length) && pinKeys.every((k) => pinnedSet.has(k));
           if (selectedStates.length === 1 && selectedStates[0].canOpen) {
             const only = selectedStates[0].entry;
             const gotoBtn = el("button", { class: "btn", type: "button" }, ["Перейти"]);
@@ -1043,6 +1058,19 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
               if (lastState) update(lastState);
             });
             actionsWrap.append(gotoBtn);
+          }
+          if (pinTargets.length) {
+            const pinBtn = el(
+              "button",
+              { class: "btn", type: "button" },
+              [labelWithCount(allPinned ? "Открепить" : "Закрепить", pinTargets.length)]
+            );
+            pinBtn.addEventListener("click", () => {
+              actions.onSearchPinToggle(pinTargets);
+              clearSelection();
+              if (lastState) update(lastState);
+            });
+            actionsWrap.append(pinBtn);
           }
           const reqContacts = uniq(
             selectedStates

@@ -214,6 +214,7 @@ export interface RenderActions {
   onOpenHistoryHit: (t: TargetRef, query: string, msgIdx?: number) => void;
   onSearchHistoryDelete: (items: Array<{ target: TargetRef; idx: number }>, mode: "local" | "remote") => void;
   onSearchHistoryForward: (items: Array<{ target: TargetRef; idx: number }>) => void;
+  onSearchPinToggle: (targets: TargetRef[]) => void;
   onSearchServerForward: (items: SearchResultEntry[]) => void;
   onGroupInviteAccept: (groupId: string) => void;
   onGroupInviteDecline: (groupId: string) => void;
@@ -733,6 +734,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onAuthCancel: actions.onAuthCancel,
         onGroupJoin: actions.onGroupJoin,
         onBoardJoin: actions.onBoardJoin,
+        onSearchPinToggle: actions.onSearchPinToggle,
         onSearchServerForward: actions.onSearchServerForward,
         onOpenHistoryHit: actions.onOpenHistoryHit,
         onSearchHistoryDelete: actions.onSearchHistoryDelete,

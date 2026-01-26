@@ -15115,6 +15115,30 @@ export function mountApp(root: HTMLElement) {
     onOpenHistoryHit: (target: TargetRef, query: string, msgIdx?: number) => {
       openChatFromSearch(target, query, msgIdx);
     },
+    onSearchPinToggle: (targets: TargetRef[]) => {
+      const list = Array.isArray(targets) ? targets : [];
+      if (!list.length) return;
+      const st = store.get();
+      const keys = Array.from(new Set(list.map((t) => conversationKey(t)).filter(Boolean)));
+      if (!keys.length) return;
+      const allPinned = keys.every((k) => st.pinned.includes(k));
+      let nextPins = st.pinned;
+      let changed = false;
+      for (const key of keys) {
+        const isPinned = nextPins.includes(key);
+        if (allPinned) {
+          if (!isPinned) continue;
+          nextPins = nextPins.filter((x) => x !== key);
+          changed = true;
+        } else if (!isPinned) {
+          nextPins = [key, ...nextPins];
+          changed = true;
+        }
+      }
+      if (!changed) return;
+      store.set({ pinned: nextPins });
+      if (st.selfId) savePinsForUser(st.selfId, nextPins);
+    },
     onSearchHistoryDelete: (items: Array<{ target: TargetRef; idx: number }>, mode: "local" | "remote") => {
       if (!Array.isArray(items) || !items.length) return;
       const st = store.get();
