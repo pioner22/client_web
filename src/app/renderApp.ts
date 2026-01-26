@@ -33,6 +33,7 @@ import { createFilesPage, type FilesPage } from "../pages/files/createFilesPage"
 import { createHelpPage, type HelpPage } from "../pages/help/createHelpPage";
 import { createGroupCreatePage, type CreateGroupPage } from "../pages/create/createGroupCreatePage";
 import { createBoardCreatePage, type CreateBoardPage } from "../pages/create/createBoardCreatePage";
+import type { AutoDownloadPrefs } from "../helpers/files/autoDownloadPrefs";
 
 let searchPage: SearchPage | null = null;
 let profilePage: ProfilePage | null = null;
@@ -227,6 +228,7 @@ export interface RenderActions {
   onFileSendConfirm: (captionText: string) => void;
   onFileSend: (file: File | null, target: TargetRef | null) => void;
   onClearCompletedFiles: () => void;
+  onAutoDownloadPrefsSave: (prefs: AutoDownloadPrefs) => void;
   onSearchQueryChange: (query: string) => void;
   onSearchSubmit: (query: string) => void;
   onBoardPostPublish: (text: string) => void;
@@ -828,6 +830,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         onFileOfferAccept: actions.onFileOfferAccept,
         onFileOfferReject: actions.onFileOfferReject,
         onClearCompleted: actions.onClearCompletedFiles,
+        onAutoDownloadPrefsSave: actions.onAutoDownloadPrefsSave,
         onOpenUser: actions.onOpenUser,
       });
     }

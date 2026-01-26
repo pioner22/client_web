@@ -10,6 +10,11 @@ import {
 } from "../../helpers/files/fileBlobCache";
 import { fileBadge, type FileBadgeKind } from "../../helpers/files/fileBadge";
 import { CACHE_CLEAN_PRESETS, CACHE_SIZE_PRESETS, loadFileCachePrefs, saveFileCachePrefs } from "../../helpers/files/fileCachePrefs";
+import {
+  DEFAULT_AUTO_DOWNLOAD_PREFS,
+  loadAutoDownloadPrefs,
+  type AutoDownloadPrefs,
+} from "../../helpers/files/autoDownloadPrefs";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 
 export interface FilesPage {
@@ -23,6 +28,7 @@ export interface FilesPageActions {
   onFileOfferAccept: (fileId: string) => void;
   onFileOfferReject: (fileId: string) => void;
   onClearCompleted: () => void;
+  onAutoDownloadPrefsSave: (prefs: AutoDownloadPrefs) => void;
   onOpenUser: (id: string) => void;
 }
 
@@ -238,6 +244,30 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     cacheActions,
   ]);
 
+  const autoDlTitle = el("div", { class: "pane-section" }, ["Автоскачивание"]);
+  const autoDlHint = el("div", { class: "file-cache-hint" }, [
+    "Ограничивает фоновую подгрузку медиа/файлов в истории сообщений. По клику файл всегда можно скачать вручную.",
+  ]);
+  const autoDlPhotoLabel = el("label", { class: "modal-label", for: "auto-dl-photo" }, ["Фото"]);
+  const autoDlPhotoSelect = el("select", { class: "modal-input", id: "auto-dl-photo" }) as HTMLSelectElement;
+  const autoDlVideoLabel = el("label", { class: "modal-label", for: "auto-dl-video" }, ["Видео"]);
+  const autoDlVideoSelect = el("select", { class: "modal-input", id: "auto-dl-video" }) as HTMLSelectElement;
+  const autoDlFileLabel = el("label", { class: "modal-label", for: "auto-dl-file" }, ["Файлы (документы/аудио)"]);
+  const autoDlFileSelect = el("select", { class: "modal-input", id: "auto-dl-file" }) as HTMLSelectElement;
+  const autoDlResetBtn = el("button", { class: "btn", type: "button" }, ["Сбросить"]);
+  const autoDlActions = el("div", { class: "file-cache-actions" }, [autoDlResetBtn]);
+  const autoDlBlock = el("div", { class: "page-card files-section" }, [
+    autoDlTitle,
+    autoDlHint,
+    autoDlPhotoLabel,
+    autoDlPhotoSelect,
+    autoDlVideoLabel,
+    autoDlVideoSelect,
+    autoDlFileLabel,
+    autoDlFileSelect,
+    autoDlActions,
+  ]);
+
   const cachedTitle = el("div", { class: "pane-section" }, ["Кэшированные файлы"]);
   const cachedHint = el("div", { class: "file-cache-hint" }, ["Это список файлов, которые реально лежат локально в кэше (CacheStorage)."]);
   const cachedList = el("div", { class: "files-list" });
@@ -251,6 +281,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     offersBlock,
     transfersBlock,
     cacheBlock,
+    autoDlBlock,
     cachedBlock,
     ...(hint ? [hint] : []),
   ]);
@@ -261,6 +292,26 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   for (const opt of CACHE_CLEAN_PRESETS) {
     cacheCleanSelect.append(el("option", { value: String(opt.ms) }, [opt.label]));
   }
+
+  const MB = 1024 * 1024;
+  const AUTO_DL_PRESETS: Array<{ label: string; bytes: number }> = [
+    { label: "Не скачивать", bytes: 0 },
+    { label: "1 МБ", bytes: 1 * MB },
+    { label: "3 МБ", bytes: 3 * MB },
+    { label: "5 МБ", bytes: 5 * MB },
+    { label: "10 МБ", bytes: 10 * MB },
+    { label: "15 МБ", bytes: 15 * MB },
+    { label: "30 МБ", bytes: 30 * MB },
+    { label: "50 МБ", bytes: 50 * MB },
+  ];
+  const initAutoDlSelect = (select: HTMLSelectElement) => {
+    for (const opt of AUTO_DL_PRESETS) {
+      select.append(el("option", { value: String(opt.bytes) }, [opt.label]));
+    }
+  };
+  initAutoDlSelect(autoDlPhotoSelect);
+  initAutoDlSelect(autoDlVideoSelect);
+  initAutoDlSelect(autoDlFileSelect);
 
   let lastState: AppState | null = null;
   let selectedTarget = "";
@@ -562,6 +613,49 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     void clearFileCache(userId).then(() => refreshCacheStats(st));
   });
 
+  function ensureAutoDlOption(select: HTMLSelectElement, bytes: number) {
+    const value = String(Math.max(0, Math.round(Number(bytes) || 0)));
+    const has = Array.from(select.options).some((opt) => opt.value === value);
+    if (has) {
+      for (const opt of Array.from(select.options)) {
+        if (opt.getAttribute("data-dynamic") === "1") opt.remove();
+      }
+      return;
+    }
+    for (const opt of Array.from(select.options)) {
+      if (opt.getAttribute("data-dynamic") === "1") opt.remove();
+    }
+    select.prepend(
+      el("option", { value, "data-dynamic": "1" }, [`Текущее: ${bytes > 0 ? formatBytes(bytes) : "Не скачивать"}`]) as HTMLOptionElement
+    );
+  }
+
+  const autoDlSave = () => {
+    const st = lastState;
+    const userId = st?.selfId;
+    if (!st || !userId) return;
+    const prefs = loadAutoDownloadPrefs(userId);
+    const photoBytes = Number(autoDlPhotoSelect.value);
+    const videoBytes = Number(autoDlVideoSelect.value);
+    const fileBytes = Number(autoDlFileSelect.value);
+    if (Number.isFinite(photoBytes)) prefs.photoMaxBytes = Math.max(0, Math.round(photoBytes));
+    if (Number.isFinite(videoBytes)) prefs.videoMaxBytes = Math.max(0, Math.round(videoBytes));
+    if (Number.isFinite(fileBytes)) prefs.fileMaxBytes = Math.max(0, Math.round(fileBytes));
+    actions.onAutoDownloadPrefsSave(prefs);
+  };
+  autoDlPhotoSelect.addEventListener("change", autoDlSave);
+  autoDlVideoSelect.addEventListener("change", autoDlSave);
+  autoDlFileSelect.addEventListener("change", autoDlSave);
+  autoDlResetBtn.addEventListener("click", () => {
+    const st = lastState;
+    const userId = st?.selfId;
+    if (!st || !userId) return;
+    actions.onAutoDownloadPrefsSave({ ...DEFAULT_AUTO_DOWNLOAD_PREFS });
+    autoDlPhotoSelect.value = String(DEFAULT_AUTO_DOWNLOAD_PREFS.photoMaxBytes);
+    autoDlVideoSelect.value = String(DEFAULT_AUTO_DOWNLOAD_PREFS.videoMaxBytes);
+    autoDlFileSelect.value = String(DEFAULT_AUTO_DOWNLOAD_PREFS.fileMaxBytes);
+  });
+
   root.addEventListener("click", (e) => {
     const t = e.target as HTMLElement | null;
     const btn = t?.closest("button[data-action='open-peer-profile']") as HTMLButtonElement | null;
@@ -581,6 +675,10 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     cacheLimitSelect.disabled = !canUseCache;
     cacheCleanSelect.disabled = !canUseCache;
     cacheClearBtn.disabled = !canUseCache;
+    autoDlPhotoSelect.disabled = !canUseCache;
+    autoDlVideoSelect.disabled = !canUseCache;
+    autoDlFileSelect.disabled = !canUseCache;
+    (autoDlResetBtn as HTMLButtonElement).disabled = !canUseCache;
     if (canUseCache && userId) {
       const prefs = loadFileCachePrefs(userId);
       cacheLimitSelect.value = String(prefs.maxBytes);
@@ -597,6 +695,23 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       }
     } else {
       cacheInfo.textContent = "Кэш доступен после входа.";
+    }
+
+    if (canUseCache && userId) {
+      const prefs = loadAutoDownloadPrefs(userId);
+      ensureAutoDlOption(autoDlPhotoSelect, prefs.photoMaxBytes);
+      ensureAutoDlOption(autoDlVideoSelect, prefs.videoMaxBytes);
+      ensureAutoDlOption(autoDlFileSelect, prefs.fileMaxBytes);
+      autoDlPhotoSelect.value = String(prefs.photoMaxBytes);
+      autoDlVideoSelect.value = String(prefs.videoMaxBytes);
+      autoDlFileSelect.value = String(prefs.fileMaxBytes);
+    } else {
+      ensureAutoDlOption(autoDlPhotoSelect, DEFAULT_AUTO_DOWNLOAD_PREFS.photoMaxBytes);
+      ensureAutoDlOption(autoDlVideoSelect, DEFAULT_AUTO_DOWNLOAD_PREFS.videoMaxBytes);
+      ensureAutoDlOption(autoDlFileSelect, DEFAULT_AUTO_DOWNLOAD_PREFS.fileMaxBytes);
+      autoDlPhotoSelect.value = String(DEFAULT_AUTO_DOWNLOAD_PREFS.photoMaxBytes);
+      autoDlVideoSelect.value = String(DEFAULT_AUTO_DOWNLOAD_PREFS.videoMaxBytes);
+      autoDlFileSelect.value = String(DEFAULT_AUTO_DOWNLOAD_PREFS.fileMaxBytes);
     }
 
     const options: HTMLElement[] = [el("option", { value: "" }, ["— адресат —"])];

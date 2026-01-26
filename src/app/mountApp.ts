@@ -60,7 +60,7 @@ import { MESSAGE_SCHEDULE_MAX_DAYS, maxMessageScheduleDelayMs } from "../helpers
 import { cleanupFileCache, getCachedFileBlob, isImageLikeFile, putCachedFileBlob } from "../helpers/files/fileBlobCache";
 import { fileBadge } from "../helpers/files/fileBadge";
 import { loadFileCachePrefs, saveFileCachePrefs } from "../helpers/files/fileCachePrefs";
-import { DEFAULT_AUTO_DOWNLOAD_PREFS, loadAutoDownloadPrefs, type AutoDownloadPrefs } from "../helpers/files/autoDownloadPrefs";
+import { DEFAULT_AUTO_DOWNLOAD_PREFS, loadAutoDownloadPrefs, saveAutoDownloadPrefs, type AutoDownloadPrefs } from "../helpers/files/autoDownloadPrefs";
 import { resumableHttpDownload } from "../helpers/files/fileHttpDownload";
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
@@ -7204,6 +7204,25 @@ export function mountApp(root: HTMLElement) {
 
   let autoDownloadPrefsUserId = "";
   let autoDownloadPrefsCache: AutoDownloadPrefs = { ...DEFAULT_AUTO_DOWNLOAD_PREFS };
+
+  window.addEventListener(
+    "storage",
+    (e) => {
+      const key = typeof e.key === "string" ? e.key : "";
+      if (!key.startsWith("yagodka_auto_download_prefs_v")) return;
+      const st = store.get();
+      const uid = st.selfId ? String(st.selfId).trim() : "";
+      if (!uid) return;
+      if (!key.endsWith(`:${uid}`)) return;
+      try {
+        autoDownloadPrefsUserId = uid;
+        autoDownloadPrefsCache = loadAutoDownloadPrefs(uid);
+      } catch {
+        // ignore
+      }
+    },
+    { passive: true }
+  );
 
   function getAutoDownloadPrefsForUser(userId: string | null): AutoDownloadPrefs {
     const uid = String(userId || "").trim();
@@ -15123,6 +15142,14 @@ export function mountApp(root: HTMLElement) {
     onFileOfferAccept: (fileId: string) => acceptFileOffer(fileId),
     onFileOfferReject: (fileId: string) => rejectFileOffer(fileId),
     onClearCompletedFiles: () => clearCompletedFiles(),
+    onAutoDownloadPrefsSave: (prefs: AutoDownloadPrefs) => {
+      const st = store.get();
+      const uid = st.selfId;
+      if (!st.authed || !uid) return;
+      saveAutoDownloadPrefs(uid, prefs);
+      autoDownloadPrefsUserId = uid;
+      autoDownloadPrefsCache = loadAutoDownloadPrefs(uid);
+    },
     onSearchQueryChange: (query: string) => {
       if (store.get().searchQuery === query) return;
       lastUserInputAt = Date.now();
