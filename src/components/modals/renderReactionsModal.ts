@@ -38,7 +38,8 @@ export function renderReactionsModal(
   const btnClose = el("button", { class: "btn btn-primary", type: "button" }, ["Закрыть"]) as HTMLButtonElement;
   btnClose.addEventListener("click", () => actions.onClose());
 
-  const pickerBtn = el("button", { class: "btn", type: "button", "data-action": "modal-react-picker" }, ["Другая реакция"]) as HTMLButtonElement;
+  const pickerLabel = mine ? "Изменить реакцию" : "Добавить реакцию";
+  const pickerBtn = el("button", { class: "btn", type: "button", "data-action": "modal-react-picker" }, [pickerLabel]) as HTMLButtonElement;
 
   if (!msg || !entries.length) {
     box.append(
@@ -66,7 +67,7 @@ export function renderReactionsModal(
         "data-action": "modal-react-set",
         "data-emoji": emoji,
         "aria-pressed": active ? "true" : "false",
-        title: active ? `Убрать реакцию ${emoji}` : `Реакция ${emoji}`,
+        title: active ? `Убрать реакцию ${emoji}` : mine ? `Заменить реакцию на ${emoji}` : `Поставить реакцию ${emoji}`,
       },
       [
         el("span", { class: "msg-react-emoji", "aria-hidden": "true" }, [emoji]),
@@ -77,7 +78,10 @@ export function renderReactionsModal(
     return btn;
   });
 
-  const hint = el("div", { class: "modal-line" }, ["Нажмите реакцию, чтобы поставить/убрать."]);
+  const hintText = mine
+    ? "Нажмите реакцию, чтобы заменить; нажмите активную — чтобы убрать."
+    : "Нажмите реакцию, чтобы поставить.";
+  const hint = el("div", { class: "modal-line" }, [hintText]);
   const reacts = el("div", { class: "msg-reacts msg-reacts-modal", role: "group", "aria-label": "Реакции" }, chips);
 
   box.append(el("div", { class: "modal-title" }, ["Реакции"]), hint, reacts, el("div", { class: "modal-actions" }, [pickerBtn, btnClose]));
@@ -91,4 +95,3 @@ export function renderReactionsModal(
 
   return box;
 }
-

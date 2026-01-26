@@ -388,7 +388,7 @@ function renderReactions(m: ChatMessage): HTMLElement | null {
     return a.emoji.localeCompare(b.emoji);
   });
 
-  const mine = typeof (raw as any).mine === "string" ? String((raw as any).mine) : null;
+  const mine = typeof (raw as any).mine === "string" ? String((raw as any).mine).trim() : null;
   const shown = entries.slice(0, 12);
   const nodes = shown.map(({ emoji, count }) => {
     const active = mine === emoji;
@@ -401,7 +401,7 @@ function renderReactions(m: ChatMessage): HTMLElement | null {
         "data-action": "msg-react",
         "data-emoji": emoji,
         "aria-pressed": active ? "true" : "false",
-        title: active ? `Убрать реакцию ${emoji}` : `Реакция ${emoji}`,
+        title: active ? `Убрать реакцию ${emoji}` : mine ? `Заменить реакцию на ${emoji}` : `Поставить реакцию ${emoji}`,
       },
       [el("span", { class: "msg-react-emoji", "aria-hidden": "true" }, [emoji]), el("span", { class: "msg-react-count" }, [String(count)])]
     ) as HTMLButtonElement;
@@ -431,8 +431,8 @@ function renderReactions(m: ChatMessage): HTMLElement | null {
       class: "msg-react msg-react-add",
       type: "button",
       "data-action": "msg-react-add",
-      title: "Другая реакция",
-      "aria-label": "Другая реакция",
+      title: mine ? "Изменить реакцию" : "Добавить реакцию",
+      "aria-label": mine ? "Изменить реакцию" : "Добавить реакцию",
     },
     ["＋"]
   ) as HTMLButtonElement;

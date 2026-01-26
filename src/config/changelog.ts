@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.667",
+    date: "2026-01-26",
+    improved: ["Реакции: тексты/подсказки уточнены под модель «1 реакция на пользователя» (поставить/заменить/убрать)"],
+  },
+  {
     version: "0.1.666",
     date: "2026-01-26",
     improved: ["Медиа: viewer открывает файлы cache-first и иначе по http-ссылке (stream), без ожидания полного скачивания"],

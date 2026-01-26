@@ -69,15 +69,16 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
   const reactionBar =
     payload.reactionBar && Array.isArray(payload.reactionBar.emojis) && payload.reactionBar.emojis.length
       ? (() => {
+          const mine = payload.reactionBar?.active ?? null;
           const btns = payload.reactionBar.emojis.map((emoji) => {
-            const active = payload.reactionBar?.active === emoji;
+            const active = mine === emoji;
             const btn = el(
               "button",
               {
                 class: active ? "ctx-react is-active" : "ctx-react",
                 type: "button",
                 "aria-pressed": active ? "true" : "false",
-                title: active ? `Убрать реакцию ${emoji}` : `Реакция ${emoji}`,
+                title: active ? `Убрать реакцию ${emoji}` : mine ? `Заменить реакцию на ${emoji}` : `Поставить реакцию ${emoji}`,
               },
               [emoji]
             ) as HTMLButtonElement;
@@ -86,7 +87,12 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
           });
           const pickerBtn = el(
             "button",
-            { class: "ctx-react", type: "button", title: "Другая реакция", "aria-label": "Другая реакция" },
+            {
+              class: "ctx-react",
+              type: "button",
+              title: mine ? "Изменить реакцию" : "Добавить реакцию",
+              "aria-label": mine ? "Изменить реакцию" : "Добавить реакцию",
+            },
             ["＋"]
           ) as HTMLButtonElement;
           pickerBtn.addEventListener("click", () => actions.onSelect("react_picker"));
