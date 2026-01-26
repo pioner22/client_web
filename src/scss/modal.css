@@ -1861,11 +1861,14 @@ input.modal-input[type="file"]::file-selector-button:active {
 
 .modal.modal-viewer.viewer-visual .viewer-img {
   cursor: zoom-in;
-  transition: transform 160ms ease;
 }
 
 .modal.modal-viewer.viewer-visual.viewer-zoomed .viewer-img {
-  cursor: zoom-out;
+  cursor: grab;
+}
+
+.modal.modal-viewer.viewer-visual.viewer-zoomed .viewer-img-scroll.viewer-panning .viewer-img {
+  cursor: grabbing;
 }
 
 .overlay.overlay-viewer .viewer-video {

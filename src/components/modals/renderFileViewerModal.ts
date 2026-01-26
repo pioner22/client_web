@@ -134,7 +134,9 @@ export function renderFileViewerModal(
   if (captionText) modalClasses.push("viewer-has-caption");
   const box = el("div", { class: modalClasses.join(" "), role: "dialog", "aria-modal": "true" });
 
-  const IMAGE_ZOOM_SCALE = 2;
+  const IMAGE_ZOOM_DEFAULT_SCALE = 2;
+  const IMAGE_ZOOM_MAX_SCALE = 4;
+  const IMAGE_ZOOM_STEP = 0.5;
 
   const btnClose = el(
     "button",
@@ -154,51 +156,143 @@ export function renderFileViewerModal(
     navButtons.push(btnNext);
   }
   const headerActions = el("div", { class: "viewer-header-actions" }, [...navButtons]);
-  let toggleZoom: (() => void) | null = null;
-  let toggleZoomAt: ((focus?: { x: number; y: number }) => void) | null = null;
   let zoomTarget: HTMLImageElement | null = null;
   let zoomScroll: HTMLElement | null = null;
+  let zoomScale = 1;
+  let zoomBaseW = 0;
+  let zoomBaseH = 0;
+  let suppressImageClickUntil = 0;
+  let setZoom: ((nextScale: number, focus?: { x: number; y: number } | null) => void) | null = null;
   if (isImage) {
+    const zoomBtnOut = el(
+      "button",
+      {
+        class: "btn viewer-action-btn viewer-zoom-btn viewer-zoom-out",
+        type: "button",
+        title: "Уменьшить",
+        "aria-label": "Уменьшить",
+      },
+      ["−"]
+    );
     const zoomBtn = el(
       "button",
       {
-        class: "btn viewer-action-btn viewer-zoom-btn",
+        class: "btn viewer-action-btn viewer-zoom-btn viewer-zoom-level",
         type: "button",
         title: "Увеличить",
         "aria-label": "Увеличить",
-        "aria-pressed": "false",
       },
-      ["1x"]
+      ["100%"]
     );
-    toggleZoom = () => {
-      const zoomed = box.classList.toggle("viewer-zoomed");
-      zoomBtn.textContent = zoomed ? "2x" : "1x";
-      zoomBtn.setAttribute("aria-pressed", zoomed ? "true" : "false");
-      zoomBtn.setAttribute("aria-label", zoomed ? "Сбросить масштаб" : "Увеличить");
+    const zoomBtnIn = el(
+      "button",
+      {
+        class: "btn viewer-action-btn viewer-zoom-btn viewer-zoom-in",
+        type: "button",
+        title: "Увеличить",
+        "aria-label": "Увеличить",
+      },
+      ["+"]
+    );
+
+    const clampZoom = (raw: number): number => {
+      const v = Number(raw ?? 1);
+      if (!Number.isFinite(v)) return 1;
+      const rounded = Math.round((Math.max(1, Math.min(IMAGE_ZOOM_MAX_SCALE, v)) / IMAGE_ZOOM_STEP)) * IMAGE_ZOOM_STEP;
+      return Math.max(1, Math.min(IMAGE_ZOOM_MAX_SCALE, rounded));
+    };
+    const zoomLabel = (scale: number): string => `${Math.round(scale * 100)}%`;
+
+    const updateZoomUi = () => {
+      const zoomed = zoomScale > 1;
+      box.classList.toggle("viewer-zoomed", zoomed);
+      zoomBtn.textContent = zoomLabel(zoomScale);
       zoomBtn.title = zoomed ? "Сбросить масштаб" : "Увеличить";
-      if (!zoomed && zoomTarget) {
-        zoomTarget.style.removeProperty("width");
-        zoomTarget.style.removeProperty("height");
-        zoomTarget.style.removeProperty("max-width");
-        zoomTarget.style.removeProperty("max-height");
-      }
-      if (!zoomed && zoomScroll) {
+      zoomBtn.setAttribute("aria-label", zoomed ? "Сбросить масштаб" : "Увеличить");
+      (zoomBtnOut as HTMLButtonElement).disabled = zoomScale <= 1;
+      (zoomBtnIn as HTMLButtonElement).disabled = zoomScale >= IMAGE_ZOOM_MAX_SCALE;
+    };
+
+    const doSetZoom = (nextScale: number, focus?: { x: number; y: number } | null) => {
+      const img = zoomTarget;
+      const scroll = zoomScroll;
+      if (!img || !scroll) return;
+      const next = clampZoom(nextScale);
+      const prevScale = zoomScale;
+      const prevZoomed = prevScale > 1;
+      const nextZoomed = next > 1;
+      if (!nextZoomed) {
+        zoomScale = 1;
+        updateZoomUi();
+        img.style.removeProperty("width");
+        img.style.removeProperty("height");
+        img.style.removeProperty("max-width");
+        img.style.removeProperty("max-height");
+        zoomBaseW = 0;
+        zoomBaseH = 0;
         try {
-          zoomScroll.scrollLeft = 0;
-          zoomScroll.scrollTop = 0;
+          scroll.scrollLeft = 0;
+          scroll.scrollTop = 0;
         } catch {
           // ignore
         }
-      }
-    };
-    zoomBtn.addEventListener("click", () => {
-      if (toggleZoomAt) {
-        toggleZoomAt();
         return;
       }
-      if (toggleZoom) toggleZoom();
-    });
-    headerActions.append(zoomBtn);
+
+      let baseW = zoomBaseW;
+      let baseH = zoomBaseH;
+      if (!prevZoomed || !baseW || !baseH) {
+        const rect = img.getBoundingClientRect();
+        baseW = rect.width > 0 ? rect.width : 0;
+        baseH = rect.height > 0 ? rect.height : 0;
+      }
+      if (!baseW || !baseH) return;
+
+      const cw = scroll.clientWidth || 0;
+      const ch = scroll.clientHeight || 0;
+      const baseFocus = (() => {
+        if (focus && Number.isFinite(focus.x) && Number.isFinite(focus.y)) {
+          const x = Math.max(0, Math.min(baseW, focus.x));
+          const y = Math.max(0, Math.min(baseH, focus.y));
+          return { x, y };
+        }
+        if (prevZoomed) {
+          const x = Math.max(0, (scroll.scrollLeft + cw * 0.5) / Math.max(1, prevScale));
+          const y = Math.max(0, (scroll.scrollTop + ch * 0.5) / Math.max(1, prevScale));
+          return { x: Math.min(baseW, x), y: Math.min(baseH, y) };
+        }
+        return { x: baseW * 0.5, y: baseH * 0.5 };
+      })();
+
+      zoomBaseW = baseW;
+      zoomBaseH = baseH;
+      zoomScale = next;
+      updateZoomUi();
+      img.style.maxWidth = "none";
+      img.style.maxHeight = "none";
+      img.style.width = `${Math.max(1, Math.round(baseW * zoomScale))}px`;
+      img.style.height = `${Math.max(1, Math.round(baseH * zoomScale))}px`;
+
+      window.requestAnimationFrame(() => {
+        try {
+          const cw2 = scroll.clientWidth || 0;
+          const ch2 = scroll.clientHeight || 0;
+          scroll.scrollLeft = Math.max(0, Math.round(baseFocus.x * zoomScale - cw2 * 0.5));
+          scroll.scrollTop = Math.max(0, Math.round(baseFocus.y * zoomScale - ch2 * 0.5));
+        } catch {
+          // ignore
+        }
+      });
+    };
+
+    setZoom = doSetZoom;
+
+    zoomBtnOut.addEventListener("click", () => doSetZoom(zoomScale - IMAGE_ZOOM_STEP, null));
+    zoomBtnIn.addEventListener("click", () => doSetZoom(zoomScale + IMAGE_ZOOM_STEP, null));
+    zoomBtn.addEventListener("click", () => doSetZoom(zoomScale > 1 ? 1 : IMAGE_ZOOM_DEFAULT_SCALE, null));
+
+    headerActions.append(zoomBtnOut, zoomBtn, zoomBtnIn);
+    updateZoomUi();
   }
   if (actions.onJump) {
     const btnJump = el(
@@ -264,59 +358,72 @@ export function renderFileViewerModal(
     body = el("div", { class: "viewer-empty" }, ["Не удалось открыть файл: небезопасный URL"]);
   } else if (isImage) {
     const img = el("img", { class: "viewer-img", src: safeHref, alt: titleText, decoding: "async" });
-    if (toggleZoom) {
-      zoomTarget = img;
-      const scroll = el("div", { class: "viewer-img-scroll" }, [img]);
-      zoomScroll = scroll;
-      const toggleAt = (focus?: { x: number; y: number }) => {
-        if (!toggleZoom) return;
-        const willZoomIn = !box.classList.contains("viewer-zoomed");
-        if (willZoomIn) {
-          const rect = img.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            const w = Math.max(1, Math.round(rect.width * IMAGE_ZOOM_SCALE));
-            const h = Math.max(1, Math.round(rect.height * IMAGE_ZOOM_SCALE));
-            img.style.maxWidth = "none";
-            img.style.maxHeight = "none";
-            img.style.width = `${w}px`;
-            img.style.height = `${h}px`;
-
-            const fx = focus ? Math.max(0, Math.min(rect.width, focus.x)) : rect.width * 0.5;
-            const fy = focus ? Math.max(0, Math.min(rect.height, focus.y)) : rect.height * 0.5;
-            window.requestAnimationFrame(() => {
-              try {
-                const cw = scroll.clientWidth || 0;
-                const ch = scroll.clientHeight || 0;
-                const left = Math.max(0, Math.round(fx * IMAGE_ZOOM_SCALE - cw * 0.5));
-                const top = Math.max(0, Math.round(fy * IMAGE_ZOOM_SCALE - ch * 0.5));
-                scroll.scrollLeft = left;
-                scroll.scrollTop = top;
-              } catch {
-                // ignore
-              }
-            });
-          }
-        }
-        toggleZoom();
-      };
-      toggleZoomAt = toggleAt;
-      img.addEventListener("click", (event) => {
-        if (event.detail > 1) return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (box.classList.contains("viewer-zoomed")) {
-          toggleAt();
-          return;
-        }
-        const rect = img.getBoundingClientRect();
-        const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
-        const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
-        toggleAt({ x, y });
-      });
-      body = el("div", { class: "viewer-media" }, [scroll]);
-    } else {
-      body = el("div", { class: "viewer-media" }, [img]);
-    }
+    zoomTarget = img;
+    const scroll = el("div", { class: "viewer-img-scroll" }, [img]);
+    zoomScroll = scroll;
+    let panActive = false;
+    let panMoved = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panStartLeft = 0;
+    let panStartTop = 0;
+    img.addEventListener("click", (event) => {
+      if (Date.now() < suppressImageClickUntil) return;
+      if (event.detail > 1) return;
+      if (!setZoom) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (zoomScale > 1) {
+        setZoom(1, null);
+        return;
+      }
+      const rect = img.getBoundingClientRect();
+      const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+      const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+      setZoom(IMAGE_ZOOM_DEFAULT_SCALE, { x, y });
+    });
+    scroll.addEventListener("pointerdown", (e) => {
+      if (!box.classList.contains("viewer-zoomed")) return;
+      const ev = e as PointerEvent;
+      if (ev.button !== 0) return;
+      if (ev.pointerType !== "mouse") return;
+      panActive = true;
+      panMoved = false;
+      panStartX = ev.clientX;
+      panStartY = ev.clientY;
+      panStartLeft = scroll.scrollLeft;
+      panStartTop = scroll.scrollTop;
+      scroll.classList.add("viewer-panning");
+      try {
+        scroll.setPointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+      e.preventDefault();
+    });
+    scroll.addEventListener("pointermove", (e) => {
+      if (!panActive) return;
+      const ev = e as PointerEvent;
+      const dx = ev.clientX - panStartX;
+      const dy = ev.clientY - panStartY;
+      if (!panMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) panMoved = true;
+      try {
+        scroll.scrollLeft = Math.max(0, Math.round(panStartLeft - dx));
+        scroll.scrollTop = Math.max(0, Math.round(panStartTop - dy));
+      } catch {
+        // ignore
+      }
+    });
+    const stopPan = (e?: Event) => {
+      if (!panActive) return;
+      panActive = false;
+      scroll.classList.remove("viewer-panning");
+      if (panMoved) suppressImageClickUntil = Date.now() + 400;
+      if (e) e.preventDefault();
+    };
+    scroll.addEventListener("pointerup", (e) => stopPan(e));
+    scroll.addEventListener("pointercancel", (e) => stopPan(e));
+    body = el("div", { class: "viewer-media" }, [scroll]);
   } else if (isVideo) {
     const video = el("video", {
       class: "viewer-video",
