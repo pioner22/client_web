@@ -3099,6 +3099,16 @@ export function mountApp(root: HTMLElement) {
     void openFileViewerFromMessageIndex(chatKey, targetIdx);
   }
 
+  function openFileViewerAtIndex(msgIdx: number) {
+    const st = store.get();
+    const modal = st.modal;
+    if (!modal || modal.kind !== "file_viewer") return;
+    const chatKey = modal.chatKey ? String(modal.chatKey) : "";
+    if (!chatKey) return;
+    if (!Number.isFinite(msgIdx)) return;
+    void openFileViewerFromMessageIndex(chatKey, Math.trunc(msgIdx));
+  }
+
   function jumpFromFileViewer() {
     const st = store.get();
     const modal = st.modal;
@@ -15212,6 +15222,7 @@ export function mountApp(root: HTMLElement) {
     onFileViewerShare: () => void shareFromFileViewer(),
     onFileViewerForward: () => forwardFromFileViewer(),
     onFileViewerDelete: () => deleteFromFileViewer(),
+    onFileViewerOpenAt: (msgIdx: number) => openFileViewerAtIndex(msgIdx),
     onFileSend: (file: File | null, target: TargetRef | null) => {
       const st = store.get();
       if (st.conn !== "connected") {

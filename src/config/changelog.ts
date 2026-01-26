@@ -10,6 +10,11 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.665",
+    date: "2026-01-26",
+    improved: ["Viewer: добавлена лента медиа (rail) и индикатор загрузки (preloader)"],
+  },
+  {
     version: "0.1.664",
     date: "2026-01-26",
     improved: ["Viewer: добавлены действия «Поделиться/Переслать/Удалить», а также pinch-zoom/pan на сенсорных устройствах"],

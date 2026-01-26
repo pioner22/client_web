@@ -250,6 +250,7 @@ export interface RenderActions {
   onFileViewerShare: () => void;
   onFileViewerForward: () => void;
   onFileViewerDelete: () => void;
+  onFileViewerOpenAt: (msgIdx: number) => void;
 }
 
 export function renderApp(layout: Layout, state: AppState, actions: RenderActions) {
@@ -600,6 +601,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     onFileViewerShare: actions.onFileViewerShare,
     onFileViewerForward: actions.onFileViewerForward,
     onFileViewerDelete: actions.onFileViewerDelete,
+    onFileViewerOpenAt: actions.onFileViewerOpenAt,
     onContextMenuAction: actions.onContextMenuAction,
     onForwardSend: actions.onForwardSend,
   };

@@ -11,6 +11,7 @@ import { renderConfirmModal } from "./renderConfirmModal";
 import { renderFileSendModal } from "./renderFileSendModal";
 import { renderFileViewerModal } from "./renderFileViewerModal";
 import type { FileViewerMeta } from "./renderFileViewerModal";
+import { safeUrl } from "../../helpers/security/safeUrl";
 import { renderInviteUserModal } from "./renderInviteUserModal";
 import { renderActionModal } from "./renderActionModal";
 import { renderContextMenu } from "./renderContextMenu";
@@ -109,6 +110,7 @@ export interface ModalActions {
   onFileViewerShare: () => void;
   onFileViewerForward: () => void;
   onFileViewerDelete: () => void;
+  onFileViewerOpenAt: (msgIdx: number) => void;
   onForwardSend: (targets: TargetRef[]) => void;
 }
 
@@ -218,7 +220,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     const canPrev = typeof modal.prevIdx === "number" && Number.isFinite(modal.prevIdx);
     const canNext = typeof modal.nextIdx === "number" && Number.isFinite(modal.nextIdx);
     const canJump = Boolean(modal.chatKey && typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx));
-    const meta = buildFileViewerMeta(state, modal);
+    const metaBase = buildFileViewerMeta(state, modal);
     const viewerMessage = (() => {
       const chatKey = modal.chatKey ? String(modal.chatKey) : "";
       const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
@@ -228,6 +230,60 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       const msg = conv[msgIdx];
       if (!msg || msg.kind === "sys") return null;
       return { chatKey, msgIdx, msg };
+    })();
+    const rail = (() => {
+      if (!viewerMessage) return [];
+      const conv = state.conversations[viewerMessage.chatKey] || [];
+      const isMedia = (msg: any): "image" | "video" | null => {
+        const att = msg?.attachment;
+        if (!att || att.kind !== "file") return null;
+        const mt = String(att.mime || "").toLowerCase();
+        if (mt.startsWith("image/")) return "image";
+        if (mt.startsWith("video/")) return "video";
+        const n = String(att.name || "").toLowerCase();
+        if (/\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n)) return "image";
+        if (/\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n)) return "video";
+        return null;
+      };
+      const base = typeof location !== "undefined" ? location.href : "http://localhost/";
+      const buildItem = (idx: number) => {
+        const msg = conv[idx];
+        const kind = isMedia(msg);
+        if (!msg || !kind) return null;
+        const att = msg.attachment;
+        if (!att || att.kind !== "file") return null;
+        const name = String(att.name || "файл");
+        const fileId = att.fileId ? String(att.fileId) : "";
+        const thumbRaw = fileId && state.fileThumbs?.[fileId]?.url ? state.fileThumbs[fileId].url : null;
+        const transferUrl =
+          fileId && state.fileTransfers?.length
+            ? state.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean(t.url))?.url || null
+            : null;
+        const thumbUrl = thumbRaw
+          ? safeUrl(thumbRaw, { base, allowedProtocols: ["http:", "https:", "blob:"] })
+          : transferUrl
+            ? safeUrl(transferUrl, { base, allowedProtocols: ["http:", "https:", "blob:"] })
+            : null;
+        return { msgIdx: idx, name, kind, thumbUrl, active: idx === viewerMessage.msgIdx };
+      };
+      const before: Array<NonNullable<ReturnType<typeof buildItem>>> = [];
+      const after: Array<NonNullable<ReturnType<typeof buildItem>>> = [];
+      for (let i = viewerMessage.msgIdx - 1; i >= 0 && before.length < 4; i -= 1) {
+        const item = buildItem(i);
+        if (item) before.unshift(item);
+      }
+      for (let i = viewerMessage.msgIdx + 1; i < conv.length && after.length < 4; i += 1) {
+        const item = buildItem(i);
+        if (item) after.push(item);
+      }
+      const cur = buildItem(viewerMessage.msgIdx);
+      if (!cur) return [];
+      return [...before, cur, ...after];
+    })();
+    const meta: FileViewerMeta | null = (() => {
+      if (!rail.length) return metaBase;
+      const base = metaBase ? metaBase : {};
+      return { ...base, rail };
     })();
     const canForward = Boolean(viewerMessage && !state.editing);
     const canDelete = (() => {
@@ -246,6 +302,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       ...(actions.onFileViewerShare ? { onShare: () => actions.onFileViewerShare() } : {}),
       ...(viewerMessage ? { onForward: () => actions.onFileViewerForward(), canForward } : {}),
       ...(canDelete ? { onDelete: () => actions.onFileViewerDelete(), canDelete } : {}),
+      ...(viewerMessage ? { onOpenAt: (msgIdx: number) => actions.onFileViewerOpenAt(msgIdx) } : {}),
     });
   }
   if (kind === "invite_user") {

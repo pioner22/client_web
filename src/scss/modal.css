@@ -1728,6 +1728,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   border-radius: var(--field-radius);
   overflow: hidden;
   background: var(--panel2);
+  position: relative;
 }
 
 .overlay.overlay-viewer .viewer-media,
@@ -1817,6 +1818,107 @@ input.modal-input[type="file"]::file-selector-button:active {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.35));
   transition: opacity 160ms ease, background 160ms ease;
   pointer-events: auto;
+}
+
+.modal.modal-viewer.viewer-has-rail {
+  --viewer-rail-h: calc(72px + var(--safe-bottom-pad));
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-caption {
+  bottom: var(--viewer-rail-h);
+}
+
+.viewer-rail {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: calc(var(--viewer-pad) * var(--phi-inv)) var(--viewer-pad) calc((var(--viewer-pad) * var(--phi-inv)) + var(--safe-bottom-pad));
+  display: flex;
+  justify-content: center;
+  gap: calc(var(--viewer-gap) * var(--phi-inv));
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  z-index: 5;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0));
+}
+
+.viewer-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.viewer-rail-item {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.viewer-rail-item.active {
+  border-color: rgba(255, 255, 255, 0.42);
+  transform: scale(1.05);
+}
+
+.viewer-rail-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.viewer-rail-thumb-empty {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.viewer-rail-video-badge {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.viewer-preloader {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.12));
+  pointer-events: none;
+}
+
+.viewer-preloader-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 3px solid rgba(255, 255, 255, 0.22);
+  border-top-color: rgba(255, 255, 255, 0.92);
+  animation: viewer-spin 0.9s linear infinite;
+}
+
+.viewer-preloader-text {
+  font-size: 12px;
+}
+
+.viewer-preloader.viewer-preloader-failed .viewer-preloader-spinner {
+  display: none;
+}
+
+@keyframes viewer-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-zoomed .viewer-caption {

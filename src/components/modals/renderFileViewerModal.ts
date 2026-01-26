@@ -9,6 +9,7 @@ export interface FileViewerMeta {
   authorHandle?: string | null;
   authorKind?: "dm" | "group" | "board";
   timestamp?: number | null;
+  rail?: Array<{ msgIdx: number; name: string; kind: "image" | "video"; thumbUrl: string | null; active?: boolean }>;
 }
 
 export interface FileViewerModalActions {
@@ -19,6 +20,7 @@ export interface FileViewerModalActions {
   onShare?: () => void;
   onForward?: () => void;
   onDelete?: () => void;
+  onOpenAt?: (msgIdx: number) => void;
   canShare?: boolean;
   canForward?: boolean;
   canDelete?: boolean;
@@ -408,10 +410,15 @@ export function renderFileViewerModal(
   if (!safeHref) {
     body = el("div", { class: "viewer-empty" }, ["Не удалось открыть файл: небезопасный URL"]);
   } else if (isImage) {
-    const img = el("img", { class: "viewer-img", src: safeHref, alt: titleText, decoding: "async" });
+    const img = el("img", { class: "viewer-img", src: safeHref, alt: titleText, decoding: "async" }) as HTMLImageElement;
     zoomTarget = img;
     const scroll = el("div", { class: "viewer-img-scroll" }, [img]);
     zoomScroll = scroll;
+    const preloaderText = el("div", { class: "viewer-preloader-text" }, ["Загрузка…"]);
+    const preloader = el("div", { class: "viewer-preloader", "aria-live": "polite" }, [
+      el("div", { class: "viewer-preloader-spinner", "aria-hidden": "true" }, [""]),
+      preloaderText,
+    ]);
     let panActive = false;
     let panMoved = false;
     let pinchActive = false;
@@ -563,7 +570,22 @@ export function renderFileViewerModal(
     };
     scroll.addEventListener("pointerup", (e) => stopPan(e));
     scroll.addEventListener("pointercancel", (e) => stopPan(e));
-    body = el("div", { class: "viewer-media" }, [scroll]);
+    img.addEventListener(
+      "load",
+      () => {
+        preloader.classList.add("hidden");
+      },
+      { once: true }
+    );
+    img.addEventListener(
+      "error",
+      () => {
+        preloader.classList.add("viewer-preloader-failed");
+        preloaderText.textContent = "Не удалось загрузить";
+      },
+      { once: true }
+    );
+    body = el("div", { class: "viewer-media viewer-media-image" }, [scroll, preloader]);
   } else if (isVideo) {
     const video = el("video", {
       class: "viewer-video",
@@ -596,6 +618,38 @@ export function renderFileViewerModal(
   }
 
   const stage = el("div", { class: "viewer-stage" }, [body]);
+  const railItems = (meta?.rail || []).filter((x) => x && Number.isFinite(x.msgIdx) && (x.kind === "image" || x.kind === "video"));
+  if (isVisual && actions.onOpenAt && railItems.length > 1) {
+    box.classList.add("viewer-has-rail");
+    const railButtons = railItems.map((item) => {
+      const thumbUrl = item.thumbUrl ? safeUrl(item.thumbUrl, { base: window.location.href, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
+      const classes = ["viewer-rail-item"];
+      if (item.active) classes.push("active");
+      if (item.kind === "video") classes.push("viewer-rail-item-video");
+      const btn = el(
+        "button",
+        {
+          class: classes.join(" "),
+          type: "button",
+          title: item.name,
+          "aria-label": `Открыть: ${item.name}`,
+        },
+        [
+          thumbUrl
+            ? el("img", { class: "viewer-rail-thumb", src: thumbUrl, alt: "", loading: "lazy", decoding: "async" })
+            : el("div", { class: "viewer-rail-thumb viewer-rail-thumb-empty", "aria-hidden": "true" }, [item.kind === "video" ? "Видео" : "Фото"]),
+          item.kind === "video" ? el("div", { class: "viewer-rail-video-badge", "aria-hidden": "true" }, ["▶"]) : "",
+        ]
+      ) as HTMLButtonElement;
+      btn.disabled = Boolean(item.active);
+      btn.addEventListener("click", () => {
+        if (item.active) return;
+        actions.onOpenAt && actions.onOpenAt(item.msgIdx);
+      });
+      return btn;
+    });
+    stage.append(el("div", { class: "viewer-rail" }, railButtons));
+  }
   if (isVisual) {
     if (actions.onPrev) {
       const btnPrev = el(
