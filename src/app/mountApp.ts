@@ -60,6 +60,7 @@ import { MESSAGE_SCHEDULE_MAX_DAYS, maxMessageScheduleDelayMs } from "../helpers
 import { cleanupFileCache, getCachedFileBlob, isImageLikeFile, putCachedFileBlob } from "../helpers/files/fileBlobCache";
 import { fileBadge } from "../helpers/files/fileBadge";
 import { loadFileCachePrefs, saveFileCachePrefs } from "../helpers/files/fileCachePrefs";
+import { DEFAULT_AUTO_DOWNLOAD_PREFS, loadAutoDownloadPrefs, type AutoDownloadPrefs } from "../helpers/files/autoDownloadPrefs";
 import { resumableHttpDownload } from "../helpers/files/fileHttpDownload";
 import { loadFileTransfersForUser, saveFileTransfersForUser } from "../helpers/files/fileTransferHistory";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
@@ -7201,6 +7202,47 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
+  let autoDownloadPrefsUserId = "";
+  let autoDownloadPrefsCache: AutoDownloadPrefs = { ...DEFAULT_AUTO_DOWNLOAD_PREFS };
+
+  function getAutoDownloadPrefsForUser(userId: string | null): AutoDownloadPrefs {
+    const uid = String(userId || "").trim();
+    if (!uid) return DEFAULT_AUTO_DOWNLOAD_PREFS;
+    if (uid !== autoDownloadPrefsUserId) {
+      autoDownloadPrefsUserId = uid;
+      autoDownloadPrefsCache = loadAutoDownloadPrefs(uid);
+    }
+    return autoDownloadPrefsCache;
+  }
+
+  type AutoDownloadKind = "image" | "video" | "audio" | "file";
+
+  function resolveAutoDownloadKind(name: string, mime: string | null | undefined, hint?: string | null): AutoDownloadKind {
+    const h = String(hint || "").trim().toLowerCase();
+    if (h === "image" || h === "video" || h === "audio") return h;
+    if (isImageLikeFile(name, mime)) return "image";
+    if (isVideoLikeFile(name, mime)) return "video";
+    if (isMediaLikeFile(name, mime)) return "audio";
+    return "file";
+  }
+
+  function autoDownloadCapBytes(userId: string | null, kind: AutoDownloadKind): number {
+    const prefs = getAutoDownloadPrefsForUser(userId);
+    const raw =
+      kind === "image" ? prefs.photoMaxBytes : kind === "video" ? prefs.videoMaxBytes : prefs.fileMaxBytes;
+    const max = Math.max(0, Number(raw ?? 0) || 0);
+    if (!max) return 0;
+    return Math.min(PREVIEW_AUTO_MAX_BYTES, max);
+  }
+
+  function canAutoDownloadFullFile(userId: string | null, kind: AutoDownloadKind, size: number): boolean {
+    const bytes = Number(size ?? 0) || 0;
+    if (bytes <= 0) return false;
+    const cap = autoDownloadCapBytes(userId, kind);
+    if (cap <= 0) return false;
+    return bytes <= cap;
+  }
+
   async function enforceFileCachePolicy(userId: string, opts: { force?: boolean } = {}): Promise<void> {
     const prefs = getFileCachePrefsForUser(userId);
     if (!prefs) return;
@@ -7664,8 +7706,10 @@ export function mountApp(root: HTMLElement) {
     const hint = String(kindHint || "").trim().toLowerCase();
     const hintIsMedia = hint === "image" || hint === "video" || hint === "audio";
     if (!forceMedia && !hintIsMedia && !isMediaLikeFile(name, mime)) return false;
-    if (size > 0 && size > PREVIEW_AUTO_MAX_BYTES) return false;
-    return true;
+    const kind = resolveAutoDownloadKind(name, mime, hint);
+    if (kind === "image" || kind === "video") return true;
+    const st = store.get();
+    return canAutoDownloadFullFile(st.selfId || null, kind, size);
   }
 
   async function autoFetchVisiblePreviews() {
@@ -7854,7 +7898,9 @@ export function mountApp(root: HTMLElement) {
       const mime = mimeRaw ? String(mimeRaw) : null;
       const size = Number(node.getAttribute("data-size") || 0) || 0;
       const shouldPrefetch = deviceCaps.prefetchAllowed && shouldAutoFetchPreview(name, mime, size, true, "audio");
-      if (shouldPrefetch && convoKey) {
+      const shouldAttemptRestore =
+        Boolean(convoKey) && (shouldPrefetch || !mime || size <= 0 || size <= PREVIEW_AUTO_RESTORE_MAX_BYTES);
+      if (shouldAttemptRestore && convoKey) {
         const msgIdx = Number(node.getAttribute("data-msg-idx") || NaN);
         const msg = Number.isFinite(msgIdx) ? st.conversations[convoKey]?.[msgIdx] : null;
         const msgEl = node.closest(".msg");
@@ -7873,7 +7919,7 @@ export function mountApp(root: HTMLElement) {
           direction,
           peer,
           room,
-          prefetch: true,
+          prefetch: shouldPrefetch,
           retryWindowMs: PREVIEW_AUTO_RETRY_MS,
         });
       }
@@ -7920,6 +7966,7 @@ export function mountApp(root: HTMLElement) {
     if (previewWarmupInFlight) return;
     const st = store.get();
     if (!st.authed || !st.selfId) return;
+    const uid = st.selfId;
     if (st.page !== "main") return;
     if (!st.selected) return;
     if (st.modal && st.modal.kind !== "context_menu") return;
@@ -7962,10 +8009,11 @@ export function mountApp(root: HTMLElement) {
         const mime = typeof att.mime === "string" ? att.mime : null;
         const size = Number(att.size ?? 0) || 0;
         const isMedia = isMediaLikeFile(name, mime);
-        const shouldPrefetch = deviceCaps.prefetchAllowed && shouldCachePreview(name, mime, size);
+        const kind = isImageLikeFile(name, mime) ? "image" : isVideoLikeFile(name, mime) ? "video" : "audio";
+        const shouldPrefetch =
+          deviceCaps.prefetchAllowed && shouldCachePreview(name, mime, size) && (kind !== "audio" || canAutoDownloadFullFile(uid, kind, size));
         const shouldAttemptRestore = isMedia && (shouldPrefetch || !mime || size <= 0 || size <= PREVIEW_AUTO_RESTORE_MAX_BYTES);
         if (!shouldAttemptRestore) continue;
-        const kind = isImageLikeFile(name, mime) ? "image" : isVideoLikeFile(name, mime) ? "video" : "audio";
         if ((kind === "image" || kind === "video") && st.fileThumbs?.[fid]?.url) continue;
         const already = st.fileTransfers.find((t) => String(t.id || "").trim() === fid && Boolean(t.url));
         if (already) continue;
@@ -8958,6 +9006,20 @@ export function mountApp(root: HTMLElement) {
           }
         })();
         return true;
+      }
+
+      if (silent && !thumbUrl) {
+        try {
+          const st = store.get();
+          const kind = resolveAutoDownloadKind(name, mime, null);
+          if (!canAutoDownloadFullFile(st.selfId || null, kind, size)) {
+            silentFileGets.delete(fileId);
+            finishFileGet(fileId);
+            return true;
+          }
+        } catch {
+          // ignore
+        }
       }
 
       if (httpDownloadInFlight.has(fileId)) {

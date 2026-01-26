@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Keep newest first. This list is shown in Info and acts as user-facing release notes.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.661",
+    date: "2026-01-26",
+    improved: [
+      "Медиа: авто‑скачивание файлов в истории теперь с tweb-like лимитами (фото 1MB, видео 15MB, файлы 3MB) — без «тихого» скачивания больших файлов",
+    ],
+  },
+  {
     version: "0.1.660",
     date: "2026-01-26",
     improved: ["Поиск: в режиме выбора «Сервер» добавлена кнопка «Закрепить/Открепить» для выбранных чатов"],
