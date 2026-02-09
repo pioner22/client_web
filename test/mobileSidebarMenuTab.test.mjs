@@ -170,6 +170,16 @@ function hasText(root, needle) {
   return txt.includes(String(needle));
 }
 
+function ctxKeyForSidebarRow(row) {
+  if (!row || typeof row.getAttribute !== "function") return "";
+  const kind = String(row.getAttribute("data-ctx-kind") || "").trim();
+  const id = String(row.getAttribute("data-ctx-id") || "").trim();
+  if (!kind || !id) return "";
+  if (kind === "dm") return `dm:${id}`;
+  if (kind === "group" || kind === "board") return `room:${id}`;
+  return `${kind}:${id}`;
+}
+
 function mkState(tab) {
   return {
     friends: [{ id: "123-456-789", online: true, friend: true, unread: 0 }],
@@ -197,7 +207,7 @@ test("mobile sidebar: 4 вкладки (Контакты/Доски/Чаты/М�
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("chats"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, mkState("chats"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
         assert.deepEqual(labels, ["Контакты", "Доски", "Чаты", "Меню"]);
@@ -215,7 +225,7 @@ test("mobile sidebar: Контакты не содержат пункты мен
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("contacts"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, mkState("contacts"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         assert.equal(hasText(target, "Поиск"), false);
         assert.equal(hasText(target, "Создать чат"), false);
         assert.equal(hasText(target, "Онлайн"), false);
@@ -233,7 +243,7 @@ test("mobile sidebar: Меню содержит навигацию/создан�
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("menu"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, mkState("menu"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         assert.equal(hasText(target, "Навигация"), true);
         assert.equal(hasText(target, "Поиск"), true);
         assert.equal(hasText(target, "Создать чат"), true);
@@ -283,6 +293,7 @@ test("mobile sidebar: поиск фильтрует список и вызыва
         helper.renderSidebar(
           target,
           state,
+          () => {},
           () => {},
           () => {},
           () => {},
@@ -343,7 +354,7 @@ test("mobile sidebar: Чаты = активные ЛС + группы (не ве
           drafts: {},
         };
 
-        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
 
         assert.equal(hasText(target, "111-111-111"), true);
         assert.equal(hasText(target, "Группа 1"), true);
@@ -387,10 +398,134 @@ test("mobile sidebar: Контакты показывают всех польз�
           drafts: {},
         };
 
-        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
 
         assert.equal(hasText(target, "111-111-111"), true);
         assert.equal(hasText(target, "222-222-222"), true);
+      },
+      { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("mobile sidebar: pinned rows следуют порядку state.pinned (dm/group вперемешку)", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    withDomStubs(
+      () => {
+        const target = document.createElement("div");
+        const state = {
+          friends: [
+            { id: "111-111-111", online: true, unread: 0 },
+            { id: "222-222-222", online: true, unread: 0 },
+          ],
+          groups: [
+            { id: "g-1", name: "Группа 1" },
+            { id: "g-2", name: "Группа 2" },
+          ],
+          boards: [],
+          pinned: ["room:g-1", "dm:111-111-111", "room:g-2", "dm:222-222-222"],
+          archived: [],
+          pendingIn: [],
+          pendingOut: [],
+          pendingGroupInvites: [],
+          pendingGroupJoinRequests: [],
+          pendingBoardInvites: [],
+          fileOffersIn: [],
+          selected: null,
+          page: "main",
+          mobileSidebarTab: "chats",
+          sidebarQuery: "",
+          sidebarChatFilter: "all",
+          conversations: {
+            "dm:111-111-111": [],
+            "dm:222-222-222": [],
+            "room:g-1": [],
+            "room:g-2": [],
+          },
+          drafts: {},
+        };
+
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+
+        const chatlists = findAll(target, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
+        assert.equal(chatlists.length > 0, true);
+        const chatlist = chatlists[0];
+        const pinned = [];
+        const kids = Array.isArray(chatlist._children) ? chatlist._children : [];
+        for (const node of kids) {
+          if (!node || typeof node !== "object") continue;
+          if (node.tagName === "DIV" && String(node.className || "").includes("pane-section")) break;
+          if (node.tagName !== "BUTTON") continue;
+          const key = ctxKeyForSidebarRow(node);
+          if (key) pinned.push(key);
+        }
+        assert.deepEqual(pinned, state.pinned);
+      },
+      { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("mobile sidebar: Чаты сортируются по активности (last_ts) по убыванию", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    withDomStubs(
+      () => {
+        const target = document.createElement("div");
+        const state = {
+          friends: [
+            { id: "111-111-111", online: true, unread: 0 },
+            { id: "222-222-222", online: true, unread: 0 },
+          ],
+          groups: [{ id: "g-1", name: "Группа 1" }],
+          boards: [],
+          pinned: [],
+          archived: [],
+          pendingIn: [],
+          pendingOut: [],
+          pendingGroupInvites: [],
+          pendingGroupJoinRequests: [],
+          pendingBoardInvites: [],
+          fileOffersIn: [],
+          selected: null,
+          page: "main",
+          mobileSidebarTab: "chats",
+          sidebarQuery: "",
+          sidebarChatFilter: "all",
+          conversations: {
+            "dm:111-111-111": [{ ts: 10, from: "111-111-111", text: "a", kind: "in" }],
+            "dm:222-222-222": [{ ts: 30, from: "222-222-222", text: "b", kind: "in" }],
+            "room:g-1": [{ ts: 20, from: "111-111-111", text: "c", kind: "in" }],
+          },
+          drafts: {},
+        };
+
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+
+        const chatlists = findAll(target, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
+        assert.equal(chatlists.length > 0, true);
+        const chatlist = chatlists[0];
+        const kids = Array.isArray(chatlist._children) ? chatlist._children : [];
+        const afterHeader = [];
+        let seenHeader = false;
+        for (const node of kids) {
+          if (!node || typeof node !== "object") continue;
+          if (!seenHeader) {
+            if (node.tagName === "DIV" && String(node.className || "").includes("pane-section")) {
+              seenHeader = true;
+            }
+            continue;
+          }
+          if (node.tagName !== "BUTTON") continue;
+          const key = ctxKeyForSidebarRow(node);
+          if (key) afterHeader.push(key);
+        }
+        assert.deepEqual(afterHeader.slice(0, 3), ["dm:222-222-222", "room:g-1", "dm:111-111-111"]);
       },
       { isMobile: true }
     );

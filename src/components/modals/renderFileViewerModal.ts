@@ -26,6 +26,11 @@ export interface FileViewerModalActions {
   canDelete?: boolean;
 }
 
+export interface FileViewerModalOptions {
+  autoplay?: boolean;
+  posterUrl?: string | null;
+}
+
 function formatBytes(size: number): string {
   if (!size || size <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -82,30 +87,41 @@ const VIDEO_NAME_HINT_RE =
 const AUDIO_NAME_HINT_RE =
   /(?:^|[_\-\s\(\)\[\]])(?:audio|voice|sound|music|song|track|record|rec|memo|note|voice[_\-\s]?note|аудио|звук|музык|песня|голос|запис|диктофон|заметк)(?:[_\-\s\(\)\[\]]|\d|$)/;
 
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/;
+const VIDEO_EXT_RE = /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/;
+const AUDIO_EXT_RE = /\.(mp3|m4a|aac|wav|ogg|opus|flac)$/;
+
 function isImageFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("image/")) return true;
+  if (mt.startsWith("video/") || mt.startsWith("audio/")) return false;
   const n = normalizeFileName(name);
   if (!n) return false;
-  if (/\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n)) return true;
+  if (IMAGE_EXT_RE.test(n)) return true;
+  // iOS often names videos as IMG_XXXX.MP4/MOV; extension must override name hints.
+  if (VIDEO_EXT_RE.test(n) || AUDIO_EXT_RE.test(n)) return false;
   return IMAGE_NAME_HINT_RE.test(n);
 }
 
 function isVideoFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("video/")) return true;
+  if (mt.startsWith("image/") || mt.startsWith("audio/")) return false;
   const n = normalizeFileName(name);
   if (!n) return false;
-  if (/\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n)) return true;
+  if (VIDEO_EXT_RE.test(n)) return true;
+  if (IMAGE_EXT_RE.test(n) || AUDIO_EXT_RE.test(n)) return false;
   return VIDEO_NAME_HINT_RE.test(n);
 }
 
 function isAudioFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("audio/")) return true;
+  if (mt.startsWith("image/") || mt.startsWith("video/")) return false;
   const n = normalizeFileName(name);
   if (!n) return false;
-  if (/\.(mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n)) return true;
+  if (AUDIO_EXT_RE.test(n)) return true;
+  if (IMAGE_EXT_RE.test(n) || VIDEO_EXT_RE.test(n)) return false;
   return AUDIO_NAME_HINT_RE.test(n);
 }
 
@@ -116,7 +132,8 @@ export function renderFileViewerModal(
   mime: string | null | undefined,
   caption: string | null | undefined,
   meta: FileViewerMeta | null | undefined,
-  actions: FileViewerModalActions
+  actions: FileViewerModalActions,
+  opts?: FileViewerModalOptions | null
 ): HTMLElement {
   const safeHref = safeUrl(url, { base: window.location.href, allowedProtocols: ["http:", "https:", "blob:"] });
   const titleText = String(name || "файл");
@@ -126,6 +143,9 @@ export function renderFileViewerModal(
   const isVideo = isVideoFile(titleText, mime);
   const isAudio = isAudioFile(titleText, mime);
   const isVisual = isImage || isVideo;
+  const shouldAutoplay = Boolean(isVideo && opts?.autoplay);
+  const posterRaw = isVideo ? String(opts?.posterUrl || "").trim() : "";
+  const posterUrl = posterRaw ? safeUrl(posterRaw, { base: window.location.href, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
 
   const authorId = String(meta?.authorId || "").trim();
   const authorKind = meta?.authorKind || "dm";
@@ -171,6 +191,8 @@ export function renderFileViewerModal(
   let zoomBaseH = 0;
   let suppressImageClickUntil = 0;
   let setZoom: ((nextScale: number, focus?: { x: number; y: number } | null) => void) | null = null;
+  let imageEl: HTMLImageElement | null = null;
+  let videoEl: HTMLVideoElement | null = null;
   if (isImage) {
     const zoomBtnOut = el(
       "button",
@@ -411,6 +433,7 @@ export function renderFileViewerModal(
     body = el("div", { class: "viewer-empty" }, ["Не удалось открыть файл: небезопасный URL"]);
   } else if (isImage) {
     const img = el("img", { class: "viewer-img", src: safeHref, alt: titleText, decoding: "async" }) as HTMLImageElement;
+    imageEl = img;
     zoomTarget = img;
     const scroll = el("div", { class: "viewer-img-scroll" }, [img]);
     zoomScroll = scroll;
@@ -592,9 +615,35 @@ export function renderFileViewerModal(
       src: safeHref,
       controls: "true",
       playsinline: "true",
-      preload: "metadata",
+      preload: shouldAutoplay ? "auto" : "metadata",
+      ...(posterUrl ? { poster: posterUrl } : {}),
+      ...(shouldAutoplay ? { autoplay: "true" } : {}),
       "data-allow-audio": "1",
     }) as HTMLVideoElement;
+    videoEl = video;
+    if (shouldAutoplay) {
+      const attemptPlay = (muted: boolean) => {
+        try {
+          video.muted = muted;
+          if (muted) {
+            video.defaultMuted = true;
+            video.setAttribute("muted", "true");
+          } else {
+            video.defaultMuted = false;
+            video.removeAttribute("muted");
+          }
+          const p = video.play();
+          if (p && typeof (p as Promise<void>).catch === "function") {
+            void (p as Promise<void>).catch(() => {
+              if (!muted) attemptPlay(true);
+            });
+          }
+        } catch {
+          if (!muted) attemptPlay(true);
+        }
+      };
+      attemptPlay(false);
+    }
     body = el("div", { class: "viewer-media" }, [video]);
   } else if (isAudio) {
     const audio = el("audio", { class: "viewer-audio", src: safeHref, controls: "true", preload: "metadata" }) as HTMLAudioElement;
@@ -681,5 +730,47 @@ export function renderFileViewerModal(
   }
   nodes.push(actionsRow);
   box.append(...nodes);
+
+  if (isVisual) {
+    const measureBottomUi = () => {
+      const railEl = stage.querySelector(".viewer-rail") as HTMLElement | null;
+      const captionEl = stage.querySelector(".viewer-caption") as HTMLElement | null;
+      const railH = railEl ? railEl.getBoundingClientRect().height : 0;
+      const capH = captionEl ? captionEl.getBoundingClientRect().height : 0;
+      const total = Math.max(0, Math.ceil(railH + capH));
+      box.style.setProperty("--viewer-bottom-ui-h", `${total}px`);
+    };
+
+    const scheduleMeasure = (connectAttempt = 0, reflowAttempt = 0) => {
+      if (!box.isConnected) {
+        if (connectAttempt < 12) {
+          try {
+            window.requestAnimationFrame(() => scheduleMeasure(connectAttempt + 1, reflowAttempt));
+          } catch {
+            scheduleMeasure(connectAttempt + 1, reflowAttempt);
+          }
+        }
+        return;
+      }
+      measureBottomUi();
+      if (reflowAttempt < 4) {
+        try {
+          window.requestAnimationFrame(() => scheduleMeasure(connectAttempt, reflowAttempt + 1));
+        } catch {
+          scheduleMeasure(connectAttempt, reflowAttempt + 1);
+        }
+      }
+    };
+
+    try {
+      window.requestAnimationFrame(() => scheduleMeasure());
+    } catch {
+      scheduleMeasure();
+    }
+
+    imageEl?.addEventListener("load", () => scheduleMeasure(), { once: true });
+    videoEl?.addEventListener("loadedmetadata", () => scheduleMeasure(), { once: true });
+  }
+
   return box;
 }

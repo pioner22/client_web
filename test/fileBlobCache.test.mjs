@@ -88,8 +88,9 @@ test("fileBlobCache: isImageLikeFile распознаёт extension/mime", async
     assert.equal(isImageLikeFile("a.png", null), true);
     assert.equal(isImageLikeFile("a.bin", "image/jpeg"), true);
     assert.equal(isImageLikeFile("a.bin", null), false);
+    assert.equal(isImageLikeFile("IMG_3383.MP4", "video/mp4"), false, "IMG_*.MP4 — это видео, даже если имя похоже на фото");
+    assert.equal(isImageLikeFile("IMG_3383.MP4", null), false, "IMG_*.MP4 по extension — видео (без mime)");
   } finally {
     await cleanup();
   }
 });
-

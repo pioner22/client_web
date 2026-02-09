@@ -385,7 +385,7 @@ body.has-right-col .right-col {
 .input-wrap > .composer-meta {
   max-width: var(--chat-input-max-width);
   width: 100%;
-  margin-left: 0;
+  margin-left: auto;
   margin-right: auto;
 }
 
@@ -394,7 +394,7 @@ body.has-right-col .right-col {
 :root[data-msg-wide="1"] .input-wrap > .board-editor,
 :root[data-msg-wide="1"] .input-wrap > .composer-row,
 :root[data-msg-wide="1"] .input-wrap > .composer-meta {
-  margin-left: 0;
+  margin-left: auto;
   margin-right: auto;
 }
 

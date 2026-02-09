@@ -1,241 +1,42 @@
 import type { GatewayClient } from "../lib/net/gatewayClient";
 import type {
-  ActionModalPayload,
   ActionModalBoardInvite,
   ActionModalGroupInvite,
   ActionModalGroupJoinRequest,
-	  AppState,
-	  BoardEntry,
-	  ChatAttachment,
-	  ChatMessage,
-    ChatMessageRef,
-	  FriendEntry,
-	  GroupEntry,
-    MessageReactions,
-	  OutboxEntry,
-	  SearchResultEntry,
-	  UserProfile,
-	} from "../stores/types";
+  AppState,
+  BoardEntry,
+  ChatMessage,
+  GroupEntry,
+  OutboxEntry,
+  SearchResultEntry,
+  UserProfile,
+} from "../stores/types";
 import { dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { nowTs } from "../helpers/time";
-import { parseRoster } from "../helpers/roster/parseRoster";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { mergeMessages } from "../helpers/chat/mergeMessages";
 import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatar, storeAvatarRev } from "../helpers/avatar/avatarStore";
-import {
-  blockSessionAutoAuth,
-  clearSessionAutoAuthBlock,
-  clearStoredSessionToken,
-  getStoredAuthId,
-  getStoredSessionToken,
-  storeAuthId,
-  storeSessionToken,
-} from "../helpers/auth/session";
-import { clearOutboxForUser } from "../helpers/pwa/outboxSync";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
-import { loadLastReadMarkers, saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
+import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
-import { playNotificationSound } from "../helpers/notify/notifySound";
-import { buildClientInfoTags, getOrCreateInstanceId } from "../helpers/device/clientTags";
-import { getTabNotifier } from "../helpers/notify/tabNotifier";
-
-const HISTORY_PAGE_SIZE = 200;
-const tabNotifier = getTabNotifier(getOrCreateInstanceId);
-
-function upsertConversationByLocalId(state: any, key: string, msg: ChatMessage, localId: string): any {
-  const convMap = state?.conversations && typeof state.conversations === "object" ? state.conversations : {};
-  const prev = Array.isArray(convMap[key]) ? convMap[key] : [];
-  if (prev.some((m: any) => String(m?.localId ?? "") === localId)) return state;
-  return { ...state, conversations: { ...convMap, [key]: [...prev, msg] } };
-}
-
-function updateConversationByLocalId(
-  state: any,
-  key: string,
-  localId: string,
-  update: (msg: ChatMessage) => ChatMessage
-): any {
-  const convMap = state?.conversations && typeof state.conversations === "object" ? state.conversations : {};
-  const prev = Array.isArray(convMap[key]) ? convMap[key] : [];
-  const idx = prev.findIndex((m: any) => String(m?.localId ?? "") === localId);
-  if (idx < 0) return state;
-  const next = [...prev];
-  next[idx] = update(next[idx] as ChatMessage);
-  return { ...state, conversations: { ...convMap, [key]: next } };
-}
-
-function sysActionMessage(peer: string, text: string, payload: ActionModalPayload, localId: string): ChatMessage {
-  return {
-    ts: nowTs(),
-    from: peer,
-    text,
-    kind: "sys",
-    localId,
-    id: null,
-    attachment: { kind: "action", payload },
-  };
-}
-
-function oldestLoadedId(msgs: ChatMessage[]): number | null {
-  let min: number | null = null;
-  for (const m of msgs) {
-    const id = m.id;
-    if (typeof id !== "number" || !Number.isFinite(id) || id <= 0) continue;
-    if (min === null || id < min) min = id;
-  }
-  return min;
-}
-
-function updateLastOutgoing(state: AppState, key: string, update: (msg: ChatMessage) => ChatMessage): AppState {
-  const conv = state.conversations[key];
-  if (!conv || conv.length === 0) return state;
-  // ACK от сервера приходит в порядке отправки, поэтому обновляем "самое старое" исходящее без id,
-  // иначе при быстрой отправке нескольких сообщений можно перепутать msg_id.
-  for (let i = 0; i < conv.length; i += 1) {
-    const msg = conv[i];
-    if (msg.kind !== "out") continue;
-    if (msg.id !== undefined && msg.id !== null) continue;
-    const next = [...conv];
-    next[i] = update(msg);
-    return { ...state, conversations: { ...state.conversations, [key]: next } };
-  }
-  return state;
-}
-
-function updateFirstPendingOutgoing(
-  state: AppState,
-  key: string,
-  update: (msg: ChatMessage) => ChatMessage
-): { state: AppState; localId: string | null } {
-  const conv = state.conversations[key];
-  if (!conv || conv.length === 0) return { state, localId: null };
-  for (let i = 0; i < conv.length; i += 1) {
-    const msg = conv[i];
-    if (msg.kind !== "out") continue;
-    if (msg.id !== undefined && msg.id !== null) continue;
-    const next = [...conv];
-    next[i] = update(msg);
-    const lid = typeof msg.localId === "string" && msg.localId.trim() ? msg.localId.trim() : null;
-    return { state: { ...state, conversations: { ...state.conversations, [key]: next } }, localId: lid };
-  }
-  return { state, localId: null };
-}
-
-function humanizeError(raw: string): string {
-  const code = String(raw ?? "").trim();
-  if (!code) return "ошибка";
-  const map: Record<string, string> = {
-    not_in_group: "Вы не участник этого чата (примите приглашение или попросите добавить вас)",
-    group_post_forbidden: "В этом чате вам запрещено писать",
-    board_post_forbidden: "На доске писать может только владелец",
-    board_check_failed: "Не удалось проверить права на доску",
-    group_check_failed: "Не удалось проверить доступ к чату",
-    broadcast_disabled: "Рассылка всем отключена",
-    message_too_long: "Слишком длинное сообщение",
-    bad_text: "Некорректный текст сообщения",
-    bad_recipient: "Некорректный получатель",
-    rate_limited: "Слишком часто. Попробуйте позже",
-  };
-  return map[code] ?? code;
-}
-
-function parseAttachment(raw: any): ChatAttachment | null {
-  if (!raw || typeof raw !== "object") return null;
-  const kind = String((raw as any).kind ?? "");
-  if (kind !== "file") return null;
-  const fileIdRaw = (raw as any).file_id ?? (raw as any).fileId ?? (raw as any).id ?? null;
-  const fileIdText = fileIdRaw === null || fileIdRaw === undefined ? "" : String(fileIdRaw).trim();
-  const fileId = fileIdText ? fileIdText : null;
-  const name = String((raw as any).name ?? "файл");
-  const size = Number((raw as any).size ?? 0) || 0;
-  const mimeRaw = (raw as any).mime;
-  const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw) : null;
-  return { kind: "file", fileId, name, size, mime };
-}
-
-function parseMessageRef(raw: any): ChatMessageRef | null {
-  if (!raw || typeof raw !== "object") return null;
-  const ref: ChatMessageRef = {};
-  const idRaw = (raw as any).id ?? (raw as any).msg_id ?? null;
-  const id = typeof idRaw === "number" && Number.isFinite(idRaw) ? Math.trunc(idRaw) : Math.trunc(Number(idRaw) || 0);
-  if (id > 0) ref.id = id;
-  const localIdRaw = (raw as any).localId ?? (raw as any).local_id ?? null;
-  if (typeof localIdRaw === "string" && localIdRaw.trim()) ref.localId = localIdRaw.trim();
-  const fromRaw = (raw as any).from;
-  if (typeof fromRaw === "string" && fromRaw.trim()) ref.from = fromRaw.trim();
-  const textRaw = (raw as any).text;
-  if (typeof textRaw === "string" && textRaw.trim()) ref.text = textRaw;
-  const attachment = parseAttachment((raw as any).attachment);
-  if (attachment) ref.attachment = attachment;
-  const viaBotRaw = (raw as any).via_bot ?? (raw as any).viaBot ?? null;
-  if (typeof viaBotRaw === "string" && viaBotRaw.trim()) ref.via_bot = viaBotRaw.trim();
-  const postAuthorRaw = (raw as any).post_author ?? (raw as any).postAuthor ?? null;
-  if (typeof postAuthorRaw === "string" && postAuthorRaw.trim()) ref.post_author = postAuthorRaw.trim();
-  const hiddenRaw = (raw as any).hidden_profile ?? (raw as any).hiddenProfile ?? null;
-  const hidden_profile =
-    hiddenRaw === true || hiddenRaw === 1 || hiddenRaw === "1" || hiddenRaw === "true" || hiddenRaw === "yes";
-  if (hidden_profile) ref.hidden_profile = true;
-  return Object.keys(ref).length ? ref : null;
-}
-
-function parseReactions(raw: any): MessageReactions | null {
-  if (!raw || typeof raw !== "object") return null;
-  const countsRaw = (raw as any).counts;
-  if (!countsRaw || typeof countsRaw !== "object") return null;
-  const counts: Record<string, number> = {};
-  for (const [emoji, cnt] of Object.entries(countsRaw as Record<string, unknown>)) {
-    const e = String(emoji || "").trim();
-    const n = typeof cnt === "number" && Number.isFinite(cnt) ? Math.trunc(cnt) : Math.trunc(Number(cnt) || 0);
-    if (!e || n <= 0) continue;
-    counts[e] = n;
-  }
-  const mineRaw = (raw as any).mine;
-  const mine = typeof mineRaw === "string" && mineRaw.trim() ? String(mineRaw) : null;
-  if (!Object.keys(counts).length && mine === null) return null;
-  return { counts, mine };
-}
-
-function isDocHidden(): boolean {
-  try {
-    return typeof document !== "undefined" && document.visibilityState !== "visible";
-  } catch {
-    return false;
-  }
-}
-
-function notifyPermission(): "default" | "granted" | "denied" {
-  try {
-    return (Notification?.permission ?? "default") as "default" | "granted" | "denied";
-  } catch {
-    return "default";
-  }
-}
-
-function showInAppNotification(state: AppState, notifKey: string, title: string, body: string, tag: string): void {
-  if (!state.notifyInAppEnabled) return;
-  if (notifyPermission() !== "granted") return;
-  if (!tabNotifier.shouldShowSystemNotification(notifKey)) return;
-  try {
-    // We control notification sound ourselves (see notifySound toggle). Ask the OS to keep it silent
-    // to avoid double sounds / inconsistent platform behavior.
-    new Notification(title, { body, tag, silent: true });
-  } catch {
-    // ignore
-  }
-}
-
-function maybePlaySound(
-  state: AppState,
-  kind: Parameters<typeof playNotificationSound>[0],
-  notifKey: string,
-  shouldPlay: boolean
-): void {
-  if (!shouldPlay) return;
-  if (!state.notifySoundEnabled) return;
-  if (!tabNotifier.shouldPlaySound(notifKey)) return;
-  void playNotificationSound(kind).catch(() => {});
-}
+import {
+  humanizeError,
+  isDocHidden,
+  lastReadSavedAt,
+  maybePlaySound,
+  oldestLoadedId,
+  parseAttachment,
+  parseMessageRef,
+  parseReactions,
+  showInAppNotification,
+  sysActionMessage,
+  updateConversationByLocalId,
+  updateFirstPendingOutgoing,
+  upsertConversationByLocalId,
+} from "./handleServerMessage/common";
+import { handleCoreAuthMessage } from "./handleServerMessage/coreAuth";
+import { handleRosterPrefsMessage } from "./handleServerMessage/rosterPrefs";
 
 export function handleServerMessage(
   msg: any,
@@ -245,410 +46,9 @@ export function handleServerMessage(
 ) {
   const t = String(msg?.type ?? "");
 
-  if (t === "welcome") {
-    const sv = typeof msg?.server_version === "string" ? msg.server_version : state.serverVersion;
-    const pushKey = typeof msg?.pwa_push_public_key === "string" ? String(msg.pwa_push_public_key).trim() : "";
-    const pushPermission = (() => {
-      try {
-        return (Notification?.permission ?? state.pwaPushPermission ?? "default") as "default" | "granted" | "denied";
-      } catch {
-        return state.pwaPushPermission ?? "default";
-      }
-    })();
-    patch({
-      serverVersion: sv,
-      status: "Handshake OK",
-      pwaPushPermission: pushPermission,
-      ...(pushKey ? { pwaPushPublicKey: pushKey } : {}),
-    });
-    return;
-  }
-  if (t === "session_replaced") {
-    // Важно: не чистим общий session token в localStorage/cookie — он общий для вкладок/PWA.
-    // Иначе “победившая” вкладка тоже потеряет автовход. Вместо этого блокируем автовход
-    // только для текущей вкладки (sessionStorage) и просим войти вручную, если нужно.
-    blockSessionAutoAuth();
-    patch((prev) => ({
-      ...prev,
-      authed: false,
-      authMode: getStoredAuthId() ? "login" : "register",
-      // “В тишине”: не открываем модалку автоматически.
-      status: "Сессия активна в другом окне. Нажмите «Войти», чтобы продолжить здесь.",
-    }));
-    return;
-  }
-  if (t === "auth_ok") {
-    const selfId = String(msg?.id ?? state.selfId ?? "");
-    const sess = typeof msg?.session === "string" ? msg.session : null;
-    const lastRead = selfId ? loadLastReadMarkers(selfId) : state.lastRead;
-    if (selfId) storeAuthId(selfId);
-    if (sess) storeSessionToken(sess);
-    else {
-      // Refresh cookie/localStorage TTL for an existing token (server doesn't resend it on session auth).
-      const existing = getStoredSessionToken();
-      if (existing) storeSessionToken(existing);
-    }
-    clearSessionAutoAuthBlock();
-    patch({
-      authed: true,
-      selfId,
-      authRememberedId: selfId || state.authRememberedId,
-      ...(sess ? { authMode: "auto" as const } : {}),
-      modal: null,
-      status: "Connected",
-      lastRead,
-    });
-    gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
-    gateway.send({ type: "group_list" });
-    gateway.send({ type: "board_list" });
-    gateway.send({ type: "profile_get" });
-    return;
-  }
-  if (t === "pwa_push_subscribe_result") {
-    const ok = Boolean(msg?.ok);
-    const active = Boolean(msg?.active);
-    const status = ok ? (active ? "Push подписка активна" : "Push подписка сохранена (сервер выключен)") : "Не удалось включить Push";
-    patch({
-      pwaPushSubscribed: ok,
-      pwaPushStatus: status,
-    });
-    return;
-  }
-  if (t === "pwa_push_unsubscribe_result") {
-    const ok = Boolean(msg?.ok);
-    patch({
-      pwaPushSubscribed: !ok ? state.pwaPushSubscribed : false,
-      pwaPushStatus: ok ? "Push отключен" : "Не удалось отключить Push",
-    });
-    return;
-  }
-  if (t === "auth_fail") {
-    const reason = String(msg?.reason ?? "auth_failed");
-    if (reason === "session_invalid" || reason === "session_expired") {
-      const uid = String(state.selfId || "").trim();
-      if (uid) void clearOutboxForUser(uid);
-      clearStoredSessionToken();
-      patch({
-        authMode: getStoredAuthId() ? "login" : "register",
-        // “В тишине”: не открываем модалку сами — только статус, дальше пользователь сам нажмёт «Войти».
-        modal: null,
-        status: "Сессия устарела или недействительна. Нажмите «Войти», чтобы войти снова.",
-      });
-      return;
-    }
-    const message =
-      reason === "no_such_user"
-        ? "Пользователь не найден"
-        : reason === "bad_id_format"
-          ? "Неверный формат ID/@логина"
-        : reason === "bad_password"
-          ? "Неверный пароль"
-          : reason === "rate_limited"
-          ? "Слишком много попыток. Попробуйте позже."
-            : "Не удалось выполнить вход";
-    if (state.modal?.kind === "auth") {
-      patch({ modal: { kind: "auth", message }, status: "Auth failed" });
-    } else {
-      patch({ status: message });
-    }
-    return;
-  }
-  if (t === "register_ok") {
-    const selfId = String(msg?.id ?? "");
-    const sess = typeof msg?.session === "string" ? msg.session : null;
-    if (selfId) storeAuthId(selfId);
-    if (sess) storeSessionToken(sess);
-    else {
-      const existing = getStoredSessionToken();
-      if (existing) storeSessionToken(existing);
-    }
-    clearSessionAutoAuthBlock();
-    patch({
-      authed: true,
-      selfId,
-      authRememberedId: selfId || state.authRememberedId,
-      ...(sess ? { authMode: "auto" as const } : {}),
-      modal: null,
-      status: "Registered",
-    });
-    gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
-    gateway.send({ type: "group_list" });
-    gateway.send({ type: "board_list" });
-    gateway.send({ type: "profile_get" });
-    return;
-  }
-  if (t === "register_fail") {
-    const reason = String(msg?.reason ?? "register_failed");
-    const message =
-      reason === "empty_password"
-        ? "Введите пароль для регистрации"
-        : reason === "password_too_short"
-          ? "Пароль слишком короткий"
-          : reason === "password_too_long"
-            ? "Пароль слишком длинный"
-            : reason === "rate_limited"
-              ? "Слишком много попыток. Попробуйте позже."
-              : "Регистрация не удалась";
-    patch({ modal: { kind: "auth", message }, status: "Register failed" });
-    return;
-  }
-  if (t === "roster_full" || t === "roster") {
-    const r = parseRoster(msg);
-    let avatarChanged = false;
-    for (const f of r.friends) {
-      const id = String(f?.id ?? "").trim();
-      if (!id) continue;
-      const rev = typeof (f as any).avatar_rev === "number" ? Math.max(0, Math.trunc((f as any).avatar_rev)) : 0;
-      const mimeRaw = (f as any).avatar_mime;
-      const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw).trim() : null;
-      const storedUrl = getStoredAvatar("dm", id);
-      const storedRev = getStoredAvatarRev("dm", id);
-      const hasAvatar = Boolean(mime);
+  if (handleCoreAuthMessage(t, msg, state, gateway, patch)) return;
+  if (handleRosterPrefsMessage(t, msg, state, gateway, patch)) return;
 
-      if (!hasAvatar) {
-        if (storedUrl) {
-          clearStoredAvatar("dm", id);
-          storeAvatarRev("dm", id, rev);
-          avatarChanged = true;
-        } else if (storedRev !== rev) {
-          storeAvatarRev("dm", id, rev);
-        }
-        continue;
-      }
-      if (storedRev !== rev || !storedUrl) {
-        gateway.send({ type: "avatar_get", id });
-      }
-    }
-
-    patch((prev) => {
-      let nextProfiles: Record<string, UserProfile> | null = null;
-      for (const f of r.friends) {
-        const id = String(f?.id ?? "").trim();
-        if (!id) continue;
-        const hasExtra =
-          (f as any).display_name !== undefined || (f as any).handle !== undefined || (f as any).avatar_rev !== undefined || (f as any).avatar_mime !== undefined;
-        if (!hasExtra) continue;
-        const cur = prev.profiles[id] ?? { id };
-        const next: UserProfile = {
-          ...cur,
-          id,
-          ...((f as any).display_name === undefined ? {} : { display_name: (f as any).display_name }),
-          ...((f as any).handle === undefined ? {} : { handle: (f as any).handle }),
-          ...((f as any).avatar_rev === undefined ? {} : { avatar_rev: (f as any).avatar_rev }),
-          ...((f as any).avatar_mime === undefined ? {} : { avatar_mime: (f as any).avatar_mime }),
-        };
-        if (!nextProfiles) nextProfiles = { ...prev.profiles };
-        nextProfiles[id] = next;
-      }
-      let nextState: any = {
-        ...prev,
-        friends: r.friends,
-        topPeers: r.topPeers,
-        pendingIn: r.pendingIn,
-        pendingOut: r.pendingOut,
-        ...(nextProfiles ? { profiles: nextProfiles } : {}),
-        ...(avatarChanged ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}),
-      };
-      for (const peer of r.pendingIn) {
-        const id = String(peer || "").trim();
-        if (!id) continue;
-        const localId = `action:auth_in:${id}`;
-        nextState = upsertConversationByLocalId(
-          nextState,
-          dmKey(id),
-          sysActionMessage(id, `Входящий запрос на контакт: ${id}`, { kind: "auth_in", peer: id }, localId),
-          localId
-        );
-      }
-      for (const peer of r.pendingOut) {
-        const id = String(peer || "").trim();
-        if (!id) continue;
-        const localId = `action:auth_out:${id}`;
-        nextState = upsertConversationByLocalId(
-          nextState,
-          dmKey(id),
-          sysActionMessage(id, `Ожидает подтверждения: ${id}`, { kind: "auth_out", peer: id }, localId),
-          localId
-        );
-      }
-      return nextState;
-    });
-    return;
-  }
-  if (t === "friends") {
-    const raw = Array.isArray(msg?.friends) ? msg.friends : [];
-    const ids: string[] = raw.map((x: any) => String(x || "").trim()).filter((x: string) => Boolean(x));
-    patch((prev) => {
-      const byId = new Map<string, FriendEntry>(prev.friends.map((f) => [f.id, f]));
-      const next: FriendEntry[] = ids.map((id) => byId.get(id) ?? { id, online: false, unread: 0, last_seen_at: null });
-      next.sort((a: FriendEntry, b: FriendEntry) => a.id.localeCompare(b.id));
-      return { ...prev, friends: next };
-    });
-    return;
-  }
-  if (t === "prefs") {
-    const muted = (Array.isArray(msg?.muted) ? msg.muted : []).map((x: any) => String(x || "").trim()).filter(Boolean);
-    const blocked = (Array.isArray(msg?.blocked) ? msg.blocked : []).map((x: any) => String(x || "").trim()).filter(Boolean);
-    const blockedBy = (Array.isArray(msg?.blocked_by) ? msg.blocked_by : [])
-      .map((x: any) => String(x || "").trim())
-      .filter(Boolean);
-    patch({ muted, blocked, blockedBy });
-    return;
-  }
-  if (t === "mute_set_result") {
-    const ok = Boolean(msg?.ok);
-    const peer = String(msg?.peer ?? "").trim();
-    const value = Boolean(msg?.value);
-    if (!peer) return;
-    if (!ok) {
-      patch({ status: `Не удалось изменить mute: ${peer}` });
-      return;
-    }
-    patch((prev) => ({
-      ...prev,
-      muted: value ? Array.from(new Set([...prev.muted, peer])) : prev.muted.filter((x) => x !== peer),
-      status: value ? `Заглушено: ${peer}` : `Звук включён: ${peer}`,
-    }));
-    return;
-  }
-  if (t === "block_set_result") {
-    const ok = Boolean(msg?.ok);
-    const peer = String(msg?.peer ?? "").trim();
-    const value = Boolean(msg?.value);
-    if (!peer) return;
-    if (!ok) {
-      patch({ status: `Не удалось изменить блокировку: ${peer}` });
-      return;
-    }
-    patch((prev) => ({
-      ...prev,
-      blocked: value ? Array.from(new Set([...prev.blocked, peer])) : prev.blocked.filter((x) => x !== peer),
-      status: value ? `Заблокировано: ${peer}` : `Разблокировано: ${peer}`,
-    }));
-    return;
-  }
-  if (t === "blocked_by_update") {
-    const peer = String(msg?.peer ?? "").trim();
-    const value = Boolean(msg?.value);
-    if (!peer) return;
-    patch((prev) => ({
-      ...prev,
-      blockedBy: value ? Array.from(new Set([...prev.blockedBy, peer])) : prev.blockedBy.filter((x) => x !== peer),
-      status: value ? `Вы заблокированы пользователем: ${peer}` : `Разблокировано пользователем: ${peer}`,
-    }));
-    return;
-  }
-  if (t === "chat_cleared") {
-    const ok = Boolean(msg?.ok);
-    const peer = String(msg?.peer ?? "").trim();
-    if (!peer) return;
-    if (!ok) {
-      patch({ status: `Не удалось очистить историю: ${peer}` });
-      return;
-    }
-    patch((prev) => {
-      const key = dmKey(peer);
-      const conv = { ...prev.conversations };
-      delete conv[key];
-      const loaded = { ...prev.historyLoaded };
-      delete loaded[key];
-      return {
-        ...prev,
-        conversations: conv,
-        historyLoaded: loaded,
-        friends: prev.friends.map((f) => (f.id === peer ? { ...f, unread: 0 } : f)),
-        status: `История очищена: ${peer}`,
-      };
-    });
-    return;
-  }
-  if (t === "room_cleared") {
-    const ok = Boolean(msg?.ok);
-    const room = String(msg?.room ?? "").trim();
-    if (!room) return;
-    if (!ok) {
-      patch({ status: `Не удалось очистить историю: ${room}` });
-      return;
-    }
-    patch((prev) => {
-      const key = roomKey(room);
-      const conversations = { ...prev.conversations };
-      delete conversations[key];
-      const historyLoaded = { ...prev.historyLoaded };
-      delete historyLoaded[key];
-      const historyCursor = { ...prev.historyCursor };
-      delete historyCursor[key];
-      const historyHasMore = { ...prev.historyHasMore };
-      delete historyHasMore[key];
-      const historyLoading = { ...prev.historyLoading };
-      delete historyLoading[key];
-      const historyVirtualStart = { ...prev.historyVirtualStart };
-      delete historyVirtualStart[key];
-      const pinnedMessages = { ...prev.pinnedMessages };
-      delete pinnedMessages[key];
-      const pinnedMessageActive = { ...prev.pinnedMessageActive };
-      delete pinnedMessageActive[key];
-      return {
-        ...prev,
-        conversations,
-        historyLoaded,
-        historyCursor,
-        historyHasMore,
-        historyLoading,
-        historyVirtualStart,
-        pinnedMessages,
-        pinnedMessageActive,
-        status: `История очищена: ${room}`,
-      };
-    });
-    return;
-  }
-  if (t === "friend_remove_result") {
-    const ok = Boolean(msg?.ok);
-    const peer = String(msg?.peer ?? "").trim();
-    if (!peer) return;
-    patch({ status: ok ? `Контакт удалён: ${peer}` : `Не удалось удалить контакт: ${peer}` });
-    return;
-  }
-  if (t === "presence_update") {
-    const id = String(msg?.id ?? "");
-    if (!id) return;
-    const online = Boolean(msg?.online);
-    patch((prev) => ({
-      ...prev,
-      friends: prev.friends.map((f) => (f.id === id ? { ...f, online } : f)),
-    }));
-    return;
-  }
-  if (t === "unread_counts") {
-    const raw = msg?.counts && typeof msg.counts === "object" ? msg.counts : {};
-    patch((prev) => ({
-      ...prev,
-      // `counts` is an authoritative snapshot; absent keys mean 0 unread.
-      friends: prev.friends.map((f) => ({ ...f, unread: Number((raw as any)[f.id] ?? 0) || 0 })),
-    }));
-    return;
-  }
-  if (t === "room_reads") {
-    const raw = msg?.reads && typeof msg.reads === "object" ? msg.reads : {};
-    patch((prev) => {
-      const next = { ...(prev.lastRead || {}) };
-      let changed = false;
-      for (const [roomId, rawId] of Object.entries(raw as Record<string, unknown>)) {
-        const id = Number(rawId);
-        if (!Number.isFinite(id) || id <= 0) continue;
-        const key = roomKey(String(roomId));
-        const prevEntry = next[key] || {};
-        if (prevEntry.id && id <= prevEntry.id) continue;
-        next[key] = { ...prevEntry, id };
-        changed = true;
-      }
-      if (!changed) return prev;
-      if (prev.selfId) saveLastReadMarkers(prev.selfId, next);
-      return { ...prev, lastRead: next };
-    });
-    return;
-  }
   if (t === "authz_pending") {
     const raw = msg?.from;
     const pending = Array.isArray(raw) ? raw.map((x: any) => String(x || "").trim()).filter((x: string) => x) : [];
@@ -2007,13 +1407,41 @@ export function handleServerMessage(
       gateway.send({ type: "message_delivered_to_device", peer: from, id: deliveredId });
     }
 
-    // If we're actively viewing this DM, mark as read immediately to keep unread counters consistent.
-    if (!room && kind === "in" && state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from) {
-      const upToId = typeof msg?.id === "number" ? msg.id : undefined;
-      gateway.send({ type: "message_read", peer: from, ...(upToId === undefined ? {} : { up_to_id: upToId }) });
-    }
-    return;
-  }
+	    // If we're actively viewing this DM, mark as read immediately to keep unread counters consistent.
+	    if (!room && kind === "in" && state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from) {
+	      const upToId = typeof msg?.id === "number" ? msg.id : undefined;
+	      gateway.send({ type: "message_read", peer: from, ...(upToId === undefined ? {} : { up_to_id: upToId }) });
+	      const key = dmKey(from);
+	      const now = Date.now();
+	      const lastSave = lastReadSavedAt.get(key) ?? 0;
+	      if (now - lastSave >= 1200) {
+	        lastReadSavedAt.set(key, now);
+	        patch((prev) => {
+	          if (!prev.selfId) return prev;
+	          const marker = prev.lastRead?.[key] || {};
+	          const nextEntry = { ...marker };
+	          let changed = false;
+	          if (upToId !== undefined) {
+	            const id = Number(upToId);
+	            if (Number.isFinite(id) && id > 0 && (!marker.id || id > marker.id)) {
+	              nextEntry.id = id;
+	              changed = true;
+	            }
+	          }
+	          const tsNum = Number(ts ?? 0);
+	          if (Number.isFinite(tsNum) && tsNum > 0 && (!marker.ts || tsNum > marker.ts)) {
+	            nextEntry.ts = tsNum;
+	            changed = true;
+	          }
+	          if (!changed) return prev;
+	          const merged = { ...(prev.lastRead || {}), [key]: nextEntry };
+	          saveLastReadMarkers(prev.selfId, merged);
+	          return { ...prev, lastRead: merged };
+	        });
+	      }
+	    }
+	    return;
+	  }
   if (t === "message_delivered") {
     const to = msg?.to ? String(msg.to) : undefined;
     const room = msg?.room ? String(msg.room) : undefined;

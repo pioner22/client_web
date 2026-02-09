@@ -17,6 +17,7 @@ import { renderChat } from "../components/chat/renderChat";
 import { renderFooter } from "../components/footer/renderFooter";
 import { renderModal } from "../components/modals/renderModal";
 import { renderAuthModal } from "../components/modals/renderAuthModal";
+import { createCallModal } from "../components/modals/call/createCallModal";
 import { renderToast } from "../components/toast/renderToast";
 import { el } from "../helpers/dom/el";
 import { conversationKey } from "../helpers/chat/conversationKey";
@@ -51,6 +52,8 @@ let rightBoardPage: RoomPage | null = null;
 let rightPanelShell: HTMLElement | null = null;
 let rightPanelTitleEl: HTMLElement | null = null;
 let rightPanelBodyEl: HTMLElement | null = null;
+let callModal: ReturnType<typeof createCallModal> | null = null;
+let callModalKey = "";
 
 function formatDatetimeLocal(ms: number): string {
   const d = new Date(ms);
@@ -182,6 +185,7 @@ export interface RenderActions {
   onSetPage: (page: PageKind) => void;
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void;
   onSetSidebarChatFilter: (filter: SidebarChatFilter) => void;
+  onSetSidebarFolderId: (folderId: string) => void;
   onSetSidebarQuery: (query: string) => void;
   onToggleSidebarArchive: () => void;
   onAuthLogin: () => void;
@@ -191,6 +195,8 @@ export interface RenderActions {
   onAuthLogout: () => void;
   onOpenSidebarToolsMenu: (x: number, y: number) => void;
   onCloseModal: () => void;
+  onCallAccept: (callId: string) => void;
+  onCallDecline: (callId: string) => void;
   onConfirmModal: () => void;
   onDismissUpdate: () => void;
   onReloadUpdate: () => void;
@@ -494,6 +500,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     actions.onOpenBoardCreate,
     actions.onSetMobileSidebarTab,
     actions.onSetSidebarChatFilter,
+    actions.onSetSidebarFolderId,
     actions.onSetSidebarQuery,
     actions.onAuthOpen,
     actions.onAuthLogout,
@@ -632,27 +639,92 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     overlayState.__ctxMenuKey = null;
   }
 
-  const modalNode = fullScreenKind
-    ? fullScreenKind === "auth"
-      ? authModalNode
-      : state.modal
-        ? state.modal.kind === "context_menu" && reuseContextMenuNode
-          ? reuseContextMenuNode
-          : renderModal(state, modalActions)
-        : null
-    : state.modal
-      ? state.modal.kind === "auth"
-        ? authModalNode
-        : state.modal.kind === "context_menu" && reuseContextMenuNode
-          ? reuseContextMenuNode
-          : renderModal(state, modalActions)
+  const callModalNode =
+    state.modal?.kind === "call"
+      ? (() => {
+          const modal = state.modal;
+          const callId = String(modal.callId || "").trim();
+          const targetKey = String(modal.room || modal.to || "").trim();
+          const pendingKey = `call:pending:${modal.mode}:${targetKey}:${String(modal.from || "").trim()}`;
+          const key = callId ? `call:${callId}` : pendingKey;
+          if (!callModal) {
+            callModal = createCallModal({
+              onHangup: actions.onCloseModal,
+              onAccept: (cid) => actions.onCallAccept(cid),
+              onDecline: (cid) => actions.onCallDecline(cid),
+              onOpenExternal: (url) => {
+                try {
+                  window.open(url, "_blank", "noopener,noreferrer");
+                } catch {
+                  // ignore
+                }
+              },
+            });
+            callModalKey = key;
+          } else if (callId && callModalKey === pendingKey) {
+            // Upgrade pending -> callId without recreating; prevents flicker and first-open races.
+            callModalKey = key;
+          } else if (callModalKey !== key) {
+            try {
+              callModal?.destroy();
+            } catch {
+              // ignore
+            }
+            callModal = createCallModal({
+              onHangup: actions.onCloseModal,
+              onAccept: (cid) => actions.onCallAccept(cid),
+              onDecline: (cid) => actions.onCallDecline(cid),
+              onOpenExternal: (url) => {
+                try {
+                  window.open(url, "_blank", "noopener,noreferrer");
+                } catch {
+                  // ignore
+                }
+              },
+            });
+            callModalKey = key;
+          }
+          callModal.update(state, modal);
+          return callModal.root;
+        })()
       : null;
+
+  if (state.modal?.kind !== "call" && callModal) {
+    try {
+      callModal.destroy();
+    } catch {
+      // ignore
+    }
+    callModal = null;
+    callModalKey = "";
+  }
+
+  const modalNode =
+    state.modal?.kind === "call"
+      ? callModalNode
+      : fullScreenKind
+        ? fullScreenKind === "auth"
+          ? authModalNode
+          : state.modal
+            ? state.modal.kind === "context_menu" && reuseContextMenuNode
+              ? reuseContextMenuNode
+              : renderModal(state, modalActions)
+            : null
+        : state.modal
+          ? state.modal.kind === "auth"
+            ? authModalNode
+            : state.modal.kind === "context_menu" && reuseContextMenuNode
+              ? reuseContextMenuNode
+              : renderModal(state, modalActions)
+          : null;
 
   // Большинство модалок рендерим inline (в теле чата), чтобы не перекрывать всё приложение.
   // Исключения:
   // - context_menu: всегда поверх (overlay) из-за позиционирования по курсору/тапу
   // - file_viewer: поверх (overlay) как fullscreen viewer (Telegram‑паттерн)
-  const inlineModal = Boolean(!fullScreenActive && state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer");
+  const inlineModal = Boolean(
+    !fullScreenActive && state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer" && state.modal.kind !== "call"
+  );
   layout.chat.classList.toggle("chat-page", state.page !== "main" || inlineModal);
   const showChatTop = state.page === "main" && !inlineModal && Boolean(state.selected);
   layout.chatTop.classList.toggle("hidden", !showChatTop);
@@ -914,13 +986,15 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.overlay.classList.remove("overlay-viewer");
     layout.overlay.classList.add("overlay-auth");
     layout.overlay.replaceChildren(modalNode);
-  } else if (state.modal?.kind === "file_viewer" && modalNode) {
+  } else if ((state.modal?.kind === "file_viewer" || state.modal?.kind === "call") && modalNode) {
     layout.overlay.classList.remove("hidden");
     layout.overlay.classList.remove("overlay-context");
     layout.overlay.classList.remove("overlay-context-sheet");
     layout.overlay.classList.add("overlay-viewer");
     layout.overlay.classList.remove("overlay-auth");
-    layout.overlay.replaceChildren(modalNode);
+    if (layout.overlay.firstElementChild !== modalNode) {
+      layout.overlay.replaceChildren(modalNode);
+    }
   } else if (state.modal?.kind === "context_menu" && modalNode) {
     layout.overlay.classList.remove("hidden");
     layout.overlay.classList.remove("overlay-viewer");

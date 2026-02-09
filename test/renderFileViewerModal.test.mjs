@@ -186,6 +186,20 @@ test("renderFileViewerModal: renders <video> for video files", async () => {
   }
 });
 
+test("renderFileViewerModal: treats IMG_*.MP4 as video (iOS naming)", async () => {
+  const helper = await loadRenderFileViewerModal();
+  try {
+    withDomStubs(() => {
+      const node = helper.renderFileViewerModal("blob:video", "IMG_3383.MP4", 123, "video/mp4", null, null, { onClose() {} });
+      const video = findFirst(node, (n) => n && n.tagName === "VIDEO");
+      assert.ok(video, "video element missing");
+      assert.ok(String(video.className || "").includes("viewer-video"));
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("renderFileViewerModal: renders <audio> for audio files", async () => {
   const helper = await loadRenderFileViewerModal();
   try {

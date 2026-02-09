@@ -496,8 +496,8 @@
   --viewer-caption-pad-x: calc(var(--sp-4) * var(--phi));
   --viewer-caption-pad-y: calc(var(--sp-3) * var(--phi-inv));
   --viewer-actions-gap: calc(var(--sp-3) * var(--phi-inv));
-  --viewer-media-max-h: min(calc(100vh * var(--phi-inv)), 640px);
-  --viewer-media-max-h-mobile: min(calc(100vh * var(--phi-inv)), 520px);
+  --viewer-media-max-h: min(calc(var(--app-vh, 100vh) * var(--phi-inv)), 640px);
+  --viewer-media-max-h-mobile: min(calc(var(--app-vh, 100vh) * var(--phi-inv)), 520px);
 }
 
 :root[data-msg-wide="1"] {

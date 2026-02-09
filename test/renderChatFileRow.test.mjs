@@ -278,6 +278,72 @@ test("renderChat: file-attachment рендерит preview первым, ико�
   }
 });
 
+test("renderChat: превью медиа ограничивает max-width (33% от thumb_w)", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
+      const chatSearchFooter = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
+      chatSearchFooter.className = "chat-search-footer";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+      const state = {
+        selected: { kind: "dm", id: "123-456-789" },
+        conversations: {
+          "dm:123-456-789": [
+            {
+              kind: "in",
+              from: "123-456-789",
+              to: "854-432-319",
+              room: null,
+              text: "",
+              ts: 1700000000,
+              id: 1,
+              attachment: { kind: "file", name: "photo.png", size: 123, mime: "image/png", fileId: "42" },
+            },
+          ],
+        },
+        historyHasMore: {},
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [],
+        fileOffersIn: [],
+        fileThumbs: {
+          "42": { url: "blob:thumb", mime: "image/jpeg", ts: 1, w: 300, h: 200 },
+        },
+        groups: [],
+        boards: [],
+      };
+
+      helper.renderChat(layout, state);
+
+      const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
+      assert.ok(fileRow, "должен быть file-row-chat");
+      assert.equal(fileRow.style.maxWidth, "99px");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("renderChat: avatarsRev инвалидирует рендер (аватар в шапке обновляется без перезагрузки)", async () => {
   const helper = await loadRenderChat();
   try {
@@ -499,6 +565,269 @@ test("renderChat: video file-attachment рендерит video preview button", 
       const video = findFirst(preview, (n) => n && n.tagName === "VIDEO");
       assert.ok(video, "в preview должен быть <video>");
       assert.ok(hasClass(video, "chat-file-video"));
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderChat: iOS video IMG_*.MP4 не должен рендериться как «Фото»", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
+      const chatSearchFooter = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
+      chatSearchFooter.className = "chat-search-footer";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+      const state = {
+        selected: { kind: "dm", id: "123-456-789" },
+        conversations: {
+          "dm:123-456-789": [
+            {
+              kind: "in",
+              from: "123-456-789",
+              to: "854-432-319",
+              room: null,
+              text: "",
+              ts: 1700000000,
+              id: 1,
+              attachment: { kind: "file", name: "IMG_3383.MP4", size: 456, mime: "video/mp4", fileId: "99" },
+            },
+          ],
+        },
+        historyHasMore: {},
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [
+          {
+            localId: "ft-99",
+            id: "99",
+            name: "IMG_3383.MP4",
+            size: 456,
+            mime: "video/mp4",
+            direction: "in",
+            peer: "123-456-789",
+            room: null,
+            status: "complete",
+            progress: 100,
+            url: "blob:video",
+          },
+        ],
+        fileOffersIn: [],
+        groups: [],
+        boards: [],
+        profiles: {},
+      };
+
+      helper.renderChat(layout, state);
+
+      const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
+      assert.ok(fileRow, "должен быть file-row-chat");
+      assert.ok(hasClass(fileRow, "file-row-video"), "file-row должен быть помечен как video");
+
+      const preview = findFirst(fileRow, (n) => hasClass(n, "chat-file-preview-video"));
+      assert.ok(preview, "должен быть video preview");
+      assert.equal(preview.getAttribute("data-file-kind"), "video");
+
+      const video = findFirst(preview, (n) => n && n.tagName === "VIDEO");
+      assert.ok(video, "в preview должен быть <video>");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderChat: video file-attachment (large) не рендерит inline <video>", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
+      const chatSearchFooter = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
+      chatSearchFooter.className = "chat-search-footer";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+      const state = {
+        selected: { kind: "dm", id: "123-456-789" },
+        conversations: {
+          "dm:123-456-789": [
+            {
+              kind: "in",
+              from: "123-456-789",
+              to: "854-432-319",
+              room: null,
+              text: "",
+              ts: 1700000000,
+              id: 1,
+              attachment: { kind: "file", name: "clip.mp4", size: 9 * 1024 * 1024, mime: "video/mp4", fileId: "99" },
+            },
+          ],
+        },
+        historyHasMore: {},
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [
+          {
+            localId: "ft-99",
+            id: "99",
+            name: "clip.mp4",
+            size: 9 * 1024 * 1024,
+            mime: "video/mp4",
+            direction: "in",
+            peer: "123-456-789",
+            room: null,
+            status: "complete",
+            progress: 100,
+            url: "blob:video",
+          },
+        ],
+        fileOffersIn: [],
+        groups: [],
+        boards: [],
+        profiles: {},
+      };
+
+      helper.renderChat(layout, state);
+
+      const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
+      assert.ok(fileRow, "должен быть file-row-chat");
+      assert.ok(hasClass(fileRow, "file-row-video"), "file-row должен быть помечен как video");
+
+      const preview = findFirst(fileRow, (n) => hasClass(n, "chat-file-preview-video"));
+      assert.ok(preview, "должен быть video preview");
+
+      const video = findFirst(preview, (n) => n && n.tagName === "VIDEO");
+      assert.equal(video, null, "inline <video> не должен рендериться для большого видео");
+
+      const placeholder = findFirst(preview, (n) => hasClass(n, "chat-file-placeholder"));
+      assert.ok(placeholder, "должен быть placeholder для видео без thumb");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderChat: video file-attachment (mobile UI) не рендерит inline <video>", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const prevWindow = globalThis.window;
+      globalThis.window = {
+        matchMedia() {
+          return { matches: true };
+        },
+      };
+      try {
+        const chat = document.createElement("div");
+        const chatTop = document.createElement("div");
+        const chatSearchResults = document.createElement("div");
+        const chatSearchFooter = document.createElement("div");
+        const chatHost = document.createElement("div");
+        const chatJump = document.createElement("button");
+        const chatSelectionBar = document.createElement("div");
+        chat.className = "chat";
+        chatTop.className = "chat-top";
+        chatSearchResults.className = "chat-search-results";
+        chatSearchFooter.className = "chat-search-footer";
+        chatHost.className = "chat-host";
+        chatJump.className = "btn chat-jump hidden";
+        chatSelectionBar.className = "chat-selection-bar hidden";
+        chatHost.clientHeight = 120;
+        chatHost.scrollHeight = 2000;
+
+        const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+        const state = {
+          selected: { kind: "dm", id: "123-456-789" },
+          conversations: {
+            "dm:123-456-789": [
+              {
+                kind: "in",
+                from: "123-456-789",
+                to: "854-432-319",
+                room: null,
+                text: "",
+                ts: 1700000000,
+                id: 1,
+                attachment: { kind: "file", name: "clip.mp4", size: 456, mime: "video/mp4", fileId: "99" },
+              },
+            ],
+          },
+          historyHasMore: {},
+          historyLoading: {},
+          chatSearchOpen: false,
+          chatSearchQuery: "",
+          chatSearchHits: [],
+          chatSearchPos: 0,
+          pinnedMessages: {},
+          pinnedMessageActive: {},
+          fileTransfers: [
+            {
+              localId: "ft-99",
+              id: "99",
+              name: "clip.mp4",
+              size: 456,
+              mime: "video/mp4",
+              direction: "in",
+              peer: "123-456-789",
+              room: null,
+              status: "complete",
+              progress: 100,
+              url: "blob:video",
+            },
+          ],
+          fileOffersIn: [],
+          groups: [],
+          boards: [],
+          profiles: {},
+        };
+
+        helper.renderChat(layout, state);
+
+        const preview = findFirst(chatHost, (n) => hasClass(n, "chat-file-preview-video"));
+        assert.ok(preview, "должен быть video preview");
+
+        const video = findFirst(preview, (n) => n && n.tagName === "VIDEO");
+        assert.equal(video, null, "inline <video> не должен рендериться на mobile UI");
+      } finally {
+        if (prevWindow === undefined) delete globalThis.window;
+        else globalThis.window = prevWindow;
+      }
     });
   } finally {
     await helper.cleanup();

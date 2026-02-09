@@ -216,7 +216,7 @@ test("iOS: sidebar search input disables while composer is focused (avoid prev/n
         sidebarQuery: "",
       };
 
-      helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+      helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
 
       const input = findFirst(
         target,

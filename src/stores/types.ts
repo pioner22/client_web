@@ -14,6 +14,7 @@ export type ModalKind =
   | "confirm"
   | "file_send"
   | "file_viewer"
+  | "call"
   | "invite_user"
   | "action"
   | "context_menu";
@@ -158,6 +159,10 @@ export interface FileThumbEntry {
   url: string;
   mime: string | null;
   ts: number;
+  w?: number | null;
+  h?: number | null;
+  mediaW?: number | null;
+  mediaH?: number | null;
 }
 
 export type ModalState =
@@ -167,6 +172,19 @@ export type ModalState =
   | { kind: "update" }
   | { kind: "pwa_update" }
   | { kind: "reactions"; chatKey: string; msgId: number }
+  | {
+      kind: "call";
+      callId: string;
+      roomName: string;
+      mode: "audio" | "video";
+      from: string;
+      to?: string | null;
+      room?: string | null;
+      title: string;
+      incoming?: boolean;
+      phase?: "creating" | "ringing" | "active";
+      phaseAt?: number; // ms timestamp (used for local UI timer)
+    }
   | {
       kind: "send_schedule";
       target: TargetRef;
@@ -208,6 +226,7 @@ export type ModalState =
       size: number;
       mime?: string | null;
       caption?: string | null;
+      autoplay?: boolean;
       chatKey?: string | null;
       msgIdx?: number | null;
       prevIdx?: number | null;
@@ -233,6 +252,14 @@ export type AuthMode = "auto" | "register" | "login";
 
 export type MobileSidebarTab = "chats" | "contacts" | "boards" | "menu";
 export type SidebarChatFilter = "all" | "unread" | "mentions" | "dms" | "groups";
+
+export interface ChatFolderEntry {
+  id: string;
+  title: string;
+  emoji?: string | null;
+  include: string[];
+  exclude: string[];
+}
 
 export type TargetKind = "dm" | "group" | "board";
 
@@ -433,6 +460,7 @@ export interface AppState {
 
   mobileSidebarTab: MobileSidebarTab;
   sidebarChatFilter: SidebarChatFilter;
+  sidebarFolderId: string;
   sidebarQuery: string;
   sidebarArchiveOpen: boolean;
   presenceTick: number;
@@ -445,6 +473,8 @@ export interface AppState {
   blocked: string[];
   blockedBy: string[];
   pinned: string[];
+  archived: string[];
+  chatFolders: ChatFolderEntry[];
   pinnedMessages: Record<string, number[]>;
   pinnedMessageActive: Record<string, number>;
   pendingGroupInvites: ActionModalGroupInvite[];

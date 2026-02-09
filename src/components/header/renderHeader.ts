@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { splitBuildId } from "../../helpers/version/buildId";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
+import { getMeetBaseUrl } from "../../config/env";
 import type { AppState } from "../../stores/types";
 import type { Layout } from "../layout/types";
 
@@ -81,6 +82,8 @@ export function renderHeader(layout: Layout, state: AppState) {
     el("span", { class: "hdr-title" }, [title])
   );
   const showCallActions = Boolean(state.page === "main" && state.selected && state.selected.kind !== "board");
+  const meetReady = Boolean(getMeetBaseUrl());
+  const canCall = Boolean(showCallActions && meetReady && state.authed && state.conn === "connected" && state.modal?.kind !== "call");
   const showChatMenu = Boolean(state.page === "main" && state.selected);
   const statusLabel = state.status || "";
   const statusEl = el("span", { class: "hdr-status" }, [statusLabel]);
@@ -92,9 +95,10 @@ export function renderHeader(layout: Layout, state: AppState) {
         {
           class: "hdr-action",
           type: "button",
-          disabled: "true",
-          title: "Аудиозвонок (скоро)",
-          "aria-label": "Аудиозвонок (скоро)",
+          ...(canCall ? {} : { disabled: "true" }),
+          title: "Аудиозвонок",
+          "aria-label": "Аудиозвонок",
+          "data-action": "call-start-audio",
           "data-icon": "call",
         },
         []
@@ -104,9 +108,10 @@ export function renderHeader(layout: Layout, state: AppState) {
         {
           class: "hdr-action",
           type: "button",
-          disabled: "true",
-          title: "Видеозвонок (скоро)",
-          "aria-label": "Видеозвонок (скоро)",
+          ...(canCall ? {} : { disabled: "true" }),
+          title: "Видеозвонок",
+          "aria-label": "Видеозвонок",
+          "data-action": "call-start-video",
           "data-icon": "video",
         },
         []

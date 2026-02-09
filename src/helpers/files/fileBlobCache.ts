@@ -158,7 +158,15 @@ export async function putCachedFileBlob(
   userId: string,
   fileId: string,
   blob: Blob,
-  meta?: { mime?: string | null; size?: number; name?: string | null }
+  meta?: {
+    mime?: string | null;
+    size?: number;
+    name?: string | null;
+    w?: number | null;
+    h?: number | null;
+    mediaW?: number | null;
+    mediaH?: number | null;
+  }
 ): Promise<void> {
   const uid = normalizeId(userId);
   const fid = normalizeId(fileId);
@@ -173,6 +181,14 @@ export async function putCachedFileBlob(
     const headers: Record<string, string> = {};
     if (mime) headers["Content-Type"] = mime;
     if (size > 0) headers["Content-Length"] = String(Math.round(size));
+    const w = Number(meta?.w ?? 0);
+    const h = Number(meta?.h ?? 0);
+    const mediaW = Number(meta?.mediaW ?? 0);
+    const mediaH = Number(meta?.mediaH ?? 0);
+    if (Number.isFinite(w) && w > 0) headers["X-Yagodka-W"] = String(Math.trunc(w));
+    if (Number.isFinite(h) && h > 0) headers["X-Yagodka-H"] = String(Math.trunc(h));
+    if (Number.isFinite(mediaW) && mediaW > 0) headers["X-Yagodka-Media-W"] = String(Math.trunc(mediaW));
+    if (Number.isFinite(mediaH) && mediaH > 0) headers["X-Yagodka-Media-H"] = String(Math.trunc(mediaH));
     const payload = new Response(blob, { headers });
     try {
       await cache.put(url, payload);
@@ -203,7 +219,7 @@ export async function putCachedFileBlob(
 export async function getCachedFileBlob(
   userId: string,
   fileId: string
-): Promise<{ blob: Blob; mime: string | null; size: number } | null> {
+): Promise<{ blob: Blob; mime: string | null; size: number; w?: number | null; h?: number | null; mediaW?: number | null; mediaH?: number | null } | null> {
   const uid = normalizeId(userId);
   const fid = normalizeId(fileId);
   if (!uid || !fid) return null;
@@ -219,11 +235,23 @@ export async function getCachedFileBlob(
     const sizeHeader = res.headers.get("Content-Length");
     const sizeFromHeader = sizeHeader ? Number(sizeHeader) : NaN;
     const size = Number.isFinite(sizeFromHeader) && sizeFromHeader > 0 ? Math.round(sizeFromHeader) : blob.size || 0;
+    const wHeader = res.headers.get("X-Yagodka-W");
+    const hHeader = res.headers.get("X-Yagodka-H");
+    const mediaWHeader = res.headers.get("X-Yagodka-Media-W");
+    const mediaHHeader = res.headers.get("X-Yagodka-Media-H");
+    const wRaw = wHeader ? Number(wHeader) : NaN;
+    const hRaw = hHeader ? Number(hHeader) : NaN;
+    const mediaWRaw = mediaWHeader ? Number(mediaWHeader) : NaN;
+    const mediaHRaw = mediaHHeader ? Number(mediaHHeader) : NaN;
+    const w = Number.isFinite(wRaw) && wRaw > 0 ? Math.trunc(wRaw) : null;
+    const h = Number.isFinite(hRaw) && hRaw > 0 ? Math.trunc(hRaw) : null;
+    const mediaW = Number.isFinite(mediaWRaw) && mediaWRaw > 0 ? Math.trunc(mediaWRaw) : null;
+    const mediaH = Number.isFinite(mediaHRaw) && mediaHRaw > 0 ? Math.trunc(mediaHRaw) : null;
 
     const idx = touchIndex(loadIndex(uid), { fileId: fid, ts: Date.now(), size: Math.round(size) || 0, mime, name: null });
     saveIndex(uid, idx);
 
-    return { blob, mime, size };
+    return { blob, mime, size, w, h, mediaW, mediaH };
   } catch {
     return null;
   }
@@ -268,6 +296,8 @@ async function pruneFileCacheForPut(userId: string, keepFileId: string, bytesNee
 
 const IMAGE_NAME_HINT_RE =
   /^(?:img|image|photo|pic|picture|screenshot|screen[_\-\s]?shot|shot|dsc|pxl|selfie|scan|скрин(?:шот)?|фото|картин|изображ|снимок)([_\-\s]|\d|$)/;
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/;
+const NON_IMAGE_EXT_RE = /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2|mp3|m4a|aac|wav|ogg|opus|flac)$/;
 
 function normalizeName(value: string): string {
   const raw = String(value || "").trim();
@@ -280,8 +310,12 @@ function normalizeName(value: string): string {
 export function isImageLikeFile(name: string, mime?: string | null): boolean {
   const mt = String(mime || "").toLowerCase();
   if (mt.startsWith("image/")) return true;
+  if (mt.startsWith("video/") || mt.startsWith("audio/")) return false;
   const n = normalizeName(name);
-  if (/\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n)) return true;
+  if (!n) return false;
+  if (IMAGE_EXT_RE.test(n)) return true;
+  // iOS often names videos as IMG_XXXX.MP4/MOV; extension must override name hints.
+  if (NON_IMAGE_EXT_RE.test(n)) return false;
   return IMAGE_NAME_HINT_RE.test(n);
 }
 

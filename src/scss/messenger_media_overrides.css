@@ -171,3 +171,86 @@ html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-
   border: 0;
   min-height: auto;
 }
+
+/* 6) Stickers / round video (heuristic flags from client).
+ * These are pure UI affordances and must not affect boards.
+ */
+.chat:not(.chat-board) .chat-file-preview-album .chat-file-video-toggle {
+  width: 32px;
+  height: 32px;
+}
+
+.chat:not(.chat-board) .chat-file-preview-album .chat-file-video-toggle::before {
+  width: 14px;
+  height: 14px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-sticker="1"] .file-row-chat.file-row-image {
+  width: min(220px, 56vw);
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-sticker="1"] .msg-body {
+  width: min(220px, 56vw);
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"] .file-row-chat.file-row-image {
+  width: min(260px, 62vw);
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"] .msg-body {
+  width: min(260px, 62vw);
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-sticker="1"] .chat-file-preview,
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"] .chat-file-preview {
+  width: 100%;
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-sticker="1"] .chat-file-preview::after,
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"] .chat-file-preview::after {
+  content: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-sticker="1"] .file-row-chat.file-row-image .file-actions,
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"] .file-row-chat.file-row-image .file-actions {
+  display: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-sticker="1"]:not([data-msg-has-caption="1"]) .msg-meta,
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"]:not([data-msg-has-caption="1"]) .msg-meta {
+  position: static;
+  right: auto;
+  bottom: auto;
+  margin-top: calc(var(--msg-meta-offset-y, 0px) + var(--sp-2));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-sticker="1"] .msg-meta,
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-round-video="1"] .msg-meta {
+  margin-left: auto;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-sticker="1"] .chat-file-img {
+  object-fit: contain;
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"] .chat-file-preview {
+  border-radius: 999px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"] .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-round-video="1"] .chat-file-video {
+  object-fit: cover;
+  background: transparent;
+}

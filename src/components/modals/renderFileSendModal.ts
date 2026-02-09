@@ -36,6 +36,19 @@ export function renderFileSendModal(
       const file = files[0];
       const url = previewUrls[0] || null;
       if (file && url) {
+        const badge = fileBadge(file?.name || "file", file?.type || null);
+        if (badge.kind === "video") {
+          return el("div", { class: "file-send-preview" }, [
+            el("video", {
+              class: "file-send-video",
+              src: url,
+              controls: "true",
+              preload: "metadata",
+              playsinline: "true",
+              muted: "true",
+            }) as HTMLVideoElement,
+          ]);
+        }
         return el("div", { class: "file-send-preview" }, [
           el("img", { class: "file-send-image", src: url, alt: String(file.name || "Файл") }),
         ]);
@@ -47,6 +60,12 @@ export function renderFileSendModal(
     const gridItems = files.map((file, idx) => {
       const url = previewUrls[idx] || null;
       if (url) {
+        const badge = fileBadge(file?.name || "file", file?.type || null);
+        if (badge.kind === "video") {
+          return el("div", { class: "file-send-thumb" }, [
+            el("video", { src: url, preload: "metadata", playsinline: "true", muted: "true" }) as HTMLVideoElement,
+          ]);
+        }
         return el("div", { class: "file-send-thumb" }, [el("img", { src: url, alt: String(file?.name || "Файл") })]);
       }
       const badge = fileBadge(file?.name || "file", file?.type || null);

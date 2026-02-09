@@ -19,6 +19,8 @@ import { renderBoardPostModal } from "./renderBoardPostModal";
 import { renderSendScheduleModal } from "./renderSendScheduleModal";
 import { renderForwardModal } from "./renderForwardModal";
 import { renderReactionsModal } from "./renderReactionsModal";
+import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
+import { renderCallModal } from "./renderCallModal";
 
 function formatUserLabel(displayName: string, handle: string, fallback: string): string {
   const dn = String(displayName || "").trim();
@@ -118,6 +120,18 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
   const modal = state.modal;
   if (!modal) return null;
   const kind = modal.kind;
+  if (kind === "call") {
+    return renderCallModal(state, modal, {
+      onHangup: actions.onClose,
+      onOpenExternal: (url) => {
+        try {
+          window.open(url, "_blank", "noopener,noreferrer");
+        } catch {
+          // ignore
+        }
+      },
+    });
+  }
   if (kind === "auth") {
     return renderAuthModal(state.authMode, state.authRememberedId, modal.message, state.skins, state.skin, {
       onLogin: actions.onAuthLogin,
@@ -221,6 +235,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     const canNext = typeof modal.nextIdx === "number" && Number.isFinite(modal.nextIdx);
     const canJump = Boolean(modal.chatKey && typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx));
     const metaBase = buildFileViewerMeta(state, modal);
+    const base = typeof location !== "undefined" ? location.href : "http://localhost/";
     const viewerMessage = (() => {
       const chatKey = modal.chatKey ? String(modal.chatKey) : "";
       const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
@@ -230,6 +245,16 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       const msg = conv[msgIdx];
       if (!msg || msg.kind === "sys") return null;
       return { chatKey, msgIdx, msg };
+    })();
+    const posterUrl = (() => {
+      if (!viewerMessage) return null;
+      const att = viewerMessage.msg?.attachment;
+      if (!att || att.kind !== "file") return null;
+      const fileId = String(att.fileId || "").trim();
+      if (!fileId) return null;
+      const raw = state.fileThumbs?.[fileId]?.url ? state.fileThumbs[fileId].url : null;
+      if (!raw) return null;
+      return safeUrl(raw, { base, allowedProtocols: ["http:", "https:", "blob:"] });
     })();
     const rail = (() => {
       if (!viewerMessage) return [];
@@ -245,7 +270,14 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
         if (/\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n)) return "video";
         return null;
       };
-      const base = typeof location !== "undefined" ? location.href : "http://localhost/";
+      const isAlbumCandidate = (idx: number): boolean => {
+        const msg = conv[idx];
+        const kind = isMedia(msg);
+        if (!msg || !kind) return false;
+        const text = String(msg.text || "").trim();
+        if (text && !text.startsWith("[file]")) return false;
+        return true;
+      };
       const buildItem = (idx: number) => {
         const msg = conv[idx];
         const kind = isMedia(msg);
@@ -261,11 +293,34 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
             : null;
         const thumbUrl = thumbRaw
           ? safeUrl(thumbRaw, { base, allowedProtocols: ["http:", "https:", "blob:"] })
-          : transferUrl
+          : kind === "image" && transferUrl
             ? safeUrl(transferUrl, { base, allowedProtocols: ["http:", "https:", "blob:"] })
             : null;
         return { msgIdx: idx, name, kind, thumbUrl, active: idx === viewerMessage.msgIdx };
       };
+
+      const albumIndices = (() => {
+        const ALBUM_MAX = 12;
+        const ALBUM_GAP_SECONDS = 121;
+        const idx = viewerMessage.msgIdx;
+        if (!isAlbumCandidate(idx)) return null;
+        const out: number[] = [idx];
+        for (let i = idx - 1; i >= 0 && out.length < ALBUM_MAX; i -= 1) {
+          if (!isAlbumCandidate(i)) break;
+          if (!isMessageContinuation(conv[i], conv[i + 1], { maxGapSeconds: ALBUM_GAP_SECONDS })) break;
+          out.unshift(i);
+        }
+        for (let i = idx + 1; i < conv.length && out.length < ALBUM_MAX; i += 1) {
+          if (!isAlbumCandidate(i)) break;
+          if (!isMessageContinuation(conv[i - 1], conv[i], { maxGapSeconds: ALBUM_GAP_SECONDS })) break;
+          out.push(i);
+        }
+        return out.length >= 2 ? out : null;
+      })();
+
+      if (albumIndices) {
+        return albumIndices.map((idx) => buildItem(idx)).filter((x): x is NonNullable<ReturnType<typeof buildItem>> => Boolean(x));
+      }
       const before: Array<NonNullable<ReturnType<typeof buildItem>>> = [];
       const after: Array<NonNullable<ReturnType<typeof buildItem>>> = [];
       for (let i = viewerMessage.msgIdx - 1; i >= 0 && before.length < 4; i -= 1) {
@@ -294,16 +349,25 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       const canOwner = Boolean(msg.kind === "out" && state.selfId && String(msg.from) === String(state.selfId));
       return Boolean(canAct && canOwner && msgId > 0);
     })();
-    return renderFileViewerModal(modal.url, modal.name, modal.size, modal.mime, modal.caption ?? null, meta, {
-      onClose: actions.onClose,
-      ...(canPrev ? { onPrev: () => actions.onFileViewerNavigate("prev") } : {}),
-      ...(canNext ? { onNext: () => actions.onFileViewerNavigate("next") } : {}),
-      ...(canJump ? { onJump: () => actions.onFileViewerJump() } : {}),
-      ...(actions.onFileViewerShare ? { onShare: () => actions.onFileViewerShare() } : {}),
-      ...(viewerMessage ? { onForward: () => actions.onFileViewerForward(), canForward } : {}),
-      ...(canDelete ? { onDelete: () => actions.onFileViewerDelete(), canDelete } : {}),
-      ...(viewerMessage ? { onOpenAt: (msgIdx: number) => actions.onFileViewerOpenAt(msgIdx) } : {}),
-    });
+    return renderFileViewerModal(
+      modal.url,
+      modal.name,
+      modal.size,
+      modal.mime,
+      modal.caption ?? null,
+      meta,
+      {
+        onClose: actions.onClose,
+        ...(canPrev ? { onPrev: () => actions.onFileViewerNavigate("prev") } : {}),
+        ...(canNext ? { onNext: () => actions.onFileViewerNavigate("next") } : {}),
+        ...(canJump ? { onJump: () => actions.onFileViewerJump() } : {}),
+        ...(actions.onFileViewerShare ? { onShare: () => actions.onFileViewerShare() } : {}),
+        ...(viewerMessage ? { onForward: () => actions.onFileViewerForward(), canForward } : {}),
+        ...(canDelete ? { onDelete: () => actions.onFileViewerDelete(), canDelete } : {}),
+        ...(viewerMessage ? { onOpenAt: (msgIdx: number) => actions.onFileViewerOpenAt(msgIdx) } : {}),
+      },
+      { autoplay: Boolean(modal.autoplay), posterUrl }
+    );
   }
   if (kind === "invite_user") {
     return renderInviteUserModal(modal.peer, state.selfId ?? null, state.groups || [], state.boards || [], modal.message, {
