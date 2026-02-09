@@ -2,6 +2,14 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.712",
+    date: "2026-02-09",
+    improved: [
+      "Звонки: главное окно Jitsi для исходящего аудио/видео открывается сразу после создания комнаты (без ожидания принятия).",
+      "Звонки: единое поведение отображения call-screen на desktop/mobile в исходящем сценарии.",
+    ],
+  },
+  {
     version: "0.1.711",
     date: "2026-02-09",
     improved: ["Звонки: окно ошибок (toast) стало компактнее."],

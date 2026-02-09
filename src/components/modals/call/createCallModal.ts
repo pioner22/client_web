@@ -3,7 +3,6 @@ import { getMeetBaseUrl } from "../../../config/env";
 import { el } from "../../../helpers/dom/el";
 import { buildMeetJoinUrl } from "../../../helpers/calls/meetUrl";
 import { loadJitsiExternalApi, resolveJitsiApiDomain, resolveJitsiExternalApiScriptUrl } from "../../../helpers/calls/jitsiExternalApi";
-import { isMobileLikeUi } from "../../../helpers/ui/mobileLike";
 import { copyText } from "../../../helpers/dom/copyText";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../../helpers/avatar/avatarStore";
 
@@ -448,9 +447,10 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
     updateControls(phase, incoming, callId);
 
-    // Surface: Telegram-like hero for pre-join; meeting only when active.
-    const mobileUi = isMobileLikeUi();
-    if (phase !== "active" || mobileUi) {
+    // Show meeting as early as possible for outgoing calls: once room exists and we are already "ringing".
+    // Incoming ringing still stays on the hero screen until user accepts.
+    const shouldShowMeeting = Boolean(joinUrl) && (phase === "active" || (!incoming && phase === "ringing"));
+    if (!shouldShowMeeting) {
       showHero();
       return;
     }

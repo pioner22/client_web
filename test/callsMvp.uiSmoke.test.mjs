@@ -21,3 +21,8 @@ test("calls: CSS contains modal-call layout", async () => {
   assert.match(css, /\.modal\.modal-call/);
   assert.match(css, /\.call-frame/);
 });
+
+test("calls: outgoing ringing shows Jitsi surface without waiting active", async () => {
+  const src = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
+  assert.match(src, /const shouldShowMeeting = Boolean\(joinUrl\) && \(phase === "active" \|\| \(!incoming && phase === "ringing"\)\);/);
+});
