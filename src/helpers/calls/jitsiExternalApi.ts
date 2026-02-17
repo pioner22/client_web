@@ -16,8 +16,6 @@ export function resolveJitsiApiDomain(meetBaseUrl: string): string | null {
   try {
     const host = new URL(raw).hostname;
     if (!host) return null;
-    // meet.yagodka.org is a JS redirect wrapper; use the real Jitsi host for the External API handshake.
-    if (host === "meet.yagodka.org") return "meet.jit.si";
     return host;
   } catch {
     return null;
@@ -62,4 +60,3 @@ export function loadJitsiExternalApi(scriptUrl: string): Promise<JitsiMeetExtern
   scriptCache.set(url, p);
   return p;
 }
-

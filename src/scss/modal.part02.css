@@ -1109,6 +1109,18 @@ input.modal-input[type="file"]::file-selector-button:active {
   font-size: 12px;
 }
 
+.viewer-preloader-actions {
+  pointer-events: auto;
+}
+
+.viewer-preloader:not(.viewer-preloader-failed) .viewer-preloader-actions {
+  display: none;
+}
+
+.viewer-preloader.viewer-preloader-failed {
+  pointer-events: auto;
+}
+
 .viewer-preloader.viewer-preloader-failed .viewer-preloader-spinner {
   display: none;
 }

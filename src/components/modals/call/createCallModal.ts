@@ -77,6 +77,8 @@ function formatDuration(ms: number): string {
   return `${h}:${String(mm).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+const CALL_IFRAME_ALLOW = "camera; microphone; fullscreen; display-capture; autoplay";
+
 export function createCallModal(actions: CallModalActions): CallModalController {
   const titleEl = el("div", { class: "call-peer-title" }, ["Звонок"]);
   const subEl = el("div", { class: "call-peer-sub" }, [""]);
@@ -184,7 +186,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     if (!iframe) {
       iframe = el("iframe", {
         class: "call-frame",
-        allow: "camera; microphone; fullscreen; display-capture; autoplay",
+        allow: CALL_IFRAME_ALLOW,
         referrerpolicy: "no-referrer",
         allowfullscreen: "true",
         title,
@@ -271,6 +273,17 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       return;
     } finally {
       clearJitsiFallbackTimer();
+    }
+
+    try {
+      const apiIframe = jitsiHost.querySelector("iframe");
+      if (apiIframe instanceof HTMLIFrameElement) {
+        apiIframe.allow = CALL_IFRAME_ALLOW;
+        apiIframe.setAttribute("allowfullscreen", "true");
+        apiIframe.setAttribute("referrerpolicy", "no-referrer");
+      }
+    } catch {
+      // ignore
     }
 
     micBtn.disabled = false;
@@ -467,7 +480,8 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       queueMicrotask(() => {
         if (tok !== ensureAfterAttachToken) return;
         if (!root.isConnected) return;
-        if (lastPhase !== "active") return;
+        const canInitAfterAttach = lastPhase === "active" || (!lastIncoming && lastPhase === "ringing");
+        if (!canInitAfterAttach) return;
         if (String(lastJoinUrl || "").trim() !== String(joinUrl || "").trim()) return;
         void ensureJitsi(roomName, mode, joinUrl, peerLabel || "Звонок");
       });

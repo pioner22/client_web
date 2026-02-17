@@ -7,14 +7,12 @@ import type {
   BoardEntry,
   ChatMessage,
   GroupEntry,
-  OutboxEntry,
   SearchResultEntry,
   UserProfile,
 } from "../stores/types";
 import { dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { nowTs } from "../helpers/time";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
-import { mergeMessages } from "../helpers/chat/mergeMessages";
 import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatar, storeAvatarRev } from "../helpers/avatar/avatarStore";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
@@ -25,10 +23,8 @@ import {
   isDocHidden,
   lastReadSavedAt,
   maybePlaySound,
-  oldestLoadedId,
   parseAttachment,
   parseMessageRef,
-  parseReactions,
   showInAppNotification,
   sysActionMessage,
   updateConversationByLocalId,
@@ -36,6 +32,7 @@ import {
   upsertConversationByLocalId,
 } from "./handleServerMessage/common";
 import { handleCoreAuthMessage } from "./handleServerMessage/coreAuth";
+import { handleHistoryServerMessage } from "./handleServerMessage/history";
 import { handleRosterPrefsMessage } from "./handleServerMessage/rosterPrefs";
 
 export function handleServerMessage(
@@ -48,6 +45,7 @@ export function handleServerMessage(
 
   if (handleCoreAuthMessage(t, msg, state, gateway, patch)) return;
   if (handleRosterPrefsMessage(t, msg, state, gateway, patch)) return;
+  if (handleHistoryServerMessage(t, msg, state, gateway, patch)) return;
 
   if (t === "authz_pending") {
     const raw = msg?.from;
@@ -1737,162 +1735,6 @@ export function handleServerMessage(
     return;
   }
   if (t === "history_result") {
-    const resultRoom = msg?.room ? String(msg.room) : undefined;
-    const resultPeer = msg?.peer ? String(msg.peer) : undefined;
-    const key = resultRoom ? roomKey(resultRoom) : resultPeer ? dmKey(resultPeer) : "";
-    if (!key) return;
-    const isPreview = Boolean(msg?.preview);
-    const beforeIdRaw = msg?.before_id;
-    const hasBefore = beforeIdRaw !== undefined && beforeIdRaw !== null;
-    const readUpToRaw = msg?.read_up_to_id;
-    const readUpToId = Number(readUpToRaw);
-    const rows = Array.isArray(msg?.rows) ? msg.rows : [];
-    const rawHasMore = msg?.has_more;
-    // Fallback: if server omits has_more, keep loading while we still receive rows.
-    const fallbackHasMore = rows.length > 0;
-    const hasMore = rawHasMore === undefined || rawHasMore === null ? fallbackHasMore : Boolean(rawHasMore);
-    const incoming: ChatMessage[] = [];
-    for (const r of rows) {
-      const from = String(r?.from ?? "");
-      if (!from) continue;
-      const to = r?.to ? String(r.to) : undefined;
-      const room = resultRoom ? resultRoom : r?.room ? String(r.room) : undefined;
-      const text = String(r?.text ?? "");
-      const ts = Number(r?.ts ?? nowTs()) || nowTs();
-      const id = r?.id === undefined || r?.id === null ? null : Number(r.id);
-      const kind: ChatMessage["kind"] = from === state.selfId ? "out" : "in";
-      const hasId = typeof id === "number" && Number.isFinite(id);
-      const delivered = Boolean(r?.delivered);
-      const read = Boolean(r?.read);
-      const edited = Boolean(r?.edited);
-      const editedTsRaw = (r as any)?.edited_ts;
-      const edited_ts = typeof editedTsRaw === "number" && Number.isFinite(editedTsRaw) ? editedTsRaw : undefined;
-      const status: ChatMessage["status"] | undefined =
-        !room && kind === "out" && hasId ? (read ? "read" : delivered ? "sent" : "queued") : undefined;
-      const attachment = parseAttachment(r?.attachment);
-      const reply = parseMessageRef((r as any)?.reply);
-      const forward = parseMessageRef((r as any)?.forward);
-      const reactions = parseReactions((r as any)?.reactions);
-      incoming.push({
-        kind,
-        from,
-        to,
-        room,
-        text,
-        ts,
-        id,
-        attachment,
-        ...(reply ? { reply } : {}),
-        ...(forward ? { forward } : {}),
-        ...(reactions ? { reactions } : {}),
-        ...(status ? { status } : {}),
-        ...(edited ? { edited: true } : {}),
-        ...(edited && edited_ts ? { edited_ts } : {}),
-      });
-    }
-    patch((prev) => {
-      let baseConv = prev.conversations[key] ?? [];
-      let outbox = (((prev as any).outbox || {}) as any) as any;
-      let nextLastRead = prev.lastRead;
-      let lastReadChanged = false;
-
-      // Best-effort dedup for reconnect: if history already contains our message, bind it to a pending outbox entry
-      // (so we don't resend and we don't show duplicates).
-      const pendingRaw = outbox[key];
-      const pending: OutboxEntry[] = Array.isArray(pendingRaw) ? pendingRaw : [];
-      if (pending.length && incoming.length) {
-        const left = [...pending];
-        let conv = baseConv;
-        let changed = false;
-        for (const inc of incoming) {
-          if (inc.kind !== "out") continue;
-          const incId = typeof inc.id === "number" && Number.isFinite(inc.id) && inc.id > 0 ? inc.id : null;
-          if (incId === null) continue;
-          if (inc.attachment) continue;
-          const text = String(inc.text || "");
-          if (!text) continue;
-
-          let bestIdx = -1;
-          let bestDelta = Infinity;
-          for (let i = 0; i < left.length; i += 1) {
-            const e = left[i];
-            if (!e) continue;
-            if (e.text !== text) continue;
-            if (e.to && inc.to && e.to !== inc.to) continue;
-            if (e.room && inc.room && e.room !== inc.room) continue;
-            const delta = Math.abs(Number(e.ts) - Number(inc.ts));
-            if (!Number.isFinite(delta) || delta > 12) continue;
-            if (delta < bestDelta) {
-              bestDelta = delta;
-              bestIdx = i;
-            }
-          }
-          if (bestIdx < 0) continue;
-          const matched = left[bestIdx];
-          left.splice(bestIdx, 1);
-          const lid = typeof matched.localId === "string" ? matched.localId : "";
-          if (!lid) continue;
-
-          const idx = conv.findIndex((m) => m.kind === "out" && (m.id === undefined || m.id === null) && typeof m.localId === "string" && m.localId === lid);
-          if (idx >= 0) {
-            const next = [...conv];
-            next[idx] = { ...next[idx], id: incId, status: inc.status ?? next[idx].status, ts: inc.ts };
-            conv = next;
-            changed = true;
-          }
-          outbox = removeOutboxEntry(outbox, key, lid);
-        }
-        if (changed) baseConv = conv;
-      }
-
-      const nextConv = mergeMessages(baseConv, incoming);
-      const delta = nextConv.length - baseConv.length;
-      const cursor = oldestLoadedId(nextConv);
-      const prevCursor = (prev as any).historyCursor || {};
-      const prevHasMoreMap = (prev as any).historyHasMore || {};
-      const prevLoadingMap = (prev as any).historyLoading || {};
-      const prevVirtualStart = (prev as any).historyVirtualStart ? (prev as any).historyVirtualStart[key] : undefined;
-      const shouldShiftVirtual = hasBefore && typeof prevVirtualStart === "number" && Number.isFinite(prevVirtualStart) && delta > 0;
-      const nextVirtualStart = shouldShiftVirtual ? Math.max(0, prevVirtualStart + delta) : prevVirtualStart;
-      const prevCursorValue = prevCursor ? Number(prevCursor[key]) : NaN;
-      const cursorStalled =
-        hasBefore &&
-        delta <= 0 &&
-        cursor !== null &&
-        Number.isFinite(prevCursorValue) &&
-        prevCursorValue > 0 &&
-        cursor === prevCursorValue;
-      if (resultRoom && Number.isFinite(readUpToId) && readUpToId > 0) {
-        const prevEntry = (nextLastRead || {})[key] || {};
-        if (!prevEntry.id || readUpToId > prevEntry.id) {
-          const merged = { ...(nextLastRead || {}), [key]: { ...prevEntry, id: readUpToId } };
-          nextLastRead = merged;
-          lastReadChanged = true;
-          if (prev.selfId) saveLastReadMarkers(prev.selfId, merged);
-        }
-      }
-      if (isPreview) {
-        const base = {
-          ...prev,
-          conversations: { ...prev.conversations, [key]: nextConv },
-          outbox,
-        };
-        return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
-      }
-      const shouldSetHasMore = hasBefore || rawHasMore !== undefined || rows.length > 0 || cursorStalled;
-      const resolvedHasMore = cursorStalled ? false : hasMore;
-      const base = {
-        ...prev,
-        conversations: { ...prev.conversations, [key]: nextConv },
-        outbox,
-        historyLoaded: { ...prev.historyLoaded, [key]: true },
-        historyCursor: cursor !== null ? { ...prevCursor, [key]: cursor } : prevCursor,
-        historyHasMore: shouldSetHasMore ? { ...prevHasMoreMap, [key]: Boolean(resolvedHasMore) } : prevHasMoreMap,
-        historyLoading: { ...prevLoadingMap, [key]: false },
-        ...(shouldShiftVirtual ? { historyVirtualStart: { ...(prev as any).historyVirtualStart, [key]: nextVirtualStart } } : {}),
-      };
-      return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
-    });
     return;
   }
   if (t === "update_required") {

@@ -46,6 +46,8 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
   let chatTouchStartX = 0;
   let chatTouchStartY = 0;
   let chatTouchTracking = false;
+  const CHAT_TOUCH_JITTER_PX = 12;
+  const CHAT_TOUCH_JITTER_SQ = CHAT_TOUCH_JITTER_PX * CHAT_TOUCH_JITTER_PX;
 
   const findLastVisibleMessageIndex = (host: HTMLElement): number | null => {
     const linesEl = host.querySelector(".chat-lines");
@@ -391,9 +393,15 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
           return;
         }
         const target = ev.target as HTMLElement | null;
-        if (target && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable)) {
-          chatTouchTracking = false;
-          return;
+        if (target) {
+          if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) {
+            chatTouchTracking = false;
+            return;
+          }
+          if (target.closest("button, a")) {
+            chatTouchTracking = false;
+            return;
+          }
         }
         chatTouchStartX = ev.touches[0].clientX;
         chatTouchStartY = ev.touches[0].clientY;
@@ -410,14 +418,15 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
         if (ev.touches.length !== 1) return;
         const dx = ev.touches[0].clientX - chatTouchStartX;
         const dy = ev.touches[0].clientY - chatTouchStartY;
-        if (Math.abs(dx) > Math.abs(dy) + 6) {
-          event.preventDefault();
-          return;
-        }
+        if (dx * dx + dy * dy < CHAT_TOUCH_JITTER_SQ) return;
         const host = layout.chatHost;
         const top = host.scrollTop <= 0;
         const bottom = host.scrollTop >= getMaxScrollTop(host) - 1;
-        if ((dy > 0 && top) || (dy < 0 && bottom)) {
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const isMostlyHorizontal = absDx > absDy + 10;
+        if (!isMostlyHorizontal) return;
+        if (top || bottom) {
           event.preventDefault();
         }
       },

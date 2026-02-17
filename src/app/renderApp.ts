@@ -253,6 +253,7 @@ export interface RenderActions {
   onContextMenuAction: (itemId: string) => void;
   onFileViewerNavigate: (dir: "prev" | "next") => void;
   onFileViewerJump: () => void;
+  onFileViewerRecover?: () => void;
   onFileViewerShare: () => void;
   onFileViewerForward: () => void;
   onFileViewerDelete: () => void;
@@ -605,6 +606,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     onFileSendConfirm: actions.onFileSendConfirm,
     onFileViewerNavigate: actions.onFileViewerNavigate,
     onFileViewerJump: actions.onFileViewerJump,
+    ...(actions.onFileViewerRecover ? { onFileViewerRecover: actions.onFileViewerRecover } : {}),
     onFileViewerShare: actions.onFileViewerShare,
     onFileViewerForward: actions.onFileViewerForward,
     onFileViewerDelete: actions.onFileViewerDelete,

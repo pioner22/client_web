@@ -6,6 +6,7 @@ import { copyText } from "../../helpers/dom/copyText";
 import { loadAutoDownloadPrefs, saveAutoDownloadPrefs } from "../../helpers/files/autoDownloadPrefs";
 import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../../helpers/notify/notifyPrefs";
 import { autosizeInput } from "../../helpers/ui/autosizeInput";
+import { installDebugMonitorFeature } from "../features/debug/debugMonitorFeature";
 import { createContextMenuAdapterActionsFeature } from "../features/contextMenu/contextMenuAdapterActionsFeature";
 import { createRoomModerationActionsFeature } from "../features/contextMenu/roomModerationActionsFeature";
 import { createFileActionsFeature } from "../features/files/fileActionsFeature";
@@ -144,6 +145,18 @@ export function installLateWiring(deps: any) {
     scheduleBoardEditorPreview,
     initSkins,
   } = deps as any;
+
+  try {
+    installDebugMonitorFeature({
+      store,
+      gateway,
+      mount: root,
+      chatHost: layout.chatHost,
+      debugHud,
+    });
+  } catch {
+    // ignore
+  }
 
   const restartStateFeature = createRestartStateFeature();
 
@@ -393,6 +406,7 @@ export function installLateWiring(deps: any) {
     onFileSendConfirm: fileActionsFeature.onFileSendConfirm,
     onFileViewerNavigate: fileViewer.navigate,
     onFileViewerJump: fileViewer.jumpFromViewer,
+    onFileViewerRecover: () => void fileViewer.recoverCurrent(),
     onFileViewerShare: () => void forwardViewerSelectionActionsFeature.shareFromFileViewer(),
     onFileViewerForward: forwardViewerSelectionActionsFeature.forwardFromFileViewer,
     onFileViewerDelete: forwardViewerSelectionActionsFeature.deleteFromFileViewer,

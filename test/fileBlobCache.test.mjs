@@ -82,6 +82,23 @@ test("fileBlobCache: put/get сохраняет blob в CacheStorage (best-effor
   }
 });
 
+test("fileBlobCache: getCachedFileBlob восстанавливает mime по magic bytes (без Content-Type)", async () => {
+  const { putCachedFileBlob, getCachedFileBlob, cleanup } = await loadHelpers();
+  const uninstall = installCachesMock();
+  try {
+    const pngHead = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+    const blob = new Blob([pngHead]);
+    await putCachedFileBlob("u1", "f2", blob, { size: blob.size });
+    const out = await getCachedFileBlob("u1", "f2");
+    assert.ok(out);
+    assert.equal(out.mime, "image/png");
+    assert.equal(out.blob.type, "image/png");
+  } finally {
+    uninstall();
+    await cleanup();
+  }
+});
+
 test("fileBlobCache: isImageLikeFile распознаёт extension/mime", async () => {
   const { isImageLikeFile, cleanup } = await loadHelpers();
   try {

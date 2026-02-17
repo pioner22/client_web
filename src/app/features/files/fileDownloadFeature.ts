@@ -83,6 +83,7 @@ export interface FileDownloadFeatureDeps {
   takePendingFileViewer: (fileId: string) => PendingFileViewer | null;
   clearPendingFileViewer: (fileId: string) => void;
   buildFileViewerModalState: (params: {
+    fileId?: string | null;
     url: string;
     name: string;
     size: number;
@@ -154,6 +155,15 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
 
   const httpDownloadInFlight = new Set<string>();
   const httpLegacyFallbackAttempted = new Set<string>();
+  const debugHook = (kind: string, data?: any) => {
+    try {
+      const dbg = (globalThis as any).__yagodka_debug_monitor;
+      if (!dbg || typeof dbg.push !== "function") return;
+      dbg.push(String(kind || "file").trim() || "file", data);
+    } catch {
+      // ignore
+    }
+  };
 
   function handleFileDownloadBegin(msg: any): boolean {
     const fileId = String(msg?.file_id ?? "").trim();
@@ -169,6 +179,16 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const existing = downloadByFileId.get(fileId);
     const streamId = existing?.streamId ? String(existing.streamId) : null;
     const streaming = Boolean(existing?.streaming && streamId);
+    debugHook("file.download.begin", {
+      fileId,
+      name,
+      size,
+      from,
+      room: room || null,
+      kind: msg?.kind ? String(msg.kind) : null,
+      streaming,
+      silent,
+    });
     downloadByFileId.set(fileId, {
       fileId,
       name,
@@ -259,11 +279,19 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? mimeRaw.trim() : metaFallback.mime;
     const thumbMimeRaw = msg?.thumb_mime;
     const thumbMime = typeof thumbMimeRaw === "string" && thumbMimeRaw.trim() ? String(thumbMimeRaw).trim() : null;
+    debugHook("file.url", {
+      fileId,
+      hasUrl: Boolean(url),
+      hasThumb: Boolean(thumbUrl),
+      kind: msg?.kind ? String(msg.kind) : null,
+      size,
+      mime: mime || null,
+    });
 
     if (silent && thumbUrl) {
       void (async () => {
         try {
-          const res = await fetch(thumbUrl, { method: "GET" });
+          const res = await fetch(thumbUrl, { method: "GET", cache: "no-store" });
           if (!res.ok) throw new Error(`http_${res.status}`);
           const blob = await res.blob();
           const finalMime = thumbMime || blob.type || "image/jpeg";
@@ -305,7 +333,11 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
           } catch {
             // ignore
           }
-        } catch {
+        } catch (err) {
+          const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
+          debugHook("file.thumb.error", { fileId, reason: errMsg || "thumb_fetch_failed" });
+          const shouldDisableHttp = err instanceof TypeError || errMsg === "http_404";
+          if (shouldDisableHttp) disableFileHttp(errMsg || "thumb_fetch_failed");
           scheduleThumbPollRetry(fileId);
         } finally {
           clearSilentFileGet(fileId);
@@ -361,6 +393,14 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "downloading", progress: 0, ...(mime ? { mime } : {}) }));
     if (!silent) store.set({ status: `Скачивание: ${name || fileId}` });
 
+    debugHook("file.http.start", {
+      fileId,
+      name,
+      size,
+      stream: streaming,
+      silent,
+      expectedMime: mime || null,
+    });
     httpDownloadInFlight.add(fileId);
     void (async () => {
       try {
@@ -386,6 +426,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
             cur.received = 0;
             cur.lastProgress = 0;
             cur.etag = null;
+            debugHook("file.http.reset", { fileId, reason });
             updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "downloading", progress: 0, ...(mime ? { mime } : {}) }));
           },
           onChunk: (chunk) => {
@@ -419,6 +460,16 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         const final = downloadByFileId.get(fileId);
         if (!final) throw new Error("missing_download_state");
         final.etag = result.etag ?? null;
+        debugHook("file.http.complete", {
+          fileId,
+          name,
+          size: final.size,
+          received: result.received,
+          total: result.total,
+          mime: final.mime || result.mime || null,
+          streaming: Boolean(final.streaming),
+          silent,
+        });
 
         downloadByFileId.delete(fileId);
         clearSilentFileGet(fileId);
@@ -476,6 +527,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
           const viewerMime = finalMime || pv.mime || null;
           store.set({
             modal: buildFileViewerModalState({
+              fileId,
               url: objectUrl,
               name: viewerName,
               size: viewerSize,
@@ -497,6 +549,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
             errMsg === "range_not_satisfiable");
         if (canFallback) {
           httpLegacyFallbackAttempted.add(fileId);
+          debugHook("file.http.fallback", { fileId, reason: errMsg, mode: "file_get" });
           disableFileHttp(errMsg || "http_download_failed");
           const cur = downloadByFileId.get(fileId);
           if (cur) {
@@ -515,6 +568,13 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
             // ignore
           }
         }
+        debugHook("file.http.error", {
+          fileId,
+          reason: errMsg,
+          canFallback,
+          silent,
+          size: size || 0,
+        });
         rejectHttpFileUrlWaiter(fileId, "download_failed");
         clearSilentFileGet(fileId);
         finishFileGet(fileId);
@@ -546,6 +606,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       const ok = postStreamChunk(download.streamId, bytes);
       if (!ok) {
         postStreamError(download.streamId, "stream_post_failed");
+        debugHook("file.http.stream_error", { fileId, reason: "stream_post_failed" });
         downloadByFileId.delete(fileId);
         clearSilentFileGet(fileId);
         finishFileGet(fileId);
@@ -575,6 +636,13 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const silent = isSilentFileGet(fileId);
     const download = downloadByFileId.get(fileId);
     if (download) {
+      debugHook("file.download.complete", {
+        fileId,
+        name: download.name,
+        size: download.size,
+        streaming: Boolean(download.streaming),
+        status: "legacy",
+      });
       downloadByFileId.delete(fileId);
       clearSilentFileGet(fileId);
       const isStreaming = Boolean(download.streaming && download.streamId);
@@ -627,6 +695,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         const viewerMime = finalMime || pv.mime || null;
         store.set({
           modal: buildFileViewerModalState({
+            fileId,
             url: objectUrl,
             name: viewerName,
             size: viewerSize,
@@ -650,6 +719,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const peer = String(msg?.peer ?? "").trim();
     const detail = peer ? `${reason} (${peer})` : reason;
     const silent = fileId ? isSilentFileGet(fileId) : false;
+    debugHook("file.error", { fileId, reason: detail, silent, peer: peer || null });
     if (fileId) {
       finishFileGet(fileId);
       dropFileGetQueue(fileId);

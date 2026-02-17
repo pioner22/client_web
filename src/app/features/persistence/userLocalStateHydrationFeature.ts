@@ -137,7 +137,18 @@ export function createUserLocalStateHydrationFeature(
     const storedHistory = needHistoryCache ? loadHistoryCacheForUser(userId) : null;
     const historyCacheConversations = storedHistory ? storedHistory.conversations : {};
     const mergedHistoryCursor = storedHistory ? { ...storedHistory.historyCursor, ...st.historyCursor } : st.historyCursor;
-    const mergedHistoryHasMore = storedHistory ? { ...storedHistory.historyHasMore, ...st.historyHasMore } : st.historyHasMore;
+    const mergedHistoryHasMore = (() => {
+      const merged = { ...(st.historyHasMore || {}) };
+      if (!storedHistory) return merged;
+      const cached = storedHistory.historyHasMore || {};
+      for (const [key, value] of Object.entries(cached)) {
+        if (Object.prototype.hasOwnProperty.call(st.historyHasMore, key)) continue;
+        if (value === true) {
+          merged[key] = true;
+        }
+      }
+      return merged;
+    })();
     const mergedHistoryLoaded = storedHistory ? { ...st.historyLoaded, ...storedHistory.historyLoaded } : st.historyLoaded;
     const baseConversations = storedHistory ? mergeConversationMaps(historyCacheConversations, st.conversations) : st.conversations;
 

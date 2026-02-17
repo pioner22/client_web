@@ -33,7 +33,7 @@ export function getMeetBaseUrl(): string {
   if (u) return u.replace(/\/+$/, "");
 
   if (env.DEV) {
-    return "https://meet.jit.si";
+    return "https://meet.yagodka.org";
   }
 
   // Production default: stable, branded meet domain.

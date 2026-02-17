@@ -13,6 +13,7 @@ type RestoreTask = {
   peer: string;
   room: string | null;
   prefetch: boolean;
+  restorePreview: boolean;
   retryWindowMs: number;
 };
 
@@ -159,7 +160,8 @@ export function createPreviewAutoFetchFeature(
       restoreTaskById.set(fid, {
         ...prev,
         kind: prev.kind || task.kind,
-        ...(task.prefetch && !prev.prefetch ? { prefetch: true } : {}),
+        prefetch: prev.prefetch || task.prefetch,
+        restorePreview: prev.restorePreview || task.restorePreview,
         retryWindowMs: Math.min(prev.retryWindowMs, task.retryWindowMs),
       });
     };
@@ -232,8 +234,8 @@ export function createPreviewAutoFetchFeature(
       const previewKind = kindHint === "video" ? "video" : "image";
       const shouldPrefetch = devicePrefetchAllowed && shouldAutoFetchPreview(name, mime, size, false, kindHint);
       const isMediaHint = kindHint === "image" || kindHint === "video" || kindHint === "audio";
-      const shouldAttemptRestore =
-        isMediaHint && previewKind === "image" && (shouldPrefetch || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
+      const restorePreview = previewKind === "image" && (shouldPrefetch || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
+      const shouldAttemptRestore = isMediaHint && (previewKind === "image" || previewKind === "video");
 
       if (shouldAttemptRestore && convoKey) {
         const msgIdx = Number(node.getAttribute("data-msg-idx") || NaN);
@@ -255,6 +257,7 @@ export function createPreviewAutoFetchFeature(
           peer,
           room,
           prefetch: shouldPrefetch,
+          restorePreview,
           retryWindowMs: mediaFailed ? previewAutoFailRetryMs : previewAutoRetryMs,
         });
         continue;
@@ -271,6 +274,7 @@ export function createPreviewAutoFetchFeature(
           peer: "—",
           room: null,
           prefetch: true,
+          restorePreview,
           retryWindowMs: mediaFailed ? previewAutoFailRetryMs : previewAutoRetryMs,
         });
       }
@@ -313,6 +317,7 @@ export function createPreviewAutoFetchFeature(
         peer,
         room,
         prefetch: shouldPrefetch,
+        restorePreview: false,
         retryWindowMs: previewAutoRetryMs,
       });
     }
@@ -326,7 +331,7 @@ export function createPreviewAutoFetchFeature(
     const restoredThumbIds = mediaIds.length
       ? await cachedPreviewRestoreFeature.restoreCachedThumbsIntoStateBatch(mediaIds)
       : new Set<string>();
-    const imageTasksToRestore = restoreTasks.filter((t) => t.kind === "image" && !restoredThumbIds.has(t.fileId));
+    const imageTasksToRestore = restoreTasks.filter((t) => t.kind === "image" && t.restorePreview && !restoredThumbIds.has(t.fileId));
     const restoredMediaIds = imageTasksToRestore.length
       ? await cachedPreviewRestoreFeature.restoreCachedPreviewsIntoTransfersBatch(
           imageTasksToRestore.map((t) => ({
@@ -357,12 +362,13 @@ export function createPreviewAutoFetchFeature(
     const restoredIds = new Set<string>([...restoredThumbIds, ...restoredMediaIds, ...restoredAudioIds]);
     for (const t of restoreTasks) {
       if (restoredIds.has(t.fileId)) continue;
-      if (!t.prefetch) continue;
+      const isVisibleMedia = t.kind === "image" || t.kind === "video";
+      if (!t.prefetch && !isVisibleMedia) continue;
       const k = `${st.selfId}:${t.fileId}`;
       const lastAttempt = previewPrefetchAttempted.get(k) || 0;
       if (lastAttempt && now - lastAttempt < t.retryWindowMs) continue;
       previewPrefetchAttempted.set(k, now);
-      enqueueFileGet(t.fileId, { priority: "prefetch", silent: true });
+      enqueueFileGet(t.fileId, { priority: t.prefetch ? "prefetch" : "high", silent: true });
     }
   };
 
@@ -425,6 +431,7 @@ export function createPreviewAutoFetchFeature(
           peer: String(m.kind === "out" ? (m.to || m.room || "") : (m.from || "")) || "—",
           room: typeof m.room === "string" ? m.room : null,
           prefetch: shouldPrefetch,
+          restorePreview: kind === "image",
         });
         if (tasks.length >= WARMUP_MAX_TASKS) break;
       }
@@ -438,7 +445,7 @@ export function createPreviewAutoFetchFeature(
       const restoredThumbIds = mediaIds.length
         ? await cachedPreviewRestoreFeature.restoreCachedThumbsIntoStateBatch(mediaIds)
         : new Set<string>();
-      const imageTasksToRestore = imageTasks.filter((t) => !restoredThumbIds.has(t.fileId));
+      const imageTasksToRestore = imageTasks.filter((t) => t.restorePreview && !restoredThumbIds.has(t.fileId));
       const restoredMediaIds = imageTasksToRestore.length
         ? await cachedPreviewRestoreFeature.restoreCachedPreviewsIntoTransfersBatch(
             imageTasksToRestore.map((t) => ({

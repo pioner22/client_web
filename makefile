@@ -26,7 +26,9 @@ help:
 	@echo "Web client (client-web/) commands:"
 	@echo "  make deps                         # npm install"
 	@echo "  make dev                          # Vite dev server (needs WS gateway)"
-	@echo "  make typecheck                    # tsc --noEmit"
+	@echo "  make typecheck                 
+	
+# tsc --noEmit"
 	@echo "  make build                        # vite build"
 	@echo "  make preview                      # vite preview"
 	@echo ""

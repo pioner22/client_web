@@ -29,7 +29,7 @@ export type HttpFileUrlInfo = {
 
 export interface FileGetFeatureDeps {
   store: Store<AppState>;
-  send: (payload: any) => void;
+  send: (payload: any) => boolean;
   deviceCaps: DeviceCapsLike;
   isFileHttpDisabled: () => boolean;
   isUploadActive: (fileId: string) => boolean;
@@ -71,6 +71,7 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
   const fileGetQueueMeta = new Map<string, { priority: FileGetPriority; silent: boolean }>();
   const fileGetInFlight = new Map<string, { priority: FileGetPriority; silent: boolean }>();
   const fileGetPrefetchInFlight = new Set<string>();
+  const fileGetStartedAtMs = new Map<string, number>();
   const fileGetTimeouts = new Map<string, number>();
   const fileGetTimeoutTouchedAt = new Map<string, number>();
   const silentFileGets = new Set<string>();
@@ -98,22 +99,47 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     string,
     { attempts: number; timer: number | null; silent: boolean; priority: FileGetPriority }
   >();
+  const debugHook = (kind: string, data?: any) => {
+    try {
+      const dbg = (globalThis as any).__yagodka_debug_monitor;
+      if (!dbg || typeof dbg.push !== "function") return;
+      dbg.push(String(kind || "file.get"), data);
+    } catch {
+      // ignore
+    }
+  };
+  const queueState = () => ({
+    queued_high: fileGetQueueHigh.length,
+    queued_prefetch: fileGetQueuePrefetch.length,
+    inflight: fileGetInFlight.size,
+    inflight_prefetch: fileGetPrefetchInFlight.size,
+    waiters: httpFileUrlWaiters.size,
+    not_found_retry: fileGetNotFoundRetries.size,
+  });
 
   const isFileGetQueued = (fileId: string): boolean =>
     fileGetQueueMeta.has(fileId) || fileGetQueueHigh.includes(fileId) || fileGetQueuePrefetch.includes(fileId);
 
   const dropQueue = (fileId: string) => {
+    const fid = String(fileId || "").trim();
     fileGetQueueMeta.delete(fileId);
-    const highIdx = fileGetQueueHigh.indexOf(fileId);
+    const highIdx = fileGetQueueHigh.indexOf(fid);
     if (highIdx >= 0) fileGetQueueHigh.splice(highIdx, 1);
-    const prefIdx = fileGetQueuePrefetch.indexOf(fileId);
+    const prefIdx = fileGetQueuePrefetch.indexOf(fid);
     if (prefIdx >= 0) fileGetQueuePrefetch.splice(prefIdx, 1);
+    if (fid) {
+      debugHook("file.get.drop_queue", {
+        fileId: fid,
+        ...queueState(),
+      });
+    }
   };
 
   const clearTimeoutFor = (fileId: string) => {
     const timer = fileGetTimeouts.get(fileId);
     if (timer === undefined) return;
     fileGetTimeouts.delete(fileId);
+    fileGetStartedAtMs.delete(fileId);
     try {
       window.clearTimeout(timer);
     } catch {
@@ -128,10 +154,18 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     const timer = window.setTimeout(() => {
       fileGetTimeouts.delete(fid);
       if (fileGetInFlight.has(fid)) {
+        const startedAt = fileGetStartedAtMs.get(fid);
+        const elapsed = startedAt ? Date.now() - startedAt : 0;
         fileGetInFlight.delete(fid);
         fileGetPrefetchInFlight.delete(fid);
         silentFileGets.delete(fid);
         fileGetTimeoutTouchedAt.delete(fid);
+        debugHook("file.get.timeout", {
+          fileId: fid,
+          timeout_ms: FILE_GET_TIMEOUT_MS,
+          elapsed_ms: Math.max(0, Number(elapsed) || 0),
+          ...queueState(),
+        });
         drain();
       }
     }, FILE_GET_TIMEOUT_MS);
@@ -153,6 +187,14 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     const meta = fileGetInFlight.get(fileId);
     if (!meta) return;
     fileGetInFlight.delete(fileId);
+    const startedAt = fileGetStartedAtMs.get(fileId);
+    const elapsed = startedAt ? Date.now() - startedAt : 0;
+    debugHook("file.get.finish", {
+      fileId,
+      reason: "done",
+      duration_ms: Math.max(0, Number(elapsed) || 0),
+      ...queueState(),
+    });
     if (meta.priority === "prefetch") fileGetPrefetchInFlight.delete(fileId);
     clearTimeoutFor(fileId);
     fileGetTimeoutTouchedAt.delete(fileId);
@@ -176,11 +218,26 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
   const enqueue = (fileId: string, opts?: { priority?: FileGetPriority; silent?: boolean }) => {
     const fid = String(fileId || "").trim();
     if (!fid) return;
-    if (fileGetInFlight.has(fid) || isFileGetQueued(fid)) return;
+    if (fileGetInFlight.has(fid) || isFileGetQueued(fid)) {
+      debugHook("file.get.enqueue.skip", {
+        fileId: fid,
+        reason: fileGetInFlight.has(fid) ? "already_inflight" : "already_queued",
+        ...queueState(),
+      });
+      return;
+    }
     const priority = opts?.priority ?? "high";
     if (priority === "prefetch" && (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden")) return;
     const silent = Boolean(opts?.silent);
     fileGetQueueMeta.set(fid, { priority, silent });
+    debugHook("file.get.enqueue", {
+      fileId: fid,
+      priority,
+      silent,
+      hidden: document.visibilityState === "hidden",
+      uploadActive: Boolean(isUploadActive(fid)),
+      ...queueState(),
+    });
     if (priority === "prefetch") fileGetQueuePrefetch.push(fid);
     else fileGetQueueHigh.push(fid);
     drain();
@@ -220,12 +277,26 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
       }
       const uploading = isUploadActive(fid);
       if (uploading) {
+        debugHook("file.get.notfound.retry_deferred", {
+          fileId: fid,
+          reason: "upload_active",
+          attempts,
+          ...queueState(),
+        });
         scheduleNotFoundRetry(fid, { silent, priority, attempts: attempts + 1 });
         return;
       }
       fileGetNotFoundRetries.set(fid, { attempts: attempts + 1, timer: null, silent, priority });
       enqueue(fid, { priority, silent });
     }, delay + jitter);
+    debugHook("file.get.notfound.retry", {
+      fileId: fid,
+      attempts,
+      priority,
+      silent,
+      delay_ms: delay + jitter,
+      ...queueState(),
+    });
     fileGetNotFoundRetries.set(fid, { attempts, timer, silent, priority });
     return true;
   };
@@ -237,18 +308,50 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     const meta = fileGetQueueMeta.get(fid);
     const silent = Boolean(meta?.silent);
     fileGetQueueMeta.delete(fid);
-    if (isFileHttpDisabled() && silent) return;
     const uploading = isUploadActive(fid);
     if (uploading) {
       scheduleNotFoundRetry(fid, { priority, silent });
       if (!silent) store.set({ status: "Файл ещё загружается на сервер" });
+      debugHook("file.get.start_deferred", {
+        fileId: fid,
+        reason: "upload_active",
+        priority,
+        ...queueState(),
+      });
       return;
     }
     clearNotFoundRetry(fid);
     fileGetInFlight.set(fid, { priority, silent });
+    fileGetStartedAtMs.set(fid, Date.now());
+    debugHook("file.get.start", {
+      fileId: fid,
+      priority,
+      silent,
+      ...queueState(),
+    });
     if (priority === "prefetch") fileGetPrefetchInFlight.add(fid);
     if (silent) silentFileGets.add(fid);
-    send({ type: "file_get", file_id: fid, ...(isFileHttpDisabled() ? {} : { transport: "http" }) });
+    const wantsHttp = !isFileHttpDisabled();
+    debugHook("file.get.transport", {
+      fileId: fid,
+      fileHttpDisabled: isFileHttpDisabled(),
+      transport: wantsHttp ? "http" : "ws",
+    });
+    const ok = send({ type: "file_get", file_id: fid, ...(wantsHttp ? { transport: "http" } : {}) });
+    debugHook("file.get.send", { fileId: fid, ok: Boolean(ok), transport: wantsHttp ? "http" : "ws" });
+    if (!ok) {
+      fileGetInFlight.delete(fid);
+      fileGetStartedAtMs.delete(fid);
+      fileGetTimeouts.delete(fid);
+      fileGetTimeoutTouchedAt.delete(fid);
+      fileGetPrefetchInFlight.delete(fid);
+      if (silent) clearSilent(fid);
+      if (meta?.silent) {
+        clearSilent(fid);
+      }
+      debugHook("file.get.send_fail", { fileId: fid });
+      return;
+    }
     armTimeoutFor(fid);
   };
 
@@ -314,7 +417,11 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     const fid = String(fileId || "").trim();
     if (!fid) return Promise.reject(new Error("missing_file_id"));
     const existing = httpFileUrlWaiters.get(fid);
-    if (existing) return existing.promise;
+    if (existing) {
+      debugHook("file.get.url_waiter_reuse", { fileId: fid, ...queueState() });
+      return existing.promise;
+    }
+    debugHook("file.get.url_waiter_begin", { fileId: fid, ...queueState() });
     let resolveRef: ((info: HttpFileUrlInfo) => void) | null = null;
     let rejectRef: ((err: Error) => void) | null = null;
     const promise = new Promise<HttpFileUrlInfo>((resolve, reject) => {
@@ -332,17 +439,21 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
       if (cur) httpFileUrlWaiters.delete(fid);
       try {
         cur?.reject(new Error("file_url_refresh_timeout"));
+        debugHook("file.get.url_timeout", { fileId: fid, timeout_ms: HTTP_FILE_URL_REFRESH_TIMEOUT_MS, ...queueState() });
       } catch {
         // ignore
       }
     }, HTTP_FILE_URL_REFRESH_TIMEOUT_MS);
     entry.timer = timer;
+    debugHook("file.get.url_waiter_set", { fileId: fid, timeout_ms: HTTP_FILE_URL_REFRESH_TIMEOUT_MS, ...queueState() });
     httpFileUrlWaiters.set(fid, entry);
     try {
+      debugHook("file.get.url_send", { fileId: fid, reason: "refresh" });
       send({ type: "file_get", file_id: fid, transport: "http" });
     } catch {
       window.clearTimeout(timer);
       httpFileUrlWaiters.delete(fid);
+      debugHook("file.get.url_send_fail", { fileId: fid });
       return Promise.reject(new Error("file_url_refresh_send_failed"));
     }
     return promise;
@@ -356,6 +467,15 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     const url = typeof msg?.url === "string" ? String(msg.url).trim() : "";
     const thumbUrl = typeof msg?.thumb_url === "string" ? String(msg.thumb_url).trim() : "";
     httpFileUrlWaiters.delete(fileId);
+    const startedAt = fileGetStartedAtMs.get(fileId);
+    const elapsed = startedAt ? Date.now() - startedAt : 0;
+    debugHook("file.get.url_resolve", {
+      fileId,
+      hasUrl: Boolean(url),
+      hasThumb: Boolean(thumbUrl),
+      elapsed_ms: Math.max(0, Number(elapsed) || 0),
+      ...queueState(),
+    });
     if (waiter.timer) {
       try {
         window.clearTimeout(waiter.timer);
@@ -414,6 +534,7 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     if (!fid) return;
     const waiter = httpFileUrlWaiters.get(fid);
     if (!waiter) return;
+    debugHook("file.get.url_reject", { fileId: fid, reason: String(err?.message || err) });
     httpFileUrlWaiters.delete(fid);
     if (waiter.timer) {
       try {
@@ -450,6 +571,7 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     fileGetQueueHigh.length = 0;
     fileGetQueuePrefetch.length = 0;
     fileGetQueueMeta.clear();
+    fileGetStartedAtMs.clear();
     for (const fid of fileGetInFlight.keys()) {
       clearTimeoutFor(fid);
     }
@@ -481,6 +603,7 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
       }
       httpFileUrlWaiters.delete(fid);
     }
+    debugHook("file.get.reset", queueState());
   };
 
   return {

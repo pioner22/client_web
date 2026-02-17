@@ -80,12 +80,16 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const HISTORY_REQUEST_RETRY_LIMIT = 2;
   const HISTORY_AUTO_RETRY_MS = 30_000;
   const HISTORY_PREFETCH_TIMEOUT_MS = 10_000;
+  const HISTORY_HAS_MORE_BYPASS_MS = 8_000;
+  const HISTORY_HAS_MORE_BYPASS_MAX = 2;
   const HISTORY_PREFETCH_LIMIT = deviceCaps.historyPrefetchLimit;
   const HISTORY_WARMUP_LIMIT = deviceCaps.historyWarmupLimit;
   const HISTORY_WARMUP_CONCURRENCY = deviceCaps.historyWarmupConcurrency;
   const HISTORY_WARMUP_TIMEOUT_MS = 12_000;
   const HISTORY_WARMUP_QUEUE_MAX = deviceCaps.historyWarmupQueueMax;
   const HISTORY_WARMUP_DELAY_MS = deviceCaps.historyWarmupDelayMs;
+  const historyHasMoreBypassUntil = new Map<string, number>();
+  const historyHasMoreBypassCount = new Map<string, number>();
   const historyRequestTimers = new Map<string, number>();
   const historyRequestAttempts = new Map<string, number>();
   const historyAutoRetryAt = new Map<string, number>();
@@ -104,6 +108,15 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   let pendingChatAutoScroll: { key: string; waitForHistory: boolean } | null = null;
 
   let historyPrependAnchor: HistoryPrependAnchor | null = null;
+  const debugHook = (kind: string, data?: any) => {
+    try {
+      const dbg = (globalThis as any).__yagodka_debug_monitor;
+      if (!dbg || typeof dbg.push !== "function") return;
+      dbg.push(String(kind || "history").trim() || "history", data);
+    } catch {
+      // ignore
+    }
+  };
 
   const historyRequestTimerKey = (key: string, mode: HistoryRequestMode) => `${key}:${mode}`;
 
@@ -138,6 +151,52 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     }
   };
 
+  const consumeHistoryHasMoreBypass = (key: string): boolean => {
+    const until = historyHasMoreBypassUntil.get(key);
+    if (!until) return false;
+    if (until < Date.now()) {
+      historyHasMoreBypassUntil.delete(key);
+      return false;
+    }
+    historyHasMoreBypassUntil.delete(key);
+    return true;
+  };
+
+  const markHistoryHasMoreBypass = (key: string) => {
+    const attempts = (historyHasMoreBypassCount.get(key) || 0) + 1;
+    if (attempts > HISTORY_HAS_MORE_BYPASS_MAX) return;
+    historyHasMoreBypassCount.set(key, attempts);
+    historyHasMoreBypassUntil.set(key, Date.now() + HISTORY_HAS_MORE_BYPASS_MS);
+    debugHook("history.has_more_bypass", {
+      key,
+      attempts,
+      reason: "historyHasMore=false_after_before_page",
+    });
+  };
+
+  const clearHistoryHasMoreBypass = (key: string) => {
+    historyHasMoreBypassUntil.delete(key);
+    historyHasMoreBypassCount.delete(key);
+  };
+
+  const clearAllHistoryHasMoreBypass = () => {
+    historyHasMoreBypassUntil.clear();
+    historyHasMoreBypassCount.clear();
+  };
+
+  const canLoadOlderHistory = (st: AppState, key: string, mode: string): boolean => {
+    if (st.historyHasMore?.[key] !== false) return true;
+    const consumed = consumeHistoryHasMoreBypass(key);
+    if (!consumed) return false;
+    debugHook("history.has_more_bypass", {
+      key,
+      mode,
+      reason: "consume",
+      detail: "historyHasMore=false_after_before_page",
+    });
+    return true;
+  };
+
   const armHistoryPrefetchTimeout = (key: string) => {
     clearHistoryPrefetchTimer(key);
     const timer = window.setTimeout(() => {
@@ -153,14 +212,35 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     if (st.conn !== "connected") return;
     const key = conversationKey(t);
     if (!key) return;
+    const force = Boolean(opts?.force);
 
     const cachedList = st.conversations?.[key] || [];
     const cachedCursor = st.historyCursor?.[key];
+    const cachedCursorValue = typeof cachedCursor === "number" && Number.isFinite(cachedCursor) && cachedCursor > 0 ? Math.floor(cachedCursor) : null;
     const cachedHasServer =
       cachedList.some((m) => typeof m?.id === "number" && Number.isFinite(m.id) && m.id > 0) ||
-      (typeof cachedCursor === "number" && Number.isFinite(cachedCursor) && cachedCursor > 0);
+      cachedCursorValue !== null;
+    const hasServerHistoryState = cachedHasServer;
+    const hasStaleLoaded = Boolean(st.historyLoaded?.[key]) && !hasServerHistoryState;
+    const effectiveLoaded = !force && Boolean(st.historyLoaded?.[key]) && hasServerHistoryState;
 
-    if (!st.historyLoaded[key] && cachedHasServer) {
+    if (hasStaleLoaded) {
+      debugHook("history.request.stale_loaded", {
+        key,
+        hasCursor: cachedCursorValue !== null,
+        cachedLen: cachedList.length,
+        force,
+      });
+      store.set((prev) => {
+        const prevLoaded = prev.historyLoaded || {};
+        if (!prevLoaded[key]) return prev;
+        const nextLoaded = { ...prevLoaded };
+        delete nextLoaded[key];
+        return { ...prev, historyLoaded: nextLoaded };
+      });
+    }
+
+    if (!force && !effectiveLoaded && hasServerHistoryState) {
       const derivedCursor =
         typeof cachedCursor === "number" && Number.isFinite(cachedCursor) && cachedCursor > 0
           ? Math.floor(cachedCursor)
@@ -174,19 +254,25 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     }
 
     // 1) Первый заход в чат: забираем "хвост" (последние сообщения), чтобы быстро заполнить экран.
-    if (!st.historyLoaded[key] && !cachedHasServer) {
+    if (!effectiveLoaded && !cachedHasServer) {
       if (historyRequested.has(key)) return;
       const cached = cachedList.length > 0;
+      const baseTarget = t.kind === "dm" ? { type: "history", peer: t.id } : { type: "history", room: t.id };
+      debugHook("history.request", {
+        key,
+        kind: t.kind,
+        mode: "tail",
+        force: Boolean(opts?.force),
+        prefetchBefore: Boolean(opts?.prefetchBefore),
+        hasServer: Boolean(cachedHasServer),
+        cachedLen: cachedList.length,
+      });
       // UX: ждём историю, если в кеше пусто, чтобы не дергать скролл на слабых устройствах.
       markChatAutoScroll(key, !cached);
       historyRequested.add(key);
       armHistoryRequestTimeout(key, "before");
       store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
-      if (t.kind === "dm") {
-        send({ type: "history", peer: t.id, before_id: 0, limit: 200 });
-      } else {
-        send({ type: "history", room: t.id, before_id: 0, limit: 200 });
-      }
+      send({ ...baseTarget, before_id: 0, limit: 200 });
       return;
     }
 
@@ -203,25 +289,39 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     // Если в локальном кэше нет ни одного серверного id (чат был пуст), "дельта" не применима —
     // забираем хвост ещё раз (это и поймает новые сообщения).
     if (!since) {
-      if (t.kind === "dm") {
-        send({ type: "history", peer: t.id, before_id: 0, limit: 200 });
-      } else {
-        send({ type: "history", room: t.id, before_id: 0, limit: 200 });
-      }
+      const baseTarget = t.kind === "dm" ? { type: "history", peer: t.id, since_id: since } : { type: "history", room: t.id, since_id: since };
+      debugHook("history.request", {
+        key,
+        kind: t.kind,
+        mode: "tail_reset",
+        force: Boolean(opts?.force),
+        prefetchBefore: Boolean(opts?.prefetchBefore),
+        since,
+      });
+      send({ ...baseTarget, before_id: 0, limit: 200 });
       return;
     }
 
     const rawLimit = Number(opts?.deltaLimit ?? 200);
     const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(2000, Math.floor(rawLimit))) : 200;
-    if (t.kind === "dm") {
-      send({ type: "history", peer: t.id, since_id: since, limit });
-    } else {
-      send({ type: "history", room: t.id, since_id: since, limit });
-    }
+    const deltaTarget = t.kind === "dm" ? { type: "history", peer: t.id, since_id: since } : { type: "history", room: t.id, since_id: since };
+    debugHook("history.request", {
+      key,
+      kind: t.kind,
+      mode: "delta",
+      since,
+      limit,
+      force: Boolean(opts?.force),
+      prefetchBefore: Boolean(opts?.prefetchBefore),
+    });
+    send({ ...deltaTarget, limit });
 
     if (!opts?.prefetchBefore) return;
     if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") return;
-    if (st.historyHasMore[key] === false) return;
+    if (!opts?.force && !canLoadOlderHistory(st, key, "prefetch")) {
+      debugHook("history.blocked", { key, mode: "prefetch", reason: "hasMore=false", limit: HISTORY_PREFETCH_LIMIT });
+      return;
+    }
     if (historyPrefetchRequested.has(key)) return;
     if (historyRequested.has(key)) return;
     if (st.historyLoading?.[key]) return;
@@ -229,6 +329,14 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     if (!before || !Number.isFinite(before) || before <= 0) return;
     historyPrefetchRequested.add(key);
     armHistoryPrefetchTimeout(key);
+    debugHook("history.request", {
+      key,
+      kind: t.kind,
+      mode: "prefetch",
+      before,
+      limit: HISTORY_PREFETCH_LIMIT,
+      force: Boolean(opts?.force),
+    });
     if (t.kind === "dm") {
       send({ type: "history", peer: t.id, before_id: before, limit: HISTORY_PREFETCH_LIMIT });
     } else {
@@ -268,6 +376,12 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       const st = store.get();
       if (!st.authed || st.conn !== "connected") return;
       if (!st.selected || conversationKey(st.selected) !== key) return;
+      debugHook("history.timeout.retry", {
+        key,
+        mode,
+        attempts,
+        canRetry,
+      });
       if (mode === "before") {
         if (st.historyLoaded?.[key]) {
           requestMoreHistory();
@@ -511,8 +625,10 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       return;
     }
     if (historyRequested.has(key)) return;
-    const hasMore = st.historyHasMore[key];
-    if (hasMore === false) return;
+    if (!canLoadOlderHistory(st, key, "more")) {
+      debugHook("history.blocked", { key, mode: "more", reason: "hasMore=false" });
+      return;
+    }
     const before = st.historyCursor[key];
     if (!before || !Number.isFinite(before) || before <= 0) return;
 
@@ -520,6 +636,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     historyRequested.add(key);
     armHistoryRequestTimeout(key, "before");
     store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+    debugHook("history.request", { key, mode: "more", before, kind: st.selected?.kind, force: false, prefetchBefore: false });
     if (st.selected.kind === "dm") {
       send({ type: "history", peer: st.selected.id, before_id: before, limit: 200 });
     } else {
@@ -597,7 +714,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     const key = conversationKey(st.selected);
     if (!key) return;
     if (!st.historyLoaded[key]) return;
-    if (st.historyHasMore[key] === false) return;
+    if (!canLoadOlderHistory(st, key, "scroll")) return;
     if (st.historyLoading[key]) return;
     if (historyRequested.has(key)) return;
     const cursor = st.historyCursor[key];
@@ -607,9 +724,9 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     const nearTopThreshold = Math.max(96, Math.min(220, Math.round(chatHost.clientHeight * 0.25)));
     const nearTop = scrollTop <= nearTopThreshold;
     if (!nearTop) return;
-    // Чтобы не "заливать" историю сама по себе при ререндере/программном скролле — требуем жест вверх
-    // (кроме случая когда уже ровно на 0).
-    if (!scrollingUp && scrollTop > 12) return;
+    // Чтобы не "заливать" историю при каждом маленьком скролле — требуем только явный upward-скролл
+    // или действительно верхнюю границу (когда scrollTop ≈ 0).
+    if (!scrollingUp && scrollTop > 4) return;
 
     if (key === lastHistoryAutoKey && now - lastHistoryAutoAt < 900) return;
     lastHistoryAutoKey = key;
@@ -631,7 +748,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     const key = conversationKey(st.selected);
     if (!key) return;
     if (!st.historyLoaded[key]) return;
-    if (st.historyHasMore[key] === false) return;
+    if (!canLoadOlderHistory(st, key, "fill")) return;
     if (st.historyLoading[key]) return;
     if (historyRequested.has(key)) return;
     const cursor = st.historyCursor[key];
@@ -753,9 +870,37 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
 
   const handleHistoryResultMessage: HistoryFeature["handleHistoryResultMessage"] = (msg) => {
     const key = msg?.room ? roomKey(String(msg.room)) : msg?.peer ? dmKey(String(msg.peer)) : "";
+    const rawHasMore = (msg as any).has_more;
+    const rows = Array.isArray(msg?.rows) ? msg.rows : [];
+    const before = msg?.before_id;
+    const preview = Boolean(msg?.preview);
+    const st = store.get();
+    debugHook("history.result", {
+      key,
+      rows: Array.isArray(rows) ? rows.length : 0,
+      before: before ?? null,
+      preview,
+      hasMore: rawHasMore !== undefined ? Boolean(rawHasMore) : undefined,
+      readUpToId: msg?.read_up_to_id ?? null,
+      hasHistoryLoading: Boolean(key && st.historyLoading?.[key]),
+    });
     if (!key) return;
     const isPreview = Boolean(msg?.preview);
     const isBefore = msg?.before_id !== undefined && msg?.before_id !== null;
+    const priorHasMore = st.historyHasMore?.[key];
+    if (!preview && priorHasMore === false && isBefore) {
+      if (rows.length > 0) {
+        if (rawHasMore === false) {
+          markHistoryHasMoreBypass(key);
+        } else {
+          clearHistoryHasMoreBypass(key);
+        }
+      } else {
+        clearHistoryHasMoreBypass(key);
+      }
+    } else if (rawHasMore === true) {
+      clearHistoryHasMoreBypass(key);
+    }
     if (isPreview) {
       historyPreviewRequested.delete(key);
     } else {
@@ -786,11 +931,10 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     if (!st.authed || !st.selfId || !st.selected) return;
     const key = conversationKey(st.selected);
     const cursor = key ? st.historyCursor?.[key] : null;
-    const hasMore = key ? st.historyHasMore?.[key] : undefined;
     if (
       key &&
       st.historyLoaded?.[key] &&
-      hasMore !== false &&
+      canLoadOlderHistory(st, key, "bootstrap") &&
       typeof cursor === "number" &&
       Number.isFinite(cursor) &&
       cursor > 0 &&
@@ -817,12 +961,14 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const onDisconnect: HistoryFeature["onDisconnect"] = () => {
     clearPendingRequests();
     historyDeltaRequestedAt.clear();
+    clearAllHistoryHasMoreBypass();
   };
 
   const onLogout: HistoryFeature["onLogout"] = () => {
     clearPendingRequests();
     historyDeltaRequestedAt.clear();
     historyPreviewLastAt.clear();
+    clearAllHistoryHasMoreBypass();
   };
 
   return {
@@ -845,4 +991,3 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     hasPendingActivityForUpdate,
   };
 }
-

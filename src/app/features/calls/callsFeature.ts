@@ -103,11 +103,69 @@ function callTitleForIncoming(
   return fromLabel ? `Входящий: ${fromLabel} (${kind})` : `Входящий (${kind})`;
 }
 
+type MediaAccessKind = "microphone" | "camera" | "camera_microphone";
+
+function formatMediaAccessError(kind: MediaAccessKind, errorRaw: unknown): string {
+  const name = String((errorRaw as { name?: unknown } | null)?.name ?? "").trim().toLowerCase();
+  const accessLabel =
+    kind === "camera" ? "камере" : kind === "camera_microphone" ? "камере и микрофону" : "микрофону";
+  if (name === "notallowederror" || name === "permissiondeniederror" || name === "securityerror") {
+    return `Разрешите доступ к ${accessLabel} в браузере`;
+  }
+  if (name === "notfounderror" || name === "devicesnotfounderror") {
+    if (kind === "camera") return "Камера не найдена";
+    if (kind === "camera_microphone") return "Камера или микрофон не найдены";
+    return "Микрофон не найден";
+  }
+  if (name === "notreadableerror" || name === "trackstarterror" || name === "aborterror") {
+    if (kind === "camera") return "Камера занята другим приложением";
+    if (kind === "camera_microphone") return "Камера или микрофон заняты другим приложением";
+    return "Микрофон занят другим приложением";
+  }
+  if (kind === "camera") return "Не удалось получить доступ к камере";
+  if (kind === "camera_microphone") return "Не удалось получить доступ к камере и микрофону";
+  return "Не удалось получить доступ к микрофону";
+}
+
+async function queryPermissionState(kind: "microphone" | "camera"): Promise<PermissionState | null> {
+  if (typeof navigator === "undefined" || !navigator.permissions?.query) return null;
+  try {
+    const status = await navigator.permissions.query({ name: kind as PermissionName });
+    return status?.state ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function formatCallEndNotice(reasonRaw: string, opts: { isCaller: boolean; bySelf: boolean }): { label: string; kind: "info" | "warn" } {
+  const reason = String(reasonRaw || "").trim();
+  if (reason === "timeout") return { label: "Нет ответа", kind: "warn" };
+  if (reason === "rejected") return { label: opts.isCaller ? "Собеседник отклонил звонок" : "Звонок отклонен", kind: "info" };
+  if (reason === "not_found") return { label: "Звонок уже недоступен", kind: "warn" };
+  if (reason === "not_allowed") return { label: "Нет доступа к звонку", kind: "warn" };
+  if (reason === "gc") return { label: "Звонок завершен по таймауту активности", kind: "warn" };
+  if (reason === "ended") return { label: opts.bySelf ? "Звонок завершен" : "Собеседник завершил звонок", kind: "info" };
+  return { label: "Звонок завершен", kind: "info" };
+}
+
 export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
   const { store, send, showToast, tabNotifier, formatTargetLabel, formatSenderLabel } = deps;
   let callCreateLocalId: string | null = null;
   let callCreateTimeoutTimer: number | null = null;
+  let mediaAccessInFlight = false;
   const abortedLocalIds = new Map<string, number>();
+
+  function sendInviteAck(callIdRaw: string) {
+    const callId = String(callIdRaw || "").trim();
+    if (!callId) return;
+    const st = store.get();
+    if (st.conn !== "connected" || !st.authed) return;
+    try {
+      send({ type: "call_invite_ack", call_id: callId });
+    } catch {
+      // ignore
+    }
+  }
 
   function pruneAbortedLocalIds(now: number) {
     // Keep this bounded; local_id is only used for the "create -> result" handshake.
@@ -153,18 +211,101 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     }, 9000);
   }
 
+  function resolveStartCallContext(quiet = false): { st: AppState; sel: NonNullable<AppState["selected"]> } | null {
+    const st = store.get();
+    if (st.modal) return null;
+    if (!st.authed || st.conn !== "connected") {
+      if (!quiet) showToast("Нет соединения", { kind: "warn", timeoutMs: 5000 });
+      return null;
+    }
+    if (!getMeetBaseUrl()) {
+      if (!quiet) showToast("Звонки не настроены (нет meet URL)", { kind: "warn", timeoutMs: 7000 });
+      return null;
+    }
+    const sel = st.selected;
+    if (!sel || st.page !== "main") {
+      if (!quiet) store.set({ status: "Выберите контакт или чат" });
+      return null;
+    }
+    if (sel.kind === "board") {
+      if (!quiet) showToast("Звонки на досках пока недоступны", { kind: "warn", timeoutMs: 6000 });
+      return null;
+    }
+    if (callCreateLocalId) {
+      if (!quiet) showToast("Звонок уже создаётся…", { kind: "info", timeoutMs: 4000 });
+      return null;
+    }
+    return { st, sel };
+  }
+
+  async function ensureMediaAccess(mode: CallMode): Promise<boolean> {
+    if (typeof navigator === "undefined") return true;
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.getUserMedia) return true;
+    if (mediaAccessInFlight) {
+      showToast("Подтвердите запрос камеры/микрофона в браузере", { kind: "info", timeoutMs: 5000, placement: "center" });
+      return false;
+    }
+
+    // If browser already has explicit deny, it may skip prompts; surface a clear action hint.
+    const micState = await queryPermissionState("microphone");
+    if (micState === "denied") {
+      showToast("Доступ к микрофону запрещён в настройках сайта/браузера", { kind: "warn", timeoutMs: 9000, placement: "center" });
+      return false;
+    }
+    if (mode === "video") {
+      const camState = await queryPermissionState("camera");
+      if (camState === "denied") {
+        showToast("Доступ к камере запрещён в настройках сайта/браузера", { kind: "warn", timeoutMs: 9000, placement: "center" });
+        return false;
+      }
+    }
+
+    mediaAccessInFlight = true;
+    async function requestMedia(constraints: MediaStreamConstraints, kind: MediaAccessKind): Promise<boolean> {
+      let stream: MediaStream | null = null;
+      try {
+        stream = await mediaDevices.getUserMedia(constraints);
+        return true;
+      } catch (error) {
+        showToast(formatMediaAccessError(kind, error), { kind: "warn", timeoutMs: 8000, placement: "center" });
+        return false;
+      } finally {
+        try {
+          for (const track of stream?.getTracks() ?? []) track.stop();
+        } catch {
+          // ignore
+        }
+      }
+    }
+    try {
+      // Request microphone first so users always see/resolve mic permission explicitly.
+      const micOk = await requestMedia({ audio: true, video: false }, "microphone");
+      if (!micOk) return false;
+      if (mode !== "video") return true;
+      const camOk = await requestMedia({ audio: false, video: true }, "camera");
+      return camOk;
+    } finally {
+      mediaAccessInFlight = false;
+    }
+  }
+
   function acceptCall(callIdRaw: string) {
+    void acceptCallInternal(callIdRaw);
+  }
+
+  async function acceptCallInternal(callIdRaw: string) {
     const callId = String(callIdRaw || "").trim();
     if (!callId) return;
-    const stNow = store.get();
-    const modal = stNow.modal;
+    const stBefore = store.get();
+    const modal = stBefore.modal;
     if (!modal || modal.kind !== "call" || String(modal.callId || "").trim() !== callId) return;
     const roomName = String(modal.roomName || "").trim();
     const mode: CallMode = String(modal.mode || "").trim() === "audio" ? "audio" : "video";
     const joinUrl = roomName ? buildMeetJoinUrl(roomName, mode) : null;
     if (!joinUrl) {
       showToast("Звонки не настроены (нет meet URL)", { kind: "warn", timeoutMs: 7000 });
-      if (stNow.conn === "connected" && stNow.authed) {
+      if (stBefore.conn === "connected" && stBefore.authed) {
         try {
           send({ type: "call_reject", call_id: callId });
         } catch {
@@ -174,6 +315,11 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       store.set({ modal: null });
       return;
     }
+    if (!(await ensureMediaAccess(mode))) return;
+
+    const stNow = store.get();
+    const modalNow = stNow.modal;
+    if (!modalNow || modalNow.kind !== "call" || String(modalNow.callId || "").trim() !== callId) return;
 
     if (stNow.conn === "connected" && stNow.authed) {
       try {
@@ -215,29 +361,16 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
   }
 
   function startCall(mode: CallMode) {
-    const st = store.get();
-    if (st.modal) return;
-    if (!st.authed || st.conn !== "connected") {
-      showToast("Нет соединения", { kind: "warn", timeoutMs: 5000 });
-      return;
-    }
-    if (!getMeetBaseUrl()) {
-      showToast("Звонки не настроены (нет meet URL)", { kind: "warn", timeoutMs: 7000 });
-      return;
-    }
-    const sel = st.selected;
-    if (!sel || st.page !== "main") {
-      store.set({ status: "Выберите контакт или чат" });
-      return;
-    }
-    if (sel.kind === "board") {
-      showToast("Звонки на досках пока недоступны", { kind: "warn", timeoutMs: 6000 });
-      return;
-    }
-    if (callCreateLocalId) {
-      showToast("Звонок уже создаётся…", { kind: "info", timeoutMs: 4000 });
-      return;
-    }
+    void startCallInternal(mode);
+  }
+
+  async function startCallInternal(mode: CallMode) {
+    const firstCtx = resolveStartCallContext(false);
+    if (!firstCtx) return;
+    if (!(await ensureMediaAccess(mode))) return;
+    const ctx = resolveStartCallContext(true);
+    if (!ctx) return;
+    const { st, sel } = ctx;
     callCreateLocalId = `call-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
     const target: TargetRef = sel.kind === "dm" ? { kind: "dm", id: sel.id } : { kind: "group", id: sel.id };
     const title = callTitleForTarget(st, target, mode, false, formatTargetLabel);
@@ -375,6 +508,14 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         },
         status: "Звонок…",
       });
+      if (tabNotifier.shouldShowToast(`call_ringing:${callId}`)) {
+        const targetLabel = target ? formatTargetLabel(st, target) : "";
+        showToast(targetLabel ? `Вызываем: ${targetLabel}` : "Вызываем…", {
+          kind: "info",
+          timeoutMs: 6000,
+          placement: "center",
+        });
+      }
       return true;
     }
 
@@ -385,9 +526,30 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       const mode: CallMode = String(msg?.mode ?? "").trim() === "audio" ? "audio" : "video";
       const roomId = typeof msg?.room === "string" ? String(msg.room).trim() : "";
       if (!callId || !roomName || !fromId) return true;
+      sendInviteAck(callId);
 
       const stNow = store.get();
       if (stNow.modal?.kind === "call") {
+        const currentCallId = String(stNow.modal.callId || "").trim();
+        if (currentCallId === callId) {
+          store.set((prev) => {
+            if (prev.modal?.kind !== "call" || String(prev.modal.callId || "").trim() !== callId) return prev;
+            return {
+              ...prev,
+              modal: {
+                ...prev.modal,
+                roomName,
+                mode,
+                from: fromId,
+                ...(roomId ? { room: roomId } : { to: String(msg?.to ?? "").trim() || null }),
+                incoming: true,
+                phase: "ringing",
+                phaseAt: Date.now(),
+              },
+            };
+          });
+          return true;
+        }
         if (stNow.conn === "connected" && stNow.authed) {
           try {
             send({ type: "call_reject", call_id: callId });
@@ -410,9 +572,6 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       } catch {
         // ignore
       }
-
-      const showToastHere = tabNotifier.shouldShowToast(notifKey);
-      if (!showToastHere) return true;
 
       const title = callTitleForIncoming(stNow, fromId, mode, roomId || null, formatTargetLabel, formatSenderLabel);
       const joinUrl = buildMeetJoinUrl(roomName, mode);
@@ -443,6 +602,17 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         },
         status: title,
       });
+      if (tabNotifier.shouldShowToast(`call_invite_toast:${callId}`)) {
+        showToast(title, {
+          kind: "info",
+          timeoutMs: 12000,
+          placement: "center",
+          actions: [
+            { id: `call_accept:${callId}`, label: "Принять", primary: true, onClick: () => acceptCall(callId) },
+            { id: `call_decline:${callId}`, label: "Отклонить", onClick: () => declineCall(callId) },
+          ],
+        });
+      }
 
       return true;
     }
@@ -476,20 +646,13 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         const endedBy = String(msg?.ended_by ?? "").trim();
         const isCaller = Boolean(me && fromId && me === fromId);
         const bySelf = Boolean(me && endedBy && me === endedBy);
-        const label =
-          reason === "timeout"
-            ? "Нет ответа"
-            : reason === "rejected"
-              ? "Звонок отклонен"
-              : reason === "ended"
-                ? bySelf
-                  ? "Звонок завершен"
-                  : "Звонок завершен"
-                : isCaller
-                  ? "Звонок завершен"
-                  : "Звонок завершен";
+        const notice = formatCallEndNotice(reason, { isCaller, bySelf });
         if (tabNotifier.shouldShowToast(`call_end:${callId}`)) {
-          showToast(label, { kind: reason === "timeout" ? "warn" : "info", timeoutMs: 7000 });
+          showToast(notice.label, {
+            kind: notice.kind,
+            timeoutMs: 7000,
+            ...(notice.kind === "warn" ? { placement: "center" as const } : {}),
+          });
         }
       }
       return true;

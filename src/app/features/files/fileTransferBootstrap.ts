@@ -35,7 +35,7 @@ export type FileTransferBootstrap = {
 type Deps = {
   store: Store<AppState>;
   deviceCaps: DeviceCaps;
-  send: (payload: any) => void;
+  send: (payload: any) => boolean;
   scheduleSaveFileTransfers: () => void;
   isUploadActive: (fileId: string) => boolean;
 };
@@ -51,6 +51,12 @@ export function initFileTransferBootstrap(deps: Deps): FileTransferBootstrap {
     fileHttpDisabled = true;
     try {
       console.warn("[files] HTTP data-plane disabled:", reason);
+    } catch {
+      // ignore
+    }
+    try {
+      const dbg = (globalThis as any).__yagodka_debug_monitor;
+      if (dbg && typeof dbg.push === "function") dbg.push("file.http.disabled", { reason: String(reason || "").trim() || "unknown" });
     } catch {
       // ignore
     }
@@ -163,4 +169,3 @@ export function initFileTransferBootstrap(deps: Deps): FileTransferBootstrap {
     previewAutoFailRetryMs,
   };
 }
-

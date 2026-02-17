@@ -93,6 +93,7 @@ export function createFileViewerCacheFeature(deps: FileViewerCacheFeatureDeps): 
         ...prev,
         fileTransfers: nextTransfers,
         modal: buildModalState({
+          fileId,
           url,
           name,
           size,

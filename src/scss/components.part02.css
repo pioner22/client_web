@@ -1234,6 +1234,7 @@
   --msg-meta-pad-y: 0px;
   --msg-meta-pad-x: 0px;
   --msg-meta-font-size: 12px;
+  --msg-meta-gap-after-text: 2px;
   --msg-meta-offset-y: calc(var(--msg-text-size, 16px) * 0.1 + var(--sp-2));
   --msg-from-pad-y: 0px;
   --msg-from-pad-x: 0px;
@@ -1366,7 +1367,7 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
 }
 
 .chat:not(.chat-board) .msg-meta {
-  margin-top: calc(var(--msg-meta-offset-y, 0px) + var(--sp-2));
+  margin-top: calc(var(--msg-meta-offset-y, 0px) + var(--sp-2) + var(--msg-meta-gap-after-text, 0px));
   margin-bottom: 0;
   row-gap: 3px;
   column-gap: 6px;
@@ -1411,7 +1412,7 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
 }
 
 .chat:not(.chat-board) .msg-tail:not(.msg-attach) .msg-body::after {
-  display: block;
+  display: none;
 }
 
 .chat:not(.chat-board) .msg-tail.msg-in:not(.msg-attach) .msg-body::after {
@@ -1629,7 +1630,7 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
 }
 
 .chat:not(.chat-board) .msg-attach .msg-meta {
-  margin: calc(var(--sp-2) + var(--msg-meta-offset-y, 0px)) 0 0;
+  margin: calc(var(--sp-2) + var(--msg-meta-offset-y, 0px) + var(--msg-meta-gap-after-text, 0px)) 0 0;
   padding: 0;
 }
 
@@ -1794,4 +1795,3 @@ html.is-standalone .chat:not(.chat-board) .chat-lines {
   top: 8px;
   z-index: 3;
 }
-

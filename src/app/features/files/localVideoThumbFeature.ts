@@ -164,7 +164,7 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
   const scheduleThumbPollRetry = (fileId: string) => {
     const fid = String(fileId || "").trim();
     if (!fid) return;
-    if (!prefetchAllowed || document.visibilityState === "hidden") return;
+    if (document.visibilityState === "hidden") return;
     const st = store.get();
     if (!st.authed || st.conn !== "connected" || !st.selfId) return;
     if (st.fileThumbs?.[fid]?.url) {
@@ -195,7 +195,7 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
         clearThumbPollRetry(fid);
         return;
       }
-      enqueueFileGet(fid, { priority: "prefetch", silent: true });
+      enqueueFileGet(fid, { priority: prefetchAllowed ? "prefetch" : "high", silent: true });
     }, delay);
     thumbPollRetries.set(fid, { attempts, timer, startedAt });
   };

@@ -221,6 +221,7 @@ export type ModalState =
     }
   | {
       kind: "file_viewer";
+      fileId?: string | null;
       url: string;
       name: string;
       size: number;

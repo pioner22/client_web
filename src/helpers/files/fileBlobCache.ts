@@ -1,7 +1,38 @@
+import { guessMimeTypeByName } from "./mimeGuess";
+
 const CACHE_VERSION = 1;
 const CACHE_NAME = `yagodka_file_blob_cache_v${CACHE_VERSION}`;
 const INDEX_VERSION = 3;
 const MAX_ENTRIES = 3200;
+
+function debugPush(kind: string, data?: any): void {
+  try {
+    const api = (globalThis as any)?.__yagodka_debug_monitor;
+    if (api && typeof api.push === "function") api.push(kind, data);
+  } catch {
+    // ignore
+  }
+}
+
+function debugPushError(kind: string, err: unknown, extra?: any): void {
+  try {
+    const api = (globalThis as any)?.__yagodka_debug_monitor;
+    if (api && typeof api.pushError === "function") api.pushError(kind, err, extra);
+  } catch {
+    // ignore
+  }
+}
+
+function isQuotaExceededError(err: unknown): boolean {
+  try {
+    const name = err && typeof err === "object" ? String((err as any).name || "") : "";
+    if (name === "QuotaExceededError") return true;
+    const msg = err instanceof Error ? String(err.message || "") : String(err || "");
+    return /quota/i.test(msg);
+  } catch {
+    return false;
+  }
+}
 
 export interface FileCachePolicy {
   maxBytes?: number;
@@ -190,18 +221,29 @@ export async function putCachedFileBlob(
     if (Number.isFinite(mediaW) && mediaW > 0) headers["X-Yagodka-Media-W"] = String(Math.trunc(mediaW));
     if (Number.isFinite(mediaH) && mediaH > 0) headers["X-Yagodka-Media-H"] = String(Math.trunc(mediaH));
     const payload = new Response(blob, { headers });
+    const bytesNeeded = Math.max(0, Math.round(size) || blob.size || 0);
+    let stored = false;
     try {
       await cache.put(url, payload);
-    } catch {
+      stored = true;
+    } catch (err) {
+      debugPushError(isQuotaExceededError(err) ? "cache.put.quota" : "cache.put.error", err, { fileId: fid, bytes: bytesNeeded });
       // Best-effort: CacheStorage quota may be exceeded or temporarily broken.
       // Drop a few oldest cached files for this user and retry once.
       try {
-        await pruneFileCacheForPut(uid, fid, Math.round(size) || blob.size || 0);
+        await pruneFileCacheForPut(uid, fid, bytesNeeded);
         await cache.put(url, payload);
-      } catch {
-        // ignore
+        stored = true;
+        debugPush("cache.put.recovered", { fileId: fid });
+      } catch (err2) {
+        debugPushError(
+          isQuotaExceededError(err2) ? "cache.put.retry.quota" : "cache.put.retry.error",
+          err2,
+          { fileId: fid, bytes: bytesNeeded }
+        );
       }
     }
+    if (!stored) return;
 
     const idx = touchIndex(loadIndex(uid), {
       fileId: fid,
@@ -216,6 +258,67 @@ export async function putCachedFileBlob(
   }
 }
 
+function normalizeMime(value: string | null | undefined): string | null {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return null;
+  const base = raw.split(";", 1)[0]?.trim().toLowerCase() || "";
+  return base ? base : null;
+}
+
+function isGenericMime(mime: string | null): boolean {
+  const mt = normalizeMime(mime);
+  if (!mt) return true;
+  return mt === "application/octet-stream" || mt === "binary/octet-stream";
+}
+
+async function sniffSafeMimeByMagic(blob: Blob): Promise<string | null> {
+  try {
+    const head = new Uint8Array(await blob.slice(0, 64).arrayBuffer());
+    if (!head.length) return null;
+    if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "image/jpeg";
+    if (
+      head.length >= 8 &&
+      head[0] === 0x89 &&
+      head[1] === 0x50 &&
+      head[2] === 0x4e &&
+      head[3] === 0x47 &&
+      head[4] === 0x0d &&
+      head[5] === 0x0a &&
+      head[6] === 0x1a &&
+      head[7] === 0x0a
+    ) {
+      return "image/png";
+    }
+    if (head.length >= 6) {
+      const s6 = String.fromCharCode(head[0], head[1], head[2], head[3], head[4], head[5]);
+      if (s6 === "GIF87a" || s6 === "GIF89a") return "image/gif";
+    }
+    if (head.length >= 12) {
+      const s4 = String.fromCharCode(head[0], head[1], head[2], head[3]);
+      const brand = String.fromCharCode(head[8], head[9], head[10], head[11]);
+      if (s4 === "RIFF" && brand === "WEBP") return "image/webp";
+      const box = String.fromCharCode(head[4], head[5], head[6], head[7]);
+      if (box === "ftyp") {
+        if (["heic", "heix", "hevc", "hevx", "heim"].includes(brand)) return "image/heic";
+        if (["mif1", "msf1", "heif"].includes(brand)) return "image/heif";
+        if (["avif", "avis"].includes(brand)) return "image/avif";
+        if (brand === "qt  ") return "video/quicktime";
+        if (["M4A ", "M4B ", "M4P "].includes(brand)) return "audio/mp4";
+        return "video/mp4";
+      }
+    }
+    if (head.length >= 2 && head[0] === 0x42 && head[1] === 0x4d) return "image/bmp";
+    if (head.length >= 4 && head[0] === 0x00 && head[1] === 0x00 && head[2] === 0x01 && head[3] === 0x00) return "image/x-icon";
+    if (head.length >= 5) {
+      const s5 = String.fromCharCode(head[0], head[1], head[2], head[3], head[4]);
+      if (s5 === "%PDF-") return "application/pdf";
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getCachedFileBlob(
   userId: string,
   fileId: string
@@ -225,13 +328,29 @@ export async function getCachedFileBlob(
   if (!uid || !fid) return null;
   if (!(await cacheAvailable())) return null;
   try {
+    const idxRows = loadIndex(uid);
+    const idxEntry = idxRows.find((e) => e.fileId === fid) || null;
+    const idxMime = normalizeMime(idxEntry?.mime ?? null);
+    const idxName = idxEntry?.name ? String(idxEntry.name) : null;
+
     const cache = await caches.open(CACHE_NAME);
     const url = requestUrl(uid, fid);
     const res = await cache.match(url);
     if (!res) return null;
-    const blob = await res.blob();
-    const mimeHeader = res.headers.get("Content-Type");
-    const mime = mimeHeader && mimeHeader.trim() ? mimeHeader.trim() : blob.type || null;
+    const rawBlob = await res.blob();
+    const mimeHeader = normalizeMime(res.headers.get("Content-Type"));
+    const blobMime = normalizeMime(rawBlob.type);
+    let mime = mimeHeader || blobMime || idxMime || null;
+    if (isGenericMime(mime) && idxName) {
+      const guessed = normalizeMime(guessMimeTypeByName(idxName));
+      if (guessed && !isGenericMime(guessed)) mime = guessed;
+    }
+    if (isGenericMime(mime)) {
+      const magic = await sniffSafeMimeByMagic(rawBlob);
+      if (magic) mime = magic;
+    }
+    const finalMime = mime && !isGenericMime(mime) ? mime : null;
+    const blob = finalMime && blobMime !== finalMime ? rawBlob.slice(0, rawBlob.size, finalMime) : rawBlob;
     const sizeHeader = res.headers.get("Content-Length");
     const sizeFromHeader = sizeHeader ? Number(sizeHeader) : NaN;
     const size = Number.isFinite(sizeFromHeader) && sizeFromHeader > 0 ? Math.round(sizeFromHeader) : blob.size || 0;
@@ -248,10 +367,10 @@ export async function getCachedFileBlob(
     const mediaW = Number.isFinite(mediaWRaw) && mediaWRaw > 0 ? Math.trunc(mediaWRaw) : null;
     const mediaH = Number.isFinite(mediaHRaw) && mediaHRaw > 0 ? Math.trunc(mediaHRaw) : null;
 
-    const idx = touchIndex(loadIndex(uid), { fileId: fid, ts: Date.now(), size: Math.round(size) || 0, mime, name: null });
+    const idx = touchIndex(idxRows, { fileId: fid, ts: Date.now(), size: Math.round(size) || 0, mime: finalMime, name: idxName });
     saveIndex(uid, idx);
 
-    return { blob, mime, size, w, h, mediaW, mediaH };
+    return { blob, mime: finalMime, size, w, h, mediaW, mediaH };
   } catch {
     return null;
   }
@@ -268,6 +387,7 @@ async function pruneFileCacheForPut(userId: string, keepFileId: string, bytesNee
   const cache = await caches.open(CACHE_NAME);
   const sorted = [...entries].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
   const target = Math.max(0, Math.round(bytesNeeded || 0)) || 0;
+  const maxRemove = target > 0 ? 256 : 64;
   let freed = 0;
   let removed = 0;
   const kept: CacheIndexEntry[] = [];
@@ -278,7 +398,7 @@ async function pruneFileCacheForPut(userId: string, keepFileId: string, bytesNee
       kept.push(e);
       continue;
     }
-    const canRemove = removed < 48 && (target <= 0 || freed < target);
+    const canRemove = removed < maxRemove && (target <= 0 || freed < target);
     if (!canRemove) {
       kept.push(e);
       continue;

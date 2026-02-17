@@ -507,7 +507,7 @@
 }
 
 :root[data-msg-view="bubble"] {
-  --messages-container-width: min(100%, 800px);
+  --messages-container-width: min(100%, 728px);
   --chat-input-max-width: var(--messages-container-width);
   --chat-line-gap: 4px;
   --msg-body-gap: 4px;

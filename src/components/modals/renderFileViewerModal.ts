@@ -17,6 +17,7 @@ export interface FileViewerModalActions {
   onPrev?: () => void;
   onNext?: () => void;
   onJump?: () => void;
+  onRecover?: () => void;
   onShare?: () => void;
   onForward?: () => void;
   onDelete?: () => void;
@@ -438,9 +439,17 @@ export function renderFileViewerModal(
     const scroll = el("div", { class: "viewer-img-scroll" }, [img]);
     zoomScroll = scroll;
     const preloaderText = el("div", { class: "viewer-preloader-text" }, ["Загрузка…"]);
+    const preloaderRetryBtn = actions.onRecover
+      ? (el("button", { class: "btn viewer-preloader-retry", type: "button" }, ["Попробовать ещё раз"]) as HTMLButtonElement)
+      : null;
+    if (preloaderRetryBtn) {
+      preloaderRetryBtn.addEventListener("click", () => actions.onRecover && actions.onRecover());
+    }
+    const preloaderActions = preloaderRetryBtn ? el("div", { class: "viewer-preloader-actions" }, [preloaderRetryBtn]) : null;
     const preloader = el("div", { class: "viewer-preloader", "aria-live": "polite" }, [
       el("div", { class: "viewer-preloader-spinner", "aria-hidden": "true" }, [""]),
       preloaderText,
+      ...(preloaderActions ? [preloaderActions] : []),
     ]);
     let panActive = false;
     let panMoved = false;
@@ -604,7 +613,15 @@ export function renderFileViewerModal(
       "error",
       () => {
         preloader.classList.add("viewer-preloader-failed");
-        preloaderText.textContent = "Не удалось загрузить";
+        const canRecover = Boolean(actions.onRecover);
+        preloaderText.textContent = canRecover ? "Не удалось загрузить. Пробуем восстановить…" : "Не удалось загрузить";
+        if (actions.onRecover) {
+          try {
+            actions.onRecover();
+          } catch {
+            // ignore
+          }
+        }
       },
       { once: true }
     );
@@ -644,6 +661,18 @@ export function renderFileViewerModal(
       };
       attemptPlay(false);
     }
+    video.addEventListener(
+      "error",
+      () => {
+        if (!actions.onRecover) return;
+        try {
+          actions.onRecover();
+        } catch {
+          // ignore
+        }
+      },
+      { once: true }
+    );
     body = el("div", { class: "viewer-media" }, [video]);
   } else if (isAudio) {
     const audio = el("audio", { class: "viewer-audio", src: safeHref, controls: "true", preload: "metadata" }) as HTMLAudioElement;

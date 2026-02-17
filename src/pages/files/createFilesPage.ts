@@ -590,6 +590,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     if (!st || !userId) return;
     const prefs = loadFileCachePrefs(userId);
     prefs.maxBytes = Number(cacheLimitSelect.value || prefs.maxBytes) || prefs.maxBytes;
+    prefs.userSetMaxBytes = true;
     saveFileCachePrefs(userId, prefs);
     void cleanupFileCache(userId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => refreshCacheStats(st));
   });
@@ -599,6 +600,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     if (!st || !userId) return;
     const prefs = loadFileCachePrefs(userId);
     prefs.autoCleanMs = Number(cacheCleanSelect.value || prefs.autoCleanMs) || prefs.autoCleanMs;
+    prefs.userSetAutoCleanMs = true;
     saveFileCachePrefs(userId, prefs);
     void cleanupFileCache(userId, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs }).then(() => {
       prefs.lastCleanAt = Date.now();

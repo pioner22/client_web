@@ -71,6 +71,12 @@ export class GatewayClient {
         try {
           const data = typeof ev.data === "string" ? ev.data : "";
           const msg = JSON.parse(data);
+          try {
+            const hook = (globalThis as any).__yagodka_debug_on_gateway_in;
+            if (typeof hook === "function") hook(msg);
+          } catch {
+            // ignore
+          }
           this.onMessage(msg);
         } catch {
           // ignore

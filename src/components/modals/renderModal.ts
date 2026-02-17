@@ -109,6 +109,7 @@ export interface ModalActions {
   onContextMenuAction: (itemId: string) => void;
   onFileViewerNavigate: (dir: "prev" | "next") => void;
   onFileViewerJump: () => void;
+  onFileViewerRecover?: () => void;
   onFileViewerShare: () => void;
   onFileViewerForward: () => void;
   onFileViewerDelete: () => void;
@@ -357,6 +358,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       modal.caption ?? null,
       meta,
       {
+        ...(actions.onFileViewerRecover ? { onRecover: actions.onFileViewerRecover } : {}),
         onClose: actions.onClose,
         ...(canPrev ? { onPrev: () => actions.onFileViewerNavigate("prev") } : {}),
         ...(canNext ? { onNext: () => actions.onFileViewerNavigate("next") } : {}),

@@ -26,3 +26,20 @@ test("calls: outgoing ringing shows Jitsi surface without waiting active", async
   const src = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
   assert.match(src, /const shouldShowMeeting = Boolean\(joinUrl\) && \(phase === "active" \|\| \(!incoming && phase === "ringing"\)\);/);
 });
+
+test("calls: call_invite is not blocked by toast dedupe", async () => {
+  const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
+  assert.ok(!/if \(!showToastHere\) return true;/.test(src));
+});
+
+test("calls: client sends call_invite_ack and dedupes same call invite", async () => {
+  const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
+  assert.match(src, /call_invite_ack/);
+  assert.match(src, /currentCallId === callId/);
+});
+
+test("calls: jitsi external API uses configured meet host", async () => {
+  const src = await readFile(path.resolve("src/helpers/calls/jitsiExternalApi.ts"), "utf8");
+  assert.ok(!/meet\.jit\.si/.test(src));
+  assert.match(src, /return host;/);
+});

@@ -2,6 +2,36 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.723",
+    date: "2026-02-17",
+    fixed: [
+      "Mobile/iOS: догрузка истории стала стабильнее — устранено «залипание» при прокрутке к старым сообщениям.",
+      "Mobile/iOS: загрузка превью/медиа стала устойчивее при проблемах HTTP (автоматический fallback на резервный канал).",
+    ],
+    improved: ["Диагностика: расширены события в DBG для точного разбора проблем с медиа."],
+  },
+  {
+    version: "0.1.722",
+    date: "2026-02-14",
+    fixed: [
+      "Mobile/iOS: видимые превью медиа (image/video) теперь всегда инициируют file_get (даже без prefetch/Save-Data) — превью не остаются пустыми.",
+      "Mobile/iOS: chatHost touch-tracking не перехватывает жест, если touchstart был на кнопке/ссылке; микродвижение не отменяет tap по превью.",
+    ],
+  },
+  {
+    version: "0.1.721",
+    date: "2026-02-13",
+    fixed: [
+      "Mobile: изображения в viewer восстанавливаются при ошибке загрузки (refresh URL → fallback скачивание).",
+      "Mobile: загрузка thumb использует cache: no-store (устранение проблем кэша на iOS).",
+    ],
+  },
+  {
+    version: "0.1.720",
+    date: "2026-02-13",
+    fixed: ["Mobile: по тапу на превью фото теперь стабильно открывается viewer."],
+  },
+  {
     version: "0.1.712",
     date: "2026-02-09",
     improved: [

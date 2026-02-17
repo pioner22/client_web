@@ -156,7 +156,7 @@ html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-
   position: static;
   right: auto;
   bottom: auto;
-  margin-top: calc(var(--msg-meta-offset-y, 0px) + var(--sp-2));
+  margin-top: calc(var(--msg-meta-offset-y, 0px) + var(--sp-2) + var(--msg-meta-gap-after-text, 0px));
   padding: 0;
   border: 0;
   background: transparent;
@@ -226,7 +226,7 @@ html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-
   position: static;
   right: auto;
   bottom: auto;
-  margin-top: calc(var(--msg-meta-offset-y, 0px) + var(--sp-2));
+  margin-top: calc(var(--msg-meta-offset-y, 0px) + var(--sp-2) + var(--msg-meta-gap-after-text, 0px));
   padding: 0;
   border: 0;
   background: transparent;
