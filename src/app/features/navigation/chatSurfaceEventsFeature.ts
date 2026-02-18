@@ -170,6 +170,7 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
   };
 
   const buildFileViewerState = (params: {
+    fileId?: string | null;
     url: string;
     name: string;
     size: number;
@@ -225,7 +226,19 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
                   const captionRaw = preview?.getAttribute("data-caption");
                   const captionText = captionRaw ? String(captionRaw).trim() : "";
                   const caption = captionText || null;
-                  void fileViewer.openFromMessageIndex(chatKey, Math.trunc(msgIdx), { url, name, size, mime, caption, fileId });
+                  const kindRaw = String(preview?.getAttribute("data-file-kind") || "")
+                    .trim()
+                    .toLowerCase();
+                  const kindHint = kindRaw === "image" || kindRaw === "video" ? (kindRaw as "image" | "video") : null;
+                  void fileViewer.openFromMessageIndex(chatKey, Math.trunc(msgIdx), {
+                    kindHint: kindHint || undefined,
+                    url,
+                    name,
+                    size,
+                    mime,
+                    caption,
+                    fileId,
+                  });
                 } catch {
                   // ignore
                 }
@@ -721,11 +734,15 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
         const url = String(viewBtn.getAttribute("data-url") || "").trim();
         const fileId = String(viewBtn.getAttribute("data-file-id") || "").trim();
         if (!url && !fileId) return;
+        const kindRaw = String(viewBtn.getAttribute("data-file-kind") || "")
+          .trim()
+          .toLowerCase();
+        const kindHint = kindRaw === "image" || kindRaw === "video" ? (kindRaw as "image" | "video") : null;
         const name = String(viewBtn.getAttribute("data-name") || "файл");
         const size = Number(viewBtn.getAttribute("data-size") || 0) || 0;
         const mimeRaw = viewBtn.getAttribute("data-mime");
         const mime = mimeRaw ? String(mimeRaw) : null;
-        const autoplay = isVideoLikeFile(name, mime);
+        const autoplay = kindHint === "video" || isVideoLikeFile(name, mime);
         const captionRaw = viewBtn.getAttribute("data-caption");
         const caption = captionRaw ? String(captionRaw).trim() : "";
         const captionText = caption || null;
@@ -735,41 +752,15 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
         const chatKey = st.selected ? conversationKey(st.selected) : null;
         e.preventDefault();
         closeMobileSidebar();
-        if (chatKey && msgIdx !== null && Number.isFinite(msgIdx)) {
-          void fileViewer.openFromMessageIndex(chatKey, Math.trunc(msgIdx), {
-            url,
-            name,
-            size,
-            mime,
-            caption: captionText,
-            fileId: fileId || null,
-          });
-          return;
-        }
-        if (url) {
-          store.set({
-            modal: buildFileViewerState({
-              url,
-              name,
-              size,
-              mime,
-              caption: captionText,
-              autoplay,
-              chatKey: null,
-              msgIdx: null,
-            }),
-          });
-          return;
-        }
-        void (async () => {
-          const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean(t.url));
-          if (existing?.url) {
+        const openFallback = () => {
+          if (url) {
             store.set({
               modal: buildFileViewerState({
-                url: existing.url,
+                fileId: fileId || null,
+                url,
                 name,
-                size: size || existing.size || 0,
-                mime: mime || existing.mime || null,
+                size,
+                mime,
                 caption: captionText,
                 autoplay,
                 chatKey: null,
@@ -778,29 +769,67 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
             });
             return;
           }
-          const opened = await tryOpenFileViewerFromCache(fileId, {
-            name,
-            size,
-            mime,
-            caption: captionText,
-            chatKey: null,
-            msgIdx: null,
-          });
-          if (opened) return;
+          void (async () => {
+            const snapshot = store.get();
+            const existing = snapshot.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean(t.url));
+            if (existing?.url) {
+              store.set({
+                modal: buildFileViewerState({
+                  fileId: fileId || null,
+                  url: existing.url,
+                  name,
+                  size: size || existing.size || 0,
+                  mime: mime || existing.mime || null,
+                  caption: captionText,
+                  autoplay,
+                  chatKey: null,
+                  msgIdx: null,
+                }),
+              });
+              return;
+            }
+            const opened = await tryOpenFileViewerFromCache(fileId, {
+              name,
+              size,
+              mime,
+              caption: captionText,
+              chatKey: null,
+              msgIdx: null,
+            });
+            if (opened) return;
 
-          const latest = store.get();
-          if (latest.conn !== "connected") {
-            store.set({ status: "Нет соединения" });
-            return;
-          }
-          if (!latest.authed) {
-            store.set({ status: "Сначала войдите или зарегистрируйтесь" });
-            return;
-          }
-          setPendingFileViewer({ fileId, name, size, mime, caption: captionText, chatKey: null, msgIdx: null });
-          enqueueFileGet(fileId, { priority: "high" });
-          store.set({ status: `Скачивание: ${name}` });
-        })();
+            const latest = store.get();
+            if (latest.conn !== "connected") {
+              store.set({ status: "Нет соединения" });
+              return;
+            }
+            if (!latest.authed) {
+              store.set({ status: "Сначала войдите или зарегистрируйтесь" });
+              return;
+            }
+            setPendingFileViewer({ fileId, name, size, mime, caption: captionText, chatKey: null, msgIdx: null });
+            enqueueFileGet(fileId, { priority: "high" });
+            store.set({ status: `Скачивание: ${name}` });
+          })();
+        };
+
+        if (chatKey && msgIdx !== null && Number.isFinite(msgIdx)) {
+          void (async () => {
+            const handled = await fileViewer.openFromMessageIndex(chatKey, Math.trunc(msgIdx), {
+              kindHint: kindHint || undefined,
+              url,
+              name,
+              size,
+              mime,
+              caption: captionText,
+              fileId: fileId || null,
+            });
+            if (handled) return;
+            openFallback();
+          })();
+          return;
+        }
+        openFallback();
         return;
       }
     });

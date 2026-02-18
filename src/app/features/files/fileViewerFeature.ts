@@ -19,6 +19,7 @@ export interface FileViewerModalParams {
 }
 
 export interface FileViewerOpenFallback {
+  kindHint?: "image" | "video";
   url?: string | null;
   name?: string;
   size?: number;
@@ -66,7 +67,7 @@ export interface FileViewerFeatureDeps {
 
 export interface FileViewerFeature {
   buildModalState: (params: FileViewerModalParams) => FileViewerModalState;
-  openFromMessageIndex: (chatKey: string, msgIdx: number, fallback?: FileViewerOpenFallback) => Promise<void>;
+  openFromMessageIndex: (chatKey: string, msgIdx: number, fallback?: FileViewerOpenFallback) => Promise<boolean>;
   recoverCurrent: () => Promise<void>;
   navigate: (dir: "prev" | "next") => void;
   openAtIndex: (msgIdx: number) => void;
@@ -145,13 +146,19 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     };
   }
 
-  async function openFromMessageIndex(chatKey: string, msgIdx: number, fallback?: FileViewerOpenFallback): Promise<void> {
+  async function openFromMessageIndex(chatKey: string, msgIdx: number, fallback?: FileViewerOpenFallback): Promise<boolean> {
     const st = store.get();
     const msgs = st.conversations[chatKey] || [];
-    if (!Number.isFinite(msgIdx) || msgIdx < 0 || msgIdx >= msgs.length) return;
+    if (!Number.isFinite(msgIdx) || msgIdx < 0 || msgIdx >= msgs.length) {
+      debugHook("file.viewer.open.skip", { chatKey, msgIdx, reason: "bad_idx" });
+      return false;
+    }
     const msg = msgs[msgIdx];
     const att = msg?.attachment;
-    if (!att || att.kind !== "file") return;
+    if (!att || att.kind !== "file") {
+      debugHook("file.viewer.open.skip", { chatKey, msgIdx, reason: "no_file_attachment" });
+      return false;
+    }
     const fileIdRaw =
       typeof att.fileId === "string" && att.fileId.trim() ? att.fileId.trim() : String(fallback?.fileId || "").trim();
     const fileId = fileIdRaw || null;
@@ -166,7 +173,12 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const size = Number(att.size || entry?.size || fallback?.size || 0) || 0;
     const mime = (att.mime ?? entry?.mime ?? fallback?.mime) || null;
     const hasThumb = Boolean(fileId && st.fileThumbs?.[fileId]?.url);
-    if (!(isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || hasThumb)) return;
+    const kindHint = fallback?.kindHint === "image" || fallback?.kindHint === "video" ? fallback.kindHint : null;
+    const hintedMedia = kindHint === "image" || kindHint === "video";
+    if (!(hintedMedia || isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || hasThumb)) {
+      debugHook("file.viewer.open.skip", { chatKey, msgIdx, fileId, reason: "not_media_like", kindHint });
+      return false;
+    }
     debugHook("file.viewer.open.start", {
       chatKey,
       msgIdx,
@@ -191,26 +203,26 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
         source: entry?.url ? "transfer" : "fallback",
       });
       store.set({ modal: buildModalState({ fileId, url, name, size, mime, caption, autoplay, chatKey, msgIdx }) });
-      return;
+      return true;
     }
     if (!fileId) {
       debugHook("file.viewer.open.blocked", { chatKey, msgIdx, reason: "no_file_id" });
       store.set({ status: "Файл пока недоступен" });
-      return;
+      return true;
     }
     const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime, caption, chatKey, msgIdx });
     debugHook("file.viewer.open.cache", { chatKey, msgIdx, fileId, ok: Boolean(opened) });
-    if (opened) return;
+    if (opened) return true;
     const latest = store.get();
     if (latest.conn !== "connected") {
       debugHook("file.viewer.open.blocked", { chatKey, msgIdx, fileId, reason: "no_conn" });
       store.set({ status: "Нет соединения" });
-      return;
+      return true;
     }
     if (!latest.authed) {
       debugHook("file.viewer.open.blocked", { chatKey, msgIdx, fileId, reason: "not_authed" });
       store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
-      return;
+      return true;
     }
     try {
       debugHook("file.viewer.open.http_url", { chatKey, msgIdx, fileId, phase: "start" });
@@ -238,7 +250,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
           msgIdx,
         }),
       });
-      return;
+      return true;
     } catch (err) {
       const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
       debugHook("file.viewer.open.http_url", { chatKey, msgIdx, fileId, phase: "fail", reason: errMsg || "http_url_failed" });
@@ -247,6 +259,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       enqueueFileGet(fileId, { priority: "high" });
       debugHook("file.viewer.open.fallback_file_get", { chatKey, msgIdx, fileId, priority: "high" });
       store.set({ status: `Скачивание: ${name}` });
+      return true;
     }
   }
 
