@@ -49,11 +49,122 @@ import {
   unreadAnchorForMessage,
 } from "./renderChatHelpers";
 
+function transferProgressTickOnly(prev: AppState["fileTransfers"], next: AppState["fileTransfers"]): boolean {
+  if (!Array.isArray(prev) || !Array.isArray(next)) return false;
+  if (prev.length !== next.length) return false;
+  const prevByLocalId = new Map<string, FileTransferEntry>();
+  for (const entry of prev) {
+    const lid = String(entry?.localId || "").trim();
+    if (!lid) return false;
+    if (prevByLocalId.has(lid)) return false;
+    prevByLocalId.set(lid, entry);
+  }
+  const norm = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+  const arrEq = (a?: string[] | null, b?: string[] | null): boolean => {
+    if (a === b) return true;
+    const aa = Array.isArray(a) ? a : [];
+    const bb = Array.isArray(b) ? b : [];
+    if (aa.length !== bb.length) return false;
+    for (let i = 0; i < aa.length; i += 1) {
+      if (String(aa[i]) !== String(bb[i])) return false;
+    }
+    return true;
+  };
+  for (const entry of next) {
+    const lid = String(entry?.localId || "").trim();
+    if (!lid) return false;
+    const prevEntry = prevByLocalId.get(lid);
+    if (!prevEntry) return false;
+    if (norm(prevEntry.id) !== norm(entry.id)) return false;
+    if (String(prevEntry.name) !== String(entry.name)) return false;
+    if (Number(prevEntry.size || 0) !== Number(entry.size || 0)) return false;
+    if (String(prevEntry.direction) !== String(entry.direction)) return false;
+    if (String(prevEntry.peer) !== String(entry.peer)) return false;
+    if (norm(prevEntry.room) !== norm(entry.room)) return false;
+    if (String(prevEntry.status) !== String(entry.status)) return false;
+    if (norm(prevEntry.error) !== norm(entry.error)) return false;
+    if (norm(prevEntry.url) !== norm(entry.url)) return false;
+    if (norm(prevEntry.mime) !== norm(entry.mime)) return false;
+    if (!arrEq(prevEntry.acceptedBy, entry.acceptedBy)) return false;
+    if (!arrEq(prevEntry.receivedBy, entry.receivedBy)) return false;
+    const prevProgress = Math.round(Number(prevEntry.progress || 0));
+    const nextProgress = Math.round(Number(entry.progress || 0));
+    if (prevProgress !== nextProgress && entry.status !== "uploading" && entry.status !== "downloading") return false;
+  }
+  return true;
+}
+
+function patchChatTransferProgress(scrollHost: HTMLElement, transfers: AppState["fileTransfers"]): void {
+  if (!Array.isArray(transfers) || transfers.length === 0) return;
+  const byLocalId = new Map<string, FileTransferEntry>();
+  const byFileId = new Map<string, FileTransferEntry>();
+  for (const t of transfers) {
+    const lid = String(t?.localId || "").trim();
+    if (lid) byLocalId.set(lid, t);
+    const fid = String(t?.id || "").trim();
+    if (fid) byFileId.set(fid, t);
+  }
+  const updateProgressbar = (node: HTMLElement, transfer: FileTransferEntry) => {
+    const pct = Math.max(0, Math.min(100, Math.round(transfer.progress || 0)));
+    const label = transfer.status === "uploading" ? `Загрузка ${pct}%` : transfer.status === "downloading" ? `Скачивание ${pct}%` : `${pct}%`;
+    try {
+      node.setAttribute("aria-valuenow", String(pct));
+      node.setAttribute("title", label);
+      node.setAttribute("aria-label", label);
+    } catch {
+      // ignore
+    }
+    const candy = node.querySelector(".file-progress-candy") as HTMLElement | null;
+    if (candy) {
+      try {
+        candy.style.setProperty("--file-progress", `${pct}%`);
+      } catch {
+        // ignore
+      }
+    }
+  };
+  const nodes = scrollHost.querySelectorAll("button.chat-file-preview[data-local-id], button.chat-file-preview[data-file-id]");
+  for (const node of Array.from(nodes)) {
+    if (!(node instanceof HTMLButtonElement)) continue;
+    const localId = String(node.getAttribute("data-local-id") || "").trim();
+    const fileId = String(node.getAttribute("data-file-id") || "").trim();
+    const transfer = localId ? byLocalId.get(localId) : fileId ? byFileId.get(fileId) : null;
+    if (!transfer) continue;
+    if (transfer.status !== "uploading" && transfer.status !== "downloading") continue;
+    const media = node.querySelector(".chat-media-progress") as HTMLElement | null;
+    if (media) updateProgressbar(media, transfer);
+    const row = node.closest(".file-row") as HTMLElement | null;
+    if (row) {
+      const bar = row.querySelector(".file-progress") as HTMLElement | null;
+      if (bar) updateProgressbar(bar, transfer);
+    }
+  }
+}
+
 export function renderChat(layout: Layout, state: AppState) {
   const mobileUi = isMobileLikeUi();
   const boardUi = Boolean(state.selected && state.selected.kind === "board");
   const scrollHost = layout.chatHost;
   const hostState = scrollHost as any;
+  const albumLayout = (() => {
+    const fallbackMaxWidth = mobileUi ? 340 : 420;
+    const fallbackSpacing = 1;
+    const parseCssPx = (raw: string, fallback: number): number => {
+      const v = String(raw || "").trim().toLowerCase();
+      if (!v) return fallback;
+      const n = Number(v.endsWith("px") ? v.slice(0, -2) : v);
+      if (!Number.isFinite(n) || n <= 0) return fallback;
+      return Math.round(n);
+    };
+    try {
+      const st = getComputedStyle(layout.chat);
+      const maxWidth = parseCssPx(st.getPropertyValue("--chat-album-frame-max"), fallbackMaxWidth);
+      const spacing = parseCssPx(st.getPropertyValue("--chat-album-gap"), fallbackSpacing);
+      return { maxWidth, minWidth: 100, spacing };
+    } catch {
+      return { maxWidth: fallbackMaxWidth, minWidth: 100, spacing: fallbackSpacing };
+    }
+  })();
   const key = state.selected ? conversationKey(state.selected) : "";
   const selectionState = state.chatSelection && state.chatSelection.key === key ? state.chatSelection : null;
   const selectionSet =
@@ -151,6 +262,7 @@ export function renderChat(layout: Layout, state: AppState) {
         boardsRef: AppState["boards"];
         rightPanelRef: AppState["rightPanel"];
         fileTransfersRef: AppState["fileTransfers"];
+        fileThumbsRef: AppState["fileThumbs"];
         messageView: AppState["messageView"];
         searchFilter: AppState["chatSearchFilter"];
         searchDate: AppState["chatSearchDate"];
@@ -188,10 +300,40 @@ export function renderChat(layout: Layout, state: AppState) {
     boardsRef: state.boards,
     rightPanelRef: state.rightPanel,
     fileTransfersRef: state.fileTransfers,
+    fileThumbsRef: state.fileThumbs,
     messageView: state.messageView,
     searchFilter: state.chatSearchFilter,
     searchDate: state.chatSearchDate,
   };
+  const canSkipRenderExceptTransfers =
+    prevRender &&
+    prevRender.key === renderState.key &&
+    prevRender.selectedKind === renderState.selectedKind &&
+    prevRender.selectedId === renderState.selectedId &&
+    prevRender.page === renderState.page &&
+    prevRender.msgsRef === renderState.msgsRef &&
+    prevRender.historyLoaded === renderState.historyLoaded &&
+    prevRender.historyLoading === renderState.historyLoading &&
+    prevRender.historyHasMore === renderState.historyHasMore &&
+    prevRender.historyVirtualStart === renderState.historyVirtualStart &&
+    prevRender.searchOpen === renderState.searchOpen &&
+    prevRender.searchQuery === renderState.searchQuery &&
+    prevRender.searchResultsOpen === renderState.searchResultsOpen &&
+    prevRender.searchPos === renderState.searchPos &&
+    prevRender.searchHitsRef === renderState.searchHitsRef &&
+    prevRender.selectionRef === renderState.selectionRef &&
+    prevRender.pinnedIdsRef === renderState.pinnedIdsRef &&
+    prevRender.pinnedActive === renderState.pinnedActive &&
+    prevRender.lastRead === renderState.lastRead &&
+    prevRender.avatarsRev === renderState.avatarsRev &&
+    prevRender.profilesRef === renderState.profilesRef &&
+    prevRender.groupsRef === renderState.groupsRef &&
+    prevRender.boardsRef === renderState.boardsRef &&
+    prevRender.rightPanelRef === renderState.rightPanelRef &&
+    prevRender.fileThumbsRef === renderState.fileThumbsRef &&
+    prevRender.messageView === renderState.messageView &&
+    prevRender.searchFilter === renderState.searchFilter &&
+    prevRender.searchDate === renderState.searchDate;
   const canSkipRender =
     prevRender &&
     prevRender.key === renderState.key &&
@@ -218,9 +360,19 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.boardsRef === renderState.boardsRef &&
     prevRender.rightPanelRef === renderState.rightPanelRef &&
     prevRender.fileTransfersRef === renderState.fileTransfersRef &&
+    prevRender.fileThumbsRef === renderState.fileThumbsRef &&
     prevRender.messageView === renderState.messageView &&
     prevRender.searchFilter === renderState.searchFilter &&
     prevRender.searchDate === renderState.searchDate;
+  if (
+    canSkipRenderExceptTransfers &&
+    prevRender.fileTransfersRef !== renderState.fileTransfersRef &&
+    transferProgressTickOnly(prevRender.fileTransfersRef, renderState.fileTransfersRef)
+  ) {
+    hostState.__chatRenderState = renderState;
+    patchChatTransferProgress(scrollHost, renderState.fileTransfersRef);
+    return;
+  }
   if (canSkipRender) return;
   hostState.__chatRenderState = renderState;
   const mobileLikeUi = isMobileLikeUi();
@@ -385,6 +537,7 @@ export function renderChat(layout: Layout, state: AppState) {
 		          partial: groupCounts.partial,
 		          groupStartIdx: group[0].idx,
 		          groupEndIdx: lastIdx,
+              albumLayout,
 		        });
 		        if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
 		        const lastItem = group[group.length - 1];

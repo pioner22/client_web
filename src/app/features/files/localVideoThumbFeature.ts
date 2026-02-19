@@ -60,9 +60,9 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
 
   const thumbPollRetries = new Map<string, { attempts: number; timer: number | null; startedAt: number }>();
   const THUMB_POLL_BASE_MS = slowNetwork ? 1100 : constrained ? 750 : 450;
-  const THUMB_POLL_MAX_DELAY_MS = slowNetwork ? 7000 : 6000;
-  const THUMB_POLL_MAX_ATTEMPTS = slowNetwork ? 5 : 6;
-  const THUMB_POLL_MAX_WINDOW_MS = slowNetwork ? 26_000 : 18_000;
+  const THUMB_POLL_MAX_DELAY_MS = slowNetwork ? 9000 : 8000;
+  const THUMB_POLL_MAX_ATTEMPTS = slowNetwork ? 12 : constrained ? 14 : 16;
+  const THUMB_POLL_MAX_WINDOW_MS = slowNetwork ? 240_000 : constrained ? 210_000 : 180_000;
 
   const localVideoPosterInFlight = new Set<string>();
   const LOCAL_VIDEO_POSTER_MAX_SIDE = 512;
@@ -177,6 +177,19 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
     const startedAt = existing?.startedAt ?? now;
     const attempts = existing?.attempts ?? 0;
     if (attempts >= THUMB_POLL_MAX_ATTEMPTS || now - startedAt > THUMB_POLL_MAX_WINDOW_MS) {
+      try {
+        const dbg = (globalThis as any).__yagodka_debug_monitor;
+        if (dbg && typeof dbg.push === "function") {
+          dbg.push("file.thumb.poll.stop", {
+            fileId: fid,
+            attempts,
+            elapsed_ms: Math.max(0, now - startedAt),
+            reason: attempts >= THUMB_POLL_MAX_ATTEMPTS ? "max_attempts" : "window_exceeded",
+          });
+        }
+      } catch {
+        // ignore
+      }
       clearThumbPollRetry(fid);
       return;
     }

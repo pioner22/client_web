@@ -13,6 +13,8 @@ import { renderBoardPost } from "../../helpers/boards/boardPost";
 import type { Layout } from "../layout/types";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
+import { getCachedLocalMediaAspectRatio } from "../../helpers/chat/localMediaAspectCache";
+import { layoutTelegramAlbum } from "../../helpers/chat/telegramGroupedLayout";
 import {
   HISTORY_VIRTUAL_THRESHOLD,
   HISTORY_VIRTUAL_WINDOW,
@@ -562,6 +564,27 @@ export function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { 
   };
 }
 
+function renderMediaProgressOverlay(transfer: FileTransferEntry): HTMLElement | null {
+  if (transfer.status !== "uploading" && transfer.status !== "downloading") return null;
+  const progress = Math.max(0, Math.min(100, Math.round(transfer.progress || 0)));
+  const label = transfer.status === "uploading" ? `Загрузка ${progress}%` : `Скачивание ${progress}%`;
+  const candy = el("span", { class: "file-progress-candy", "aria-hidden": "true" });
+  candy.style.setProperty("--file-progress", `${progress}%`);
+  return el(
+    "span",
+    {
+      class: "chat-media-progress",
+      role: "progressbar",
+      title: label,
+      "aria-label": label,
+      "aria-valuemin": "0",
+      "aria-valuemax": "100",
+      "aria-valuenow": String(progress),
+    },
+    [candy]
+  );
+}
+
 export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number; caption?: string | null }): HTMLElement | null {
   if (!info.isImage) return null;
   const previewUrl = info.thumbUrl || info.url;
@@ -579,6 +602,9 @@ export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { clas
     ...(fixedAspect ? { "data-media-fixed": "1" } : {}),
     "aria-label": `Открыть: ${info.name}`,
   };
+  if (info.transfer?.localId) attrs["data-local-id"] = info.transfer.localId;
+  const progressOverlay = info.transfer ? renderMediaProgressOverlay(info.transfer) : null;
+  if (progressOverlay) attrs["data-media-progress"] = "1";
   if (info.url) attrs["data-url"] = info.url;
   if (info.fileId) attrs["data-file-id"] = info.fileId;
   if (info.mime) attrs["data-mime"] = info.mime;
@@ -588,10 +614,14 @@ export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { clas
   const child = previewUrl
     ? el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" })
     : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
-  const btn = el("button", attrs, [child]) as HTMLButtonElement;
-  if (info.fileId && !fixedAspect) {
-    const cachedRatio = getCachedMediaAspectRatio(info.fileId);
-    if (cachedRatio) btn.style.aspectRatio = String(cachedRatio);
+  const btnChildren: HTMLElement[] = [child];
+  if (progressOverlay) btnChildren.push(progressOverlay);
+  const btn = el("button", attrs, btnChildren) as HTMLButtonElement;
+  if (!fixedAspect) {
+    const cachedRatio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
+    const cachedLocalRatio = !cachedRatio && info.transfer?.localId ? getCachedLocalMediaAspectRatio(info.transfer.localId) : null;
+    const ratio = cachedRatio ?? cachedLocalRatio;
+    if (ratio) btn.style.aspectRatio = String(ratio);
   }
   return btn;
 }
@@ -603,12 +633,13 @@ export function renderVideoPreviewButton(
   if (!info.isVideo) return null;
   const fixedAspect = Boolean(opts?.className && opts.className.split(/\s+/).includes("chat-file-preview-album"));
   const mobileUi = Boolean(opts?.mobileUi);
+  const progressOverlay = info.transfer ? renderMediaProgressOverlay(info.transfer) : null;
   const bytes = Number(info.size || 0) || 0;
   const INLINE_VIDEO_MAX_BYTES = 8 * 1024 * 1024;
   const canInlineVideo = Boolean(!fixedAspect && info.url && !mobileUi && bytes > 0 && bytes <= INLINE_VIDEO_MAX_BYTES);
   const previewUrl = fixedAspect ? info.thumbUrl : canInlineVideo ? info.url : info.thumbUrl;
   if (!previewUrl && !info.fileId) return null;
-  const hasVisual = Boolean((!fixedAspect && info.url) || info.thumbUrl);
+  const hasVisual = Boolean(previewUrl);
   const classes = hasVisual
     ? ["chat-file-preview", "chat-file-preview-video"]
     : ["chat-file-preview", "chat-file-preview-video", "chat-file-preview-empty"];
@@ -619,11 +650,13 @@ export function renderVideoPreviewButton(
     "data-action": "open-file-viewer",
     ...(fixedAspect ? { "data-media-fixed": "1" } : {}),
     ...(canInlineVideo ? { "data-video-state": "paused" } : {}),
+    ...(progressOverlay ? { "data-media-progress": "1" } : {}),
     "data-file-kind": "video",
     "data-name": info.name,
     "data-size": String(info.size || 0),
     "aria-label": `Открыть: ${info.name}`,
   };
+  if (info.transfer?.localId) attrs["data-local-id"] = info.transfer.localId;
   if (info.url) attrs["data-url"] = info.url;
   if (info.fileId) attrs["data-file-id"] = info.fileId;
   if (info.mime) attrs["data-mime"] = info.mime;
@@ -651,14 +684,19 @@ export function renderVideoPreviewButton(
         : (el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Видео"]) as HTMLDivElement),
   ];
   if (canInlineVideo) {
-    children.push(el("span", { class: "chat-file-video-toggle", "data-action": "media-toggle", "aria-hidden": "true" }, [""]));
-  } else {
+    if (!progressOverlay) {
+      children.push(el("span", { class: "chat-file-video-toggle", "data-action": "media-toggle", "aria-hidden": "true" }, [""]));
+    }
+  } else if (!progressOverlay) {
     children.push(el("span", { class: "chat-file-video-toggle", "aria-hidden": "true" }, [""]));
   }
+  if (progressOverlay) children.push(progressOverlay);
   const btn = el("button", attrs, children) as HTMLButtonElement;
-  if (info.fileId && !fixedAspect) {
-    const cachedRatio = getCachedMediaAspectRatio(info.fileId);
-    if (cachedRatio) btn.style.aspectRatio = String(cachedRatio);
+  if (!fixedAspect) {
+    const cachedRatio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
+    const cachedLocalRatio = !cachedRatio && info.transfer?.localId ? getCachedLocalMediaAspectRatio(info.transfer.localId) : null;
+    const ratio = cachedRatio ?? cachedLocalRatio;
+    if (ratio) btn.style.aspectRatio = String(ratio);
   }
   return btn;
 }
@@ -677,20 +715,15 @@ export function isWebpStickerCandidate(info: FileAttachmentInfo, ratio: number):
 }
 
 export function isRoundVideoCandidate(info: FileAttachmentInfo, ratio: number): boolean {
-  if (!info.isVideo) return false;
-  const r = Number(ratio);
-  if (!Number.isFinite(r) || r <= 0) return false;
-  if (r < 0.85 || r > 1.18) return false;
-  const size = Number(info.size || 0) || 0;
-  if (size <= 0 || size > 25_000_000) return false;
-  return true;
+  void info;
+  void ratio;
+  return false;
 }
 
 export function isAlbumCandidate(msg: ChatMessage, info: FileAttachmentInfo | null): info is FileAttachmentInfo {
   if (!info || !(info.isImage || info.isVideo)) return false;
   if (msg.kind === "sys") return false;
   if (info.offer) return false;
-  if (info.hasProgress) return false;
   const caption = String(msg.text || "").trim();
   if (caption && !caption.startsWith("[file]")) return false;
   if (!info.url && !info.fileId) return false;
@@ -1221,7 +1254,7 @@ export function messageLine(
         ? "file-row file-row-chat file-row-audio"
         : "file-row file-row-chat";
     fileRowEl = el("div", { class: fileRowClass }, rowChildren);
-    if (isVisualMedia) {
+    if (isVisualMedia && !opts?.mobileUi) {
       if (!stickerCandidate && !roundVideoCandidate) {
         const baseW = resolvePreviewBaseWidthPx(info);
         if (baseW) {
@@ -1350,7 +1383,14 @@ export function renderAlbumLine(
   state: AppState,
   items: AlbumItem[],
   friendLabels?: Map<string, string>,
-  opts?: { selectionMode?: boolean; selected?: boolean; partial?: boolean; groupStartIdx?: number; groupEndIdx?: number }
+  opts?: {
+    selectionMode?: boolean;
+    selected?: boolean;
+    partial?: boolean;
+    groupStartIdx?: number;
+    groupEndIdx?: number;
+    albumLayout?: { maxWidth: number; minWidth: number; spacing: number };
+  }
 ): HTMLElement {
   const first = items[0];
   const last = items[items.length - 1];
@@ -1421,7 +1461,29 @@ export function renderAlbumLine(
   let hasCaption = false;
   let emojiOnly = false;
   const albumFileKind = items.every((it) => it && it.info && it.info.isVideo) ? "video" : "image";
-  for (const item of items) {
+  const layoutCfg = opts?.albumLayout ?? { maxWidth: 420, minWidth: 100, spacing: 1 };
+  const sizes = items.map((item) => {
+    const w = item.info.thumbW || item.info.mediaW;
+    const h = item.info.thumbH || item.info.mediaH;
+    if (w && h) return { w, h };
+    const ratio =
+      (item.info.fileId ? getCachedMediaAspectRatio(item.info.fileId) : null) ??
+      (item.info.transfer?.localId ? getCachedLocalMediaAspectRatio(item.info.transfer.localId) : null);
+    const r = typeof ratio === "number" && Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+    return { w: Math.max(1, Math.round(1000 * r)), h: 1000 };
+  });
+  const layout = (() => {
+    try {
+      return layoutTelegramAlbum(sizes, layoutCfg);
+    } catch {
+      return null;
+    }
+  })();
+  const albumW = layout && Number.isFinite(layout.width) && layout.width > 0 ? layout.width : null;
+  const albumH = layout && Number.isFinite(layout.height) && layout.height > 0 ? layout.height : null;
+  const layoutOk = Boolean(albumW && albumH && layout && Array.isArray(layout.layout) && layout.layout.length === items.length);
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
     const caption = String(item.msg.text || "").trim();
     const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
     if (viewerCaption) {
@@ -1434,10 +1496,16 @@ export function renderAlbumLine(
         ? renderVideoPreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx, caption: viewerCaption })
         : null;
     if (!preview) continue;
-    const wrap = el("div", { class: "chat-album-item", "data-msg-idx": String(item.idx) }, [preview]);
+    const lay = layoutOk && layout ? layout.layout[i] : null;
+    const style = lay && albumW && albumH ? `width: ${(lay.geometry.width / albumW) * 100}%; height: ${(lay.geometry.height / albumH) * 100}%; top: ${(lay.geometry.y / albumH) * 100}%; left: ${(lay.geometry.x / albumW) * 100}%;` : "";
+    const wrap = el("div", { class: "chat-album-item", "data-msg-idx": String(item.idx), ...(layoutOk && style ? { style } : {}) }, [preview]);
     gridItems.push(wrap);
   }
-  const grid = el("div", { class: "chat-album-grid", "data-count": String(items.length) }, gridItems);
+  const grid = el("div", { class: layoutOk ? "chat-album-grid chat-album-grid-mosaic" : "chat-album-grid", "data-count": String(items.length) }, gridItems);
+  if (layoutOk && albumW && albumH) {
+    grid.style.width = `${Math.round(albumW)}px`;
+    grid.style.height = `${Math.round(albumH)}px`;
+  }
   if (selectionBtn) {
     selectionBtnPlacedInGrid = true;
     grid.append(selectionBtn);
@@ -1490,4 +1558,3 @@ export function renderAlbumLine(
   }
   return line;
 }
-

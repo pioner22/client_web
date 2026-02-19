@@ -7,9 +7,15 @@ function stableKey(m: ChatMessage): string {
   return `ts:${m.ts}|from:${m.from}|room:${m.room ?? ""}|to:${m.to ?? ""}|text:${m.text}`;
 }
 
-function sortKey(m: ChatMessage): number {
-  if (m.id !== undefined && m.id !== null) return Number(m.id);
-  return Number(m.ts) || 0;
+function sortTs(m: ChatMessage): number {
+  const ts = Number(m.ts);
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function sortId(m: ChatMessage): number {
+  const id = m.id;
+  const n = typeof id === "number" ? id : id == null ? 0 : Number(id);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function mergeLocalFields(prev: ChatMessage, next: ChatMessage): ChatMessage {
@@ -33,6 +39,17 @@ export function mergeMessages(prev: ChatMessage[], incoming: ChatMessage[]): Cha
     map.set(key, existing ? mergeLocalFields(existing, m) : m);
   }
   const merged = Array.from(map.values());
-  merged.sort((a, b) => sortKey(a) - sortKey(b));
+  merged.sort((a, b) => {
+    const at = sortTs(a);
+    const bt = sortTs(b);
+    if (at !== bt) return at - bt;
+    const ai = sortId(a);
+    const bi = sortId(b);
+    if (ai !== bi) return ai - bi;
+    const al = typeof a.localId === "string" ? a.localId : "";
+    const bl = typeof b.localId === "string" ? b.localId : "";
+    if (al !== bl) return al.localeCompare(bl);
+    return 0;
+  });
   return merged;
 }

@@ -1,4 +1,5 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
+import { setCachedLocalMediaAspectRatio } from "../../../helpers/chat/localMediaAspectCache";
 import { clampMediaAspectRatio, setCachedMediaAspectRatio } from "../../../helpers/chat/mediaAspectCache";
 import type { Layout } from "../../../components/layout/types";
 import type { Store } from "../../../stores/store";
@@ -119,6 +120,8 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
     const clamped = clampMediaAspectRatio(ratio);
     button.style.aspectRatio = String(clamped);
     const fileId = String(button.getAttribute("data-file-id") || "").trim();
+    const localId = String(button.getAttribute("data-local-id") || "").trim();
+    if (localId) setCachedLocalMediaAspectRatio(localId, clamped);
     if (fileId) setCachedMediaAspectRatio(fileId, clamped);
 
     const msg = button.closest("div.msg") as HTMLElement | null;

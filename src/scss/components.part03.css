@@ -317,9 +317,11 @@
 .file-row-chat.file-row-image.file-row-progress .file-main {
   display: inline-flex;
   position: absolute;
-  left: 8px;
-  bottom: 8px;
+  left: 50%;
+  top: 50%;
+  bottom: auto;
   right: auto;
+  transform: translate(-50%, -50%);
   padding: 0;
   border-radius: 0;
   border: 0;
@@ -337,6 +339,22 @@
 
 .file-row-chat.file-row-image.file-row-progress .file-progress {
   margin-top: 0;
+}
+
+.file-row-chat.file-row-image.file-row-progress .file-progress-candy {
+  width: 46px;
+  height: 46px;
+  animation: none;
+  background: conic-gradient(#ffffff var(--file-progress), rgba(255, 255, 255, 0.22) 0);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 10px 18px rgba(0, 0, 0, 0.28);
+}
+
+.file-row-chat.file-row-image.file-row-progress .file-progress-candy::after {
+  inset: 7px;
+  background: color-mix(in srgb, rgba(0, 0, 0, 0.42), transparent 15%);
+  box-shadow: none;
 }
 
 .file-row-chat.file-row-image .file-actions {
@@ -481,6 +499,30 @@
   transition: transform 140ms ease, opacity 140ms ease, background 140ms ease;
 }
 
+.chat-media-progress {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.chat-media-progress .file-progress-candy {
+  width: clamp(26px, 40%, 46px);
+  height: clamp(26px, 40%, 46px);
+  animation: none;
+  background: conic-gradient(#ffffff var(--file-progress), rgba(255, 255, 255, 0.22) 0);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 10px 18px rgba(0, 0, 0, 0.28);
+}
+
+.chat-media-progress .file-progress-candy::after {
+  inset: 7px;
+  background: color-mix(in srgb, rgba(0, 0, 0, 0.42), transparent 15%);
+  box-shadow: none;
+}
+
 .chat-file-video-toggle::before {
   content: "";
   width: 18px;
@@ -553,6 +595,18 @@
   padding: 0;
 }
 
+.chat:not(.chat-board) .chat-file-preview.chat-file-preview-album {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  background: var(--panel2);
+}
+
+.chat:not(.chat-board) .chat-file-preview.chat-file-preview-album[data-file-kind="video"] {
+  aspect-ratio: 4 / 3;
+}
+
 .chat-file-preview-album .chat-file-img {
   height: 100%;
   max-height: none;
@@ -579,10 +633,10 @@
 
 .chat-album-grid {
   display: grid;
-  gap: 2px;
+  gap: var(--chat-album-gap, 2px);
   grid-auto-flow: dense;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  max-width: min(100%, 451px, var(--msg-body-max-width));
+  max-width: min(100%, var(--chat-album-frame-max, 451px), var(--msg-body-max-width));
 }
 
 .chat-album-grid[data-count="2"],
@@ -640,6 +694,44 @@
   position: relative;
   overflow: hidden;
   background: var(--message-highlighting-color);
+}
+
+/* Telegram-like album mosaic (absolute positioned tiles; see helpers/chat/telegramGroupedLayout.ts). */
+.chat-album-grid.chat-album-grid-mosaic {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--msg-in-radius);
+}
+
+.msg-out .chat-album-grid.chat-album-grid-mosaic {
+  border-radius: var(--msg-out-radius);
+}
+
+.chat-album-grid.chat-album-grid-mosaic .chat-album-item {
+  position: absolute;
+  border-radius: 0;
+}
+
+.chat-album-grid.chat-album-grid-mosaic .chat-file-preview-album {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  aspect-ratio: auto;
+  display: block;
+  background: transparent;
+}
+
+.chat-album-grid.chat-album-grid-mosaic .chat-file-preview-album.chat-file-preview-empty {
+  min-height: 0;
+}
+
+.chat-album-grid.chat-album-grid-mosaic .chat-file-img,
+.chat-album-grid.chat-album-grid-mosaic .chat-file-video {
+  width: 100%;
+  height: 100%;
 }
 
 .btn.chat-post-btn {

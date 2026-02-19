@@ -331,11 +331,14 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     });
     if (priority === "prefetch") fileGetPrefetchInFlight.add(fid);
     if (silent) silentFileGets.add(fid);
-    const wantsHttp = !isFileHttpDisabled();
+    const fileHttpDisabled = isFileHttpDisabled();
+    const wantsHttp = silent || !fileHttpDisabled;
     debugHook("file.get.transport", {
       fileId: fid,
-      fileHttpDisabled: isFileHttpDisabled(),
+      silent,
+      fileHttpDisabled,
       transport: wantsHttp ? "http" : "ws",
+      ...(wantsHttp && fileHttpDisabled ? { note: "silent_forced_http" } : {}),
     });
     const ok = send({ type: "file_get", file_id: fid, ...(wantsHttp ? { transport: "http" } : {}) });
     debugHook("file.get.send", { fileId: fid, ok: Boolean(ok), transport: wantsHttp ? "http" : "ws" });

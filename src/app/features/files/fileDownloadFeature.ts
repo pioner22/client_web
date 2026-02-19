@@ -335,9 +335,11 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
           }
         } catch (err) {
           const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
-          debugHook("file.thumb.error", { fileId, reason: errMsg || "thumb_fetch_failed" });
-          const shouldDisableHttp = err instanceof TypeError || errMsg === "http_404";
-          if (shouldDisableHttp) disableFileHttp(errMsg || "thumb_fetch_failed");
+          debugHook("file.thumb.error", {
+            fileId,
+            reason: errMsg || "thumb_fetch_failed",
+            type: err instanceof Error ? String(err.name || "") : null,
+          });
           scheduleThumbPollRetry(fileId);
         } finally {
           clearSilentFileGet(fileId);

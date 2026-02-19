@@ -82,6 +82,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const HISTORY_PREFETCH_TIMEOUT_MS = 10_000;
   const HISTORY_HAS_MORE_BYPASS_MS = 8_000;
   const HISTORY_HAS_MORE_BYPASS_MAX = 2;
+  const HISTORY_BOTTOM_SYNC_MIN_MS = 2_500;
   const HISTORY_PREFETCH_LIMIT = deviceCaps.historyPrefetchLimit;
   const HISTORY_WARMUP_LIMIT = deviceCaps.historyWarmupLimit;
   const HISTORY_WARMUP_CONCURRENCY = deviceCaps.historyWarmupConcurrency;
@@ -93,6 +94,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const historyRequestTimers = new Map<string, number>();
   const historyRequestAttempts = new Map<string, number>();
   const historyAutoRetryAt = new Map<string, number>();
+  const historyBottomSyncAt = new Map<string, number>();
   const historyWarmupQueue: TargetRef[] = [];
   const historyWarmupQueued = new Set<string>();
   const historyWarmupRequested = new Set<string>();
@@ -717,6 +719,18 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     if (!canLoadOlderHistory(st, key, "scroll")) return;
     if (st.historyLoading[key]) return;
     if (historyRequested.has(key)) return;
+    const maxTop = Math.max(0, chatHost.scrollHeight - chatHost.clientHeight);
+    const atBottom = scrollTop >= maxTop - 24;
+    if (atBottom) {
+      const last = historyBottomSyncAt.get(key) || 0;
+      if (now - last >= HISTORY_BOTTOM_SYNC_MIN_MS) {
+        historyBottomSyncAt.set(key, now);
+        debugHook("history.bottom_sync", { key, mode: "scroll", deltaLimit: 2000 });
+        requestHistory(st.selected, { deltaLimit: 2000 });
+      }
+      return;
+    }
+
     const cursor = st.historyCursor[key];
     if (!cursor || !Number.isFinite(cursor) || cursor <= 0) return;
 
@@ -962,6 +976,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     clearPendingRequests();
     historyDeltaRequestedAt.clear();
     clearAllHistoryHasMoreBypass();
+    historyBottomSyncAt.clear();
   };
 
   const onLogout: HistoryFeature["onLogout"] = () => {
@@ -969,6 +984,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     historyDeltaRequestedAt.clear();
     historyPreviewLastAt.clear();
     clearAllHistoryHasMoreBypass();
+    historyBottomSyncAt.clear();
   };
 
   return {

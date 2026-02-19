@@ -1543,6 +1543,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function handleFileMessage(msg: any): boolean {
+    if (msg?.type === "file_preview_ready") { const fileId = String(msg?.file_id ?? "").trim(); if (fileId) enqueueFileGet(fileId, { priority: "prefetch", silent: true }); return true; }
     if (fileOffers?.handleMessage(msg)) return true;
     return fileDownload?.handleMessage(msg) ?? false;
   }

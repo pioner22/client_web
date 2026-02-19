@@ -3,9 +3,13 @@ import type { StorageLike } from "./drafts";
 import { APP_MSG_MAX_LEN } from "../../config/app";
 
 const HISTORY_CACHE_VERSION = 2;
-const HISTORY_CACHE_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HISTORY_CACHE_MAX_AGE_MS = 45 * DAY_MS;
 const HISTORY_CACHE_MAX_CONVERSATIONS = 400;
 const HISTORY_CACHE_MAX_MESSAGES = 2800;
+const IOS_HISTORY_CACHE_MAX_AGE_MS = 21 * DAY_MS;
+const IOS_HISTORY_CACHE_MAX_CONVERSATIONS = 180;
+const IOS_HISTORY_CACHE_MAX_MESSAGES = 900;
 const HISTORY_CACHE_MAX_KEY_LEN = 96;
 
 type HistoryCachePayload = {
@@ -23,6 +27,63 @@ export type HistoryCache = {
   historyHasMore: Record<string, boolean>;
   historyLoaded: Record<string, boolean>;
 };
+
+type HistoryCacheLimits = {
+  maxAgeMs: number;
+  maxConversations: number;
+  maxMessages: number;
+};
+
+function debugPush(kind: string, data?: any): void {
+  try {
+    const api = (globalThis as any)?.__yagodka_debug_monitor;
+    if (api && typeof api.push === "function") api.push(kind, data);
+  } catch {
+    // ignore
+  }
+}
+
+function debugPushError(kind: string, err: unknown, extra?: any): void {
+  try {
+    const api = (globalThis as any)?.__yagodka_debug_monitor;
+    if (api && typeof api.pushError === "function") api.pushError(kind, err, extra);
+  } catch {
+    // ignore
+  }
+}
+
+function isQuotaExceededError(err: unknown): boolean {
+  try {
+    const name = err && typeof err === "object" ? String((err as any).name || "") : "";
+    if (name === "QuotaExceededError") return true;
+    const msg = err instanceof Error ? String(err.message || "") : String(err || "");
+    return /quota/i.test(msg);
+  } catch {
+    return false;
+  }
+}
+
+function isAppleMobile(): boolean {
+  try {
+    const nav: any = typeof navigator !== "undefined" ? navigator : null;
+    const ua = String(nav?.userAgent || "");
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    // iPadOS often reports "Macintosh" but has touch points.
+    if (/Macintosh/i.test(ua) && Number(nav?.maxTouchPoints || 0) > 1) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function cacheLimits(): HistoryCacheLimits {
+  const appleMobile = isAppleMobile();
+  return {
+    maxAgeMs: appleMobile ? IOS_HISTORY_CACHE_MAX_AGE_MS : HISTORY_CACHE_MAX_AGE_MS,
+    maxConversations: appleMobile ? IOS_HISTORY_CACHE_MAX_CONVERSATIONS : HISTORY_CACHE_MAX_CONVERSATIONS,
+    maxMessages: appleMobile ? IOS_HISTORY_CACHE_MAX_MESSAGES : HISTORY_CACHE_MAX_MESSAGES,
+  };
+}
 
 function storageKey(userId: string): string | null {
   const id = String(userId || "").trim();
@@ -154,9 +215,15 @@ function sanitizeMessage(raw: unknown): ChatMessage | null {
   return next;
 }
 
-function sortKey(m: ChatMessage): number {
-  if (m.id !== undefined && m.id !== null) return Number(m.id);
-  return Number(m.ts) || 0;
+function sortTs(m: ChatMessage): number {
+  const ts = Number(m.ts);
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function sortId(m: ChatMessage): number {
+  const id = m.id;
+  const n = typeof id === "number" ? id : id == null ? 0 : Number(id);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function sanitizeMessageList(raw: unknown): ChatMessage[] {
@@ -167,7 +234,18 @@ function sanitizeMessageList(raw: unknown): ChatMessage[] {
     if (!msg) continue;
     out.push(msg);
   }
-  out.sort((a, b) => sortKey(a) - sortKey(b));
+  out.sort((a, b) => {
+    const at = sortTs(a);
+    const bt = sortTs(b);
+    if (at !== bt) return at - bt;
+    const ai = sortId(a);
+    const bi = sortId(b);
+    if (ai !== bi) return ai - bi;
+    const al = typeof a.localId === "string" ? a.localId : "";
+    const bl = typeof b.localId === "string" ? b.localId : "";
+    if (al !== bl) return al.localeCompare(bl);
+    return 0;
+  });
   return out;
 }
 
@@ -181,12 +259,14 @@ function oldestId(list: ChatMessage[]): number | null {
   return min;
 }
 
-function trimTail(list: ChatMessage[]): ChatMessage[] {
-  if (list.length <= HISTORY_CACHE_MAX_MESSAGES) return list;
-  return list.slice(Math.max(0, list.length - HISTORY_CACHE_MAX_MESSAGES));
+function trimTail(list: ChatMessage[], maxMessages: number): ChatMessage[] {
+  const capRaw = Number(maxMessages || 0);
+  const cap = Number.isFinite(capRaw) && capRaw > 0 ? Math.max(50, Math.min(5000, Math.floor(capRaw))) : HISTORY_CACHE_MAX_MESSAGES;
+  if (list.length <= cap) return list;
+  return list.slice(Math.max(0, list.length - cap));
 }
 
-function sanitizeConversationMap(raw: unknown): Record<string, ChatMessage[]> {
+function sanitizeConversationMap(raw: unknown, limits: { maxMessages: number }): Record<string, ChatMessage[]> {
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, ChatMessage[]> = {};
   for (const [kRaw, vRaw] of Object.entries(raw as Record<string, unknown>)) {
@@ -195,7 +275,7 @@ function sanitizeConversationMap(raw: unknown): Record<string, ChatMessage[]> {
     if (!key || key.length > HISTORY_CACHE_MAX_KEY_LEN) continue;
     const list = sanitizeMessageList(vRaw);
     if (!list.length) continue;
-    out[key] = trimTail(list);
+    out[key] = trimTail(list, limits.maxMessages);
   }
   return out;
 }
@@ -247,6 +327,7 @@ export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | 
   if (!key) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
   const st = storage ?? defaultStorage();
   if (!st) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
+  const limits = cacheLimits();
   try {
     const raw = st.getItem(key);
     if (!raw) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
@@ -254,10 +335,15 @@ export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | 
     if (!parsed || typeof parsed !== "object") return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
     if (parsed.v !== HISTORY_CACHE_VERSION) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
     const updated = Number(parsed.updated ?? 0);
-    if (!Number.isFinite(updated) || Date.now() - updated > HISTORY_CACHE_MAX_AGE_MS) {
+    if (!Number.isFinite(updated) || Date.now() - updated > limits.maxAgeMs) {
+      try {
+        st.removeItem(key);
+      } catch {
+        // ignore
+      }
       return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
     }
-    const conversations = sanitizeConversationMap(parsed.conversations);
+    const conversations = sanitizeConversationMap(parsed.conversations, limits);
     const loadedKeys = sanitizeLoadedKeys(parsed.loaded);
     const historyLoaded: Record<string, boolean> = {};
     for (const key of loadedKeys) historyLoaded[key] = true;
@@ -269,6 +355,70 @@ export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | 
   } catch {
     return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
   }
+}
+
+function buildEncodedHistoryCache(
+  payload: {
+    conversations: Record<string, ChatMessage[]>;
+    historyCursor: Record<string, number>;
+    historyHasMore: Record<string, boolean>;
+    historyLoaded: Record<string, boolean>;
+  },
+  limits: { maxConversations: number; maxMessages: number }
+): HistoryCachePayload | null {
+  const safe = sanitizeConversationMap(payload.conversations, { maxMessages: limits.maxMessages });
+  const entries = Object.entries(safe)
+    .map(([k, list]) => {
+      const last = list.length ? list[list.length - 1] : null;
+      const lastKey = last ? Number(last.id ?? last.ts ?? 0) : 0;
+      return { key: k, list, lastKey };
+    })
+    .sort((a, b) => b.lastKey - a.lastKey)
+    .slice(0, limits.maxConversations);
+
+  const conversations: Record<string, ChatMessage[]> = {};
+  const cursors: Record<string, number> = {};
+  const hasMore: Record<string, boolean> = {};
+  const loaded: string[] = [];
+  const loadedSeen = new Set<string>();
+  for (const entry of entries) {
+    const list = entry.list;
+    conversations[entry.key] = list;
+    loaded.push(entry.key);
+    loadedSeen.add(entry.key);
+    const cursor = oldestId(list);
+    if (cursor !== null) cursors[entry.key] = cursor;
+    const trimmed = list.length >= limits.maxMessages;
+    const known = payload.historyHasMore[entry.key];
+    if (typeof known === "boolean") hasMore[entry.key] = trimmed ? true : known;
+    else if (trimmed) hasMore[entry.key] = true;
+  }
+  if (loaded.length < limits.maxConversations) {
+    const extra = Object.entries(payload.historyLoaded || {})
+      .filter(([key, value]) => Boolean(value) && !loadedSeen.has(key))
+      .map(([key]) => key.trim())
+      .filter((key) => key && key.length <= HISTORY_CACHE_MAX_KEY_LEN);
+    for (const key of extra) {
+      if (loaded.length >= limits.maxConversations) break;
+      if (loadedSeen.has(key)) continue;
+      loaded.push(key);
+      loadedSeen.add(key);
+      const cursor = payload.historyCursor[key];
+      if (typeof cursor === "number" && Number.isFinite(cursor) && cursor > 0) cursors[key] = Math.floor(cursor);
+      const known = payload.historyHasMore[key];
+      if (typeof known === "boolean") hasMore[key] = known;
+    }
+  }
+
+  if (!Object.keys(conversations).length && !loaded.length) return null;
+  return {
+    v: HISTORY_CACHE_VERSION,
+    updated: Date.now(),
+    conversations,
+    cursors,
+    hasMore,
+    loaded,
+  };
 }
 
 export function saveHistoryCacheForUser(
@@ -285,62 +435,46 @@ export function saveHistoryCacheForUser(
   if (!key) return;
   const st = storage ?? defaultStorage();
   if (!st) return;
+  const baseLimits = cacheLimits();
   try {
-    const safe = sanitizeConversationMap(payload.conversations);
-    const entries = Object.entries(safe)
-      .map(([k, list]) => {
-        const last = list.length ? list[list.length - 1] : null;
-        const lastKey = last ? Number(last.id ?? last.ts ?? 0) : 0;
-        return { key: k, list, lastKey };
-      })
-      .sort((a, b) => b.lastKey - a.lastKey)
-      .slice(0, HISTORY_CACHE_MAX_CONVERSATIONS);
-    const conversations: Record<string, ChatMessage[]> = {};
-    const cursors: Record<string, number> = {};
-    const hasMore: Record<string, boolean> = {};
-    const loaded: string[] = [];
-    const loadedSeen = new Set<string>();
-    for (const entry of entries) {
-      const list = entry.list;
-      conversations[entry.key] = list;
-      loaded.push(entry.key);
-      loadedSeen.add(entry.key);
-      const cursor = oldestId(list);
-      if (cursor !== null) cursors[entry.key] = cursor;
-      const trimmed = list.length >= HISTORY_CACHE_MAX_MESSAGES;
-      const known = payload.historyHasMore[entry.key];
-      if (typeof known === "boolean") hasMore[entry.key] = trimmed ? true : known;
-      else if (trimmed) hasMore[entry.key] = true;
-    }
-    if (loaded.length < HISTORY_CACHE_MAX_CONVERSATIONS) {
-      const extra = Object.entries(payload.historyLoaded || {})
-        .filter(([key, value]) => Boolean(value) && !loadedSeen.has(key))
-        .map(([key]) => key.trim())
-        .filter((key) => key && key.length <= HISTORY_CACHE_MAX_KEY_LEN);
-      for (const key of extra) {
-        if (loaded.length >= HISTORY_CACHE_MAX_CONVERSATIONS) break;
-        if (loadedSeen.has(key)) continue;
-        loaded.push(key);
-        loadedSeen.add(key);
-        const cursor = payload.historyCursor[key];
-        if (typeof cursor === "number" && Number.isFinite(cursor) && cursor > 0) cursors[key] = Math.floor(cursor);
-        const known = payload.historyHasMore[key];
-        if (typeof known === "boolean") hasMore[key] = known;
-      }
-    }
-    const encoded: HistoryCachePayload = {
-      v: HISTORY_CACHE_VERSION,
-      updated: Date.now(),
-      conversations,
-      cursors,
-      hasMore,
-      loaded,
-    };
-    if (!Object.keys(conversations).length && !loaded.length) {
+    let limits = { maxConversations: baseLimits.maxConversations, maxMessages: baseLimits.maxMessages };
+    let encoded = buildEncodedHistoryCache(payload, limits);
+    if (!encoded) {
       st.removeItem(key);
       return;
     }
-    st.setItem(key, JSON.stringify(encoded));
+    let json = JSON.stringify(encoded);
+    try {
+      st.setItem(key, json);
+      return;
+    } catch (err) {
+      if (!isQuotaExceededError(err)) throw err;
+      debugPushError("history_cache.save.quota", err, { bytes: json.length, ...limits });
+      try {
+        st.removeItem(key);
+      } catch {
+        // ignore
+      }
+    }
+
+    // Fallback: progressively reduce cache limits and retry a few times.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      limits = {
+        maxConversations: Math.max(40, Math.floor(limits.maxConversations * 0.65)),
+        maxMessages: Math.max(200, Math.floor(limits.maxMessages * 0.6)),
+      };
+      encoded = buildEncodedHistoryCache(payload, limits);
+      if (!encoded) return;
+      json = JSON.stringify(encoded);
+      try {
+        st.setItem(key, json);
+        debugPush("history_cache.save.recovered", { attempt: attempt + 1, bytes: json.length, ...limits });
+        return;
+      } catch (err2) {
+        if (!isQuotaExceededError(err2)) return;
+        debugPushError("history_cache.save.retry.quota", err2, { attempt: attempt + 1, bytes: json.length, ...limits });
+      }
+    }
   } catch {
     // ignore
   }

@@ -207,7 +207,8 @@ export async function putCachedFileBlob(
     const cache = await caches.open(CACHE_NAME);
     const url = requestUrl(uid, fid);
     const mime = typeof meta?.mime === "string" && meta.mime.trim() ? meta.mime.trim() : (blob.type || null);
-    const size = Number(meta?.size ?? blob.size ?? 0) || 0;
+    const metaSizeRaw = Number(meta?.size ?? NaN);
+    const size = Number.isFinite(metaSizeRaw) && metaSizeRaw > 0 ? Math.round(metaSizeRaw) : Math.round(Number(blob.size || 0) || 0);
     const name = typeof meta?.name === "string" && meta.name.trim() ? meta.name.trim() : null;
     const headers: Record<string, string> = {};
     if (mime) headers["Content-Type"] = mime;
@@ -248,7 +249,7 @@ export async function putCachedFileBlob(
     const idx = touchIndex(loadIndex(uid), {
       fileId: fid,
       ts: Date.now(),
-      size: Math.round(size) || 0,
+      size,
       mime,
       name,
     });
@@ -336,7 +337,21 @@ export async function getCachedFileBlob(
     const cache = await caches.open(CACHE_NAME);
     const url = requestUrl(uid, fid);
     const res = await cache.match(url);
-    if (!res) return null;
+    if (!res) {
+      // CacheStorage can evict entries without us seeing it; keep index consistent.
+      if (idxEntry) {
+        try {
+          saveIndex(
+            uid,
+            idxRows.filter((e) => e.fileId !== fid)
+          );
+          debugPush("cache.index.stale_removed", { fileId: fid });
+        } catch {
+          // ignore
+        }
+      }
+      return null;
+    }
     const rawBlob = await res.blob();
     const mimeHeader = normalizeMime(res.headers.get("Content-Type"));
     const blobMime = normalizeMime(rawBlob.type);

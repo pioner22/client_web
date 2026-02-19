@@ -222,7 +222,9 @@ export function createPreviewAutoFetchFeature(
           return { ...entry, url: null };
         });
       }
-      if ((existing?.url || thumb?.url) && !mediaFailed) continue;
+      // NOTE: For outgoing videos on mobile UI we may have a blob `transfer.url`, but still render an empty preview
+      // (we don't inline <video>). In that case we still want to fetch the real thumbnail.
+      if (!isEmpty && (existing?.url || thumb?.url) && !mediaFailed) continue;
 
       const name = String(node.getAttribute("data-name") || "");
       const mimeRaw = node.getAttribute("data-mime");
