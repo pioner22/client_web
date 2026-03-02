@@ -6,6 +6,17 @@ import type { Store } from "../../../stores/store";
 import type { AppState, TargetRef } from "../../../stores/types";
 import { scheduleSaveDrafts } from "../persistence/localPersistenceTimers";
 
+function isAudioLikeFile(name: string, mime?: string | null): boolean {
+  const mt = String(mime || "")
+    .trim()
+    .toLowerCase();
+  if (mt.startsWith("audio/")) return true;
+  if (mt.startsWith("image/") || mt.startsWith("video/")) return false;
+  const n = String(name || "").trim().toLowerCase();
+  if (!n) return false;
+  return n.endsWith(".mp3") || n.endsWith(".m4a") || n.endsWith(".aac") || n.endsWith(".wav") || n.endsWith(".ogg") || n.endsWith(".opus") || n.endsWith(".flac");
+}
+
 export interface FileSendModalFeatureDeps {
   store: Store<AppState>;
   input: HTMLTextAreaElement;
@@ -80,24 +91,23 @@ export function createFileSendModalFeature(deps: FileSendModalFeatureDeps): File
   function openFileSendModal(files: File[], target: TargetRef) {
     if (!files.length) return;
     const st = store.get();
-    const captionDisabled = Boolean(st.editing) || files.length !== 1;
+    const captionDisabled = Boolean(st.editing);
     let captionHint = "";
     if (st.editing) captionHint = "Подпись недоступна во время редактирования";
-    else if (files.length !== 1) captionHint = "Подпись доступна только для одного файла";
+    else if (files.length > 1) captionHint = "Подпись будет добавлена один раз (как подпись альбома)";
     let caption = "";
     let restoreInput: string | null = null;
     if (!captionDisabled && st.page === "main") {
       const res = detachComposerCaption(st);
       caption = res.caption;
       restoreInput = res.restoreInput;
-    } else if (files.length !== 1 && st.page === "main") {
-      const draft = String(input.value || "").trim();
-      if (draft) store.set({ status: "Подпись доступна только для одного файла" });
     }
+    const allowAudioPreview = files.length <= 1;
     const previewUrls = files.map((file) => {
       const name = file?.name || "";
       const mime = file?.type || null;
-      if (!(isImageLikeFile(name, mime) || isVideoLikeFile(name, mime))) return null;
+      const canPreview = isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || (allowAudioPreview && isAudioLikeFile(name, mime));
+      if (!canPreview) return null;
       try {
         return URL.createObjectURL(file);
       } catch {
@@ -128,7 +138,7 @@ export function createFileSendModalFeature(deps: FileSendModalFeatureDeps): File
     store.set({ modal: null });
     if (!files.length) return;
     const caption = String(captionText || "").trimEnd();
-    const canCaption = files.length === 1 && Boolean(caption);
+    const canCaption = Boolean(caption) && !st.editing;
     for (let i = 0; i < files.length; i += 1) {
       sendFile(files[i], target, i === 0 && canCaption ? caption : "");
     }
@@ -146,4 +156,3 @@ export function createFileSendModalFeature(deps: FileSendModalFeatureDeps): File
 
   return { openFileSendModal, confirmFileSend, closeModalIfFileSend };
 }
-

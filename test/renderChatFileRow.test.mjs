@@ -834,7 +834,7 @@ test("renderChat: video file-attachment (mobile UI) не рендерит inline
   }
 });
 
-test("renderChat: audio file-attachment рендерит inline <audio> controls", async () => {
+test("renderChat: audio file-attachment рендерит custom audio player (chat-voice)", async () => {
   const helper = await loadRenderChat();
   try {
     withDomStubs(() => {
@@ -907,9 +907,12 @@ test("renderChat: audio file-attachment рендерит inline <audio> controls
       assert.ok(fileRow, "должен быть file-row-chat");
       assert.ok(hasClass(fileRow, "file-row-audio"), "file-row должен быть помечен как audio");
 
-      const audio = findFirst(fileRow, (n) => n && n.tagName === "AUDIO");
-      assert.ok(audio, "должен быть <audio> controls");
-      assert.ok(hasClass(audio, "chat-file-audio"));
+      const player = findFirst(fileRow, (n) => hasClass(n, "chat-voice"));
+      assert.ok(player, "должен быть chat-voice player");
+
+      const audio = findFirst(player, (n) => n && n.tagName === "AUDIO");
+      assert.ok(audio, "должен быть <audio> внутри плеера");
+      assert.ok(hasClass(audio, "chat-voice-audio"));
     });
   } finally {
     await helper.cleanup();

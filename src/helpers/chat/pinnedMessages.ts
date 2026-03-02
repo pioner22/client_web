@@ -7,7 +7,6 @@ export interface StorageLike {
 export type PinnedMessagesMap = Record<string, number[]>;
 
 const PINNED_MESSAGES_VERSION = 2;
-const LEGACY_PINNED_MESSAGES_VERSION = 1;
 const MAX_KEYS = 200;
 const MAX_PER_KEY = 50;
 
@@ -71,19 +70,6 @@ export function parsePinnedMessagesPayload(raw: string | null): PinnedMessagesMa
   }
 }
 
-function parsePinnedMessagesPayloadLegacy(raw: string | null): PinnedMessagesMap {
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-    const obj = parsed as any;
-    if (obj.v !== LEGACY_PINNED_MESSAGES_VERSION) return {};
-    return sanitizePinnedMessages(obj.pinned);
-  } catch {
-    return {};
-  }
-}
-
 export function serializePinnedMessagesPayload(map: PinnedMessagesMap): string {
   return JSON.stringify({ v: PINNED_MESSAGES_VERSION, pinned: sanitizePinnedMessages(map) });
 }
@@ -95,15 +81,9 @@ export function loadPinnedMessagesForUser(userId: string, storage?: StorageLike 
     const key = storageKey(userId, PINNED_MESSAGES_VERSION);
     if (!key) return {};
     const cur = parsePinnedMessagesPayload(st.getItem(key));
-    if (Object.keys(cur).length) return cur;
-
-    const legacyKey = storageKey(userId, LEGACY_PINNED_MESSAGES_VERSION);
-    if (!legacyKey) return {};
-    const legacy = parsePinnedMessagesPayloadLegacy(st.getItem(legacyKey));
-    if (!Object.keys(legacy).length) return {};
-    st.setItem(key, serializePinnedMessagesPayload(legacy));
-    st.removeItem(legacyKey);
-    return legacy;
+    const legacyKey = storageKey(userId, 1);
+    if (legacyKey) st.removeItem(legacyKey);
+    return cur;
   } catch {
     return {};
   }

@@ -1,0 +1,156 @@
+/* Toasts — Telegram-like "glass" look + compact actions. */
+
+.toast {
+  --toast-accent: var(--focus);
+  position: relative;
+  overflow: hidden;
+  padding: 12px 44px 12px 14px; /* keep space for the close button */
+  gap: 10px;
+  border-radius: 16px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--modal-bg), transparent 6%),
+    color-mix(in srgb, var(--modal-bg), transparent 12%)
+  );
+  border: 1px solid color-mix(in srgb, var(--toast-accent), transparent 72%);
+  box-shadow:
+    0 18px 54px rgba(0, 0, 0, 0.38),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  animation: toast-pop 180ms ease-out both;
+}
+
+.toast.toast-success {
+  --toast-accent: var(--good);
+}
+
+.toast.toast-warn {
+  --toast-accent: var(--warn);
+}
+
+.toast.toast-error {
+  --toast-accent: var(--bad);
+}
+
+.toast::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--toast-accent), transparent 15%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--toast-accent), transparent 55%);
+  pointer-events: none;
+}
+
+.toast-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  margin-left: 6px; /* keep space from the accent bar */
+  background: color-mix(in srgb, var(--toast-accent), transparent 86%);
+  border: 1px solid color-mix(in srgb, var(--toast-accent), transparent 72%);
+  color: color-mix(in srgb, var(--toast-accent), #ffffff 12%);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+}
+
+.toast-msg {
+  white-space: normal;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.toast-actions {
+  margin-left: auto;
+  gap: 8px;
+}
+
+.toast-btn {
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  border-color: color-mix(in srgb, var(--line), transparent 35%);
+  background: color-mix(in srgb, var(--modal-bg), transparent 8%);
+}
+
+.toast-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--line), transparent 52%);
+  background: transparent;
+  color: color-mix(in srgb, var(--text-muted), #ffffff 8%);
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.toast-dismiss:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-hover), transparent 18%);
+  border-color: color-mix(in srgb, var(--line), transparent 34%);
+  color: var(--text);
+}
+
+.toast-dismiss:active:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-active), transparent 14%);
+}
+
+.toast-host[data-toast-placement="center"] .toast.toast-warn,
+.toast-host[data-toast-placement="center"] .toast.toast-error {
+  /* Compact enough, but still pleasant (avoid "flat modal" look). */
+  width: min(420px, 92vw);
+  max-width: min(420px, 92vw);
+  padding: 12px 44px 12px 14px;
+}
+
+.toast-host[data-toast-placement="center"] .toast-msg {
+  -webkit-line-clamp: unset;
+  display: block;
+  overflow: visible;
+}
+
+.toast-host[data-toast-placement="center"] .toast-icon {
+  margin: 0 auto;
+}
+
+@keyframes toast-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+    filter: blur(1px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

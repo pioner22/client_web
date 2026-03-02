@@ -433,7 +433,9 @@ export function renderFileViewerModal(
   if (!safeHref) {
     body = el("div", { class: "viewer-empty" }, ["Не удалось открыть файл: небезопасный URL"]);
   } else if (isImage) {
-    const img = el("img", { class: "viewer-img", src: safeHref, alt: titleText, decoding: "async" }) as HTMLImageElement;
+    // Important: do not set `src` before wiring listeners — cached images may fire `load` early,
+    // leaving the preloader stuck (notably when navigating with ArrowLeft/ArrowRight).
+    const img = el("img", { class: "viewer-img", alt: titleText, decoding: "async" }) as HTMLImageElement;
     imageEl = img;
     zoomTarget = img;
     const scroll = el("div", { class: "viewer-img-scroll" }, [img]);
@@ -459,13 +461,24 @@ export function renderFileViewerModal(
     let panStartLeft = 0;
     let panStartTop = 0;
     let panPointerId: number | null = null;
-    const touchPoints = new Map<number, { x: number; y: number }>();
-    let pinchStartDist = 0;
-    let pinchStartScale = 1;
-    img.addEventListener("click", (event) => {
-      if (Date.now() < suppressImageClickUntil) return;
-      if (event.detail > 1) return;
-      if (!setZoom) return;
+	    const touchPoints = new Map<number, { x: number; y: number }>();
+	    let pinchStartDist = 0;
+	    let pinchStartScale = 1;
+	    const SWIPE_MIN_PX = 55;
+	    let swipeActive = false;
+	    let swipePointerId: number | null = null;
+	    let swipeStartX = 0;
+	    let swipeStartY = 0;
+	    const resetSwipe = () => {
+	      swipeActive = false;
+	      swipePointerId = null;
+	      swipeStartX = 0;
+	      swipeStartY = 0;
+	    };
+	    img.addEventListener("click", (event) => {
+	      if (Date.now() < suppressImageClickUntil) return;
+	      if (event.detail > 1) return;
+	      if (!setZoom) return;
       event.preventDefault();
       event.stopPropagation();
       if (zoomScale > 1) {
@@ -482,40 +495,53 @@ export function renderFileViewerModal(
       const pt = ev.pointerType;
       const isMouse = pt === "mouse";
       const isTouch = pt === "touch";
-      const isPen = pt === "pen";
-      if (!isMouse && !isTouch && !isPen) return;
-      if (isMouse && !box.classList.contains("viewer-zoomed")) return;
-      if (isMouse && ev.button !== 0) return;
-      if (isTouch || isPen) {
-        touchPoints.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-        if (touchPoints.size >= 2) {
-          pinchActive = true;
-          panActive = false;
-          panPointerId = null;
-          const pts = Array.from(touchPoints.values()).slice(0, 2);
+	      const isPen = pt === "pen";
+	      if (!isMouse && !isTouch && !isPen) return;
+	      if (isMouse && !box.classList.contains("viewer-zoomed")) return;
+	      if (isMouse && ev.button !== 0) return;
+	      if (!isTouch && !isPen) resetSwipe();
+	      if (isTouch || isPen) {
+	        touchPoints.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+	        if (touchPoints.size >= 2) {
+	          resetSwipe();
+	          pinchActive = true;
+	          panActive = false;
+	          panPointerId = null;
+	          const pts = Array.from(touchPoints.values()).slice(0, 2);
           const dx = pts[0].x - pts[1].x;
-          const dy = pts[0].y - pts[1].y;
-          pinchStartDist = Math.hypot(dx, dy);
-          pinchStartScale = zoomScale;
-        } else if (box.classList.contains("viewer-zoomed")) {
-          pinchActive = false;
-          panActive = true;
-          panPointerId = ev.pointerId;
-          panMoved = false;
+	          const dy = pts[0].y - pts[1].y;
+	          pinchStartDist = Math.hypot(dx, dy);
+	          pinchStartScale = zoomScale;
+	        } else if (box.classList.contains("viewer-zoomed")) {
+	          resetSwipe();
+	          pinchActive = false;
+	          panActive = true;
+	          panPointerId = ev.pointerId;
+	          panMoved = false;
           panStartX = ev.clientX;
           panStartY = ev.clientY;
           panStartLeft = scroll.scrollLeft;
-          panStartTop = scroll.scrollTop;
-        } else {
-          pinchActive = false;
-          panActive = false;
-          panPointerId = null;
-        }
-      } else {
-        pinchActive = false;
-        panActive = true;
-        panPointerId = ev.pointerId;
-        panMoved = false;
+	          panStartTop = scroll.scrollTop;
+	        } else {
+	          pinchActive = false;
+	          panActive = false;
+	          panPointerId = null;
+	          const canSwipe = Boolean(actions.onPrev || actions.onNext);
+	          if (canSwipe) {
+	            swipeActive = true;
+	            swipePointerId = ev.pointerId;
+	            swipeStartX = ev.clientX;
+	            swipeStartY = ev.clientY;
+	          } else {
+	            resetSwipe();
+	          }
+	        }
+	      } else {
+	        resetSwipe();
+	        pinchActive = false;
+	        panActive = true;
+	        panPointerId = ev.pointerId;
+	        panMoved = false;
         panStartX = ev.clientX;
         panStartY = ev.clientY;
         panStartLeft = scroll.scrollLeft;
@@ -551,13 +577,21 @@ export function renderFileViewerModal(
             suppressImageClickUntil = Date.now() + 500;
           }
           e.preventDefault();
-          return;
-        }
-      }
-      if (!panActive) return;
-      if (panPointerId !== null && ev.pointerId !== panPointerId) return;
-      const dx = ev.clientX - panStartX;
-      const dy = ev.clientY - panStartY;
+	          return;
+	        }
+	      }
+	      if (swipeActive && !pinchActive && !box.classList.contains("viewer-zoomed") && swipePointerId === ev.pointerId) {
+	        const dx = ev.clientX - swipeStartX;
+	        const dy = ev.clientY - swipeStartY;
+	        if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.1) {
+	          suppressImageClickUntil = Date.now() + 650;
+	          e.preventDefault();
+	        }
+	      }
+	      if (!panActive) return;
+	      if (panPointerId !== null && ev.pointerId !== panPointerId) return;
+	      const dx = ev.clientX - panStartX;
+	      const dy = ev.clientY - panStartY;
       if (!panMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) panMoved = true;
       try {
         scroll.scrollLeft = Math.max(0, Math.round(panStartLeft - dx));
@@ -567,64 +601,93 @@ export function renderFileViewerModal(
       }
       if (panMoved) e.preventDefault();
     });
-    const stopPan = (e?: Event) => {
-      if (!panActive && !pinchActive && !touchPoints.size) return;
-      const wasPinch = pinchActive;
-      if (e && ((e as PointerEvent).pointerType === "touch" || (e as PointerEvent).pointerType === "pen")) {
-        const ev = e as PointerEvent;
-        touchPoints.delete(ev.pointerId);
-      }
+	    const stopPan = (e?: Event) => {
+	      if (!panActive && !pinchActive && !touchPoints.size) return;
+	      const wasPinch = pinchActive;
+	      const now = Date.now();
+	      const isTouchLike =
+	        Boolean(e) && (((e as PointerEvent).pointerType === "touch") || ((e as PointerEvent).pointerType === "pen"));
+	      const swipeEvent = isTouchLike ? (e as PointerEvent) : null;
+	      const canSwipeNow =
+	        Boolean(swipeEvent) &&
+	        swipeActive &&
+	        !pinchActive &&
+	        !box.classList.contains("viewer-zoomed") &&
+	        swipePointerId !== null &&
+	        swipeEvent?.pointerId === swipePointerId;
+	      const swipeDx = canSwipeNow && swipeEvent ? swipeEvent.clientX - swipeStartX : 0;
+	      const swipeDy = canSwipeNow && swipeEvent ? swipeEvent.clientY - swipeStartY : 0;
+	      if (e && ((e as PointerEvent).pointerType === "touch" || (e as PointerEvent).pointerType === "pen")) {
+	        const ev = e as PointerEvent;
+	        touchPoints.delete(ev.pointerId);
+	      }
       if (pinchActive && touchPoints.size >= 2) {
         if (e) e.preventDefault();
         return;
       }
       pinchActive = false;
-      pinchStartDist = 0;
-      pinchStartScale = zoomScale;
-      if (wasPinch && touchPoints.size === 1 && box.classList.contains("viewer-zoomed")) {
-        const [id, pt] = Array.from(touchPoints.entries())[0];
-        panActive = true;
-        panPointerId = id;
-        panMoved = false;
-        panStartX = pt.x;
+	      pinchStartDist = 0;
+	      pinchStartScale = zoomScale;
+	      if (wasPinch && touchPoints.size === 1 && box.classList.contains("viewer-zoomed")) {
+	        const [id, pt] = Array.from(touchPoints.entries())[0];
+	        resetSwipe();
+	        panActive = true;
+	        panPointerId = id;
+	        panMoved = false;
+	        panStartX = pt.x;
         panStartY = pt.y;
         panStartLeft = scroll.scrollLeft;
         panStartTop = scroll.scrollTop;
         scroll.classList.add("viewer-panning");
         if (e) e.preventDefault();
         return;
-      }
-      panActive = false;
-      panPointerId = null;
-      scroll.classList.remove("viewer-panning");
-      if (panMoved) suppressImageClickUntil = Date.now() + 400;
-      if (e) e.preventDefault();
-    };
+	      }
+	      panActive = false;
+	      panPointerId = null;
+	      scroll.classList.remove("viewer-panning");
+	      if (canSwipeNow) {
+	        const absDx = Math.abs(swipeDx);
+	        const absDy = Math.abs(swipeDy);
+	        if (absDx >= SWIPE_MIN_PX && absDx >= absDy * 1.2) {
+	          if (swipeDx < 0) actions.onNext?.();
+	          else actions.onPrev?.();
+	          suppressImageClickUntil = now + 650;
+	        }
+	      }
+	      resetSwipe();
+	      if (panMoved) suppressImageClickUntil = now + 400;
+	      if (e) e.preventDefault();
+	    };
     scroll.addEventListener("pointerup", (e) => stopPan(e));
     scroll.addEventListener("pointercancel", (e) => stopPan(e));
-    img.addEventListener(
-      "load",
-      () => {
-        preloader.classList.add("hidden");
-      },
-      { once: true }
-    );
-    img.addEventListener(
-      "error",
-      () => {
-        preloader.classList.add("viewer-preloader-failed");
-        const canRecover = Boolean(actions.onRecover);
-        preloaderText.textContent = canRecover ? "Не удалось загрузить. Пробуем восстановить…" : "Не удалось загрузить";
-        if (actions.onRecover) {
-          try {
-            actions.onRecover();
-          } catch {
-            // ignore
-          }
+    let preloaderSettled = false;
+    const onLoaded = () => {
+      if (preloaderSettled) return;
+      preloaderSettled = true;
+      img.classList.add("viewer-img-loaded");
+      preloader.classList.add("hidden");
+    };
+    const onFailed = () => {
+      if (preloaderSettled) return;
+      preloaderSettled = true;
+      preloader.classList.add("viewer-preloader-failed");
+      const canRecover = Boolean(actions.onRecover);
+      preloaderText.textContent = canRecover ? "Не удалось загрузить. Пробуем восстановить…" : "Не удалось загрузить";
+      if (actions.onRecover) {
+        try {
+          actions.onRecover();
+        } catch {
+          // ignore
         }
-      },
-      { once: true }
-    );
+      }
+    };
+    img.addEventListener("load", onLoaded, { once: true });
+    img.addEventListener("error", onFailed, { once: true });
+    img.src = safeHref;
+    if (img.complete) {
+      if (img.naturalWidth > 0) onLoaded();
+      else onFailed();
+    }
     body = el("div", { class: "viewer-media viewer-media-image" }, [scroll, preloader]);
   } else if (isVideo) {
     const video = el("video", {

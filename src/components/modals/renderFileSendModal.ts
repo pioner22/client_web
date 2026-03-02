@@ -18,6 +18,11 @@ function totalSize(files: File[]): number {
   return files.reduce((acc, f) => acc + (Number(f?.size || 0) || 0), 0);
 }
 
+function isVideoNoteName(name: string): boolean {
+  const n = String(name || "").trim().toLowerCase();
+  return n.startsWith("video_note") || n.startsWith("video-note") || n.includes("_video_note") || n.includes("video-note");
+}
+
 export function renderFileSendModal(
   files: File[],
   caption: string,
@@ -38,15 +43,21 @@ export function renderFileSendModal(
       if (file && url) {
         const badge = fileBadge(file?.name || "file", file?.type || null);
         if (badge.kind === "video") {
+          const videoCls = isVideoNoteName(file?.name || "") ? "file-send-video file-send-video-note" : "file-send-video";
           return el("div", { class: "file-send-preview" }, [
             el("video", {
-              class: "file-send-video",
+              class: videoCls,
               src: url,
               controls: "true",
               preload: "metadata",
               playsinline: "true",
               muted: "true",
             }) as HTMLVideoElement,
+          ]);
+        }
+        if (badge.kind === "audio") {
+          return el("div", { class: "file-send-preview" }, [
+            el("audio", { class: "file-send-audio", src: url, controls: "true", preload: "metadata" }) as HTMLAudioElement,
           ]);
         }
         return el("div", { class: "file-send-preview" }, [
@@ -103,8 +114,10 @@ export function renderFileSendModal(
   captionInput.value = String(caption || "");
 
   const hintText = captionDisabled
-    ? captionHint || "Подпись доступна только для одного файла"
-    : "Подпись появится под файлом в истории чата";
+    ? captionHint || "Подпись недоступна"
+    : files.length > 1
+      ? "Подпись появится под альбомом в истории чата"
+      : "Подпись появится под файлом в истории чата";
   const captionHintEl = el("div", { class: "file-send-hint" }, [hintText]);
 
   const btnSend = el("button", { class: "btn btn-primary", type: "button" }, ["Отправить"]);

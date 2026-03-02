@@ -5,6 +5,8 @@ const CACHE_NAME = `yagodka_file_blob_cache_v${CACHE_VERSION}`;
 const INDEX_VERSION = 3;
 const MAX_ENTRIES = 3200;
 
+const cleanedLegacyIndexUsers = new Set<string>();
+
 function debugPush(kind: string, data?: any): void {
   try {
     const api = (globalThis as any)?.__yagodka_debug_monitor;
@@ -81,10 +83,17 @@ function indexKey(userId: string): string | null {
   return `yagodka_file_blob_index_v${INDEX_VERSION}:${uid}`;
 }
 
-function legacyIndexKey(userId: string): string | null {
+function removeLegacyIndexKeys(userId: string, st: Storage): void {
   const uid = normalizeId(userId);
-  if (!uid) return null;
-  return `yagodka_file_blob_index_v1:${uid}`;
+  if (!uid) return;
+  if (cleanedLegacyIndexUsers.has(uid)) return;
+  cleanedLegacyIndexUsers.add(uid);
+  try {
+    st.removeItem(`yagodka_file_blob_index_v1:${uid}`);
+    st.removeItem(`yagodka_file_blob_index_v2:${uid}`);
+  } catch {
+    // ignore
+  }
 }
 
 function defaultStorage(): Storage | null {
@@ -100,12 +109,15 @@ function loadIndex(userId: string, storage?: Storage | null): CacheIndexEntry[] 
   const st = storage ?? defaultStorage();
   if (!st) return [];
   try {
-    const legacyKey = legacyIndexKey(userId);
-    const raw = (key ? st.getItem(key) : null) || (legacyKey ? st.getItem(legacyKey) : null);
+    removeLegacyIndexKeys(userId, st);
+    const raw = key ? st.getItem(key) : null;
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return [];
-    if (parsed.v !== 1 && parsed.v !== 2 && parsed.v !== 3) return [];
+    if (parsed.v !== INDEX_VERSION) {
+      if (key) st.removeItem(key);
+      return [];
+    }
     const entries = Array.isArray(parsed.entries) ? parsed.entries : [];
     const out: CacheIndexEntry[] = [];
     for (const it of entries) {
@@ -140,8 +152,7 @@ function saveIndex(userId: string, entries: CacheIndexEntry[], storage?: Storage
   try {
     const payload = JSON.stringify({ v: INDEX_VERSION, entries: entries.slice(0, MAX_ENTRIES) });
     if (key) st.setItem(key, payload);
-    const legacyKey = legacyIndexKey(userId);
-    if (legacyKey) st.removeItem(legacyKey);
+    removeLegacyIndexKeys(userId, st);
   } catch {
     // ignore
   }
@@ -153,8 +164,7 @@ function removeIndex(userId: string, storage?: Storage | null): void {
   try {
     const key = indexKey(userId);
     if (key) st.removeItem(key);
-    const legacyKey = legacyIndexKey(userId);
-    if (legacyKey) st.removeItem(legacyKey);
+    removeLegacyIndexKeys(userId, st);
   } catch {
     // ignore
   }

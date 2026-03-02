@@ -1,0 +1,70 @@
+/* UI polish overrides (telegram-exact).
+ *
+ * Goal: make the UI look less flat and closer to Telegram's "paper" feel,
+ * without touching core layout logic.
+ */
+
+html[data-skin="telegram-exact"][data-theme="light"] .chat {
+  background:
+    radial-gradient(circle at 18px 20px, rgba(0, 0, 0, 0.035) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 64px 76px, rgba(0, 0, 0, 0.025) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 110px 34px, rgba(0, 0, 0, 0.02) 0 1px, transparent 1px 100%),
+    linear-gradient(var(--layer-1), var(--layer-1)),
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--chat-bg);
+  background-size: 180px 180px, 260px 260px, 340px 340px, auto, auto, auto;
+  background-position: 0 0, 40px 60px, 90px 30px, 0 0, 0 0, 0 0;
+}
+
+html[data-skin="telegram-exact"][data-theme="dark"] .chat {
+  background:
+    radial-gradient(circle at 18px 20px, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 64px 76px, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 110px 34px, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 100%),
+    linear-gradient(var(--layer-1), var(--layer-1)),
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--chat-bg);
+  background-size: 180px 180px, 260px 260px, 340px 340px, auto, auto, auto;
+  background-position: 0 0, 40px 60px, 90px 30px, 0 0, 0 0, 0 0;
+}
+
+html[data-skin="telegram-exact"][data-theme="light"] {
+  --composer-field-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset, 0 10px 24px rgba(0, 0, 0, 0.06);
+}
+
+html[data-skin="telegram-exact"][data-theme="dark"] {
+  --composer-field-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px rgba(0, 0, 0, 0.38);
+}
+
+html[data-skin="telegram-exact"] .input-wrap {
+  background: color-mix(in srgb, var(--composer-bg), #ffffff 6%);
+  box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.06);
+}
+
+html[data-skin="telegram-exact"][data-theme="dark"] .input-wrap {
+  box-shadow: 0 -16px 36px rgba(0, 0, 0, 0.42);
+}
+
+html[data-skin="telegram-exact"] .chat-jump {
+  border: 1px solid color-mix(in srgb, var(--line), transparent 35%);
+  background: color-mix(in srgb, var(--panel) 92%, transparent 8%);
+  backdrop-filter: blur(6px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach) .msg-body {
+    transition:
+      transform 140ms ease,
+      box-shadow 180ms ease,
+      border-color 180ms ease;
+  }
+
+  html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach):hover .msg-body {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+  }
+
+  html[data-skin="telegram-exact"][data-theme="dark"] .chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach):hover .msg-body {
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+  }
+}

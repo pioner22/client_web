@@ -43,9 +43,21 @@ export function createTopbarActionsFeature(deps: TopbarActionsFeatureDeps): Topb
   let listenersInstalled = false;
 
   const onOverlayClick = (e: Event) => {
-    const kind = store.get().modal?.kind;
+    const modal = store.get().modal;
+    const kind = modal?.kind;
     if (kind !== "context_menu" && kind !== "file_viewer") return;
     if (e.target !== overlay) return;
+    if (kind === "file_viewer" && modal && modal.kind === "file_viewer") {
+      const openedAt = modal.openedAtMs;
+      const openedAtMs = typeof openedAt === "number" && Number.isFinite(openedAt) ? openedAt : 0;
+      if (openedAtMs > 0) {
+        const age = Date.now() - openedAtMs;
+        if (age >= 0 && age < 420) {
+          e.preventDefault();
+          return;
+        }
+      }
+    }
     e.preventDefault();
     closeModal();
   };

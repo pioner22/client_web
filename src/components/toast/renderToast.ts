@@ -9,6 +9,14 @@ function toastButton(action: ToastAction): HTMLButtonElement {
   return btn;
 }
 
+function toastIconLabel(kind: string): string {
+  const k = String(kind || "").trim();
+  if (k === "success") return "✓";
+  if (k === "warn") return "!";
+  if (k === "error") return "×";
+  return "i";
+}
+
 export function renderToast(host: HTMLElement, toast: ToastState | null): void {
   if (!toast) {
     host.classList.add("hidden");
@@ -20,11 +28,30 @@ export function renderToast(host: HTMLElement, toast: ToastState | null): void {
   const placement = toast.placement === "center" ? "center" : "bottom";
   host.setAttribute("data-toast-placement", placement);
   const kind = toast.kind || "info";
-  const actions = Array.isArray(toast.actions) ? toast.actions : [];
+  const actionsAll = Array.isArray(toast.actions) ? toast.actions : [];
+  const actions = actionsAll.filter((a) => String(a?.id || "").trim() !== "dismiss");
+  const hasDismiss = actionsAll.some((a) => String(a?.id || "").trim() === "dismiss");
+  const icon = toastIconLabel(kind);
 
+  const dismissBtn = hasDismiss
+    ? (el(
+        "button",
+        {
+          class: "btn toast-dismiss",
+          type: "button",
+          title: "Закрыть",
+          "aria-label": "Закрыть",
+          "data-action": "toast-action",
+          "data-toast-id": "dismiss",
+        },
+        ["×"]
+      ) as HTMLButtonElement)
+    : null;
   const box = el("div", { class: `toast toast-${kind}`, role: "status" }, [
+    el("div", { class: "toast-icon", "aria-hidden": "true" }, [icon]),
     el("div", { class: "toast-msg" }, [toast.message]),
     ...(actions.length ? [el("div", { class: "toast-actions" }, actions.map((a) => toastButton(a)))] : []),
+    ...(dismissBtn ? [dismissBtn] : []),
   ]);
 
   host.replaceChildren(box);

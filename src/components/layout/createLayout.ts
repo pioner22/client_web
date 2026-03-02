@@ -51,6 +51,21 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const emojiBtn = el("button", { class: "btn composer-action composer-emoji", type: "button", title: "Эмодзи", "aria-label": "Открыть эмодзи" }, [
     "☺︎",
   ]) as HTMLButtonElement;
+  const voiceBtn = el(
+    "button",
+    { class: "btn composer-action composer-voice", type: "button", title: "Голосовое", "aria-label": "Записать голосовое сообщение" },
+    ["🎙"]
+  ) as HTMLButtonElement;
+  const videoNoteBtn = el(
+    "button",
+    {
+      class: "btn composer-action composer-video-note",
+      type: "button",
+      title: "Видео-сота",
+      "aria-label": "Записать видеосообщение (сота)",
+    },
+    ["⬡"]
+  ) as HTMLButtonElement;
   const sendBtn = el(
     "button",
     {
@@ -235,7 +250,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const composerField = el("div", { class: "composer-field" }, [composerActionsLeft, input]);
   const composerRow = el("div", { class: "composer-row" }, [
     composerField,
-    el("div", { class: "composer-actions composer-actions-right" }, [sendBtn]),
+    el("div", { class: "composer-actions composer-actions-right" }, [videoNoteBtn, voiceBtn, sendBtn]),
   ]);
   const inputWrap = el("div", { class: "input-wrap" }, [chatSelectionBar, editBar, helperBar, boardEditorWrap, composerRow, composerMeta]);
 
@@ -277,6 +292,8 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     input,
     attachBtn,
     emojiBtn,
+    voiceBtn,
+    videoNoteBtn,
     sendBtn,
     boardEditorBtn,
     boardEditorWrap,

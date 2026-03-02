@@ -39,6 +39,7 @@ import {
   formatSelectionCount,
   formatUserLabel,
   getFileAttachmentInfo,
+  extractFileCaptionText,
   isAlbumCandidate,
   messageLine,
   renderAlbumLine,
@@ -504,6 +505,10 @@ export function renderChat(layout: Layout, state: AppState) {
     const info = getFileAttachmentInfo(state, m, { mobileUi });
     if (isAlbumCandidate(m, info)) {
       const group: AlbumItem[] = [{ idx: msgIdx, msg: m, info }];
+      let groupCaption: string | null = (() => {
+        const c = extractFileCaptionText(m.text);
+        return c ? c : null;
+      })();
       let scan = msgIdx + 1;
       while (scan < virtualEnd) {
         const next = msgs[scan];
@@ -511,11 +516,14 @@ export function renderChat(layout: Layout, state: AppState) {
         const nextInfo = getFileAttachmentInfo(state, next, { mobileUi });
         if (!isAlbumCandidate(next, nextInfo)) break;
         if (!isMessageContinuation(group[group.length - 1].msg, next, { maxGapSeconds: albumGapSeconds })) break;
+        const nextCaption = extractFileCaptionText(next.text);
+        if (groupCaption && nextCaption && nextCaption !== groupCaption) break;
+        if (!groupCaption && nextCaption) groupCaption = nextCaption;
         group.push({ idx: scan, msg: next, info: nextInfo });
         scan += 1;
         if (group.length >= albumMax) break;
       }
-		      if (group.length >= albumMin) {
+      if (group.length >= albumMin) {
 		        const groupCounts = (() => {
 		          let selectedCount = 0;
 		          let selectableCount = 0;

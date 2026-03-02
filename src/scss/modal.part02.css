@@ -1175,6 +1175,21 @@ input.modal-input[type="file"]::file-selector-button:active {
   background: transparent;
 }
 
+.overlay.overlay-viewer .viewer-media-image .viewer-img {
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.overlay.overlay-viewer .viewer-media-image .viewer-img.viewer-img-loaded {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay.overlay-viewer .viewer-media-image .viewer-img {
+    transition: none;
+  }
+}
+
 .modal.modal-viewer.viewer-visual .viewer-img {
   cursor: zoom-in;
 }

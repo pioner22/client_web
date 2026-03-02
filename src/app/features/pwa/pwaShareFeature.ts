@@ -119,7 +119,7 @@ export function createPwaShareFeature(deps: PwaShareFeatureDeps): PwaShareFeatur
       const caption = formatShareCaption(payload);
       const files = payload.files || [];
       if (files.length) {
-        const canCaption = Boolean(caption) && files.length === 1 && !st.editing;
+        const canCaption = Boolean(caption) && !st.editing;
         for (let i = 0; i < files.length; i += 1) {
           sendFile(files[i], target, i === 0 && canCaption ? caption : "");
           sentFiles += 1;
@@ -206,4 +206,3 @@ export function createPwaShareFeature(deps: PwaShareFeatureDeps): PwaShareFeatur
 
   return { installEventListeners, dispose, tryAppendShareTextToSelected };
 }
-

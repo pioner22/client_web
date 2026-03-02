@@ -20,6 +20,8 @@ export interface Layout {
   input: HTMLTextAreaElement;
   attachBtn: HTMLButtonElement;
   emojiBtn: HTMLButtonElement;
+  voiceBtn: HTMLButtonElement;
+  videoNoteBtn: HTMLButtonElement;
   sendBtn: HTMLButtonElement;
   boardEditorBtn: HTMLButtonElement;
   boardEditorWrap: HTMLElement;

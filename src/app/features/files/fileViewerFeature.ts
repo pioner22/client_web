@@ -122,6 +122,45 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     }
   };
 
+  const VIEWER_PREFETCH_MAX_BYTES = 24 * 1024 * 1024;
+
+  const maybePrefetchNeighbors = (chatKeyRaw: string, centerIdxRaw: number) => {
+    const chatKey = String(chatKeyRaw || "").trim();
+    const centerIdx = Number.isFinite(centerIdxRaw) ? Math.trunc(centerIdxRaw) : -1;
+    if (!chatKey || centerIdx < 0) return;
+    const st = store.get();
+    if (st.conn !== "connected" || !st.authed) return;
+    const msgs = st.conversations[chatKey] || [];
+    if (!msgs.length) return;
+    const prevIdx = findNeighborMediaIndex(st, msgs, centerIdx, -1);
+    const nextIdx = findNeighborMediaIndex(st, msgs, centerIdx, 1);
+    for (const neighborIdx of [prevIdx, nextIdx]) {
+      if (neighborIdx === null) continue;
+      const msg = msgs[neighborIdx];
+      const att = msg?.attachment;
+      if (!att || att.kind !== "file") continue;
+      const fileId = typeof att.fileId === "string" ? att.fileId.trim() : "";
+      if (!fileId) continue;
+      const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId) || null;
+      if (entry?.url) continue;
+      const name = String(att.name || entry?.name || "файл");
+      const size = Number(att.size || entry?.size || 0) || 0;
+      const mime = (att.mime ?? entry?.mime) || null;
+      if (!isImageLikeFile(name, mime)) continue;
+      if (size > 0 && size > VIEWER_PREFETCH_MAX_BYTES) continue;
+      enqueueFileGet(fileId, { priority: "prefetch", silent: true });
+      debugHook("file.viewer.prefetch", {
+        chatKey,
+        centerIdx,
+        neighborIdx,
+        fileId,
+        size,
+        mime: mime ? String(mime).slice(0, 80) : null,
+        name: name ? String(name).slice(0, 80) : null,
+      });
+    }
+  };
+
   function buildModalState(params: FileViewerModalParams): FileViewerModalState {
     const st = store.get();
     const chatKey = params.chatKey ? String(params.chatKey) : null;
@@ -130,6 +169,16 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const prevIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(st, msgs, msgIdx, -1) : null;
     const nextIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(st, msgs, msgIdx, 1) : null;
     const fileId = params.fileId ? String(params.fileId).trim() : "";
+    const openedAtMs = (() => {
+      const cur = st.modal;
+      if (!cur || cur.kind !== "file_viewer") return Date.now();
+      const curFileId = typeof cur.fileId === "string" ? cur.fileId.trim() : "";
+      const nextFileId = fileId;
+      const same = curFileId && nextFileId ? curFileId === nextFileId : String(cur.url || "").trim() === String(params.url || "").trim();
+      if (!same) return Date.now();
+      const prevOpenedAt = cur.openedAtMs;
+      return typeof prevOpenedAt === "number" && Number.isFinite(prevOpenedAt) ? prevOpenedAt : Date.now();
+    })();
     return {
       kind: "file_viewer",
       ...(fileId ? { fileId } : {}),
@@ -143,6 +192,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       msgIdx,
       prevIdx,
       nextIdx,
+      openedAtMs,
     };
   }
 
@@ -173,6 +223,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const size = Number(att.size || entry?.size || fallback?.size || 0) || 0;
     const mime = (att.mime ?? entry?.mime ?? fallback?.mime) || null;
     const hasThumb = Boolean(fileId && st.fileThumbs?.[fileId]?.url);
+    const thumbUrl = fileId && st.fileThumbs?.[fileId]?.url ? String(st.fileThumbs[fileId].url || "").trim() : null;
     const kindHint = fallback?.kindHint === "image" || fallback?.kindHint === "video" ? fallback.kindHint : null;
     const hintedMedia = kindHint === "image" || kindHint === "video";
     if (!(hintedMedia || isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || hasThumb)) {
@@ -203,6 +254,146 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
         source: entry?.url ? "transfer" : "fallback",
       });
       store.set({ modal: buildModalState({ fileId, url, name, size, mime, caption, autoplay, chatKey, msgIdx }) });
+      maybePrefetchNeighbors(chatKey, msgIdx);
+      return true;
+    }
+    const canOpenThumbNow = Boolean(
+      fileId &&
+        thumbUrl &&
+        (kindHint === "image" || (!kindHint && isImageLikeFile(name, mime))) &&
+        !isVideoLikeFile(name, mime)
+    );
+    if (canOpenThumbNow) {
+      debugHook("file.viewer.open.thumb", { chatKey, msgIdx, fileId, hasThumb: true });
+      store.set({ modal: buildModalState({ fileId, url: thumbUrl as string, name, size, mime, caption, autoplay: false, chatKey, msgIdx }) });
+      maybePrefetchNeighbors(chatKey, msgIdx);
+      void (async () => {
+        try {
+          const info = await requestFreshHttpDownloadUrl(fileId as string);
+          const fullUrl = String(info?.url || "").trim();
+          if (!fullUrl) {
+            debugHook("file.viewer.open.thumb_upgrade_fail", { chatKey, msgIdx, fileId, reason: "missing_url" });
+            return;
+          }
+          const latest = store.get();
+          const modal = latest.modal;
+          if (!modal || modal.kind !== "file_viewer") {
+            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "no_modal" });
+            return;
+          }
+          const modalFileId = typeof modal.fileId === "string" ? modal.fileId.trim() : "";
+          if (!modalFileId || modalFileId !== String(fileId)) {
+            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "different_file" });
+            return;
+          }
+          const modalUrl = String(modal.url || "").trim();
+          if (modalUrl && thumbUrl && modalUrl !== thumbUrl) {
+            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "already_upgraded" });
+            return;
+          }
+          debugHook("file.viewer.open.thumb_upgrade", { chatKey, msgIdx, fileId, phase: "prefetch_start" });
+          const prefetchStartedAt = Date.now();
+          const prefetchOk = await (async (): Promise<boolean> => {
+            try {
+              const img = new Image();
+              img.decoding = "async";
+              await new Promise<void>((resolve, reject) => {
+                let done = false;
+                const timer = window.setTimeout(() => {
+                  if (done) return;
+                  done = true;
+                  reject(new Error("timeout"));
+                }, 15_000);
+                const cleanup = () => {
+                  try {
+                    window.clearTimeout(timer);
+                  } catch {
+                    // ignore
+                  }
+                  try {
+                    img.onload = null;
+                    img.onerror = null;
+                  } catch {
+                    // ignore
+                  }
+                };
+                img.onload = () => {
+                  if (done) return;
+                  done = true;
+                  cleanup();
+                  resolve();
+                };
+                img.onerror = () => {
+                  if (done) return;
+                  done = true;
+                  cleanup();
+                  reject(new Error("error"));
+                };
+                img.src = fullUrl;
+                if (img.complete) {
+                  if (img.naturalWidth > 0) {
+                    if (done) return;
+                    done = true;
+                    cleanup();
+                    resolve();
+                  } else {
+                    if (done) return;
+                    done = true;
+                    cleanup();
+                    reject(new Error("error"));
+                  }
+                }
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          })();
+          debugHook("file.viewer.open.thumb_upgrade", {
+            chatKey,
+            msgIdx,
+            fileId,
+            phase: prefetchOk ? "prefetch_ok" : "prefetch_fail",
+            elapsed_ms: Math.max(0, Date.now() - prefetchStartedAt),
+          });
+          if (!prefetchOk) return;
+
+          const latestAfterPrefetch = store.get();
+          const modalAfterPrefetch = latestAfterPrefetch.modal;
+          if (!modalAfterPrefetch || modalAfterPrefetch.kind !== "file_viewer") {
+            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "no_modal_after_prefetch" });
+            return;
+          }
+          const modalFileIdAfterPrefetch = typeof modalAfterPrefetch.fileId === "string" ? modalAfterPrefetch.fileId.trim() : "";
+          if (!modalFileIdAfterPrefetch || modalFileIdAfterPrefetch !== String(fileId)) {
+            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "different_file_after_prefetch" });
+            return;
+          }
+          const modalUrlAfterPrefetch = String(modalAfterPrefetch.url || "").trim();
+          if (modalUrlAfterPrefetch && thumbUrl && modalUrlAfterPrefetch !== thumbUrl) {
+            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "already_upgraded_after_prefetch" });
+            return;
+          }
+          debugHook("file.viewer.open.thumb_upgrade", { chatKey, msgIdx, fileId, phase: "apply" });
+          const nextMime = mime || info.mime || null;
+          store.set({
+            modal: buildModalState({
+              fileId,
+              url: fullUrl,
+              name: name || info.name || "файл",
+              size: size || info.size || 0,
+              mime: nextMime,
+              caption,
+              autoplay: false,
+              chatKey,
+              msgIdx,
+            }),
+          });
+        } catch (err) {
+          const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
+          debugHook("file.viewer.open.thumb_upgrade_fail", { chatKey, msgIdx, fileId, reason: errMsg || "thumb_upgrade_failed" });
+        }
+      })();
       return true;
     }
     if (!fileId) {
@@ -212,7 +403,10 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     }
     const opened = await tryOpenFileViewerFromCache(fileId, { name, size, mime, caption, chatKey, msgIdx });
     debugHook("file.viewer.open.cache", { chatKey, msgIdx, fileId, ok: Boolean(opened) });
-    if (opened) return true;
+    if (opened) {
+      maybePrefetchNeighbors(chatKey, msgIdx);
+      return true;
+    }
     const latest = store.get();
     if (latest.conn !== "connected") {
       debugHook("file.viewer.open.blocked", { chatKey, msgIdx, fileId, reason: "no_conn" });
@@ -250,6 +444,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
           msgIdx,
         }),
       });
+      maybePrefetchNeighbors(chatKey, msgIdx);
       return true;
     } catch (err) {
       const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");

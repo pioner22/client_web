@@ -137,6 +137,126 @@ export function formatBytes(size: number): string {
   return `${value.toFixed(precision)} ${units[idx]}`;
 }
 
+function formatVoiceTime(valueSeconds: number): string {
+  const raw = Number(valueSeconds);
+  if (!Number.isFinite(raw) || raw <= 0) return "0:00";
+  const total = Math.max(0, Math.round(raw));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function renderVoicePlayer(opts: {
+  url: string | null;
+  fileId?: string | null;
+  name?: string | null;
+  size?: number | null;
+  mime?: string | null;
+  msgIdx?: number | null;
+}): HTMLElement {
+  const url = opts.url;
+  const audio = url ? (el("audio", { class: "chat-voice-audio", src: url, preload: "metadata" }) as HTMLAudioElement) : null;
+  const playBtn = el("button", { class: "btn chat-voice-play", type: "button", "aria-label": "Воспроизвести" }, [""]);
+  const bar = el("span", { class: "chat-voice-progress", "aria-hidden": "true" }, [""]);
+  const track = el("button", { class: "btn chat-voice-track", type: "button", "aria-label": "Перемотка" }, [bar]);
+  const time = el("div", { class: "chat-voice-time" }, ["0:00"]);
+  const wrap = el("div", { class: `chat-voice${url ? "" : " chat-voice-placeholder"}`, "data-voice-state": "paused" }, [
+    playBtn,
+    track,
+    time,
+    ...(audio ? [audio] : []),
+  ]);
+  wrap.style.setProperty("--voice-progress", "0%");
+
+  const fileId = String(opts.fileId || "").trim();
+  if (fileId) {
+    wrap.setAttribute("data-file-kind", "audio");
+    wrap.setAttribute("data-file-id", fileId);
+    wrap.setAttribute("data-name", String(opts.name || ""));
+    wrap.setAttribute("data-size", String(Number(opts.size || 0) || 0));
+    if (opts.mime) wrap.setAttribute("data-mime", String(opts.mime));
+    if (typeof opts.msgIdx === "number" && Number.isFinite(opts.msgIdx)) {
+      wrap.setAttribute("data-msg-idx", String(Math.trunc(opts.msgIdx)));
+    }
+  }
+
+  if (!audio) {
+    playBtn.setAttribute("disabled", "true");
+    track.setAttribute("disabled", "true");
+    time.textContent = "—";
+    return wrap;
+  }
+
+  const canWireControls =
+    typeof (playBtn as any).addEventListener === "function" &&
+    typeof (track as any).addEventListener === "function" &&
+    typeof (audio as any).addEventListener === "function" &&
+    typeof (audio as any).play === "function" &&
+    typeof (audio as any).pause === "function";
+  if (!canWireControls) {
+    playBtn.setAttribute("disabled", "true");
+    track.setAttribute("disabled", "true");
+    time.textContent = "—";
+    return wrap;
+  }
+
+  let duration = 0;
+  const setProgressPct = (pct: number) => {
+    const safe = Math.max(0, Math.min(100, Math.round(pct)));
+    wrap.style.setProperty("--voice-progress", `${safe}%`);
+  };
+  const setState = (state: "playing" | "paused") => {
+    wrap.setAttribute("data-voice-state", state);
+    playBtn.setAttribute("aria-label", state === "playing" ? "Пауза" : "Воспроизвести");
+  };
+
+  playBtn.addEventListener("click", () => {
+    if (audio.paused) {
+      setState("playing");
+      void audio.play().catch(() => setState("paused"));
+    } else {
+      audio.pause();
+      setState("paused");
+    }
+  });
+
+  track.addEventListener("click", (e) => {
+    const rect = track.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    if (rect.width <= 0) return;
+    const ratio = x / rect.width;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    try {
+      audio.currentTime = Math.max(0, Math.min(duration, ratio * duration));
+    } catch {
+      // ignore
+    }
+  });
+
+  audio.addEventListener("loadedmetadata", () => {
+    duration = Number(audio.duration);
+    if (Number.isFinite(duration) && duration > 0) {
+      time.textContent = formatVoiceTime(duration);
+      setProgressPct(0);
+    }
+  });
+  audio.addEventListener("timeupdate", () => {
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    const pct = (audio.currentTime / duration) * 100;
+    setProgressPct(pct);
+    time.textContent = formatVoiceTime(Math.max(0, duration - audio.currentTime));
+  });
+  audio.addEventListener("ended", () => {
+    setProgressPct(0);
+    if (Number.isFinite(duration) && duration > 0) time.textContent = formatVoiceTime(duration);
+    setState("paused");
+  });
+  audio.addEventListener("pause", () => setState("paused"));
+  audio.addEventListener("play", () => setState("playing"));
+
+  return wrap;
+}
+
 export function resolveUserAccent(seed: string): string | null {
   const s = String(seed ?? "").trim();
   if (!s) return null;
@@ -150,6 +270,16 @@ export function normalizeFileName(value: string): string {
   const noQuery = raw.split(/[?#]/)[0];
   const leaf = noQuery.split(/[\\/]/).pop() || "";
   return leaf.trim().toLowerCase();
+}
+
+function isVoiceNoteName(name: string): boolean {
+  const n = normalizeFileName(name);
+  return n.startsWith("voice_") || n.startsWith("voice-note") || n.startsWith("voice_note") || n.includes("_voice_note");
+}
+
+function isVideoNoteName(name: string): boolean {
+  const n = normalizeFileName(name);
+  return n.startsWith("video_note") || n.startsWith("video-note") || n.includes("_video_note");
 }
 
 export const IMAGE_NAME_HINT_RE =
@@ -632,6 +762,7 @@ export function renderVideoPreviewButton(
 ): HTMLElement | null {
   if (!info.isVideo) return null;
   const fixedAspect = Boolean(opts?.className && opts.className.split(/\s+/).includes("chat-file-preview-album"));
+  const videoNote = !fixedAspect && isVideoNoteName(info.name);
   const mobileUi = Boolean(opts?.mobileUi);
   const progressOverlay = info.transfer ? renderMediaProgressOverlay(info.transfer) : null;
   const bytes = Number(info.size || 0) || 0;
@@ -644,6 +775,7 @@ export function renderVideoPreviewButton(
     ? ["chat-file-preview", "chat-file-preview-video"]
     : ["chat-file-preview", "chat-file-preview-video", "chat-file-preview-empty"];
   if (opts?.className) classes.push(opts.className);
+  if (videoNote) classes.push("chat-file-preview-video-note");
   const attrs: Record<string, string | undefined> = {
     class: classes.join(" "),
     type: "button",
@@ -693,10 +825,14 @@ export function renderVideoPreviewButton(
   if (progressOverlay) children.push(progressOverlay);
   const btn = el("button", attrs, children) as HTMLButtonElement;
   if (!fixedAspect) {
-    const cachedRatio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
-    const cachedLocalRatio = !cachedRatio && info.transfer?.localId ? getCachedLocalMediaAspectRatio(info.transfer.localId) : null;
-    const ratio = cachedRatio ?? cachedLocalRatio;
-    if (ratio) btn.style.aspectRatio = String(ratio);
+    if (videoNote) {
+      btn.style.aspectRatio = "1 / 1";
+    } else {
+      const cachedRatio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
+      const cachedLocalRatio = !cachedRatio && info.transfer?.localId ? getCachedLocalMediaAspectRatio(info.transfer.localId) : null;
+      const ratio = cachedRatio ?? cachedLocalRatio;
+      if (ratio) btn.style.aspectRatio = String(ratio);
+    }
   }
   return btn;
 }
@@ -720,12 +856,16 @@ export function isRoundVideoCandidate(info: FileAttachmentInfo, ratio: number): 
   return false;
 }
 
+export function extractFileCaptionText(text: unknown): string {
+  const caption = String(text ?? "").trim();
+  if (!caption || caption.startsWith("[file]")) return "";
+  return caption;
+}
+
 export function isAlbumCandidate(msg: ChatMessage, info: FileAttachmentInfo | null): info is FileAttachmentInfo {
   if (!info || !(info.isImage || info.isVideo)) return false;
   if (msg.kind === "sys") return false;
   if (info.offer) return false;
-  const caption = String(msg.text || "").trim();
-  if (caption && !caption.startsWith("[file]")) return false;
   if (!info.url && !info.fileId) return false;
   return true;
 }
@@ -1180,26 +1320,36 @@ export function messageLine(
     const isImage = info.isImage;
     const isVideo = info.isVideo;
     const isAudio = info.isAudio;
+    const voice = isAudio && isVoiceNoteName(name);
+    const videoNote = isVideo && isVideoNoteName(name);
 
     if (isAudio) {
-      if (url) {
+      if (voice) {
         mainChildren.splice(
           1,
           0,
-          el("audio", { class: "chat-file-audio", src: url, controls: "true", preload: "metadata" }) as HTMLAudioElement
+          renderVoicePlayer({
+            url: url || null,
+            fileId: info.fileId,
+            name: info.name,
+            size: info.size,
+            mime: info.mime,
+            msgIdx: typeof opts?.msgIdx === "number" && Number.isFinite(opts.msgIdx) ? Math.trunc(opts.msgIdx) : null,
+          })
         );
-      } else if (info.fileId) {
-        const placeholderAttrs: Record<string, string> = {
-          class: "chat-file-audio-placeholder",
-          "data-file-id": info.fileId,
-          "data-file-kind": "audio",
-          "data-name": info.name,
-          "data-size": String(info.size || 0),
-          "aria-hidden": "true",
-        };
-        if (info.mime) placeholderAttrs["data-mime"] = info.mime;
-        if (opts?.msgIdx !== undefined) placeholderAttrs["data-msg-idx"] = String(opts.msgIdx);
-        mainChildren.splice(1, 0, el("div", placeholderAttrs, ["Аудио"]));
+      } else {
+        mainChildren.splice(
+          1,
+          0,
+          renderVoicePlayer({
+            url: url || null,
+            fileId: info.fileId,
+            name: info.name,
+            size: info.size,
+            mime: info.mime,
+            msgIdx: typeof opts?.msgIdx === "number" && Number.isFinite(opts.msgIdx) ? Math.trunc(opts.msgIdx) : null,
+          })
+        );
       }
     }
 
@@ -1249,9 +1399,9 @@ export function messageLine(
 
     const hasProgress = info.hasProgress;
     const fileRowClass = isVisualMedia
-      ? `file-row file-row-chat file-row-image${isVideo ? " file-row-video" : ""}${hasProgress ? " file-row-progress" : ""}`
+      ? `file-row file-row-chat file-row-image${isVideo ? " file-row-video" : ""}${videoNote ? " file-row-video-note" : ""}${hasProgress ? " file-row-progress" : ""}`
       : isAudio
-        ? "file-row file-row-chat file-row-audio"
+        ? `file-row file-row-chat file-row-audio${voice ? " file-row-voice" : ""}`
         : "file-row file-row-chat";
     fileRowEl = el("div", { class: fileRowClass }, rowChildren);
     if (isVisualMedia && !opts?.mobileUi) {
@@ -1405,6 +1555,16 @@ export function renderAlbumLine(
   const titleLabel = showHandle ? `${fromLabel} ${fromHandle}` : fromLabel;
   const showFrom = true;
   const canOpenProfile = Boolean(displayFromId);
+  const albumCaption = (() => {
+    let unique: string | null = null;
+    for (const item of items) {
+      const c = extractFileCaptionText(item?.msg?.text);
+      if (!c) continue;
+      if (unique === null) unique = c;
+      else if (unique !== c) return "";
+    }
+    return unique ?? "";
+  })();
   const bodyChildren: HTMLElement[] = [];
   if (showFrom) {
     const attrs = canOpenProfile
@@ -1458,8 +1618,8 @@ export function renderAlbumLine(
       : null;
 
   const gridItems: HTMLElement[] = [];
-  let hasCaption = false;
-  let emojiOnly = false;
+  const hasCaption = Boolean(albumCaption);
+  const emojiOnly = hasCaption ? isEmojiOnlyText(albumCaption) : false;
   const albumFileKind = items.every((it) => it && it.info && it.info.isVideo) ? "video" : "image";
   const layoutCfg = opts?.albumLayout ?? { maxWidth: 420, minWidth: 100, spacing: 1 };
   const sizes = items.map((item) => {
@@ -1484,12 +1644,7 @@ export function renderAlbumLine(
   const layoutOk = Boolean(albumW && albumH && layout && Array.isArray(layout.layout) && layout.layout.length === items.length);
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
-    const caption = String(item.msg.text || "").trim();
-    const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
-    if (viewerCaption) {
-      hasCaption = true;
-      emojiOnly = isEmojiOnlyText(viewerCaption);
-    }
+    const viewerCaption = extractFileCaptionText(item.msg.text) || albumCaption;
     const preview = item.info.isImage
       ? renderImagePreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx, caption: viewerCaption })
       : item.info.isVideo
@@ -1511,6 +1666,11 @@ export function renderAlbumLine(
     grid.append(selectionBtn);
   }
   bodyChildren.push(grid);
+  if (albumCaption) {
+    bodyChildren.push(
+      el("div", { class: `msg-text msg-caption${emojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(albumCaption))
+    );
+  }
   bodyChildren.push(el("div", { class: "msg-meta" }, buildMessageMeta(last.msg)));
   const reacts = renderReactions(last.msg);
   if (reacts) bodyChildren.push(reacts);

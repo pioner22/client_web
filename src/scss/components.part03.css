@@ -976,6 +976,7 @@
   height: var(--composer-action-size, var(--composer-icon-btn-size));
   margin: 0;
   padding: 0;
+  position: relative;
   border-radius: calc(var(--composer-action-size, var(--composer-icon-btn-size)) * var(--phi-inv));
   border-color: color-mix(in srgb, var(--composer-field-border-color), transparent 12%);
   background: var(--composer-field-bg);
@@ -987,27 +988,51 @@
   box-shadow: 0 2px 10px color-mix(in srgb, var(--composer-field-border-color), transparent 82%);
 }
 
+.btn.composer-action[data-media-perm="denied"] {
+  color: color-mix(in srgb, var(--btn-text), #ff4d4f 35%);
+}
+
+.btn.composer-action[data-media-perm="denied"]::after {
+  content: "!";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
 .composer-field .btn.composer-action {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
 }
 
+.composer-actions-right .btn.composer-send {
+  display: none;
+}
+
+.input-wrap.composer-has-text .composer-actions-right .btn.composer-send {
+  display: grid;
+}
+
+.input-wrap.composer-has-text .composer-actions-right .btn.composer-voice:not(.is-recording),
+.input-wrap.composer-has-text .composer-actions-right .btn.composer-video-note:not(.is-recording) {
+  display: none;
+}
+
 .btn.composer-send {
-  min-width: var(--composer-btn-size);
-  width: var(--composer-btn-size);
-  height: var(--composer-btn-size);
-  margin: 0;
-  padding: 0;
-  border-radius: calc(var(--composer-btn-size) * var(--phi-inv));
   border-color: transparent;
   background: var(--accent);
-  box-shadow: var(--composer-field-shadow);
   color: #fff;
-  font-size: 0;
-  line-height: 1;
-  display: grid;
-  place-items: center;
 }
 
 .btn.composer-emoji::before {
@@ -1020,6 +1045,37 @@
     no-repeat center / contain;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm4-7c-.67 1.33-2.17 2.5-4 2.5s-3.33-1.17-4-2.5h8ZM9.5 11A1.5 1.5 0 1 0 9.5 8a1.5 1.5 0 0 0 0 3Zm5 0A1.5 1.5 0 1 0 14.5 8a1.5 1.5 0 0 0 0 3Z'/%3E%3C/svg%3E")
     no-repeat center / contain;
+}
+
+.btn.composer-voice::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  opacity: 0.9;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 14 0h-2Zm-6 11v-3h2v3h-2Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 14 0h-2Zm-6 11v-3h2v3h-2Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
+.btn.composer-video-note::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  opacity: 0.9;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 2 21 7v10l-9 5-9-5V7l9-5Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 2 21 7v10l-9 5-9-5V7l9-5Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
+.btn.composer-voice.is-recording,
+.btn.composer-video-note.is-recording {
+  background: color-mix(in srgb, var(--danger), transparent 82%);
+  border-color: color-mix(in srgb, var(--danger), transparent 55%);
+  color: color-mix(in srgb, var(--danger), #fff 12%);
 }
 
 .btn.composer-send::before {
@@ -1070,6 +1126,13 @@
   color: var(--btn-text-hover);
 }
 
+.btn.composer-voice:hover:not(:disabled),
+.btn.composer-video-note:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-hover), transparent 25%);
+  border-color: transparent;
+  color: var(--btn-text-hover);
+}
+
 .btn.composer-send:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent), #000 10%);
   border-color: transparent;
@@ -1098,6 +1161,12 @@
   transform: translateY(1px);
 }
 
+.btn.composer-voice:active:not(:disabled),
+.btn.composer-video-note:active:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-bg-active), transparent 18%);
+  transform: translateY(1px);
+}
+
 .btn.composer-send:active:not(:disabled) {
   background: color-mix(in srgb, var(--accent), #000 18%);
   transform: translateY(1px);
@@ -1118,6 +1187,12 @@
   cursor: not-allowed;
 }
 
+.btn.composer-voice:disabled,
+.btn.composer-video-note:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .btn.composer-send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1130,6 +1205,8 @@
 
 .btn.composer-attach:focus-visible,
 .btn.composer-emoji:focus-visible,
+.btn.composer-voice:focus-visible,
+.btn.composer-video-note:focus-visible,
 .btn.composer-send:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: 2px;

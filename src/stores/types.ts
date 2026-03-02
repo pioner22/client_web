@@ -232,6 +232,7 @@ export type ModalState =
       msgIdx?: number | null;
       prevIdx?: number | null;
       nextIdx?: number | null;
+      openedAtMs?: number | null;
     }
   | { kind: "invite_user"; peer: string; message?: string }
   | { kind: "action"; payload: ActionModalPayload; message?: string }

@@ -73,7 +73,7 @@ test("pinnedMessages: mergePinnedMessagesMaps объединяет без дуб
   }
 });
 
-test("pinnedMessages: loadPinnedMessagesForUser мигрирует v1 -> v2", async () => {
+test("pinnedMessages: loadPinnedMessagesForUser удаляет legacy v1 key (без миграции)", async () => {
   const { mod, cleanup } = await loadPinnedMessages();
   try {
     const userId = "123-45";
@@ -90,11 +90,11 @@ test("pinnedMessages: loadPinnedMessagesForUser мигрирует v1 -> v2", as
     const legacyKey = `yagodka_pinned_messages_v1:${userId}`;
     storage.setItem(legacyKey, JSON.stringify({ v: 1, pinned: { "dm:1": 100 } }));
     const loaded = mod.loadPinnedMessagesForUser(userId, storage);
-    assert.deepEqual(loaded, { "dm:1": [100] });
+    assert.deepEqual(loaded, {});
 
     const v2Key = `yagodka_pinned_messages_v2:${userId}`;
     assert.equal(storage.getItem(legacyKey), null);
-    assert.ok(String(storage.getItem(v2Key) || "").includes('"v":2'));
+    assert.equal(storage.getItem(v2Key), null);
 
     // roundtrip: save writes v2 and keeps arrays
     const next = { "dm:1": [100, 200] };

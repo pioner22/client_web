@@ -59,12 +59,15 @@ export function createComposerInputStateFeature(deps: ComposerInputStateFeatureD
 
   const updateComposerTypingUi = (forceOff = false) => {
     try {
+      const hasText = Boolean(String(input.value || "").trim());
+      inputWrap.classList.toggle("composer-has-text", hasText);
+
       if (forceOff) {
         inputWrap.classList.remove("composer-typing");
         if (typeof document !== "undefined") document.documentElement.classList.remove("app-typing");
         return;
       }
-      const active = Boolean(document.activeElement === input && String(input.value || "").trim());
+      const active = Boolean(document.activeElement === input && hasText);
       inputWrap.classList.toggle("composer-typing", active);
       if (typeof document !== "undefined") document.documentElement.classList.toggle("app-typing", active);
     } catch {

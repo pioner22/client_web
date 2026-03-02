@@ -22,16 +22,11 @@ import type {
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { messageSelectionKey } from "../helpers/chat/chatSelection";
 import { getCachedMediaAspectRatio } from "../helpers/chat/mediaAspectCache";
-import {
-  createChatSearchCounts,
-  type ChatSearchFilter,
-} from "../helpers/chat/chatSearch";
+import { createChatSearchCounts, type ChatSearchFilter } from "../helpers/chat/chatSearch";
 import { saveArchivedForUser, toggleArchived } from "../helpers/chat/archives";
 import { saveChatFoldersForUser } from "../helpers/chat/folders";
 import { savePinsForUser, togglePin } from "../helpers/chat/pins";
-import {
-  savePinnedMessagesForUser,
-} from "../helpers/chat/pinnedMessages";
+import { savePinnedMessagesForUser } from "../helpers/chat/pinnedMessages";
 import { putCachedFileBlob } from "../helpers/files/fileBlobCache";
 import { loadAutoDownloadPrefs, saveAutoDownloadPrefs, type AutoDownloadPrefs } from "../helpers/files/autoDownloadPrefs";
 import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
@@ -61,6 +56,8 @@ import { createFileSendModalFeature, type FileSendModalFeature } from "./feature
 import { createFileActionsFeature } from "./features/files/fileActionsFeature";
 import { createComposerFileInputFeature } from "./features/files/composerFileInputFeature";
 import { createComposerAttachButtonFeature } from "./features/files/composerAttachButtonFeature";
+import { createComposerVoiceRecordFeature } from "./features/media/composerVoiceRecordFeature";
+import { createComposerVideoNoteRecordFeature } from "./features/media/composerVideoNoteRecordFeature";
 import { initFileTransferBootstrap } from "./features/files/fileTransferBootstrap";
 import { createPreviewAutoFetchFeature } from "./features/files/previewAutoFetchFeature";
 import { createLocalVideoThumbFeature, type LocalVideoThumbFeature } from "./features/files/localVideoThumbFeature";
@@ -1543,7 +1540,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function handleFileMessage(msg: any): boolean {
-    if (msg?.type === "file_preview_ready") { const fileId = String(msg?.file_id ?? "").trim(); if (fileId) enqueueFileGet(fileId, { priority: "prefetch", silent: true }); return true; }
+    if (msg?.type === "file_preview_ready") { const fileId = String(msg?.file_id ?? "").trim(); if (fileId) enqueueFileGet(fileId, { priority: "high", silent: true }); return true; }
     if (fileOffers?.handleMessage(msg)) return true;
     return fileDownload?.handleMessage(msg) ?? false;
   }
@@ -1760,6 +1757,8 @@ export function mountApp(root: HTMLElement) {
   sendButtonMenuGestureFeature.bind(layout.sendBtn);
   composerFileInputFeature.bind();
   composerAttachButtonFeature.bind();
+  createComposerVoiceRecordFeature({ store, voiceBtn: layout.voiceBtn, showToast: toastFeature.showToast, openFileSendModal: (files: File[], target: TargetRef) => fileSendModalFeature?.openFileSendModal(files, target) }).bind();
+  createComposerVideoNoteRecordFeature({ store, videoNoteBtn: layout.videoNoteBtn, showToast: toastFeature.showToast, openFileSendModal: (files: File[], target: TargetRef) => fileSendModalFeature?.openFileSendModal(files, target) }).bind();
   layout.inputWrap.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
 

@@ -751,6 +751,8 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
         const st = store.get();
         const chatKey = st.selected ? conversationKey(st.selected) : null;
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         closeMobileSidebar();
         const openFallback = () => {
           if (url) {
