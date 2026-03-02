@@ -3,6 +3,7 @@ import type { AppState, ChatMessage, OutboxEntry } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { mergeMessages } from "../../helpers/chat/mergeMessages";
 import { removeOutboxEntry } from "../../helpers/chat/outbox";
+import { ingestHistoryResult } from "../../helpers/chat/historyIdb";
 import { nowTs } from "../../helpers/time";
 import { saveLastReadMarkers } from "../../helpers/ui/lastReadMarkers";
 import { oldestLoadedId, parseAttachment, parseMessageRef, parseReactions } from "./common";
@@ -35,6 +36,8 @@ export function handleHistoryServerMessage(
   const beforeIdRaw = msg?.before_id;
   const hasBefore = beforeIdRaw !== undefined && beforeIdRaw !== null;
   const beforeIdValue = hasBefore ? Number(beforeIdRaw) : NaN;
+  const sinceIdRaw = msg?.since_id;
+  const sinceId = typeof sinceIdRaw === "number" && Number.isFinite(sinceIdRaw) ? Math.trunc(sinceIdRaw) : Math.trunc(Number(sinceIdRaw) || 0);
   const readUpToRaw = msg?.read_up_to_id;
   const readUpToId = Number(readUpToRaw);
   const rows = Array.isArray(msg?.rows) ? msg.rows : [];
@@ -83,8 +86,28 @@ export function handleHistoryServerMessage(
     });
   }
 
+  // Persist full history into IndexedDB (best-effort, async).
+  try {
+    const metaBefore = hasBefore ? (Number.isFinite(beforeIdValue) ? Math.trunc(beforeIdValue) : 0) : null;
+    const metaHasMore =
+      rawHasMore === undefined || rawHasMore === null
+        ? hasBefore && rows.length === 0
+          ? false
+          : null
+        : Boolean(rawHasMore);
+    void ingestHistoryResult(state.selfId, key, incoming, {
+      beforeId: metaBefore,
+      hasMore: metaHasMore,
+      preview: isPreview,
+      sinceId: sinceId > 0 ? sinceId : null,
+    });
+  } catch {
+    // ignore
+  }
+
   patch((prev) => {
-    let baseConv = prev.conversations[key] ?? [];
+    const initialConv = prev.conversations[key] ?? [];
+    let baseConv = initialConv;
     let outbox = (((prev as any).outbox || {}) as any) as any;
     let nextLastRead = prev.lastRead;
     let lastReadChanged = false;
@@ -138,6 +161,33 @@ export function handleHistoryServerMessage(
         outbox = removeOutboxEntry(outbox, key, lid);
       }
       if (changed) baseConv = conv;
+    }
+
+    // Background backfill: for non-selected chats, avoid growing in-memory conversation arrays when
+    // we fetch older pages (before_id>0). Persisted in IDB above, so keeping it in RAM is wasteful.
+    const selected = (prev as any).selected;
+    const selectedKey = selected ? (selected.kind === "dm" ? dmKey(String(selected.id || "")) : roomKey(String(selected.id || ""))) : "";
+    const isSelected = Boolean(selectedKey && selectedKey === key);
+    const suppressMerge = !isPreview && hasBefore && Number.isFinite(beforeIdValue) && beforeIdValue > 0 && !isSelected;
+
+    if (suppressMerge) {
+      if (resultRoom && Number.isFinite(readUpToId) && readUpToId > 0) {
+        const prevEntry = (nextLastRead || {})[key] || {};
+        if (!prevEntry.id || readUpToId > prevEntry.id) {
+          const merged = { ...(nextLastRead || {}), [key]: { ...prevEntry, id: readUpToId } };
+          nextLastRead = merged;
+          lastReadChanged = true;
+          if (prev.selfId) saveLastReadMarkers(prev.selfId, merged);
+        }
+      }
+
+      const base = {
+        ...prev,
+        outbox,
+        ...(baseConv !== initialConv ? { conversations: { ...prev.conversations, [key]: baseConv } } : {}),
+        ...(prev.historyLoading?.[key] ? { historyLoading: { ...prev.historyLoading, [key]: false } } : {}),
+      };
+      return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
     }
 
     const nextConv = mergeMessages(baseConv, incoming);
@@ -222,4 +272,3 @@ export function handleHistoryServerMessage(
   });
   return true;
 }
-

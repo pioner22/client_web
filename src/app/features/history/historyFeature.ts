@@ -2,9 +2,12 @@ import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage, TargetRef } from "../../../stores/types";
 import { conversationKey, dmKey, roomKey } from "../../../helpers/chat/conversationKey";
 import { newestServerMessageId } from "../../../helpers/chat/historySync";
+import { getHistoryConvoMeta, getHistoryLatestMessages, getHistoryMessagesBefore } from "../../../helpers/chat/historyIdb";
+import { mergeMessages } from "../../../helpers/chat/mergeMessages";
 
 type DeviceCapsLike = {
   constrained: boolean;
+  slowNetwork: boolean;
   prefetchAllowed: boolean;
   historyPrefetchLimit: number;
   historyWarmupLimit: number;
@@ -29,6 +32,7 @@ export interface HistoryFeature {
   requestMoreHistory: () => void;
   enqueueHistoryPreview: (t: TargetRef) => void;
   scheduleWarmup: () => void;
+  scheduleBackfill: () => void;
   maybeAutoLoadMoreOnScroll: (opts: { scrollTop: number; scrollingUp: boolean; lastUserScrollAt: number }) => void;
   maybeFillViewport: () => void;
   maybeAutoRetrySelected: () => void;
@@ -101,6 +105,25 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const historyWarmupInFlight = new Set<string>();
   const historyWarmupTimers = new Map<string, number>();
   let historyWarmupTimer: number | null = null;
+
+  const historyIdbHydrating = new Set<string>();
+  const historyIdbNoCacheUntil = new Map<string, number>();
+
+  const HISTORY_IDB_TAIL_LIMIT = Math.max(200, Math.min(420, HISTORY_WARMUP_LIMIT));
+  const HISTORY_IDB_MISS_TTL_MS = 25_000;
+
+  const HISTORY_BACKFILL_LIMIT = deviceCaps.slowNetwork ? 120 : deviceCaps.constrained ? 160 : 200;
+  const HISTORY_BACKFILL_CONCURRENCY = 1;
+  const HISTORY_BACKFILL_QUEUE_MAX = deviceCaps.slowNetwork ? 30 : deviceCaps.constrained ? 50 : 70;
+  const HISTORY_BACKFILL_DELAY_MS = deviceCaps.slowNetwork ? 1600 : deviceCaps.constrained ? 1050 : 780;
+  const HISTORY_BACKFILL_TIMEOUT_MS = Math.max(12_000, Math.min(30_000, HISTORY_REQUEST_TIMEOUT_MS + 3000));
+  const HISTORY_BACKFILL_TAIL_REVALIDATE_MS = 6 * 60 * 60 * 1000;
+
+  const historyBackfillQueue: TargetRef[] = [];
+  const historyBackfillQueued = new Set<string>();
+  const historyBackfillInFlight = new Set<string>();
+  const historyBackfillTimers = new Map<string, number>();
+  let historyBackfillTimer: number | null = null;
 
   let historyAutoBlockUntil = 0;
   let lastHistoryAutoAt = 0;
@@ -253,6 +276,52 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
         ...(prev.historyLoading?.[key] ? { historyLoading: { ...prev.historyLoading, [key]: false } } : {}),
         ...(derivedCursor ? { historyCursor: { ...prev.historyCursor, [key]: derivedCursor } } : {}),
       }));
+    }
+
+    // 0) Local-first: if we have a full history cache in IndexedDB, hydrate the tail before hitting the server.
+    if (!effectiveLoaded && !cachedHasServer && st.selfId) {
+      const missUntil = historyIdbNoCacheUntil.get(key) ?? 0;
+      if (Date.now() >= missUntil && !historyIdbHydrating.has(key) && !historyRequested.has(key)) {
+        historyIdbHydrating.add(key);
+        markChatAutoScroll(key, true);
+        store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+        void (async () => {
+          try {
+            const snap = store.get();
+            const uid = snap.selfId;
+            if (!uid) return;
+            const cached = await getHistoryLatestMessages(uid, key, { limit: HISTORY_IDB_TAIL_LIMIT });
+            if (!cached.length) {
+              historyIdbNoCacheUntil.set(key, Date.now() + HISTORY_IDB_MISS_TTL_MS);
+              store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: false } }));
+              requestHistory(t, opts);
+              return;
+            }
+            const meta = await getHistoryConvoMeta(uid, key);
+            const derivedCursor = oldestServerMessageId(cached);
+            store.set((prev) => {
+              const prevConv = prev.conversations?.[key] || [];
+              const merged = prevConv.length ? mergeMessages(prevConv, cached) : cached;
+              const cursor = derivedCursor || oldestServerMessageId(merged);
+              return {
+                ...prev,
+                conversations: { ...prev.conversations, [key]: merged },
+                historyLoaded: { ...prev.historyLoaded, [key]: true },
+                ...(cursor ? { historyCursor: { ...prev.historyCursor, [key]: cursor } } : {}),
+                ...(meta ? { historyHasMore: { ...prev.historyHasMore, [key]: !meta.backfilled } } : {}),
+                historyLoading: { ...prev.historyLoading, [key]: false },
+              };
+            });
+            // Best-effort delta sync for freshness (edits/deletes/new messages).
+            const after = store.get();
+            const selectedKey = after.selected ? conversationKey(after.selected) : "";
+            if (selectedKey === key) requestHistory(t, { ...opts, force: true });
+          } finally {
+            historyIdbHydrating.delete(key);
+          }
+        })();
+        return;
+      }
     }
 
     // 1) Первый заход в чат: забираем "хвост" (последние сообщения), чтобы быстро заполнить экран.
@@ -416,6 +485,143 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       scheduleWarmup();
     }, HISTORY_WARMUP_TIMEOUT_MS);
     historyWarmupTimers.set(key, timer);
+  };
+
+  const clearHistoryBackfillTimer = (key: string) => {
+    const timer = historyBackfillTimers.get(key);
+    if (timer === undefined) return;
+    historyBackfillTimers.delete(key);
+    try {
+      window.clearTimeout(timer);
+    } catch {
+      // ignore
+    }
+  };
+
+  const armHistoryBackfillTimer = (key: string) => {
+    clearHistoryBackfillTimer(key);
+    const timer = window.setTimeout(() => {
+      historyBackfillTimers.delete(key);
+      if (!historyBackfillInFlight.has(key)) return;
+      historyBackfillInFlight.delete(key);
+      debugHook("history.backfill.timeout", { key, timeout_ms: HISTORY_BACKFILL_TIMEOUT_MS });
+      scheduleBackfill();
+    }, HISTORY_BACKFILL_TIMEOUT_MS);
+    historyBackfillTimers.set(key, timer);
+  };
+
+  const shouldBackfillHistoryTarget = (st: AppState, key: string): boolean => {
+    if (!key) return false;
+    if (!st.selfId) return false;
+    if (st.selected && conversationKey(st.selected) === key) return false;
+    if (historyRequested.has(key) || historyDeltaRequested.has(key) || historyPrefetchRequested.has(key)) return false;
+    if (historyWarmupInFlight.has(key) || historyWarmupQueued.has(key) || historyWarmupRequested.has(key)) return false;
+    if (historyBackfillQueued.has(key) || historyBackfillInFlight.has(key)) return false;
+    return true;
+  };
+
+  const fillHistoryBackfillQueue = (st: AppState) => {
+    if (historyBackfillQueue.length >= HISTORY_BACKFILL_QUEUE_MAX) return;
+    const targets = collectHistoryWarmupTargets(st);
+    for (const target of targets) {
+      if (historyBackfillQueue.length >= HISTORY_BACKFILL_QUEUE_MAX) break;
+      const key = conversationKey(target);
+      if (!key) continue;
+      if (!shouldBackfillHistoryTarget(st, key)) continue;
+      historyBackfillQueue.push(target);
+      historyBackfillQueued.add(key);
+    }
+  };
+
+  const startBackfillForTarget = async (target: TargetRef, key: string) => {
+    try {
+      const st = store.get();
+      if (!st.authed || st.conn !== "connected") return;
+      const uid = st.selfId;
+      if (!uid) return;
+      const meta = await getHistoryConvoMeta(uid, key);
+      const now = Date.now();
+
+      const tailCheckedAt = meta?.tail_checked_at ?? 0;
+      const tailStale = !tailCheckedAt || now - tailCheckedAt > HISTORY_BACKFILL_TAIL_REVALIDATE_MS;
+      const needTail = !meta || !meta.max_id || meta.max_id <= 0 || tailStale;
+      if (needTail) {
+        debugHook("history.backfill.request", {
+          key,
+          mode: "tail",
+          limit: HISTORY_IDB_TAIL_LIMIT,
+          reason: !meta ? "no_meta" : !meta.max_id ? "no_max_id" : tailStale ? "stale_tail" : "unknown",
+        });
+        if (target.kind === "dm") send({ type: "history", peer: target.id, before_id: 0, limit: HISTORY_IDB_TAIL_LIMIT });
+        else send({ type: "history", room: target.id, before_id: 0, limit: HISTORY_IDB_TAIL_LIMIT });
+        return;
+      }
+
+      if (!meta.backfilled) {
+        const cursor = Number(meta.min_id ?? 0) || 0;
+        if (cursor > 0) {
+          debugHook("history.backfill.request", { key, mode: "before", before: cursor, limit: HISTORY_BACKFILL_LIMIT });
+          if (target.kind === "dm") send({ type: "history", peer: target.id, before_id: cursor, limit: HISTORY_BACKFILL_LIMIT });
+          else send({ type: "history", room: target.id, before_id: cursor, limit: HISTORY_BACKFILL_LIMIT });
+          return;
+        }
+        debugHook("history.backfill.request", { key, mode: "tail_repair", limit: HISTORY_IDB_TAIL_LIMIT, reason: "missing_min_id" });
+        if (target.kind === "dm") send({ type: "history", peer: target.id, before_id: 0, limit: HISTORY_IDB_TAIL_LIMIT });
+        else send({ type: "history", room: target.id, before_id: 0, limit: HISTORY_IDB_TAIL_LIMIT });
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    historyBackfillInFlight.delete(key);
+    clearHistoryBackfillTimer(key);
+    scheduleBackfill();
+  };
+
+  const drainHistoryBackfillQueue = () => {
+    historyBackfillTimer = null;
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") {
+      historyBackfillQueue.length = 0;
+      historyBackfillQueued.clear();
+      for (const key of historyBackfillInFlight) clearHistoryBackfillTimer(key);
+      historyBackfillInFlight.clear();
+      return;
+    }
+    if (!st.selfId) return;
+    if (st.page !== "main") return;
+    if (st.modal && st.modal.kind !== "context_menu") return;
+    const selectedKey = st.selected ? conversationKey(st.selected) : "";
+    if (selectedKey && (!st.historyLoaded?.[selectedKey] || st.historyLoading?.[selectedKey])) return;
+    if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") {
+      if (historyBackfillQueue.length) {
+        historyBackfillTimer = window.setTimeout(drainHistoryBackfillQueue, HISTORY_BACKFILL_DELAY_MS);
+      }
+      return;
+    }
+    if (historyWarmupInFlight.size || historyWarmupQueue.length || historyWarmupQueued.size) {
+      historyBackfillTimer = window.setTimeout(drainHistoryBackfillQueue, Math.max(350, HISTORY_BACKFILL_DELAY_MS));
+      return;
+    }
+    if (!historyBackfillQueue.length) fillHistoryBackfillQueue(st);
+    let slots = Math.max(0, HISTORY_BACKFILL_CONCURRENCY - historyBackfillInFlight.size);
+    while (historyBackfillQueue.length && slots > 0) {
+      const target = historyBackfillQueue.shift();
+      if (!target) continue;
+      const key = conversationKey(target);
+      if (!key) continue;
+      historyBackfillQueued.delete(key);
+      if (!shouldBackfillHistoryTarget(st, key)) continue;
+      historyBackfillInFlight.add(key);
+      armHistoryBackfillTimer(key);
+      void startBackfillForTarget(target, key);
+      slots -= 1;
+    }
+  };
+
+  const scheduleBackfill: HistoryFeature["scheduleBackfill"] = () => {
+    if (historyBackfillTimer !== null) return;
+    historyBackfillTimer = window.setTimeout(drainHistoryBackfillQueue, 450);
   };
 
   const shouldWarmupHistoryTarget = (st: AppState, key: string): boolean => {
@@ -635,6 +841,85 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     if (!before || !Number.isFinite(before) || before <= 0) return;
 
     historyPrependAnchor = makeHistoryPrependAnchor(key);
+
+    // Local-first: try to satisfy "load older" from IndexedDB cache to reduce server load (Telegram-like).
+    if (st.selfId) {
+      historyRequested.add(key);
+      store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+      void (async () => {
+        let usedNetwork = false;
+        try {
+          const snap = store.get();
+          const uid = snap.selfId;
+          if (!uid) return;
+          const cached = await getHistoryMessagesBefore(uid, key, { beforeId: before, limit: 200 });
+          if (cached.length) {
+            store.set((prev) => {
+              const baseConv = prev.conversations?.[key] || [];
+              const nextConv = mergeMessages(baseConv, cached);
+              const delta = nextConv.length - baseConv.length;
+              const cursor = oldestServerMessageId(nextConv);
+              const prevVirtualStart = prev.historyVirtualStart?.[key];
+              const shouldShiftVirtual =
+                typeof prevVirtualStart === "number" && Number.isFinite(prevVirtualStart) && delta > 0;
+              const nextVirtualStart = shouldShiftVirtual ? Math.max(0, prevVirtualStart + delta) : prevVirtualStart;
+              return {
+                ...prev,
+                conversations: { ...prev.conversations, [key]: nextConv },
+                ...(cursor ? { historyCursor: { ...prev.historyCursor, [key]: cursor } } : {}),
+                historyLoading: { ...prev.historyLoading, [key]: false },
+                ...(shouldShiftVirtual ? { historyVirtualStart: { ...prev.historyVirtualStart, [key]: nextVirtualStart } } : {}),
+              };
+            });
+            return;
+          }
+
+          const meta = await getHistoryConvoMeta(uid, key);
+          if (meta?.backfilled) {
+            store.set((prev) => ({
+              ...prev,
+              historyHasMore: { ...prev.historyHasMore, [key]: false },
+              historyLoading: { ...prev.historyLoading, [key]: false },
+            }));
+            return;
+          }
+
+          // Fallback: no cache (or not fully backfilled) — request from server.
+          const live = store.get();
+          if (!live.authed || live.conn !== "connected") return;
+          const selected = live.selected;
+          if (!selected) return;
+          const selectedKey = conversationKey(selected);
+          if (!selectedKey || selectedKey !== key) return;
+          usedNetwork = true;
+          armHistoryRequestTimeout(key, "before");
+          debugHook("history.request", {
+            key,
+            mode: "more",
+            before,
+            kind: selected.kind,
+            force: false,
+            prefetchBefore: false,
+            reason: "idb_miss",
+          });
+          if (selected.kind === "dm") {
+            send({ type: "history", peer: selected.id, before_id: before, limit: 200 });
+          } else {
+            send({ type: "history", room: selected.id, before_id: before, limit: 200 });
+          }
+        } finally {
+          if (!usedNetwork) {
+            historyRequested.delete(key);
+            store.set((prev) => {
+              if (!prev.historyLoading?.[key]) return prev;
+              return { ...prev, historyLoading: { ...prev.historyLoading, [key]: false } };
+            });
+          }
+        }
+      })();
+      return;
+    }
+
     historyRequested.add(key);
     armHistoryRequestTimeout(key, "before");
     store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
@@ -817,7 +1102,9 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       !historyWarmupQueue.length &&
       !historyWarmupInFlight.size &&
       !historyWarmupRequested.size &&
-      !historyWarmupQueued.size
+      !historyWarmupQueued.size &&
+      !historyBackfillQueue.length &&
+      !historyBackfillInFlight.size
     ) {
       return;
     }
@@ -837,6 +1124,10 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     historyWarmupQueued.clear();
     historyWarmupRequested.clear();
     historyWarmupInFlight.clear();
+    historyBackfillQueue.length = 0;
+    historyBackfillQueued.clear();
+    for (const key of historyBackfillInFlight) clearHistoryBackfillTimer(key);
+    historyBackfillInFlight.clear();
     historyPreviewQueue.length = 0;
     if (historyPreviewTimer !== null) {
       try {
@@ -866,6 +1157,14 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       }
     }
     historyWarmupTimers.clear();
+    for (const timer of historyBackfillTimers.values()) {
+      try {
+        window.clearTimeout(timer);
+      } catch {
+        // ignore
+      }
+    }
+    historyBackfillTimers.clear();
     store.set((prev) => {
       if (!pendingBefore.size) return prev;
       let nextLoading = prev.historyLoading;
@@ -939,6 +1238,11 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       clearHistoryWarmupTimer(key);
       scheduleWarmup();
     }
+    if (historyBackfillInFlight.has(key)) {
+      historyBackfillInFlight.delete(key);
+      clearHistoryBackfillTimer(key);
+      scheduleBackfill();
+    }
   };
 
   const maybeBootstrapPrefetch: HistoryFeature["maybeBootstrapPrefetch"] = (st) => {
@@ -969,7 +1273,9 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
         historyDeltaRequested.size ||
         historyPrefetchRequested.size ||
         historyWarmupInFlight.size ||
-        historyWarmupQueue.length
+        historyWarmupQueue.length ||
+        historyBackfillInFlight.size ||
+        historyBackfillQueue.length
     );
 
   const onDisconnect: HistoryFeature["onDisconnect"] = () => {
@@ -992,6 +1298,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     requestMoreHistory,
     enqueueHistoryPreview,
     scheduleWarmup,
+    scheduleBackfill,
     maybeAutoLoadMoreOnScroll,
     maybeFillViewport,
     maybeAutoRetrySelected,

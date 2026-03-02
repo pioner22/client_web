@@ -11,6 +11,7 @@ import type {
   UserProfile,
 } from "../stores/types";
 import { dmKey, roomKey } from "../helpers/chat/conversationKey";
+import { deleteHistoryMessageById, ingestHistoryResult, patchHistoryMessageById } from "../helpers/chat/historyIdb";
 import { nowTs } from "../helpers/time";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
 import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatar, storeAvatarRev } from "../helpers/avatar/avatarStore";
@@ -1383,22 +1384,31 @@ export function handleServerMessage(
       showInAppNotification(state, notifKey, title, body, room ? `yagodka:room:${room}` : `yagodka:dm:${from}`);
       maybePlaySound(state, "message", notifKey, hidden || !viewingSame);
     }
-    patch((prev) =>
-      upsertConversation(prev, key, {
-        kind,
-        from,
-        to,
-        room,
-        text,
-        ts,
-        id: msg?.id ?? null,
-        attachment,
-        ...(reply ? { reply } : {}),
-        ...(forward ? { forward } : {}),
-        ...(edited ? { edited: true } : {}),
-        ...(edited && edited_ts ? { edited_ts } : {}),
-      })
-    );
+    const chatMessage: ChatMessage = {
+      kind,
+      from,
+      to,
+      room,
+      text,
+      ts,
+      id: msg?.id ?? null,
+      attachment,
+      ...(reply ? { reply } : {}),
+      ...(forward ? { forward } : {}),
+      ...(edited ? { edited: true } : {}),
+      ...(edited && edited_ts ? { edited_ts } : {}),
+    };
+    patch((prev) => upsertConversation(prev, key, chatMessage));
+    try {
+      void ingestHistoryResult(state.selfId, key, [chatMessage], {
+        beforeId: null,
+        hasMore: null,
+        preview: false,
+        sinceId: null,
+      });
+    } catch {
+      // ignore
+    }
 
     // delivered_to_device: подтверждаем факт доставки события на устройство (DM).
     if (!room && kind === "in" && deliveredId !== null) {
@@ -1539,6 +1549,11 @@ export function handleServerMessage(
       return next;
     });
     patch({ status: "Сообщение удалено" });
+    try {
+      void deleteHistoryMessageById(state.selfId, id);
+    } catch {
+      // ignore
+    }
     return;
   }
   if (t === "message_edited") {
@@ -1605,6 +1620,18 @@ export function handleServerMessage(
       return prev;
     });
     patch({ status: didUpdate ? "Сообщение изменено" : "Сообщение изменено (обновится после синхронизации)" });
+    if (didUpdate) {
+      try {
+        void patchHistoryMessageById(state.selfId, id, (prev) => ({
+          ...prev,
+          text,
+          edited: true,
+          ...(edited_ts ? { edited_ts } : {}),
+        }));
+      } catch {
+        // ignore
+      }
+    }
     return;
   }
   if (t === "message_queued") {
@@ -1732,6 +1759,17 @@ export function handleServerMessage(
 
       return prev;
     });
+    try {
+      void patchHistoryMessageById(state.selfId, id, (prev) => {
+        const prevMine = prev.reactions && typeof prev.reactions === "object" && typeof prev.reactions.mine === "string" ? prev.reactions.mine : null;
+        const selfId = String(state.selfId ?? "").trim();
+        const mine = selfId && actor && actor === selfId ? emoji : prevMine;
+        const nextReacts = Object.keys(counts).length || mine !== null ? { counts, ...(mine !== null ? { mine } : {}) } : null;
+        return { ...prev, reactions: nextReacts };
+      });
+    } catch {
+      // ignore
+    }
     return;
   }
   if (t === "history_result") {

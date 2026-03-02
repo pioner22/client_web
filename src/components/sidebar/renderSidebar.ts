@@ -1044,7 +1044,7 @@ export function renderSidebar(
         : [...(searchBar ? [searchBar] : [])]),
     ]);
     const header = el("div", { class: "sidebar-header" }, [headerStack]);
-    const showChatFilters = activeTab === "chats" && !hasSidebarQuery;
+    const showChatFilters = false;
     const chatFiltersRow = showChatFilters
       ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount)
       : null;
@@ -1531,7 +1531,7 @@ export function renderSidebar(
       : [searchBar]),
   ]);
   const header = el("div", { class: "sidebar-header" }, [headerStack]);
-  const showChatFilters = activeDesktopTab === "chats" && !hasSidebarQuery;
+  const showChatFilters = false;
   const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount) : null;
   const chatFilterMode: SidebarChatFilter = showChatFilters ? effectiveChatFilter : "all";
   const passesChatFilter = (opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean =>

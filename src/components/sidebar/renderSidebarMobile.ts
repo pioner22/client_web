@@ -183,7 +183,7 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
     tabs,
     ...(searchBar ? [searchBar] : []),
   ]);
-  const showChatFilters = isMobile && activeTab === "chats" && !hasSidebarQuery;
+  const showChatFilters = false;
   const chatFiltersRow = showChatFilters
     ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount)
     : null;

@@ -22,6 +22,7 @@ import type {
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { messageSelectionKey } from "../helpers/chat/chatSelection";
 import { getCachedMediaAspectRatio } from "../helpers/chat/mediaAspectCache";
+import { prefetchHistoryMediaFromHistoryResult } from "../helpers/chat/historyMediaPrefetch";
 import { createChatSearchCounts, type ChatSearchFilter } from "../helpers/chat/chatSearch";
 import { saveArchivedForUser, toggleArchived } from "../helpers/chat/archives";
 import { saveChatFoldersForUser } from "../helpers/chat/folders";
@@ -1023,7 +1024,7 @@ export function mountApp(root: HTMLElement) {
     getGatewayUrl,
     handleSearchResultMessage: (msg) => membersChipsFeature?.handleSearchResultMessage(msg) ?? false,
     handleHistoryResultMessage: (msg) => {
-      historyFeature?.handleHistoryResultMessage(msg);
+      historyFeature?.handleHistoryResultMessage(msg); prefetchHistoryMediaFromHistoryResult(msg, { getState: () => store.get(), devicePrefetchAllowed: deviceCaps.prefetchAllowed, autoDownloadCachePolicyFeature, enqueueFileGet });
     },
     clearPendingHistoryRequests,
     handleCallsMessage: (msg) => callsFeature?.handleMessage(msg) ?? false,
@@ -1229,7 +1230,7 @@ export function mountApp(root: HTMLElement) {
   }
 
   function scheduleHistoryWarmup() {
-    historyFeature?.scheduleWarmup();
+    historyFeature?.scheduleWarmup(); historyFeature?.scheduleBackfill();
   }
 
   function clearPendingHistoryRequests() {

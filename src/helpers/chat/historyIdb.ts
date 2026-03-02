@@ -1,0 +1,357 @@
+import type { ChatMessage } from "../../stores/types";
+
+const DB_NAME = "yagodka-history-v1";
+const DB_VERSION = 1;
+
+const STORE_MESSAGES = "messages";
+const STORE_CONVOS = "convos";
+const INDEX_BY_CONVO_ID = "by_convo_id";
+
+type HistoryMessageRow = {
+  uid: string;
+  id: number;
+  convo: string;
+  ts: number;
+  msg: ChatMessage;
+};
+
+export type HistoryConvoMeta = {
+  uid: string;
+  convo: string;
+  updated: number;
+  min_id: number;
+  max_id: number;
+  backfilled: boolean;
+  tail_checked_at?: number;
+  delta_checked_at?: number;
+};
+
+type HistoryIngestMeta = {
+  beforeId: number | null;
+  hasMore: boolean | null;
+  preview: boolean;
+  sinceId: number | null;
+};
+
+let dbPromise: Promise<IDBDatabase | null> | null = null;
+
+function idbAvailable(): boolean {
+  try {
+    return typeof indexedDB !== "undefined" && Boolean(indexedDB) && typeof indexedDB.open === "function";
+  } catch {
+    return false;
+  }
+}
+
+function normalizeId(raw: string): string | null {
+  const uid = String(raw || "").trim();
+  return uid ? uid : null;
+}
+
+function normalizeConvo(raw: string): string | null {
+  const key = String(raw || "").trim();
+  if (!key) return null;
+  // Expect keys like "dm:..." / "room:..." / "board:..."; keep generic.
+  if (key.length > 160) return key.slice(0, 160);
+  return key;
+}
+
+function toReqPromise<T>(req: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error ?? new Error("idb_request_failed"));
+  });
+}
+
+function waitTx(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+    tx.onabort = () => resolve();
+  });
+}
+
+async function openDb(): Promise<IDBDatabase | null> {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve) => {
+    if (!idbAvailable()) return resolve(null);
+    try {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE_MESSAGES)) {
+          const store = db.createObjectStore(STORE_MESSAGES, { keyPath: ["uid", "id"] });
+          store.createIndex(INDEX_BY_CONVO_ID, ["uid", "convo", "id"], { unique: false });
+        } else {
+          const tx = req.transaction;
+          const store = tx?.objectStore(STORE_MESSAGES);
+          if (store && !store.indexNames.contains(INDEX_BY_CONVO_ID)) {
+            store.createIndex(INDEX_BY_CONVO_ID, ["uid", "convo", "id"], { unique: false });
+          }
+        }
+        if (!db.objectStoreNames.contains(STORE_CONVOS)) {
+          db.createObjectStore(STORE_CONVOS, { keyPath: ["uid", "convo"] });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return dbPromise;
+}
+
+function validServerId(raw: unknown): number | null {
+  const id = typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : Math.trunc(Number(raw) || 0);
+  return id > 0 ? id : null;
+}
+
+function pickMinMaxIds(msgs: ChatMessage[]): { minId: number | null; maxId: number | null } {
+  let minId: number | null = null;
+  let maxId: number | null = null;
+  for (const m of msgs) {
+    const id = validServerId((m as any)?.id);
+    if (id === null) continue;
+    minId = minId === null ? id : Math.min(minId, id);
+    maxId = maxId === null ? id : Math.max(maxId, id);
+  }
+  return { minId, maxId };
+}
+
+function sanitizeMeta(raw: any): HistoryConvoMeta | null {
+  if (!raw || typeof raw !== "object") return null;
+  const uid = normalizeId(raw.uid);
+  const convo = normalizeConvo(raw.convo);
+  if (!uid || !convo) return null;
+  const updated = Number(raw.updated ?? 0);
+  const min_id = Number(raw.min_id ?? 0);
+  const max_id = Number(raw.max_id ?? 0);
+  const backfilled = Boolean(raw.backfilled);
+  const tail_checked_at = Number(raw.tail_checked_at ?? 0);
+  const delta_checked_at = Number(raw.delta_checked_at ?? 0);
+  const meta: HistoryConvoMeta = {
+    uid,
+    convo,
+    updated: Number.isFinite(updated) && updated > 0 ? Math.trunc(updated) : 0,
+    min_id: Number.isFinite(min_id) && min_id > 0 ? Math.trunc(min_id) : 0,
+    max_id: Number.isFinite(max_id) && max_id > 0 ? Math.trunc(max_id) : 0,
+    backfilled,
+    ...(Number.isFinite(tail_checked_at) && tail_checked_at > 0 ? { tail_checked_at: Math.trunc(tail_checked_at) } : {}),
+    ...(Number.isFinite(delta_checked_at) && delta_checked_at > 0 ? { delta_checked_at: Math.trunc(delta_checked_at) } : {}),
+  };
+  return meta;
+}
+
+export async function getHistoryConvoMeta(userId: string, convo: string): Promise<HistoryConvoMeta | null> {
+  const uid = normalizeId(userId);
+  const key = normalizeConvo(convo);
+  if (!uid || !key) return null;
+  const db = await openDb();
+  if (!db) return null;
+  try {
+    const tx = db.transaction([STORE_CONVOS], "readonly");
+    const store = tx.objectStore(STORE_CONVOS);
+    const raw = await toReqPromise<any>(store.get([uid, key]));
+    await waitTx(tx);
+    return sanitizeMeta(raw);
+  } catch {
+    return null;
+  }
+}
+
+export async function ingestHistoryResult(
+  userId: string | null | undefined,
+  convo: string,
+  msgs: ChatMessage[],
+  meta: HistoryIngestMeta
+): Promise<void> {
+  const uid = userId ? normalizeId(userId) : null;
+  const key = normalizeConvo(convo);
+  if (!uid || !key) return;
+  const db = await openDb();
+  if (!db) return;
+  const rows = Array.isArray(msgs) ? msgs : [];
+  const { minId, maxId } = pickMinMaxIds(rows);
+  const now = Date.now();
+
+  const shouldMarkTailChecked = meta.beforeId === 0;
+  const shouldMarkDeltaChecked = meta.beforeId === null;
+  const shouldMarkBackfilled = (() => {
+    if (meta.hasMore === null) return false;
+    if (meta.hasMore === true) return false;
+    // If server explicitly says "no more", treat as fully backfilled (older pages exhausted).
+    // For tail (before_id=0) it means the whole conversation fits into the tail page.
+    return true;
+  })();
+
+  try {
+    const tx = db.transaction([STORE_MESSAGES, STORE_CONVOS], "readwrite");
+    const msgStore = tx.objectStore(STORE_MESSAGES);
+    for (const m of rows) {
+      const id = validServerId((m as any)?.id);
+      if (id === null) continue;
+      const tsRaw = Number((m as any)?.ts ?? 0);
+      const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? tsRaw : 0;
+      const row: HistoryMessageRow = { uid, id, convo: key, ts, msg: m };
+      msgStore.put(row);
+    }
+
+    const convStore = tx.objectStore(STORE_CONVOS);
+    const prevRaw = await toReqPromise<any>(convStore.get([uid, key]));
+    const prev = sanitizeMeta(prevRaw);
+    const next: HistoryConvoMeta = prev
+      ? { ...prev, uid, convo: key }
+      : {
+          uid,
+          convo: key,
+          updated: 0,
+          min_id: 0,
+          max_id: 0,
+          backfilled: false,
+        };
+
+    next.updated = now;
+    if (minId !== null) {
+      next.min_id = next.min_id > 0 ? Math.min(next.min_id, minId) : minId;
+    }
+    if (maxId !== null) {
+      next.max_id = next.max_id > 0 ? Math.max(next.max_id, maxId) : maxId;
+    }
+    if (shouldMarkTailChecked) next.tail_checked_at = now;
+    if (shouldMarkDeltaChecked) next.delta_checked_at = now;
+    if (shouldMarkBackfilled) next.backfilled = true;
+
+    convStore.put(next);
+    await waitTx(tx);
+  } catch {
+    // ignore
+  }
+}
+
+export async function patchHistoryMessageById(
+  userId: string | null | undefined,
+  messageId: number,
+  patch: (msg: ChatMessage) => ChatMessage
+): Promise<void> {
+  const uid = userId ? normalizeId(userId) : null;
+  const id = validServerId(messageId);
+  if (!uid || id === null) return;
+  const db = await openDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction([STORE_MESSAGES], "readwrite");
+    const store = tx.objectStore(STORE_MESSAGES);
+    const prev = await toReqPromise<any>(store.get([uid, id]));
+    if (!prev || typeof prev !== "object") {
+      await waitTx(tx);
+      return;
+    }
+    const msg = (prev as any).msg as ChatMessage | null;
+    const convo = normalizeConvo((prev as any).convo);
+    const tsPrev = Number((prev as any).ts ?? 0);
+    if (!msg || !convo) {
+      await waitTx(tx);
+      return;
+    }
+    const nextMsg = patch(msg);
+    const tsRaw = Number((nextMsg as any)?.ts ?? tsPrev);
+    const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? tsRaw : (Number.isFinite(tsPrev) && tsPrev > 0 ? tsPrev : 0);
+    const row: HistoryMessageRow = { uid, id, convo, ts, msg: nextMsg };
+    store.put(row);
+    await waitTx(tx);
+  } catch {
+    // ignore
+  }
+}
+
+export async function deleteHistoryMessageById(
+  userId: string | null | undefined,
+  messageId: number
+): Promise<void> {
+  const uid = userId ? normalizeId(userId) : null;
+  const id = validServerId(messageId);
+  if (!uid || id === null) return;
+  const db = await openDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction([STORE_MESSAGES], "readwrite");
+    const store = tx.objectStore(STORE_MESSAGES);
+    store.delete([uid, id]);
+    await waitTx(tx);
+  } catch {
+    // ignore
+  }
+}
+
+async function cursorToMessages(cursorReq: IDBRequest<IDBCursorWithValue | null>, limit: number): Promise<ChatMessage[]> {
+  const out: ChatMessage[] = [];
+  return await new Promise((resolve) => {
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (!cursor) return resolve(out.reverse());
+      const row = cursor.value as any;
+      const msg = row && typeof row === "object" ? (row.msg as ChatMessage | null) : null;
+      if (msg) out.push(msg);
+      if (out.length >= limit) return resolve(out.reverse());
+      cursor.continue();
+    };
+    cursorReq.onerror = () => resolve(out.reverse());
+  });
+}
+
+export async function getHistoryLatestMessages(
+  userId: string,
+  convo: string,
+  opts: { limit: number }
+): Promise<ChatMessage[]> {
+  const uid = normalizeId(userId);
+  const key = normalizeConvo(convo);
+  const rawLimit = Math.trunc(Number(opts.limit ?? 0) || 0);
+  const limit = rawLimit > 0 ? Math.min(800, rawLimit) : 0;
+  if (!uid || !key || limit <= 0) return [];
+  const db = await openDb();
+  if (!db) return [];
+  try {
+    const tx = db.transaction([STORE_MESSAGES], "readonly");
+    const store = tx.objectStore(STORE_MESSAGES);
+    const index = store.index(INDEX_BY_CONVO_ID);
+    const range = IDBKeyRange.bound([uid, key, 0], [uid, key, Number.MAX_SAFE_INTEGER]);
+    const cursorReq = index.openCursor(range, "prev");
+    const msgs = await cursorToMessages(cursorReq, limit);
+    await waitTx(tx);
+    return msgs;
+  } catch {
+    return [];
+  }
+}
+
+export async function getHistoryMessagesBefore(
+  userId: string,
+  convo: string,
+  opts: { beforeId: number; limit: number }
+): Promise<ChatMessage[]> {
+  const uid = normalizeId(userId);
+  const key = normalizeConvo(convo);
+  const beforeId = validServerId(opts.beforeId);
+  const rawLimit = Math.trunc(Number(opts.limit ?? 0) || 0);
+  const limit = rawLimit > 0 ? Math.min(800, rawLimit) : 0;
+  if (!uid || !key || beforeId === null || limit <= 0) return [];
+  const upper = Math.max(0, beforeId - 1);
+  if (upper <= 0) return [];
+  const db = await openDb();
+  if (!db) return [];
+  try {
+    const tx = db.transaction([STORE_MESSAGES], "readonly");
+    const store = tx.objectStore(STORE_MESSAGES);
+    const index = store.index(INDEX_BY_CONVO_ID);
+    const range = IDBKeyRange.bound([uid, key, 0], [uid, key, upper]);
+    const cursorReq = index.openCursor(range, "prev");
+    const msgs = await cursorToMessages(cursorReq, limit);
+    await waitTx(tx);
+    return msgs;
+  } catch {
+    return [];
+  }
+}
+
