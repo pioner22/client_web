@@ -19,9 +19,8 @@ export function renderAuthModal(
   currentSkin: string,
   actions: AuthModalActions
 ): HTMLElement {
-  function wrapWithIdUnlock(input: HTMLInputElement, locked: boolean): HTMLElement {
-    if (!locked) return input;
-
+  function wrapWithIdEditAction(input: HTMLInputElement, hasRemembered: boolean): HTMLElement {
+    if (!hasRemembered) return input;
     const toggle = el(
       "button",
       {
@@ -33,22 +32,11 @@ export function renderAuthModal(
       [""]
     ) as HTMLButtonElement;
 
-    try {
-      input.setAttribute("readonly", "true");
-    } catch {
-      // ignore
-    }
-
     toggle.addEventListener("click", () => {
-      try {
-        input.removeAttribute("readonly");
-      } catch {
-        // ignore
-      }
       focusElement(input, { select: true });
     });
 
-    return el("div", { class: "field-with-action auth-id-lock" }, [input, toggle]);
+    return el("div", { class: "field-with-action auth-id-edit" }, [input, toggle]);
   }
 
   function wrapWithPasswordToggle(input: HTMLInputElement): HTMLElement {
@@ -105,7 +93,9 @@ export function renderAuthModal(
     mode === "auto"
       ? null
       : el("button", { class: "btn btn-primary", type: "submit", form: formId }, [btnOkLabel]);
-  const authImage = el("div", { class: "auth-image", "aria-hidden": "true" }, [""]);
+  const authImage = el("div", { class: "auth-image", "aria-hidden": "true" }, [
+    el("img", { class: "auth-logo", src: "./icons/icon.svg", alt: "" }, []),
+  ]);
   const header = el("div", { class: "auth-header" }, [
     el("div", { class: "auth-header-top" }, [el("div", { class: "auth-brand" }, ["Ягодка"]), btnClose]),
     el("div", { class: "subtitle auth-subtitle" }, ["Вход и синхронизация"]),
@@ -177,6 +167,7 @@ export function renderAuthModal(
       name: "username",
       placeholder: "517-048-184 или @login",
       "data-ios-assistant": "off",
+      "data-fancy-caret": "off",
       inputmode: "text",
       autocomplete: "off",
       autocorrect: "off",
@@ -185,6 +176,18 @@ export function renderAuthModal(
       enterkeyhint: "next",
       value: rememberedId ?? "",
     }) as HTMLInputElement;
+    let autoSelected = false;
+    idInput.addEventListener("focus", () => {
+      if (autoSelected) return;
+      if (!hasRemembered) return;
+      if (idInput.value !== (rememberedId ?? "")) return;
+      autoSelected = true;
+      try {
+        idInput.select();
+      } catch {
+        // ignore
+      }
+    });
     idInput.addEventListener("input", () => {
       applyLegacyIdMask(idInput);
     });
@@ -204,7 +207,7 @@ export function renderAuthModal(
     body.append(
       el("div", { class: "modal-title" }, ["Войти по ID/@логину"]),
       el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин:"]),
-      wrapWithIdUnlock(idInput, hasRemembered),
+      wrapWithIdEditAction(idInput, hasRemembered),
       el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль:"]),
       wrapWithPasswordToggle(pwInput)
     );

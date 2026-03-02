@@ -199,7 +199,7 @@ function findFirst(node, predicate) {
   return null;
 }
 
-test("renderAuthModal: rememberedId блокирует поле ID и показывает кнопку «Сменить ID»", async () => {
+test("renderAuthModal: rememberedId не блокирует поле ID и показывает кнопку «Сменить ID»", async () => {
   const helper = await loadRenderAuthModal();
   try {
     withDomStubs(() => {
@@ -223,7 +223,8 @@ test("renderAuthModal: rememberedId блокирует поле ID и показ
 
       const idInput = findFirst(modal, (n) => typeof n?.getAttribute === "function" && n.getAttribute("id") === "auth-id");
       assert.ok(idInput, "auth-id input not found");
-      assert.equal(idInput.getAttribute("readonly"), "true");
+      assert.equal(idInput.hasAttribute("readonly"), false);
+      assert.equal(idInput.getAttribute("data-fancy-caret"), "off");
 
       const editBtn = findFirst(
         modal,
@@ -233,9 +234,9 @@ test("renderAuthModal: rememberedId блокирует поле ID и показ
 
       const lockWrap = findFirst(
         modal,
-        (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-id-lock")
+        (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-id-edit")
       );
-      assert.ok(lockWrap, "auth-id-lock wrapper not found");
+      assert.ok(lockWrap, "auth-id-edit wrapper not found");
     });
   } finally {
     await helper.cleanup();
@@ -267,12 +268,11 @@ test("renderAuthModal: без rememberedId поле ID остаётся реда
 
       const lockWrap = findFirst(
         modal,
-        (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-id-lock")
+        (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-id-edit")
       );
-      assert.equal(lockWrap, null, "auth-id-lock wrapper must not be rendered without rememberedId");
+      assert.equal(lockWrap, null, "auth-id-edit wrapper must not be rendered without rememberedId");
     });
   } finally {
     await helper.cleanup();
   }
 });
-

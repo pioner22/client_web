@@ -7,6 +7,7 @@ function isCaretTarget(el: unknown): el is CaretTarget {
 }
 
 function isSupportedField(el: CaretTarget): boolean {
+  if (String(el.getAttribute("data-fancy-caret") || "").toLowerCase() === "off") return false;
   if (el instanceof HTMLInputElement) {
     const t = String(el.type || "text").toLowerCase();
     // Password fields often use special glyph rendering; custom caret positioning becomes unreliable.
