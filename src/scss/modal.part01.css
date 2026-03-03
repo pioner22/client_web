@@ -894,10 +894,8 @@
 .auth-brand-icon {
   width: 22px;
   height: 22px;
-  border-radius: 8px;
-  background: #fefffe;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
   flex: 0 0 auto;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.16));
 }
 
 .auth-brand-text {
