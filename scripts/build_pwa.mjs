@@ -8,6 +8,95 @@ const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
 
 const HAS_SPACE_RE = /\s/;
+const PWA_HASH_SALT = "pwa-cachebust-icons-v1";
+const CACHE_BUST_PARAM = "v";
+const ICON_URL_RE = /(^|\/)icons\/[^?#]+\.(png|svg)(?:[?#].*)?$/i;
+const MANIFEST_URL_RE = /(?:^|\/)manifest\.webmanifest(?:[?#].*)?$/i;
+
+function isAbsoluteSchemeUrl(value) {
+  return /^[a-z][a-z0-9+.-]*:/i.test(value);
+}
+
+function parseUrlLike(value) {
+  const raw = String(value ?? "");
+  if (!raw) return null;
+  if (raw.startsWith("data:")) return null;
+  if (isAbsoluteSchemeUrl(raw) && !raw.startsWith("http:") && !raw.startsWith("https:")) return null;
+  try {
+    return new URL(raw, "https://yagodka.local/");
+  } catch {
+    return null;
+  }
+}
+
+function formatUrlLike(original, url) {
+  const raw = String(original ?? "");
+  const pathOnly = url.pathname.replace(/^\//, "");
+  const suffix = `${url.search || ""}${url.hash || ""}`;
+
+  if (raw.startsWith("./")) return `./${pathOnly}${suffix}`;
+  if (raw.startsWith("/")) return `${url.pathname}${suffix}`;
+  return `${pathOnly}${suffix}`;
+}
+
+function stripCacheBust(value) {
+  const url = parseUrlLike(value);
+  if (!url) return String(value ?? "");
+  url.searchParams.delete(CACHE_BUST_PARAM);
+  return formatUrlLike(value, url);
+}
+
+function withCacheBust(value, buildId) {
+  const url = parseUrlLike(value);
+  if (!url) return String(value ?? "");
+  url.searchParams.set(CACHE_BUST_PARAM, String(buildId ?? ""));
+  return formatUrlLike(value, url);
+}
+
+function patchIndexHtmlCacheBust(html, patchHref) {
+  const raw = String(html ?? "");
+  const re =
+    /(<link\b[^>]*?\brel=(?:"|')(manifest|icon|apple-touch-icon|mask-icon)(?:"|')[^>]*?\bhref=(?:"|'))([^"']+)((?:"|')[^>]*>)/gi;
+  return raw.replace(re, (m, pre, rel, href, post) => {
+    const cleanRel = String(rel || "").toLowerCase();
+    const shouldPatch =
+      cleanRel === "manifest" ? MANIFEST_URL_RE.test(href) : cleanRel === "icon" || cleanRel === "apple-touch-icon" || cleanRel === "mask-icon" ? ICON_URL_RE.test(href) : false;
+    if (!shouldPatch) return m;
+    return `${pre}${patchHref(href)}${post}`;
+  });
+}
+
+function patchManifestCacheBust(manifest, patchHref) {
+  const out = { ...(manifest && typeof manifest === "object" ? manifest : {}) };
+
+  if (Array.isArray(out.icons)) {
+    out.icons = out.icons.map((it) => {
+      const icon = it && typeof it === "object" ? { ...it } : it;
+      if (icon && typeof icon === "object" && typeof icon.src === "string" && ICON_URL_RE.test(icon.src)) {
+        icon.src = patchHref(icon.src);
+      }
+      return icon;
+    });
+  }
+
+  if (Array.isArray(out.shortcuts)) {
+    out.shortcuts = out.shortcuts.map((it) => {
+      const shortcut = it && typeof it === "object" ? { ...it } : it;
+      if (shortcut && typeof shortcut === "object" && Array.isArray(shortcut.icons)) {
+        shortcut.icons = shortcut.icons.map((ic) => {
+          const icon = ic && typeof ic === "object" ? { ...ic } : ic;
+          if (icon && typeof icon === "object" && typeof icon.src === "string" && ICON_URL_RE.test(icon.src)) {
+            icon.src = patchHref(icon.src);
+          }
+          return icon;
+        });
+      }
+      return shortcut;
+    });
+  }
+
+  return out;
+}
 
 async function removeSpaceNamedFilesRec(dir) {
   let items = [];
@@ -92,6 +181,22 @@ async function main() {
   // Clean up conflict copies / junk files in dist (can appear on synced filesystems).
   await removeSpaceNamedFilesRec(distDir);
 
+  // Normalize previously built dist (build_pwa.mjs is sometimes re-run without a fresh Vite build).
+  // We strip our own cache-bust query param before hashing to keep BUILD_ID stable for identical builds.
+  try {
+    const indexPath = path.join(distDir, "index.html");
+    const existing = await readText(indexPath);
+    const normalized = patchIndexHtmlCacheBust(existing, stripCacheBust);
+    if (normalized !== existing) await fs.writeFile(indexPath, normalized, "utf8");
+  } catch {}
+  try {
+    const manifestPath = path.join(distDir, "manifest.webmanifest");
+    const existing = await readJson(manifestPath);
+    const normalized = patchManifestCacheBust(existing, stripCacheBust);
+    const next = JSON.stringify(normalized, null, 2) + "\n";
+    await fs.writeFile(manifestPath, next, "utf8");
+  } catch {}
+
   const entryFiles = new Set(["index.html", "boot.js", "manifest.webmanifest"]);
   const precacheSet = new Set(entryFiles);
 
@@ -122,6 +227,8 @@ async function main() {
   }
 
   const hasher = crypto.createHash("sha256");
+  hasher.update(PWA_HASH_SALT);
+  hasher.update("\0");
   for (const rel of precacheFiles) {
     const abs = path.join(distDir, rel);
     const data = await fs.readFile(abs);
@@ -132,6 +239,22 @@ async function main() {
   }
   const buildHash = hasher.digest("hex").slice(0, 12);
   const buildId = `${version}-${buildHash}`;
+
+  // Cache-bust PWA icons/manifest to make macOS/iOS refresh homescreen / app icons more reliably.
+  try {
+    const indexPath = path.join(distDir, "index.html");
+    const existing = await readText(indexPath);
+    const next = patchIndexHtmlCacheBust(existing, (href) =>
+      MANIFEST_URL_RE.test(href) ? withCacheBust(href, buildId) : ICON_URL_RE.test(href) ? withCacheBust(href, buildId) : href
+    );
+    if (next !== existing) await fs.writeFile(indexPath, next, "utf8");
+  } catch {}
+  try {
+    const manifestPath = path.join(distDir, "manifest.webmanifest");
+    const existing = await readJson(manifestPath);
+    const next = patchManifestCacheBust(existing, (href) => (ICON_URL_RE.test(href) ? withCacheBust(href, buildId) : href));
+    await fs.writeFile(manifestPath, JSON.stringify(next, null, 2) + "\n", "utf8");
+  } catch {}
 
   const precacheUrls = precacheFiles.map((p) => `./${p}`);
 
