@@ -730,24 +730,6 @@
   object-fit: cover;
 }
 
-#auth-pages .auth-image::after {
-  content: "";
-  position: absolute;
-  left: 74%;
-  top: 22%;
-  width: 28%;
-  height: 28%;
-  border-radius: 999px 999px 999px 2px;
-  transform: rotate(-25deg);
-  background: radial-gradient(
-    circle at 30% 70%,
-    color-mix(in srgb, var(--good), #ffffff 22%) 0,
-    var(--good) 70%,
-    color-mix(in srgb, var(--good), #000000 22%) 100%
-  );
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
-}
-
 #auth-pages .page-sign .auth-image,
 #auth-pages .page-signUp .auth-image {
   width: 7.5rem;
