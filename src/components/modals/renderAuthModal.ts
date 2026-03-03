@@ -83,7 +83,7 @@ export function renderAuthModal(
   const pageClass = mode === "register" ? "page-signUp" : "page-sign";
   const container = el("div", { class: `container modal-auth ${pageClass}` });
   const tabRegister = el("button", { class: "btn auth-tab", type: "button" }, ["Регистрация"]);
-  const tabLogin = el("button", { class: "btn auth-tab", type: "button" }, ["Войти по ID/@логину"]);
+  const tabLogin = el("button", { class: "btn auth-tab", type: "button" }, ["Вход"]);
   const btnClose = el("button", { class: "btn auth-close", type: "button", title: "Закрыть", "aria-label": "Закрыть" }, [
     "×",
   ]);
@@ -96,10 +96,17 @@ export function renderAuthModal(
   const authImage = el("div", { class: "auth-image", "aria-hidden": "true" }, [
     el("img", { class: "auth-logo", src: "./icons/icon.svg", alt: "" }, []),
   ]);
+  const brand = el("div", { class: "auth-brand" }, [
+    el("img", { class: "auth-brand-icon", src: "./icons/icon.svg", alt: "" }, []),
+    el("div", { class: "auth-brand-text" }, ["Ягодка"]),
+  ]);
   const header = el("div", { class: "auth-header" }, [
-    el("div", { class: "auth-header-top" }, [el("div", { class: "auth-brand" }, ["Ягодка"]), btnClose]),
+    el("div", { class: "auth-header-top" }, [brand, btnClose]),
     el("div", { class: "subtitle auth-subtitle" }, ["Вход и синхронизация"]),
-    el("div", { class: "auth-note" }, ["Сессия сохранится на этом устройстве. Пароль мы не сохраняем."]),
+    el("div", { class: "auth-note" }, [
+      el("span", { class: "auth-note-line" }, ["Сессия сохранится на этом устройстве."]),
+      el("span", { class: "auth-note-line" }, ["Пароль мы не сохраняем."]),
+    ]),
   ]);
 
   const skinLabel = el("label", { class: "modal-label", for: "auth-skin" }, ["Скин (тема):"]);
@@ -137,6 +144,8 @@ export function renderAuthModal(
       autocorrect: "off",
       autocapitalize: "off",
       spellcheck: "false",
+      "data-ios-assistant": "off",
+      "data-fancy-caret": "off",
       enterkeyhint: "next",
     }) as HTMLInputElement;
     const pw2Input = el("input", {
@@ -149,6 +158,8 @@ export function renderAuthModal(
       autocorrect: "off",
       autocapitalize: "off",
       spellcheck: "false",
+      "data-ios-assistant": "off",
+      "data-fancy-caret": "off",
       enterkeyhint: "done",
     }) as HTMLInputElement;
     body.append(
@@ -197,6 +208,8 @@ export function renderAuthModal(
       name: "password",
       type: "password",
       placeholder: "••••••",
+      "data-ios-assistant": "off",
+      "data-fancy-caret": "off",
       autocomplete: "current-password",
       autocorrect: "off",
       autocapitalize: "off",
@@ -205,7 +218,8 @@ export function renderAuthModal(
     }) as HTMLInputElement;
 
     body.append(
-      el("div", { class: "modal-title" }, ["Войти по ID/@логину"]),
+      el("div", { class: "modal-title" }, ["Вход"]),
+      el("div", { class: "modal-help" }, ["Введите ID или @логин и пароль."]),
       el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин:"]),
       wrapWithIdEditAction(idInput, hasRemembered),
       el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль:"]),
