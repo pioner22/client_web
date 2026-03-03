@@ -512,6 +512,8 @@ self.addEventListener("install", (event) => {
           "./index.html",
           "./manifest.webmanifest",
           "./icons/icon.svg",
+          "./icons/icon-app-192.png",
+          "./icons/icon-app-512.png",
           "./icons/icon-192.png",
           "./icons/icon-512.png",
           "./skins/skins.json",
