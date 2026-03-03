@@ -25,6 +25,7 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
 
   function maybeAutoAuthOnConnected() {
     const st = store.get();
+    if (!st.netLeader) return;
     if (st.authed) return;
     const token = getStoredSessionToken();
     if (token && isSessionAutoAuthBlocked()) {
@@ -92,4 +93,3 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
 
   return { resetAutoAuthAttempt, maybeAutoAuthOnConnected, authLoginFromDom, authRegisterFromDom };
 }
-

@@ -43,6 +43,7 @@ export function prefetchHistoryMediaFromHistoryResult(
     const st = deps.getState();
     if (!st.authed || st.conn !== "connected") return;
     if (!st.selfId) return;
+    if (!st.netLeader) return;
     if (!deps.devicePrefetchAllowed) return;
     if (document.visibilityState === "hidden") return;
     if (Boolean(msg?.preview)) return;
@@ -88,4 +89,3 @@ export function prefetchHistoryMediaFromHistoryResult(
     // ignore
   }
 }
-

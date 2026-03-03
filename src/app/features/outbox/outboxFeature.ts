@@ -213,6 +213,12 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
     if (!flat.length) return;
     if (st.conn !== "connected") return;
     if (!st.authed || !st.selfId) return;
+    if (!st.netLeader) {
+      const retryAt = Date.now() + 2500;
+      const nextAt = nextScheduleAt ? Math.min(nextScheduleAt, retryAt) : retryAt;
+      armOutboxScheduleTimer(nextAt);
+      return;
+    }
     flat.sort((a, b) => a.ts - b.ts);
 
     const onlineById = new Map<string, boolean>();
@@ -270,4 +276,3 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
 
   return { drainOutbox, syncFromServiceWorker, dispose };
 }
-

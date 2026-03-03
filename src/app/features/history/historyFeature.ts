@@ -537,9 +537,19 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     try {
       const st = store.get();
       if (!st.authed || st.conn !== "connected") return;
+      if (!st.netLeader) {
+        historyBackfillInFlight.delete(key);
+        clearHistoryBackfillTimer(key);
+        return;
+      }
       const uid = st.selfId;
       if (!uid) return;
       const meta = await getHistoryConvoMeta(uid, key);
+      if (!store.get().netLeader) {
+        historyBackfillInFlight.delete(key);
+        clearHistoryBackfillTimer(key);
+        return;
+      }
       const now = Date.now();
 
       const tailCheckedAt = meta?.tail_checked_at ?? 0;
@@ -588,6 +598,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       historyBackfillInFlight.clear();
       return;
     }
+    if (!st.netLeader) return;
     if (!st.selfId) return;
     if (st.page !== "main") return;
     if (st.modal && st.modal.kind !== "context_menu") return;
@@ -621,6 +632,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
 
   const scheduleBackfill: HistoryFeature["scheduleBackfill"] = () => {
     if (historyBackfillTimer !== null) return;
+    if (!store.get().netLeader) return;
     historyBackfillTimer = window.setTimeout(drainHistoryBackfillQueue, 450);
   };
 
@@ -680,6 +692,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       historyWarmupInFlight.clear();
       return;
     }
+    if (!st.netLeader) return;
     if (st.page !== "main") return;
     if (st.modal && st.modal.kind !== "context_menu") return;
     const selectedKey = st.selected ? conversationKey(st.selected) : "";
@@ -716,6 +729,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
 
   const scheduleWarmup: HistoryFeature["scheduleWarmup"] = () => {
     if (historyWarmupTimer !== null) return;
+    if (!store.get().netLeader) return;
     historyWarmupTimer = window.setTimeout(drainHistoryWarmupQueue, 200);
   };
 

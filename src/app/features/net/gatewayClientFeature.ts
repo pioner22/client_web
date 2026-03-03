@@ -1,9 +1,10 @@
-import { GatewayClient } from "../../../lib/net/gatewayClient";
+import { GatewayClient, type GatewayRole, type GatewayTransport, type MsgHandler, type StatusHandler } from "../../../lib/net/gatewayClient";
+import { MultiplexGatewayClient } from "../../../lib/net/multiplexGatewayClient";
 import type { Store } from "../../../stores/store";
 import type { AppState, ConnStatus } from "../../../stores/types";
 
 export type GatewayClientFeature = {
-  gateway: GatewayClient;
+  gateway: GatewayTransport;
 };
 
 type Deps = {
@@ -18,7 +19,7 @@ type Deps = {
   handleFileUploadMessage?: (msg: any) => boolean;
   handleFileMessage?: (msg: any) => boolean;
 
-  dispatchServerMessage: (msg: any, gateway: GatewayClient) => void;
+  dispatchServerMessage: (msg: any, gateway: GatewayTransport) => void;
   scheduleSaveOutbox: () => void;
 
   onAuthed: () => void;
@@ -76,70 +77,92 @@ function requeueSendingOutboxOnDisconnect(prev: AppState): AppState {
 
 export function createGatewayClientFeature(deps: Deps): GatewayClientFeature {
   let lastConn: ConnStatus = "connecting";
+  let gateway: GatewayTransport;
 
-  const gateway = new GatewayClient(
-    deps.getGatewayUrl(),
-    (msg) => {
-      const t = String(msg?.type ?? "");
-      if (t === "search_result") {
-        if (deps.handleSearchResultMessage?.(msg)) return;
-      }
-      if (t === "history_result") {
-        deps.handleHistoryResultMessage?.(msg);
-      }
-      if (t === "error") deps.clearPendingHistoryRequests();
-      if (deps.handleCallsMessage?.(msg)) return;
-      if (deps.handleFileUploadMessage?.(msg)) return;
-      if (deps.handleFileMessage?.(msg)) return;
+  const onRole = (role: GatewayRole) => {
+    deps.store.set((prev) => {
+      const netLeader = role === "solo" || role === "leader";
+      return prev.netLeader === netLeader ? prev : { ...prev, netLeader };
+    });
+  };
 
-      deps.dispatchServerMessage(msg, gateway);
-
-      if (t === "message_delivered" || t === "message_queued" || t === "message_blocked" || t === "error" || t === "history_result") {
-        deps.scheduleSaveOutbox();
-      }
-
-      if (t === "auth_ok" || t === "register_ok") {
-        deps.onAuthed();
-      }
-    },
-    (conn, detail) => {
-      const base =
-        conn === "connected"
-          ? "Связь с сервером установлена"
-          : conn === "connecting"
-            ? "Подключение…"
-            : "Нет соединения";
-      const nextStatus = detail ? `${base}: ${detail}` : base;
-      deps.store.set((prev) => {
-        const clearWelcome = conn === "connected" && prev.modal?.kind === "welcome";
-        if (!clearWelcome && prev.conn === conn && prev.status === nextStatus) return prev;
-        return {
-          ...prev,
-          conn,
-          status: nextStatus,
-          ...(clearWelcome ? { modal: null } : {}),
-        };
-      });
-
-      const prevConn = lastConn;
-      lastConn = conn;
-
-      if (conn !== "connected") {
-        deps.onDisconnected?.();
-        deps.store.set(requeueSendingOutboxOnDisconnect);
-        deps.scheduleSaveOutbox();
-        return;
-      }
-
-      // New socket: even if UI thought we were authed, we must re-auth on reconnect.
-      if (prevConn !== "connected") {
-        deps.store.set((prev) => (prev.authed ? { ...prev, authed: false } : prev));
-      }
-
-      deps.maybeAutoAuthOnConnected?.();
+  const onMessage: MsgHandler = (msg) => {
+    const t = String((msg as any)?.type ?? "");
+    if (t === "search_result") {
+      if (deps.handleSearchResultMessage?.(msg)) return;
     }
-  );
+    if (t === "history_result") {
+      deps.handleHistoryResultMessage?.(msg);
+    }
+    if (t === "error") deps.clearPendingHistoryRequests();
+    if (deps.handleCallsMessage?.(msg)) return;
+    if (deps.handleFileUploadMessage?.(msg)) return;
+    if (deps.handleFileMessage?.(msg)) return;
+
+    deps.dispatchServerMessage(msg, gateway);
+
+    if (
+      t === "message_delivered" ||
+      t === "message_queued" ||
+      t === "message_blocked" ||
+      t === "error" ||
+      t === "history_result"
+    ) {
+      deps.scheduleSaveOutbox();
+    }
+
+    if (t === "auth_ok" || t === "register_ok") {
+      if (deps.store.get().netLeader) deps.onAuthed();
+    }
+  };
+
+  const onStatus: StatusHandler = (conn, detail) => {
+    const base =
+      conn === "connected" ? "Связь с сервером установлена" : conn === "connecting" ? "Подключение…" : "Нет соединения";
+    const nextStatus = detail ? `${base}: ${detail}` : base;
+    deps.store.set((prev) => {
+      const clearWelcome = conn === "connected" && prev.modal?.kind === "welcome";
+      if (!clearWelcome && prev.conn === conn && prev.status === nextStatus) return prev;
+      return {
+        ...prev,
+        conn,
+        status: nextStatus,
+        ...(clearWelcome ? { modal: null } : {}),
+      };
+    });
+
+    const prevConn = lastConn;
+    lastConn = conn;
+
+    if (conn !== "connected") {
+      deps.onDisconnected?.();
+      deps.store.set(requeueSendingOutboxOnDisconnect);
+      deps.scheduleSaveOutbox();
+      return;
+    }
+
+    // New socket: even if UI thought we were authed, we must re-auth on reconnect.
+    if (prevConn !== "connected") {
+      deps.store.set((prev) => (prev.authed ? { ...prev, authed: false } : prev));
+    }
+
+    deps.maybeAutoAuthOnConnected?.();
+  };
+
+  const url = deps.getGatewayUrl();
+  const canMultiplex =
+    typeof window !== "undefined" &&
+    typeof BroadcastChannel === "function" &&
+    typeof navigator !== "undefined" &&
+    Boolean((navigator as any)?.locks?.request);
+
+  gateway = canMultiplex ? new MultiplexGatewayClient(url, onMessage, onStatus, { onRole }) : new GatewayClient(url, onMessage, onStatus);
+
+  try {
+    onRole(typeof gateway.getRole === "function" ? gateway.getRole() : "solo");
+  } catch {
+    // ignore
+  }
 
   return { gateway };
 }
-

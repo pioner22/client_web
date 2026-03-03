@@ -446,6 +446,7 @@ export type MessageViewMode = "bubble" | "plain" | "compact";
 
 export interface AppState {
   conn: ConnStatus;
+  netLeader: boolean;
   authed: boolean;
   selfId: string | null;
   serverVersion: string | null;

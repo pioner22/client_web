@@ -45,6 +45,7 @@ export function createInitialState(): AppState {
   const notifySoundEnabled = getNotifySoundEnabled();
   return {
     conn: "connecting",
+    netLeader: false,
     authed: false,
     selfId: null,
     serverVersion: null,

@@ -1,4 +1,4 @@
-import type { GatewayClient } from "../../../lib/net/gatewayClient";
+import type { GatewayTransport } from "../../../lib/net/gatewayClient";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 import { conversationKey } from "../../../helpers/chat/conversationKey";
@@ -22,7 +22,7 @@ type DebugHudLike = {
 
 type DebugMonitorFeatureDeps = {
   store: Store<AppState>;
-  gateway: GatewayClient;
+  gateway: GatewayTransport;
   mount: HTMLElement;
   chatHost: HTMLElement;
   debugHud?: DebugHudLike;

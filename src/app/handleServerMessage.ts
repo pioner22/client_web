@@ -1,4 +1,4 @@
-import type { GatewayClient } from "../lib/net/gatewayClient";
+import type { GatewayTransport } from "../lib/net/gatewayClient";
 import type {
   ActionModalBoardInvite,
   ActionModalGroupInvite,
@@ -39,7 +39,7 @@ import { handleRosterPrefsMessage } from "./handleServerMessage/rosterPrefs";
 export function handleServerMessage(
   msg: any,
   state: AppState,
-  gateway: GatewayClient,
+  gateway: GatewayTransport,
   patch: (p: Partial<AppState> | ((prev: AppState) => AppState)) => void
 ) {
   const t = String(msg?.type ?? "");

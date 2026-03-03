@@ -3,6 +3,15 @@ import type { ConnStatus } from "../../stores/types";
 export type MsgHandler = (msg: any) => void;
 export type StatusHandler = (st: ConnStatus, detail?: string) => void;
 
+export type GatewayRole = "solo" | "leader" | "follower";
+
+export interface GatewayTransport {
+  connect: () => void;
+  send: (obj: unknown) => boolean;
+  close: () => void;
+  getRole?: () => GatewayRole;
+}
+
 export class GatewayClient {
   private ws: WebSocket | null = null;
   private reconnectTimer: number | null = null;
@@ -25,6 +34,10 @@ export class GatewayClient {
     private onMessage: MsgHandler,
     private onStatus: StatusHandler
   ) {}
+
+  getRole(): GatewayRole {
+    return "solo";
+  }
 
   connect() {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;

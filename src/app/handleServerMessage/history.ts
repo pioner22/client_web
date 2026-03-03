@@ -1,4 +1,4 @@
-import type { GatewayClient } from "../../lib/net/gatewayClient";
+import type { GatewayTransport } from "../../lib/net/gatewayClient";
 import type { AppState, ChatMessage, OutboxEntry } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { mergeMessages } from "../../helpers/chat/mergeMessages";
@@ -22,7 +22,7 @@ export function handleHistoryServerMessage(
   t: string,
   msg: any,
   state: AppState,
-  _gateway: GatewayClient,
+  _gateway: GatewayTransport,
   patch: (p: Partial<AppState> | ((prev: AppState) => AppState)) => void
 ): boolean {
   if (t !== "history_result") return false;

@@ -1,4 +1,4 @@
-import type { GatewayClient } from "../../lib/net/gatewayClient";
+import type { GatewayTransport } from "../../lib/net/gatewayClient";
 import type { AppState, FriendEntry, UserProfile } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatarRev } from "../../helpers/avatar/avatarStore";
@@ -13,7 +13,7 @@ export function handleRosterPrefsMessage(
   t: string,
   msg: any,
   state: AppState,
-  gateway: GatewayClient,
+  gateway: GatewayTransport,
   patch: (p: Partial<AppState> | ((prev: AppState) => AppState)) => void
 ): boolean {
   if (t === "roster_full" || t === "roster") {
@@ -321,4 +321,3 @@ export function handleRosterPrefsMessage(
 
   return false;
 }
-

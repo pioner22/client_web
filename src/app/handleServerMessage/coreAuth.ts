@@ -1,4 +1,4 @@
-import type { GatewayClient } from "../../lib/net/gatewayClient";
+import type { GatewayTransport } from "../../lib/net/gatewayClient";
 import type { AppState } from "../../stores/types";
 import {
   blockSessionAutoAuth,
@@ -17,7 +17,7 @@ export function handleCoreAuthMessage(
   t: string,
   msg: any,
   state: AppState,
-  gateway: GatewayClient,
+  gateway: GatewayTransport,
   patch: (p: Partial<AppState> | ((prev: AppState) => AppState)) => void
 ): boolean {
   if (t === "welcome") {
@@ -73,10 +73,12 @@ export function handleCoreAuthMessage(
       status: "Connected",
       lastRead,
     });
-    gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
-    gateway.send({ type: "group_list" });
-    gateway.send({ type: "board_list" });
-    gateway.send({ type: "profile_get" });
+    if (state.netLeader) {
+      gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
+      gateway.send({ type: "group_list" });
+      gateway.send({ type: "board_list" });
+      gateway.send({ type: "profile_get" });
+    }
     return true;
   }
   if (t === "pwa_push_subscribe_result") {
@@ -146,10 +148,12 @@ export function handleCoreAuthMessage(
       modal: null,
       status: "Registered",
     });
-    gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
-    gateway.send({ type: "group_list" });
-    gateway.send({ type: "board_list" });
-    gateway.send({ type: "profile_get" });
+    if (state.netLeader) {
+      gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
+      gateway.send({ type: "group_list" });
+      gateway.send({ type: "board_list" });
+      gateway.send({ type: "profile_get" });
+    }
     return true;
   }
   if (t === "register_fail") {
@@ -170,4 +174,3 @@ export function handleCoreAuthMessage(
 
   return false;
 }
-

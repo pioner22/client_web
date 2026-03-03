@@ -362,6 +362,7 @@ export function createPreviewAutoFetchFeature(
       : new Set<string>();
 
     const restoredIds = new Set<string>([...restoredThumbIds, ...restoredMediaIds, ...restoredAudioIds]);
+    if (!store.get().netLeader) return;
     for (const t of restoreTasks) {
       if (restoredIds.has(t.fileId)) continue;
       const isVisibleMedia = t.kind === "image" || t.kind === "video";
@@ -484,6 +485,7 @@ export function createPreviewAutoFetchFeature(
           const latestUid = latest.selfId;
           if (!latestUid) continue;
           if (latest.conn !== "connected") continue;
+          if (!latest.netLeader) continue;
           // Only prefetch small media to avoid wasting traffic/storage.
           if (t.kind !== "video" && t.size > WARMUP_PREFETCH_MAX_BYTES) continue;
           const k = `${latestUid}:${t.fileId}`;
