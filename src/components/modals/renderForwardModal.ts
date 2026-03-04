@@ -1,4 +1,5 @@
 import { el } from "../../helpers/dom/el";
+import { avatar } from "../sidebar/renderSidebarHelpers";
 import type {
   BoardEntry,
   FriendEntry,
@@ -46,10 +47,12 @@ function makeRow(kind: TargetRef["kind"], id: string, title: string, sub: string
     "data-forward-kind": kind,
     value: id,
   }) as HTMLInputElement;
+  const av = avatar(kind, id);
+  av.classList.add("forward-row-avatar");
   const mainChildren: Array<string | HTMLElement> = [el("span", { class: "forward-row-title" }, [title])];
   if (sub) mainChildren.push(el("span", { class: "forward-row-sub" }, [sub]));
   const main = el("span", { class: "forward-row-main" }, mainChildren);
-  const row = el("label", { class: "forward-row" }, [input, main]);
+  const row = el("label", { class: "forward-row" }, [input, av, main]);
   const search = [title, sub || "", id].join(" ").toLowerCase();
   return { row, input, search, section: row };
 }
@@ -86,7 +89,7 @@ export function renderForwardModal(
   actions: ForwardModalActions
 ): HTMLElement {
   const box = el("div", { class: "modal modal-forward" });
-  const btnSend = el("button", { class: "btn btn-primary", type: "button", disabled: "disabled" }, ["Переслать"]);
+  const btnSend = el("button", { class: "btn btn-primary", type: "button", disabled: "disabled" }, ["Отправить"]);
   const btnCancel = el("button", { class: "btn", type: "button" }, ["Отмена"]);
   const queryInput = el("input", {
     class: "modal-input",
@@ -101,6 +104,12 @@ export function renderForwardModal(
   const preview = primaryDraft ? String(primaryDraft.preview || primaryDraft.text || "Сообщение").trim() : "Сообщение";
   const previewLabel = draftCount > 1 ? `${draftCount} сообщений` : preview;
   const previewLine = el("div", { class: "modal-line forward-preview" }, [`Переслать: ${previewLabel}`]);
+  const commentInput = el("textarea", {
+    class: "modal-input forward-comment",
+    id: "forward-comment",
+    placeholder: "Добавить сообщение…",
+    rows: "2",
+  }) as HTMLTextAreaElement;
   const showSenderInput = el("input", { type: "checkbox", id: "forward-show-sender", checked: "checked" }) as HTMLInputElement;
   const showCaptionInput = el("input", { type: "checkbox", id: "forward-show-caption", checked: "checked" }) as HTMLInputElement;
   const hasCaption = safeDrafts.some((d) => {
@@ -199,16 +208,21 @@ export function renderForwardModal(
   btnCancel.addEventListener("click", () => actions.onCancel());
 
   box.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    const active = document.activeElement as HTMLElement | null;
+    const isTextArea = active instanceof HTMLTextAreaElement;
+    const isSearch = active instanceof HTMLInputElement && active.type === "search";
+    const allowSubmit = (e.ctrlKey || e.metaKey) || (!isTextArea && !isSearch);
+    if (e.key === "Enter" && !e.shiftKey && allowSubmit) {
       e.preventDefault();
       submit();
     }
   });
 
   box.append(
-    el("div", { class: "modal-title" }, ["Переслать сообщение"]),
+    el("div", { class: "modal-title" }, [draftCount > 1 ? "Переслать сообщения" : "Переслать сообщение"]),
     el("div", { class: "modal-body" }, [
       previewLine,
+      commentInput,
       options,
       queryInput,
       selectionLine,
@@ -220,5 +234,12 @@ export function renderForwardModal(
 
   updateCount();
   applyFilter("");
+  queueMicrotask(() => {
+    try {
+      queryInput.focus({ preventScroll: true });
+    } catch {
+      queryInput.focus();
+    }
+  });
   return box;
 }

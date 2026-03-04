@@ -82,6 +82,7 @@ export type ContextMenuTargetKind =
   | "auth_in"
   | "auth_out"
   | "message"
+  | "pinned_messages"
   | "composer_helper"
   | "composer_send"
   | "sidebar_tools";
@@ -118,7 +119,10 @@ export type ConfirmAction =
   | { kind: "group_leave"; groupId: string }
   | { kind: "board_leave"; boardId: string }
   | { kind: "group_disband"; groupId: string }
-  | { kind: "board_disband"; boardId: string };
+  | { kind: "board_disband"; boardId: string }
+  | { kind: "pinned_bar_hide"; chatKey: string }
+  | { kind: "pinned_message_toggle"; chatKey: string; msgId: number }
+  | { kind: "pinned_messages_unpin_all"; chatKey: string };
 
 export type FileTransferStatus =
   | "offering"
@@ -478,6 +482,7 @@ export interface AppState {
   chatFolders: ChatFolderEntry[];
   pinnedMessages: Record<string, number[]>;
   pinnedMessageActive: Record<string, number>;
+  pinnedBarHidden: Record<string, string>;
   pendingGroupInvites: ActionModalGroupInvite[];
   pendingGroupJoinRequests: ActionModalGroupJoinRequest[];
   pendingBoardInvites: ActionModalBoardInvite[];

@@ -92,6 +92,10 @@ export function createForwardActionsFeature(deps: ForwardActionsFeatureDeps): Fo
       return true;
     });
     if (!uniqueTargets.length) return;
+    const commentEl = document.getElementById("forward-comment") as HTMLTextAreaElement | null;
+    const commentText = String(commentEl?.value || "")
+      .replace(/\r\n?/g, "\n")
+      .trim();
     const showSender = (document.getElementById("forward-show-sender") as HTMLInputElement | null)?.checked ?? true;
     const showCaption = (document.getElementById("forward-show-caption") as HTMLInputElement | null)?.checked ?? true;
     const applyForwardOptions = (draft: MessageHelperDraft): MessageHelperDraft => {
@@ -108,6 +112,7 @@ export function createForwardActionsFeature(deps: ForwardActionsFeatureDeps): Fo
       return next;
     };
     uniqueTargets.forEach((target) => {
+      if (commentText) sendChat({ target, text: commentText });
       drafts.forEach((draft) => {
         sendChat({ target, text: "", forwardDraft: applyForwardOptions(draft) });
       });

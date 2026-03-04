@@ -4,7 +4,7 @@ import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
 import type { ChatSearchFilter } from "../../../helpers/chat/chatSearch";
 import type { Layout } from "../../../components/layout/types";
 import type { Store } from "../../../stores/store";
-import type { AppState, ChatMessage, MessageHelperDraft, TargetRef } from "../../../stores/types";
+import type { AppState, ChatMessage, ContextMenuItem, MessageHelperDraft, TargetRef } from "../../../stores/types";
 import type { FileViewerFeature, PendingFileViewer, FileViewerModalState } from "../files/fileViewerFeature";
 
 export interface ChatSurfaceEventsFeatureDeps {
@@ -495,9 +495,69 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
         return;
       }
 
-      const pinnedCloseBtn = target?.closest("button[data-action='chat-pinned-unpin']") as HTMLButtonElement | null;
-      if (pinnedCloseBtn) {
-        if (pinnedMessagesUiActions.unpinActiveForSelected()) e.preventDefault();
+      const pinnedHideBtn = target?.closest("button[data-action='chat-pinned-hide']") as HTMLButtonElement | null;
+      if (pinnedHideBtn) {
+        const st = store.get();
+        if (st.modal) return;
+        const key = st.selected ? conversationKey(st.selected) : "";
+        const ids = key ? st.pinnedMessages[key] : null;
+        if (!key || !Array.isArray(ids) || !ids.length) return;
+        e.preventDefault();
+        store.set({
+          modal: {
+            kind: "confirm",
+            title: "Скрыть закреплённые сообщения",
+            message: "Скрыть панель закреплённого сообщения? Она останется скрытой до нового закрепа.",
+            confirmLabel: "Скрыть",
+            cancelLabel: "Отмена",
+            action: { kind: "pinned_bar_hide", chatKey: key },
+          },
+        });
+        return;
+      }
+
+      const pinnedListBtn = target?.closest("button[data-action='chat-pinned-list']") as HTMLButtonElement | null;
+      if (pinnedListBtn) {
+        const st = store.get();
+        if (st.modal) return;
+        const key = st.selected ? conversationKey(st.selected) : "";
+        const ids = key ? st.pinnedMessages[key] : null;
+        if (!key || !Array.isArray(ids) || !ids.length) return;
+        e.preventDefault();
+        const conv = st.conversations[key] || [];
+        const formatPreview = (id: number): string => {
+          const msg = conv.find((m) => typeof m.id === "number" && m.id === id) || null;
+          if (!msg) return `Сообщение #${id}`;
+          const text = String((msg as any)?.text || "").replace(/\s+/g, " ").trim();
+          if (text && !text.startsWith("[file]")) return text;
+          const att = (msg as any)?.attachment;
+          if (att?.kind === "file") return `Файл: ${String(att.name || "файл")}`;
+          return `Сообщение #${id}`;
+        };
+        const items: ContextMenuItem[] = ids.map((id, idx) => ({
+          id: `pinned_jump:${id}`,
+          label: ids.length > 1 ? `${idx + 1}. ${formatPreview(id)}` : formatPreview(id),
+          icon: "📌",
+        }));
+        if (ids.length > 1) {
+          items.push({ id: "sep-unpin-all", label: "", separator: true });
+          items.push({ id: "pinned_unpin_all", label: "Открепить все", icon: "🗑️", danger: true });
+        }
+        const rect = pinnedListBtn.getBoundingClientRect();
+        const x = Math.round(rect.left + rect.width / 2);
+        const y = Math.round(rect.bottom + 6);
+        store.set({
+          modal: {
+            kind: "context_menu",
+            payload: {
+              x,
+              y,
+              title: ids.length > 1 ? `Закреплённые (${ids.length})` : "Закреплённое",
+              target: { kind: "pinned_messages", id: key },
+              items,
+            },
+          },
+        });
         return;
       }
 

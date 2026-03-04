@@ -2,7 +2,7 @@ import { sanitizeArchived, saveArchivedForUser, toggleArchived } from "../../../
 import { conversationKey, dmKey, roomKey } from "../../../helpers/chat/conversationKey";
 import { saveChatFoldersForUser, sanitizeChatFoldersSnapshot } from "../../../helpers/chat/folders";
 import { sanitizePins, savePinsForUser, togglePin } from "../../../helpers/chat/pins";
-import { isPinnedMessage, savePinnedMessagesForUser, togglePinnedMessage } from "../../../helpers/chat/pinnedMessages";
+import { isPinnedMessage, savePinnedMessagesForUser } from "../../../helpers/chat/pinnedMessages";
 import { updateOutboxEntry } from "../../../helpers/chat/outbox";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
@@ -144,6 +144,46 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
       clearMsgContextSelection();
       closeModal();
     };
+
+    if (itemId.startsWith("pinned_jump:")) {
+      const msgId = Math.trunc(Number(itemId.slice("pinned_jump:".length)));
+      const key = t.kind === "pinned_messages" ? String(t.id || "").trim() : st.selected ? conversationKey(st.selected) : "";
+      if (!key || !Number.isFinite(msgId) || msgId <= 0) {
+        close();
+        return;
+      }
+      const conv = st.conversations[key] || [];
+      const idx = conv.findIndex((m) => typeof (m as any)?.id === "number" && (m as any).id === msgId);
+      close();
+      if (idx < 0) {
+        showToast("Сообщение пока не загружено", { kind: "info" });
+        return;
+      }
+      store.set((prev) => ({ ...prev, pinnedMessageActive: { ...prev.pinnedMessageActive, [key]: msgId } }));
+      const searchActive = Boolean(st.chatSearchOpen && st.chatSearchQuery.trim());
+      ensureVirtualHistoryIndexVisible?.(key, conv.length, idx, searchActive);
+      window.setTimeout(() => jumpToChatMsgIdx(idx), 0);
+      return;
+    }
+
+    if (itemId === "pinned_unpin_all") {
+      const key = t.kind === "pinned_messages" ? String(t.id || "").trim() : st.selected ? conversationKey(st.selected) : "";
+      const ids = key ? st.pinnedMessages[key] : null;
+      if (!key || !Array.isArray(ids) || !ids.length) {
+        close();
+        return;
+      }
+      close();
+      openConfirmModal({
+        title: "Открепить все сообщения",
+        message: "Открепить все закреплённые сообщения в этом чате?",
+        confirmLabel: "Открепить",
+        cancelLabel: "Отмена",
+        danger: true,
+        action: { kind: "pinned_messages_unpin_all", chatKey: key },
+      });
+      return;
+    }
 
     if (itemId === "composer_helper_cancel") {
       close();
@@ -922,18 +962,19 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
           return;
         }
         const wasPinned = isPinnedMessage(st.pinnedMessages, selKey, msgId);
-        const next = togglePinnedMessage(st.pinnedMessages, selKey, msgId);
-        const nextIds = next[selKey] || [];
-        const nextActive = { ...st.pinnedMessageActive };
-        if (!wasPinned) {
-          nextActive[selKey] = msgId;
-        } else if (nextActive[selKey] === msgId || !nextIds.includes(nextActive[selKey])) {
-          if (nextIds.length) nextActive[selKey] = nextIds[0];
-          else delete nextActive[selKey];
-        }
-        store.set({ pinnedMessages: next, pinnedMessageActive: nextActive });
-        if (st.selfId) savePinnedMessagesForUser(st.selfId, next);
+        const previewRaw =
+          msg?.attachment?.kind === "file"
+            ? `Файл: ${String(msg.attachment.name || "файл")}`
+            : String(msg?.text || "").trim() || `Сообщение #${msgId}`;
+        const preview = previewRaw.length > 180 ? `${previewRaw.slice(0, 177)}…` : previewRaw;
         close();
+        openConfirmModal({
+          title: wasPinned ? "Открепить сообщение" : "Закрепить сообщение",
+          message: preview,
+          confirmLabel: wasPinned ? "Открепить" : "Закрепить",
+          cancelLabel: "Отмена",
+          action: { kind: "pinned_message_toggle", chatKey: selKey, msgId },
+        });
         return;
       }
 

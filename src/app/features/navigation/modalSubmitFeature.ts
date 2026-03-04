@@ -1,5 +1,7 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { isPinnedMessage, savePinnedMessagesForUser, togglePinnedMessage } from "../../../helpers/chat/pinnedMessages";
+import { pinnedIdsSignature, savePinnedBarHiddenForUser } from "../../../helpers/chat/pinnedBarHidden";
 
 export interface ModalSubmitFeatureDeps {
   store: Store<AppState>;
@@ -60,11 +62,70 @@ export function createModalSubmitFeature(deps: ModalSubmitFeatureDeps): ModalSub
     const st = store.get();
     const modal = st.modal;
     if (!modal || modal.kind !== "confirm") return;
+    const close = () => store.set({ modal: null });
+
+    if (modal.action.kind === "pinned_bar_hide") {
+      const key = String(modal.action.chatKey || "").trim();
+      const ids = key ? st.pinnedMessages[key] : null;
+      const sig = Array.isArray(ids) && ids.length ? pinnedIdsSignature(ids) : "";
+      if (!key || !sig || !st.authed || !st.selfId) {
+        close();
+        return;
+      }
+      const next = { ...(st.pinnedBarHidden || {}) };
+      next[key] = sig;
+      store.set({ modal: null, pinnedBarHidden: next });
+      savePinnedBarHiddenForUser(st.selfId, next);
+      return;
+    }
+
+    if (modal.action.kind === "pinned_message_toggle") {
+      const key = String(modal.action.chatKey || "").trim();
+      const msgId = Math.trunc(Number(modal.action.msgId));
+      if (!key || !Number.isFinite(msgId) || msgId <= 0 || !st.authed || !st.selfId) {
+        close();
+        return;
+      }
+      const wasPinned = isPinnedMessage(st.pinnedMessages, key, msgId);
+      const nextPinned = togglePinnedMessage(st.pinnedMessages, key, msgId);
+      const nextIds = nextPinned[key] || [];
+      const nextActive = { ...st.pinnedMessageActive };
+      if (!wasPinned) {
+        nextActive[key] = msgId;
+      } else if (nextActive[key] === msgId || !nextIds.includes(nextActive[key])) {
+        if (nextIds.length) nextActive[key] = nextIds[0];
+        else delete nextActive[key];
+      }
+      const nextHidden = { ...(st.pinnedBarHidden || {}) };
+      delete nextHidden[key];
+      store.set({ modal: null, pinnedMessages: nextPinned, pinnedMessageActive: nextActive, pinnedBarHidden: nextHidden, chatSelection: null });
+      savePinnedMessagesForUser(st.selfId, nextPinned);
+      savePinnedBarHiddenForUser(st.selfId, nextHidden);
+      return;
+    }
+
+    if (modal.action.kind === "pinned_messages_unpin_all") {
+      const key = String(modal.action.chatKey || "").trim();
+      if (!key || !st.authed || !st.selfId) {
+        close();
+        return;
+      }
+      const nextPinned = { ...(st.pinnedMessages || {}) };
+      const nextActive = { ...(st.pinnedMessageActive || {}) };
+      const nextHidden = { ...(st.pinnedBarHidden || {}) };
+      delete nextPinned[key];
+      delete nextActive[key];
+      delete nextHidden[key];
+      store.set({ modal: null, pinnedMessages: nextPinned, pinnedMessageActive: nextActive, pinnedBarHidden: nextHidden, chatSelection: null });
+      savePinnedMessagesForUser(st.selfId, nextPinned);
+      savePinnedBarHiddenForUser(st.selfId, nextHidden);
+      return;
+    }
+
     if (st.conn !== "connected" || !st.authed) {
       store.set({ modal: null, status: "Нет соединения" });
       return;
     }
-    const close = () => store.set({ modal: null });
 
     if (modal.action.kind === "chat_clear") {
       send({ type: "chat_clear", peer: modal.action.peer });

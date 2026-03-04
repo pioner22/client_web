@@ -853,7 +853,10 @@ export function renderChat(layout: Layout, state: AppState) {
   }
 
   let pinnedBar: HTMLElement | null = null;
-  if (Array.isArray(pinnedIds) && pinnedIds.length) {
+  const pinnedSig = Array.isArray(pinnedIds) && pinnedIds.length ? pinnedIds.join(",") : "";
+  const pinnedHiddenSig = key ? String(state.pinnedBarHidden?.[key] || "") : "";
+  const pinnedHidden = Boolean(pinnedSig && pinnedHiddenSig && pinnedHiddenSig === pinnedSig);
+  if (!pinnedHidden && Array.isArray(pinnedIds) && pinnedIds.length) {
     const activeId = typeof activeRaw === "number" && pinnedIds.includes(activeRaw) ? activeRaw : pinnedIds[0];
     const activeIdx = Math.max(0, pinnedIds.indexOf(activeId));
     const pinnedMsg = msgs.find((m) => typeof m.id === "number" && m.id === activeId) || null;
@@ -882,13 +885,12 @@ export function renderChat(layout: Layout, state: AppState) {
         el("span", { class: "chat-pinned-jump", "aria-hidden": "true" }, ["→"]),
       ]
     );
-    const closeBtn = el("button", { class: "btn chat-pinned-close", type: "button", "data-action": "chat-pinned-unpin", "aria-label": "Открепить" }, [
+    const closeBtn = el("button", { class: "btn chat-pinned-close", type: "button", "data-action": "chat-pinned-hide", "aria-label": "Скрыть" }, [
       "×",
     ]);
     const actions: HTMLElement[] = [];
     if (pinnedIds.length > 1) {
-      actions.push(el("button", { class: "btn chat-pinned-nav", type: "button", "data-action": "chat-pinned-prev", "aria-label": "Предыдущий закреп" }, ["↑"]));
-      actions.push(el("button", { class: "btn chat-pinned-nav", type: "button", "data-action": "chat-pinned-next", "aria-label": "Следующий закреп" }, ["↓"]));
+      actions.push(el("button", { class: "btn chat-pinned-nav", type: "button", "data-action": "chat-pinned-list", "aria-label": "Все закрепы" }, ["≡"]));
     }
     actions.push(closeBtn);
     pinnedBar = el("div", { class: "chat-pinned", role: "note" }, [
@@ -939,7 +941,7 @@ export function renderChat(layout: Layout, state: AppState) {
     const pinCandidates = selectedMsgs
       .map((msg) => (typeof msg.id === "number" && Number.isFinite(msg.id) ? Math.trunc(msg.id) : 0))
       .filter((id) => id > 0);
-    const canPin = pinCandidates.length > 0;
+    const canPin = pinCandidates.length === 1;
     const allPinned = canPin && pinCandidates.every((id) => isPinnedMessage(state.pinnedMessages, key, id));
     const pinLabel = allPinned ? "📍" : "📌";
     const pinTitle = allPinned ? "Открепить" : "Закрепить";
@@ -1016,25 +1018,26 @@ export function renderChat(layout: Layout, state: AppState) {
       },
       ["🗑️"]
     );
-    const pinBtn = el(
-      "button",
-      {
-        class: "btn chat-selection-action",
-        type: "button",
-        "data-action": "chat-selection-pin",
-        "aria-label": pinTitle,
-        title: pinTitle,
-        ...(canPin ? {} : { disabled: "true" }),
-      },
-      [pinLabel]
-    );
+    const pinBtn = canPin
+      ? el(
+          "button",
+          {
+            class: "btn chat-selection-action",
+            type: "button",
+            "data-action": "chat-selection-pin",
+            "aria-label": pinTitle,
+            title: pinTitle,
+          },
+          [pinLabel]
+        )
+      : null;
     const actions = el("div", { class: "chat-selection-actions" }, [
       forwardBtn,
       copyBtn,
       ...(downloadBtn ? [downloadBtn] : []),
       ...(sendNowBtn ? [sendNowBtn] : []),
       deleteBtn,
-      pinBtn,
+      ...(pinBtn ? [pinBtn] : []),
     ]);
     const left = el("div", { class: "chat-selection-container-left" }, [cancelBtn, countNode]);
     const right = el("div", { class: "chat-selection-container-right" }, [actions]);

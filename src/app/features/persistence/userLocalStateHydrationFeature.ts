@@ -5,6 +5,7 @@ import { loadChatFoldersForUser } from "../../../helpers/chat/folders";
 import { loadHistoryCacheForUser } from "../../../helpers/chat/historyCache";
 import { loadOutboxForUser } from "../../../helpers/chat/outbox";
 import { loadPinnedMessagesForUser, mergePinnedMessagesMaps } from "../../../helpers/chat/pinnedMessages";
+import { loadPinnedBarHiddenForUser } from "../../../helpers/chat/pinnedBarHidden";
 import { loadPinsForUser } from "../../../helpers/chat/pins";
 import { loadBoardScheduleForUser } from "../../../helpers/boards/boardSchedule";
 import { loadFileTransfersForUser } from "../../../helpers/files/fileTransferHistory";
@@ -18,6 +19,7 @@ type LoadedForUserState = {
   archives: string | null;
   chatFolders: string | null;
   pinnedMessages: string | null;
+  pinnedBarHidden: string | null;
   fileTransfers: string | null;
   outbox: string | null;
   boardSchedule: string | null;
@@ -45,6 +47,7 @@ function createLoadedForUserState(): LoadedForUserState {
     archives: null,
     chatFolders: null,
     pinnedMessages: null,
+    pinnedBarHidden: null,
     fileTransfers: null,
     outbox: null,
     boardSchedule: null,
@@ -77,6 +80,7 @@ export function createUserLocalStateHydrationFeature(
     const needArchived = loadedForUser.archives !== userId;
     const needChatFolders = loadedForUser.chatFolders !== userId;
     const needPinnedMessages = loadedForUser.pinnedMessages !== userId;
+    const needPinnedBarHidden = loadedForUser.pinnedBarHidden !== userId;
     const needFileTransfers = loadedForUser.fileTransfers !== userId;
     const needOutbox = loadedForUser.outbox !== userId;
     const needBoardSchedule = loadedForUser.boardSchedule !== userId;
@@ -88,6 +92,7 @@ export function createUserLocalStateHydrationFeature(
       !needArchived &&
       !needChatFolders &&
       !needPinnedMessages &&
+      !needPinnedBarHidden &&
       !needFileTransfers &&
       !needOutbox &&
       !needBoardSchedule &&
@@ -101,6 +106,7 @@ export function createUserLocalStateHydrationFeature(
     if (needArchived) loadedForUser.archives = userId;
     if (needChatFolders) loadedForUser.chatFolders = userId;
     if (needPinnedMessages) loadedForUser.pinnedMessages = userId;
+    if (needPinnedBarHidden) loadedForUser.pinnedBarHidden = userId;
     if (needFileTransfers) loadedForUser.fileTransfers = userId;
     if (needOutbox) loadedForUser.outbox = userId;
     if (needBoardSchedule) loadedForUser.boardSchedule = userId;
@@ -133,6 +139,9 @@ export function createUserLocalStateHydrationFeature(
 
     const storedPinnedMessages = needPinnedMessages ? loadPinnedMessagesForUser(userId) : {};
     const mergedPinnedMessages = needPinnedMessages ? mergePinnedMessagesMaps(storedPinnedMessages, st.pinnedMessages) : st.pinnedMessages;
+
+    const storedPinnedBarHidden = needPinnedBarHidden ? loadPinnedBarHiddenForUser(userId) : {};
+    const mergedPinnedBarHidden = needPinnedBarHidden ? { ...storedPinnedBarHidden, ...st.pinnedBarHidden } : st.pinnedBarHidden;
 
     const storedHistory = needHistoryCache ? loadHistoryCacheForUser(userId) : null;
     const historyCacheConversations = storedHistory ? storedHistory.conversations : {};
@@ -263,6 +272,7 @@ export function createUserLocalStateHydrationFeature(
       chatFolders: mergedChatFolders,
       sidebarFolderId: mergedFolderId,
       pinnedMessages: mergedPinnedMessages,
+      pinnedBarHidden: mergedPinnedBarHidden,
       fileTransfers: mergedFileTransfers,
       outbox: mergedOutbox,
       conversations: mergedConversations,

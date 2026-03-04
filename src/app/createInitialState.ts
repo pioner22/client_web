@@ -76,6 +76,7 @@ export function createInitialState(): AppState {
     chatFolders: [],
     pinnedMessages: {},
     pinnedMessageActive: {},
+    pinnedBarHidden: {},
     pendingGroupInvites: [],
     pendingGroupJoinRequests: [],
     pendingBoardInvites: [],
