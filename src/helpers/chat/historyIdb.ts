@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../../stores/types";
+import { loadHistoryCachePrefs } from "./historyCachePrefs";
 
 const DB_NAME = "yagodka-history-v1";
 const DB_VERSION = 1;
@@ -35,6 +36,50 @@ type HistoryIngestMeta = {
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
+const pruneTimers = new Map<string, number>();
+const pruneInFlight = new Set<string>();
+
+function pruneKey(uid: string, convo: string): string {
+  return `${uid}:${convo}`;
+}
+
+function clearPruneTimer(key: string) {
+  const t = pruneTimers.get(key);
+  if (t === undefined) return;
+  pruneTimers.delete(key);
+  try {
+    globalThis.clearTimeout(t);
+  } catch {
+    // ignore
+  }
+}
+
+function schedulePruneConvo(uid: string, convo: string, delayMs = 1200) {
+  const key = pruneKey(uid, convo);
+  if (pruneTimers.has(key)) return;
+  const timer = globalThis.setTimeout(() => {
+    pruneTimers.delete(key);
+    if (pruneInFlight.has(key)) {
+      schedulePruneConvo(uid, convo, 1800);
+      return;
+    }
+    pruneInFlight.add(key);
+    void (async () => {
+      try {
+        const prefs = loadHistoryCachePrefs(uid);
+        const keepLatest = Math.max(0, Math.trunc(Number(prefs.keepLatestPerConvo ?? 0) || 0));
+        if (!keepLatest) return;
+        const maxDeletesPerRun = 1200;
+        const deleted = await pruneHistoryConvo(uid, convo, { keepLatest, maxDeletesPerRun });
+        if (deleted >= maxDeletesPerRun) schedulePruneConvo(uid, convo, 450);
+      } finally {
+        pruneInFlight.delete(key);
+      }
+    })();
+  }, Math.max(50, Math.min(30_000, Math.trunc(delayMs) || 0)));
+  pruneTimers.set(key, timer);
+}
+
 function idbAvailable(): boolean {
   try {
     return typeof indexedDB !== "undefined" && Boolean(indexedDB) && typeof indexedDB.open === "function";
@@ -54,6 +99,18 @@ function normalizeConvo(raw: string): string | null {
   // Expect keys like "dm:..." / "room:..." / "board:..."; keep generic.
   if (key.length > 160) return key.slice(0, 160);
   return key;
+}
+
+function convoRange(uid: string, convo: string): IDBKeyRange {
+  return IDBKeyRange.bound([uid, convo, 0], [uid, convo, Number.MAX_SAFE_INTEGER]);
+}
+
+function userMessagesRange(uid: string): IDBKeyRange {
+  return IDBKeyRange.bound([uid, 0], [uid, Number.MAX_SAFE_INTEGER]);
+}
+
+function userConvosRange(uid: string): IDBKeyRange {
+  return IDBKeyRange.bound([uid, ""], [uid, "\uffff"]);
 }
 
 function toReqPromise<T>(req: IDBRequest<T>): Promise<T> {
@@ -185,6 +242,7 @@ export async function ingestHistoryResult(
     return true;
   })();
 
+  let stored = false;
   try {
     const tx = db.transaction([STORE_MESSAGES, STORE_CONVOS], "readwrite");
     const msgStore = tx.objectStore(STORE_MESSAGES);
@@ -224,9 +282,11 @@ export async function ingestHistoryResult(
 
     convStore.put(next);
     await waitTx(tx);
+    stored = true;
   } catch {
     // ignore
   }
+  if (stored) schedulePruneConvo(uid, key, meta.beforeId && meta.beforeId > 0 ? 700 : 1400);
 }
 
 export async function patchHistoryMessageById(
@@ -316,7 +376,7 @@ export async function getHistoryLatestMessages(
     const tx = db.transaction([STORE_MESSAGES], "readonly");
     const store = tx.objectStore(STORE_MESSAGES);
     const index = store.index(INDEX_BY_CONVO_ID);
-    const range = IDBKeyRange.bound([uid, key, 0], [uid, key, Number.MAX_SAFE_INTEGER]);
+    const range = convoRange(uid, key);
     const cursorReq = index.openCursor(range, "prev");
     const msgs = await cursorToMessages(cursorReq, limit);
     await waitTx(tx);
@@ -355,3 +415,178 @@ export async function getHistoryMessagesBefore(
   }
 }
 
+export type HistoryCacheStats = {
+  messages: number;
+  convos: number;
+};
+
+export async function getHistoryCacheStats(userId: string): Promise<HistoryCacheStats | null> {
+  const uid = normalizeId(userId);
+  if (!uid) return null;
+  const db = await openDb();
+  if (!db) return null;
+  try {
+    const tx = db.transaction([STORE_MESSAGES, STORE_CONVOS], "readonly");
+    const msgStore = tx.objectStore(STORE_MESSAGES);
+    const convStore = tx.objectStore(STORE_CONVOS);
+    const [messages, convos] = await Promise.all([
+      toReqPromise<number>(msgStore.count(userMessagesRange(uid))),
+      toReqPromise<number>(convStore.count(userConvosRange(uid))),
+    ]);
+    await waitTx(tx);
+    return {
+      messages: Number.isFinite(messages) && messages >= 0 ? Math.trunc(messages) : 0,
+      convos: Number.isFinite(convos) && convos >= 0 ? Math.trunc(convos) : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function clearHistoryCacheForUser(userId: string): Promise<void> {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  const db = await openDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction([STORE_MESSAGES, STORE_CONVOS], "readwrite");
+    const msgStore = tx.objectStore(STORE_MESSAGES);
+    const convStore = tx.objectStore(STORE_CONVOS);
+    msgStore.delete(userMessagesRange(uid));
+    convStore.delete(userConvosRange(uid));
+    await waitTx(tx);
+  } catch {
+    // ignore
+  }
+}
+
+export async function countHistoryMessagesForConvo(userId: string, convo: string): Promise<number> {
+  const uid = normalizeId(userId);
+  const key = normalizeConvo(convo);
+  if (!uid || !key) return 0;
+  const db = await openDb();
+  if (!db) return 0;
+  try {
+    const tx = db.transaction([STORE_MESSAGES], "readonly");
+    const store = tx.objectStore(STORE_MESSAGES);
+    const index = store.index(INDEX_BY_CONVO_ID);
+    const count = await toReqPromise<number>(index.count(convoRange(uid, key)));
+    await waitTx(tx);
+    return Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+type PruneCursorResult = {
+  deleted: number;
+  oldestRemainingId: number | null;
+};
+
+async function pruneOldestMessages(
+  tx: IDBTransaction,
+  uid: string,
+  convo: string,
+  toDelete: number
+): Promise<PruneCursorResult> {
+  const store = tx.objectStore(STORE_MESSAGES);
+  const index = store.index(INDEX_BY_CONVO_ID);
+  const range = convoRange(uid, convo);
+  const deleted = Math.max(0, Math.trunc(toDelete) || 0);
+  if (deleted <= 0) return { deleted: 0, oldestRemainingId: null };
+
+  return await new Promise((resolve) => {
+    let removed = 0;
+    const cursorReq = index.openCursor(range, "next");
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (!cursor) return resolve({ deleted: removed, oldestRemainingId: null });
+      const row = cursor.value as any;
+      const id = validServerId(row?.id);
+      if (removed < deleted) {
+        try {
+          cursor.delete();
+        } catch {
+          // ignore
+        }
+        removed += 1;
+        cursor.continue();
+        return;
+      }
+      // Stopped deleting: current cursor points at the oldest remaining message.
+      return resolve({ deleted: removed, oldestRemainingId: id });
+    };
+    cursorReq.onerror = () => resolve({ deleted: removed, oldestRemainingId: null });
+  });
+}
+
+async function findOldestMessageId(tx: IDBTransaction, uid: string, convo: string): Promise<number | null> {
+  const store = tx.objectStore(STORE_MESSAGES);
+  const index = store.index(INDEX_BY_CONVO_ID);
+  const range = convoRange(uid, convo);
+  const cursorReq = index.openCursor(range, "next");
+  return await new Promise((resolve) => {
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (!cursor) return resolve(null);
+      const row = cursor.value as any;
+      resolve(validServerId(row?.id));
+    };
+    cursorReq.onerror = () => resolve(null);
+  });
+}
+
+export async function pruneHistoryConvo(
+  userId: string,
+  convo: string,
+  opts: { keepLatest: number; maxDeletesPerRun?: number }
+): Promise<number> {
+  const uid = normalizeId(userId);
+  const key = normalizeConvo(convo);
+  const keepLatest = Math.max(0, Math.trunc(Number(opts.keepLatest ?? 0) || 0));
+  const maxDeletesPerRun = Math.max(50, Math.min(2500, Math.trunc(Number(opts.maxDeletesPerRun ?? 900) || 0)));
+  if (!uid || !key || keepLatest <= 0) return 0;
+
+  const total = await countHistoryMessagesForConvo(uid, key);
+  const overflow = Math.max(0, total - keepLatest);
+  const toDelete = Math.min(overflow, maxDeletesPerRun);
+  if (toDelete <= 0) return 0;
+
+  const db = await openDb();
+  if (!db) return 0;
+  try {
+    const tx = db.transaction([STORE_MESSAGES, STORE_CONVOS], "readwrite");
+    const convStore = tx.objectStore(STORE_CONVOS);
+    const prevRaw = await toReqPromise<any>(convStore.get([uid, key]));
+    const prev = sanitizeMeta(prevRaw);
+
+    const cursorResult = await pruneOldestMessages(tx, uid, key, toDelete);
+    const oldestRemainingId =
+      cursorResult.oldestRemainingId !== null ? cursorResult.oldestRemainingId : await findOldestMessageId(tx, uid, key);
+
+    if (!oldestRemainingId) {
+      convStore.delete([uid, key]);
+      await waitTx(tx);
+      return cursorResult.deleted;
+    }
+
+    const now = Date.now();
+    const next: HistoryConvoMeta = prev
+      ? { ...prev, uid, convo: key }
+      : {
+          uid,
+          convo: key,
+          updated: 0,
+          min_id: 0,
+          max_id: 0,
+          backfilled: false,
+        };
+    next.updated = now;
+    next.min_id = oldestRemainingId;
+    convStore.put(next);
+    await waitTx(tx);
+    return cursorResult.deleted;
+  } catch {
+    return 0;
+  }
+}

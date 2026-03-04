@@ -8,6 +8,8 @@ import {
   getFileCacheStats,
   listFileCacheEntries,
 } from "../../helpers/files/fileBlobCache";
+import { HISTORY_KEEP_PRESETS, loadHistoryCachePrefs, saveHistoryCachePrefs } from "../../helpers/chat/historyCachePrefs";
+import { clearHistoryCacheForUser, getHistoryCacheStats } from "../../helpers/chat/historyIdb";
 import { fileBadge, type FileBadgeKind } from "../../helpers/files/fileBadge";
 import { CACHE_CLEAN_PRESETS, CACHE_SIZE_PRESETS, loadFileCachePrefs, saveFileCachePrefs } from "../../helpers/files/fileCachePrefs";
 import {
@@ -244,6 +246,24 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     cacheActions,
   ]);
 
+  const historyCacheTitle = el("div", { class: "pane-section" }, ["Кэш истории"]);
+  const historyCacheInfo = el("div", { class: "file-cache-info" }, ["—"]);
+  const historyCacheLimitLabel = el("label", { class: "modal-label", for: "history-cache-limit" }, ["Лимит на чат"]);
+  const historyCacheLimitSelect = el("select", { class: "modal-input", id: "history-cache-limit" }) as HTMLSelectElement;
+  const historyCacheHint = el("div", { class: "file-cache-hint" }, [
+    "Хранит последние сообщения в IndexedDB, чтобы чаты открывались быстрее и не приходилось скачивать историю повторно.",
+  ]);
+  const historyCacheClearBtn = el("button", { class: "btn btn-danger", type: "button" }, ["Очистить кэш истории"]);
+  const historyCacheActions = el("div", { class: "file-cache-actions" }, [historyCacheClearBtn]);
+  const historyCacheBlock = el("div", { class: "page-card files-section" }, [
+    historyCacheTitle,
+    historyCacheInfo,
+    historyCacheLimitLabel,
+    historyCacheLimitSelect,
+    historyCacheHint,
+    historyCacheActions,
+  ]);
+
   const autoDlTitle = el("div", { class: "pane-section" }, ["Автоскачивание"]);
   const autoDlHint = el("div", { class: "file-cache-hint" }, [
     "Ограничивает фоновую подгрузку медиа/файлов в истории сообщений. По клику файл всегда можно скачать вручную.",
@@ -281,6 +301,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     offersBlock,
     transfersBlock,
     cacheBlock,
+    historyCacheBlock,
     autoDlBlock,
     cachedBlock,
     ...(hint ? [hint] : []),
@@ -291,6 +312,9 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   }
   for (const opt of CACHE_CLEAN_PRESETS) {
     cacheCleanSelect.append(el("option", { value: String(opt.ms) }, [opt.label]));
+  }
+  for (const opt of HISTORY_KEEP_PRESETS) {
+    historyCacheLimitSelect.append(el("option", { value: String(opt.keep) }, [opt.label]));
   }
 
   const MB = 1024 * 1024;
@@ -374,7 +398,10 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     if (cacheStatsTimer !== null) return;
     cacheStatsTimer = window.setTimeout(() => {
       cacheStatsTimer = null;
-      if (lastState) refreshCacheStats(lastState);
+      if (lastState) {
+        refreshCacheStats(lastState);
+        refreshHistoryCacheStats(lastState);
+      }
     }, 120);
   }
 
@@ -573,6 +600,39 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     cacheInfo.classList.toggle("file-cache-warning", warn);
   }
 
+  let historyStatsInFlight = false;
+  let historyStatsPending = false;
+  function refreshHistoryCacheStats(state: AppState) {
+    if (!state.selfId) {
+      historyCacheInfo.textContent = "Кэш доступен после входа.";
+      historyCacheInfo.classList.remove("file-cache-warning");
+      return;
+    }
+    const uid = state.selfId;
+    const prefs = loadHistoryCachePrefs(uid);
+    if (historyStatsInFlight) {
+      historyStatsPending = true;
+      return;
+    }
+    historyStatsInFlight = true;
+    historyCacheInfo.textContent = "Считаем…";
+    void getHistoryCacheStats(uid)
+      .then((stats) => {
+        const messages = stats?.messages ?? 0;
+        const convos = stats?.convos ?? 0;
+        historyCacheInfo.textContent = `Сообщений: ${messages} · чатов: ${convos} · лимит: ${prefs.keepLatestPerConvo}/чат`;
+        const warn = prefs.keepLatestPerConvo > 0 && messages >= convos * prefs.keepLatestPerConvo * 0.92 && messages > 0 && convos > 0;
+        historyCacheInfo.classList.toggle("file-cache-warning", warn);
+      })
+      .finally(() => {
+        historyStatsInFlight = false;
+        if (historyStatsPending) {
+          historyStatsPending = false;
+          if (lastState) refreshHistoryCacheStats(lastState);
+        }
+      });
+  }
+
   fileInput.addEventListener("change", updateFileMeta);
   targetSelect.addEventListener("change", () => {
     selectedTarget = targetSelect.value;
@@ -613,6 +673,22 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     const userId = st?.selfId;
     if (!st || !userId) return;
     void clearFileCache(userId).then(() => refreshCacheStats(st));
+  });
+  historyCacheLimitSelect.addEventListener("change", () => {
+    const st = lastState;
+    const userId = st?.selfId;
+    if (!st || !userId) return;
+    const prefs = loadHistoryCachePrefs(userId);
+    prefs.keepLatestPerConvo = Number(historyCacheLimitSelect.value || prefs.keepLatestPerConvo) || prefs.keepLatestPerConvo;
+    prefs.userSetKeepLatestPerConvo = true;
+    saveHistoryCachePrefs(userId, prefs);
+    refreshHistoryCacheStats(st);
+  });
+  historyCacheClearBtn.addEventListener("click", () => {
+    const st = lastState;
+    const userId = st?.selfId;
+    if (!st || !userId) return;
+    void clearHistoryCacheForUser(userId).then(() => refreshHistoryCacheStats(st));
   });
 
   function ensureAutoDlOption(select: HTMLSelectElement, bytes: number) {
@@ -677,6 +753,8 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     cacheLimitSelect.disabled = !canUseCache;
     cacheCleanSelect.disabled = !canUseCache;
     cacheClearBtn.disabled = !canUseCache;
+    historyCacheLimitSelect.disabled = !canUseCache;
+    (historyCacheClearBtn as HTMLButtonElement).disabled = !canUseCache;
     autoDlPhotoSelect.disabled = !canUseCache;
     autoDlVideoSelect.disabled = !canUseCache;
     autoDlFileSelect.disabled = !canUseCache;
@@ -697,6 +775,14 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       }
     } else {
       cacheInfo.textContent = "Кэш доступен после входа.";
+    }
+
+    if (canUseCache && userId) {
+      const prefs = loadHistoryCachePrefs(userId);
+      historyCacheLimitSelect.value = String(prefs.keepLatestPerConvo);
+      scheduleCacheStatsRefresh();
+    } else {
+      historyCacheInfo.textContent = "Кэш доступен после входа.";
     }
 
     if (canUseCache && userId) {

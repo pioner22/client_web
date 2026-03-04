@@ -2,7 +2,8 @@ import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage, TargetRef } from "../../../stores/types";
 import { conversationKey, dmKey, roomKey } from "../../../helpers/chat/conversationKey";
 import { newestServerMessageId } from "../../../helpers/chat/historySync";
-import { getHistoryConvoMeta, getHistoryLatestMessages, getHistoryMessagesBefore } from "../../../helpers/chat/historyIdb";
+import { loadHistoryCachePrefs } from "../../../helpers/chat/historyCachePrefs";
+import { countHistoryMessagesForConvo, getHistoryConvoMeta, getHistoryLatestMessages, getHistoryMessagesBefore } from "../../../helpers/chat/historyIdb";
 import { mergeMessages } from "../../../helpers/chat/mergeMessages";
 
 type DeviceCapsLike = {
@@ -618,6 +619,17 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       }
 
       if (!meta.backfilled) {
+        const keepLatest = loadHistoryCachePrefs(uid).keepLatestPerConvo;
+        if (keepLatest > 0) {
+          const cached = await countHistoryMessagesForConvo(uid, key);
+          if (cached >= keepLatest) {
+            debugHook("history.backfill.skip", { key, mode: "before", reason: "cache_limit", cached, keepLatest });
+            historyBackfillInFlight.delete(key);
+            clearHistoryBackfillTimer(key);
+            scheduleBackfill();
+            return;
+          }
+        }
         const cursor = Number(meta.min_id ?? 0) || 0;
         if (cursor > 0) {
           debugHook("history.backfill.request", { key, mode: "before", before: cursor, limit: HISTORY_BACKFILL_LIMIT });
