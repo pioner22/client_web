@@ -19,6 +19,7 @@ import type {
   TargetRef,
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
+import { convoSig } from "../helpers/chat/convoSig";
 import { messageSelectionKey } from "../helpers/chat/chatSelection";
 import { getCachedMediaAspectRatio } from "../helpers/chat/mediaAspectCache";
 import { prefetchHistoryMediaFromHistoryResult } from "../helpers/chat/historyMediaPrefetch";
@@ -1033,6 +1034,7 @@ export function mountApp(root: HTMLElement) {
     scheduleSaveOutbox: () => scheduleSaveOutbox(store),
     onAuthed: () => {
       const st = store.get();
+      if (st.selfId) void autoDownloadCachePolicyFeature.enforceFileCachePolicy(st.selfId, { force: true });
       if (st.selected) requestHistory(st.selected, { force: true, deltaLimit: 2000, prefetchBefore: true });
       outboxFeature?.drainOutbox();
     },
@@ -1082,6 +1084,7 @@ export function mountApp(root: HTMLElement) {
     onPwaPushLogout: () => pwaPushFeature?.onLogout(),
     resetFileGet: () => fileGet?.reset(),
     resetFileDownloadActions: () => fileDownloadActions?.reset(),
+    resetFileDownloads: () => fileDownload?.reset(),
     resetPreviewWarmup,
     resetLoadedForUser,
     clearBoardScheduleTimer,
@@ -1517,12 +1520,6 @@ export function mountApp(root: HTMLElement) {
     { passive: true }
   );
 
-  function convoSig(msgs: any[]): string {
-    const last = msgs && msgs.length ? msgs[msgs.length - 1] : null;
-    const lastKey = last ? String((last.id ?? last.ts ?? "") as any) : "";
-    return `${msgs?.length || 0}:${lastKey}`;
-  }
-
   function updateTransferByLocalId(localId: string, apply: (entry: FileTransferEntry) => FileTransferEntry) {
     fileTransferStateFeature.updateTransferByLocalId(localId, apply);
   }
@@ -1540,7 +1537,11 @@ export function mountApp(root: HTMLElement) {
   }
 
   function handleFileMessage(msg: any): boolean {
-    if (msg?.type === "file_preview_ready") { const fileId = String(msg?.file_id ?? "").trim(); if (fileId) enqueueFileGet(fileId, { priority: "high", silent: true }); return true; }
+    if (msg?.type === "file_preview_ready") {
+      const fileId = String(msg?.file_id ?? "").trim();
+      if (fileId) enqueueFileGet(fileId, { priority: "prefetch", silent: true });
+      return true;
+    }
     if (fileOffers?.handleMessage(msg)) return true;
     return fileDownload?.handleMessage(msg) ?? false;
   }

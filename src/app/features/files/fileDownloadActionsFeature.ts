@@ -216,12 +216,17 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
     const fid = String(fileId || "").trim();
     if (!fid) return;
     const meta = resolveFileMeta(fid);
-    const st = store.get();
     const fromCache = await tryServeFromCache(fid, meta);
     if (fromCache) return;
+    const st = store.get();
     const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fid);
     if (entry?.url) {
       triggerBrowserDownload(entry.url, meta.name || entry.name || "файл");
+      return;
+    }
+    if (downloadByFileId.has(fid)) {
+      pendingFileDownloads.set(fid, { name: meta.name || entry?.name || "файл" });
+      store.set({ status: `Скачивание: ${meta.name || entry?.name || fid}` });
       return;
     }
     const canStream = Number(meta.size || 0) >= STREAM_MIN_BYTES && startStreamDownload(fid, meta);
@@ -281,4 +286,3 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
     reset,
   };
 }
-

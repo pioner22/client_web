@@ -1,5 +1,5 @@
 import { DEFAULT_AUTO_DOWNLOAD_PREFS, loadAutoDownloadPrefs, type AutoDownloadPrefs } from "../../../helpers/files/autoDownloadPrefs";
-import { cleanupFileCache, isImageLikeFile } from "../../../helpers/files/fileBlobCache";
+import { cleanupFileCache, getFileCacheStats, isImageLikeFile } from "../../../helpers/files/fileBlobCache";
 import { loadFileCachePrefs, saveFileCachePrefs } from "../../../helpers/files/fileCachePrefs";
 import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
 import type { Store } from "../../../stores/store";
@@ -41,6 +41,8 @@ export function createAutoDownloadCachePolicyFeature(
   deps: AutoDownloadCachePolicyFeatureDeps
 ): AutoDownloadCachePolicyFeature {
   const { store, previewAutoMaxBytes } = deps;
+
+  const enforceByUser = new Map<string, { inFlight: boolean; queued: boolean; queuedForce: boolean }>();
 
   let autoDownloadPrefsUserId = "";
   let autoDownloadPrefsCache: AutoDownloadPrefs = { ...DEFAULT_AUTO_DOWNLOAD_PREFS };
@@ -134,13 +136,44 @@ export function createAutoDownloadCachePolicyFeature(
     if (!uid) return;
     const prefs = getFileCachePrefsForUser(uid);
     if (!prefs) return;
-    const now = Date.now();
-    const due = prefs.autoCleanMs > 0 && now - prefs.lastCleanAt >= prefs.autoCleanMs;
-    if (!opts.force && !due && !(prefs.maxBytes > 0)) return;
-    await cleanupFileCache(uid, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs });
-    if (due) {
-      prefs.lastCleanAt = now;
-      saveFileCachePrefs(uid, prefs);
+
+    const state = (() => {
+      const existing = enforceByUser.get(uid);
+      if (existing) return existing;
+      const next = { inFlight: false, queued: false, queuedForce: false };
+      enforceByUser.set(uid, next);
+      return next;
+    })();
+
+    if (state.inFlight) {
+      state.queued = true;
+      if (opts.force) state.queuedForce = true;
+      return;
+    }
+
+    state.inFlight = true;
+    try {
+      const now = Date.now();
+      const due = prefs.autoCleanMs > 0 && now - prefs.lastCleanAt >= prefs.autoCleanMs;
+      const maxBytes = Number(prefs.maxBytes ?? 0) || 0;
+      const overLimit = maxBytes > 0 ? getFileCacheStats(uid).totalBytes > maxBytes : false;
+      if (!opts.force && !due && !overLimit) return;
+      if (!due && !overLimit) return;
+
+      await cleanupFileCache(uid, { maxBytes: prefs.maxBytes, ttlMs: prefs.autoCleanMs });
+      if (due) {
+        prefs.lastCleanAt = now;
+        saveFileCachePrefs(uid, prefs);
+      }
+    } finally {
+      state.inFlight = false;
+      const rerun = state.queued;
+      const rerunForce = state.queuedForce;
+      state.queued = false;
+      state.queuedForce = false;
+      if (rerun) {
+        void enforceFileCachePolicy(uid, rerunForce ? { force: true } : {});
+      }
     }
   };
 

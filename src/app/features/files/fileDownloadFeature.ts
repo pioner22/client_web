@@ -25,6 +25,7 @@ export interface DownloadState {
 type DeviceCapsLike = {
   constrained: boolean;
   slowNetwork: boolean;
+  prefetchAllowed: boolean;
 };
 
 type AutoDownloadKind = "image" | "video" | "audio" | "file";
@@ -106,6 +107,8 @@ export interface FileDownloadFeatureDeps {
 
 export interface FileDownloadFeature {
   handleMessage: (msg: any) => boolean;
+  abortHttpDownload: (fileId: string, reason?: string, opts?: { quiet?: boolean }) => void;
+  reset: () => void;
 }
 
 export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDownloadFeature {
@@ -153,7 +156,353 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     abortUploadByFileId,
   } = deps;
 
-  const httpDownloadInFlight = new Set<string>();
+  type HttpDownloadPriority = "high" | "prefetch";
+
+  const HTTP_MAX_CONCURRENCY = deviceCaps.slowNetwork ? 1 : deviceCaps.constrained ? 2 : 3;
+  const HTTP_PREFETCH_CONCURRENCY = deviceCaps.slowNetwork ? 0 : 1;
+
+  const httpQueueHigh: string[] = [];
+  const httpQueuePrefetch: string[] = [];
+  const httpQueueMeta = new Map<
+    string,
+    { url: string; name: string; size: number; mime: string | null; silent: boolean; queuedAtMs: number }
+  >();
+  const httpInFlight = new Map<
+    string,
+    { controller: AbortController; priority: HttpDownloadPriority; silent: boolean; queuedAtMs: number; resetToken: number }
+  >();
+  const httpAbortQuiet = new Set<string>();
+  let httpResetToken = 0;
+
+  const httpQueueState = () => {
+    let inflightPrefetch = 0;
+    for (const v of httpInFlight.values()) {
+      if (v.priority === "prefetch") inflightPrefetch += 1;
+    }
+    return {
+      queued_high: httpQueueHigh.length,
+      queued_prefetch: httpQueuePrefetch.length,
+      inflight: httpInFlight.size,
+      inflight_prefetch: inflightPrefetch,
+    };
+  };
+
+  const isHttpQueuedOrActive = (fileId: string): boolean => {
+    const fid = String(fileId || "").trim();
+    return Boolean(fid && (httpQueueMeta.has(fid) || httpInFlight.has(fid)));
+  };
+
+  const dropHttpQueue = (fileId: string): void => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    httpQueueMeta.delete(fid);
+    const hi = httpQueueHigh.indexOf(fid);
+    if (hi >= 0) httpQueueHigh.splice(hi, 1);
+    const pi = httpQueuePrefetch.indexOf(fid);
+    if (pi >= 0) httpQueuePrefetch.splice(pi, 1);
+  };
+
+  const abortHttpDownload = (fileId: string, reason = "abort", opts: { quiet?: boolean } = {}): void => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    if (opts.quiet) httpAbortQuiet.add(fid);
+    dropHttpQueue(fid);
+    const cur = httpInFlight.get(fid);
+    if (cur) {
+      try {
+        cur.controller.abort();
+      } catch {
+        // ignore
+      }
+    }
+    debugHook("file.http.abort", { fileId: fid, reason, quiet: Boolean(opts.quiet), ...httpQueueState() });
+  };
+
+  let httpDrainTimer: number | null = null;
+  const scheduleHttpDrain = () => {
+    if (httpDrainTimer !== null) return;
+    httpDrainTimer = window.setTimeout(() => {
+      httpDrainTimer = null;
+      drainHttpQueue();
+    }, 0);
+  };
+
+  const canPrefetchHttp = () => {
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") return false;
+    if (!st.netLeader) return false;
+    if (!deviceCaps.prefetchAllowed) return false;
+    if (document.visibilityState === "hidden") return false;
+    return true;
+  };
+
+  const promoteUserRequestedPrefetchToHigh = () => {
+    for (let i = 0; i < httpQueuePrefetch.length; i += 1) {
+      const fid = httpQueuePrefetch[i];
+      if (!fid) continue;
+      if (!pendingFileDownloads.has(fid)) continue;
+      httpQueuePrefetch.splice(i, 1);
+      i -= 1;
+      if (!httpQueueHigh.includes(fid)) httpQueueHigh.push(fid);
+      const meta = httpQueueMeta.get(fid);
+      if (meta && meta.silent) httpQueueMeta.set(fid, { ...meta, silent: false });
+      debugHook("file.http.promote", { fileId: fid, reason: "user_request", ...httpQueueState() });
+    }
+  };
+
+  const startHttpDownloadTask = (fileId: string, priority: HttpDownloadPriority) => {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    const meta = httpQueueMeta.get(fid);
+    dropHttpQueue(fid);
+    if (!meta) return;
+    const controller = new AbortController();
+    const token = httpResetToken;
+    httpInFlight.set(fid, { controller, priority, silent: meta.silent, queuedAtMs: meta.queuedAtMs, resetToken: token });
+    debugHook("file.http.start", {
+      fileId: fid,
+      priority,
+      silent: meta.silent,
+      queue_ms: Math.max(0, Date.now() - meta.queuedAtMs),
+      ...httpQueueState(),
+    });
+    void (async () => {
+      try {
+        const baseDelayMs = deviceCaps.slowNetwork ? 900 : deviceCaps.constrained ? 650 : 400;
+        const download = downloadByFileId.get(fid);
+        if (!download) throw new Error("missing_download_state");
+
+        const result = await resumableHttpDownload({
+          url: meta.url,
+          offset: download.received,
+          etag: download.etag ?? null,
+          expectedSize: meta.size || 0,
+          maxRetries: 6,
+          baseDelayMs,
+          maxDelayMs: 8000,
+          maxUrlRefresh: 2,
+          signal: controller.signal,
+          refreshUrl: async () => (await requestFreshHttpDownloadUrl(fid)).url,
+          onReset: (reason) => {
+            const cur = downloadByFileId.get(fid);
+            if (!cur) return;
+            if (cur.streaming && cur.streamId) throw new Error(`http_download_reset_${reason}`);
+            cur.chunks = [];
+            cur.received = 0;
+            cur.lastProgress = 0;
+            cur.etag = null;
+            debugHook("file.http.reset", { fileId: fid, reason });
+            updateTransferByFileId(fid, (entry) => ({
+              ...entry,
+              status: "downloading",
+              progress: 0,
+              ...(meta.mime ? { mime: meta.mime } : {}),
+            }));
+          },
+          onChunk: (chunk) => {
+            const cur = downloadByFileId.get(fid);
+            if (!cur) throw new Error("missing_download_state");
+            if (cur.streaming && cur.streamId) {
+              const okPost = postStreamChunk(cur.streamId, chunk);
+              if (!okPost) throw new Error("stream_post_failed");
+              return;
+            }
+            const buf = (chunk.buffer as ArrayBuffer).slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
+            cur.chunks.push(buf);
+          },
+          onProgress: ({ received, total }) => {
+            const cur = downloadByFileId.get(fid);
+            if (!cur) return;
+            cur.received = received;
+            if (typeof total === "number" && Number.isFinite(total) && total > 0 && (!cur.size || cur.size <= 0)) {
+              cur.size = Math.trunc(total);
+            }
+            touchFileGetTimeout(fid);
+            const denom = cur.size > 0 ? cur.size : typeof total === "number" && total > 0 ? total : 0;
+            const pct = denom > 0 ? Math.min(100, Math.round((cur.received / denom) * 100)) : 0;
+            if (pct !== cur.lastProgress) {
+              cur.lastProgress = pct;
+              updateTransferByFileId(fid, (entry) => ({ ...entry, progress: pct, status: "downloading" }));
+            }
+          },
+        });
+
+        const final = downloadByFileId.get(fid);
+        if (!final) throw new Error("missing_download_state");
+        final.etag = result.etag ?? null;
+        const userRequested = pendingFileDownloads.has(fid);
+        const silent = Boolean(meta.silent && !userRequested);
+        debugHook("file.http.complete", {
+          fileId: fid,
+          name: meta.name,
+          size: final.size,
+          received: result.received,
+          total: result.total,
+          mime: final.mime || result.mime || null,
+          streaming: Boolean(final.streaming),
+          silent,
+          priority,
+        });
+
+        downloadByFileId.delete(fid);
+        clearSilentFileGet(fid);
+        finishFileGet(fid);
+        if (!silent) {
+          try {
+            send({ type: "file_downloaded", file_id: fid });
+          } catch {
+            // ignore
+          }
+        }
+
+        if (final.streaming && final.streamId) {
+          postStreamEnd(final.streamId);
+          updateTransferByFileId(fid, (entry) => ({
+            ...entry,
+            status: "complete",
+            progress: 100,
+            ...(meta.mime ? { mime: meta.mime } : {}),
+          }));
+          if (!silent) store.set({ status: `Скачивание завершено: ${meta.name}` });
+          clearPendingFileViewer(fid);
+          return;
+        }
+
+        const finalMime = meta.mime || final.mime || result.mime || guessMimeTypeByName(meta.name);
+        const blob = new Blob(final.chunks, { type: finalMime || undefined });
+        const objectUrl = URL.createObjectURL(blob);
+        updateTransferByFileId(fid, (entry) => ({
+          ...entry,
+          status: "complete",
+          progress: 100,
+          url: objectUrl,
+          ...(finalMime ? { mime: finalMime } : {}),
+        }));
+        if (!silent) store.set({ status: `Файл готов: ${meta.name}` });
+        try {
+          const st = store.get();
+          if (st.selfId && shouldCacheFile(meta.name || "файл", finalMime, meta.size || blob.size || 0)) {
+            void putCachedFileBlob(st.selfId, fid, blob, {
+              name: meta.name || "файл",
+              mime: finalMime,
+              size: meta.size || blob.size || 0,
+            });
+            void enforceFileCachePolicy(st.selfId, { force: true });
+            clearCachedPreviewAttempt(st.selfId, fid);
+          }
+        } catch {
+          // ignore
+        }
+        const pending = pendingFileDownloads.get(fid);
+        if (pending) {
+          pendingFileDownloads.delete(fid);
+          triggerBrowserDownload(objectUrl, pending.name || meta.name || "файл");
+        }
+        const pv = takePendingFileViewer(fid);
+        if (pv) {
+          const viewerName = pv.name || meta.name || "файл";
+          const viewerSize = pv.size || meta.size || blob.size || 0;
+          const viewerMime = finalMime || pv.mime || null;
+          store.set({
+            modal: buildFileViewerModalState({
+              fileId: fid,
+              url: objectUrl,
+              name: viewerName,
+              size: viewerSize,
+              mime: viewerMime,
+              caption: pv.caption || null,
+              chatKey: pv.chatKey,
+              msgIdx: pv.msgIdx,
+            }),
+          });
+        }
+      } catch (err) {
+        if (token !== httpResetToken || httpAbortQuiet.has(fid)) {
+          debugHook("file.http.abort.done", { fileId: fid, reason: "reset_or_quiet" });
+          return;
+        }
+        const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
+        const userRequested = pendingFileDownloads.has(fid);
+        const silent = Boolean(meta.silent && !userRequested);
+        const canFallback =
+          !silent &&
+          !httpLegacyFallbackAttempted.has(fid) &&
+          (err instanceof TypeError ||
+            /^http_\\d+$/.test(errMsg) ||
+            errMsg === "incomplete_body" ||
+            errMsg === "range_not_satisfiable");
+        if (canFallback) {
+          httpLegacyFallbackAttempted.add(fid);
+          debugHook("file.http.fallback", { fileId: fid, reason: errMsg, mode: "file_get" });
+          disableFileHttp(errMsg || "http_download_failed");
+          const cur = downloadByFileId.get(fid);
+          if (cur) {
+            cur.chunks = [];
+            cur.received = 0;
+            cur.lastProgress = 0;
+            cur.etag = null;
+          }
+          updateTransferByFileId(fid, (entry) => ({ ...entry, status: "downloading", progress: 0, error: null }));
+          store.set({ status: `HTTP-скачивание недоступно (${errMsg || "download_failed"}). Резервный канал…` });
+          try {
+            send({ type: "file_get", file_id: fid });
+            touchFileGetTimeout(fid);
+            return;
+          } catch {
+            // ignore
+          }
+        }
+        debugHook("file.http.error", {
+          fileId: fid,
+          reason: errMsg,
+          canFallback,
+          silent,
+          size: meta.size || 0,
+        });
+        rejectHttpFileUrlWaiter(fid, "download_failed");
+        clearSilentFileGet(fid);
+        finishFileGet(fid);
+        pendingFileDownloads.delete(fid);
+        clearPendingFileViewer(fid);
+        const download = downloadByFileId.get(fid);
+        if (download?.streamId) postStreamError(download.streamId, "http_download_failed");
+        downloadByFileId.delete(fid);
+        updateTransferByFileId(fid, (entry) => ({ ...entry, status: "error", error: "download_failed" }));
+        if (!silent) store.set({ status: "Ошибка файла: download_failed" });
+      } finally {
+        httpAbortQuiet.delete(fid);
+        httpInFlight.delete(fid);
+        scheduleHttpDrain();
+      }
+    })();
+  };
+
+  const drainHttpQueue = () => {
+    const st = store.get();
+    if (!st.authed || st.conn !== "connected") return;
+
+    promoteUserRequestedPrefetchToHigh();
+
+    while (httpQueueHigh.length && httpInFlight.size < HTTP_MAX_CONCURRENCY) {
+      const fid = httpQueueHigh.shift();
+      if (!fid) continue;
+      if (!httpQueueMeta.has(fid)) continue;
+      startHttpDownloadTask(fid, "high");
+    }
+
+    if (!canPrefetchHttp()) return;
+    while (
+      httpQueuePrefetch.length &&
+      httpInFlight.size < HTTP_MAX_CONCURRENCY &&
+      httpQueueState().inflight_prefetch < HTTP_PREFETCH_CONCURRENCY
+    ) {
+      const fid = httpQueuePrefetch.shift();
+      if (!fid) continue;
+      if (!httpQueueMeta.has(fid)) continue;
+      startHttpDownloadTask(fid, "prefetch");
+    }
+  };
+
   const httpLegacyFallbackAttempted = new Set<string>();
   const debugHook = (kind: string, data?: any) => {
     try {
@@ -164,6 +513,26 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       // ignore
     }
   };
+
+  let lastDrainConn = store.get().conn;
+  let lastDrainAuthed = store.get().authed;
+  let lastDrainLeader = store.get().netLeader;
+  store.subscribe(() => {
+    const st = store.get();
+    const conn = st.conn;
+    const authed = st.authed;
+    const leader = st.netLeader;
+    if (conn === lastDrainConn && authed === lastDrainAuthed && leader === lastDrainLeader) return;
+    lastDrainConn = conn;
+    lastDrainAuthed = authed;
+    lastDrainLeader = leader;
+    scheduleHttpDrain();
+  });
+  try {
+    document.addEventListener("visibilitychange", scheduleHttpDrain, { passive: true });
+  } catch {
+    // ignore
+  }
 
   function handleFileDownloadBegin(msg: any): boolean {
     const fileId = String(msg?.file_id ?? "").trim();
@@ -373,7 +742,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       }
     }
 
-    if (httpDownloadInFlight.has(fileId)) return true;
+    if (isHttpQueuedOrActive(fileId)) return true;
 
     const existing = downloadByFileId.get(fileId);
     const streamId = existing?.streamId ? String(existing.streamId) : null;
@@ -395,202 +764,23 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "downloading", progress: 0, ...(mime ? { mime } : {}) }));
     if (!silent) store.set({ status: `Скачивание: ${name || fileId}` });
 
-    debugHook("file.http.start", {
+    const userRequested = pendingFileDownloads.has(fileId);
+    const priority: HttpDownloadPriority = silent && !userRequested ? "prefetch" : "high";
+    debugHook("file.http.enqueue", {
       fileId,
       name,
       size,
       stream: streaming,
       silent,
+      priority,
       expectedMime: mime || null,
+      ...httpQueueState(),
     });
-    httpDownloadInFlight.add(fileId);
-    void (async () => {
-      try {
-        const baseDelayMs = deviceCaps.slowNetwork ? 900 : deviceCaps.constrained ? 650 : 400;
-        const download = downloadByFileId.get(fileId);
-        if (!download) throw new Error("missing_download_state");
-
-        const result = await resumableHttpDownload({
-          url,
-          offset: download.received,
-          etag: download.etag ?? null,
-          expectedSize: size || 0,
-          maxRetries: 6,
-          baseDelayMs,
-          maxDelayMs: 8000,
-          maxUrlRefresh: 2,
-          refreshUrl: async () => (await requestFreshHttpDownloadUrl(fileId)).url,
-          onReset: (reason) => {
-            const cur = downloadByFileId.get(fileId);
-            if (!cur) return;
-            if (cur.streaming && cur.streamId) throw new Error(`http_download_reset_${reason}`);
-            cur.chunks = [];
-            cur.received = 0;
-            cur.lastProgress = 0;
-            cur.etag = null;
-            debugHook("file.http.reset", { fileId, reason });
-            updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "downloading", progress: 0, ...(mime ? { mime } : {}) }));
-          },
-          onChunk: (chunk) => {
-            const cur = downloadByFileId.get(fileId);
-            if (!cur) throw new Error("missing_download_state");
-            if (cur.streaming && cur.streamId) {
-              const okPost = postStreamChunk(cur.streamId, chunk);
-              if (!okPost) throw new Error("stream_post_failed");
-              return;
-            }
-            const buf = (chunk.buffer as ArrayBuffer).slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-            cur.chunks.push(buf);
-          },
-          onProgress: ({ received, total }) => {
-            const cur = downloadByFileId.get(fileId);
-            if (!cur) return;
-            cur.received = received;
-            if (typeof total === "number" && Number.isFinite(total) && total > 0 && (!cur.size || cur.size <= 0)) {
-              cur.size = Math.trunc(total);
-            }
-            touchFileGetTimeout(fileId);
-            const denom = cur.size > 0 ? cur.size : typeof total === "number" && total > 0 ? total : 0;
-            const pct = denom > 0 ? Math.min(100, Math.round((cur.received / denom) * 100)) : 0;
-            if (pct !== cur.lastProgress) {
-              cur.lastProgress = pct;
-              updateTransferByFileId(fileId, (entry) => ({ ...entry, progress: pct, status: "downloading" }));
-            }
-          },
-        });
-
-        const final = downloadByFileId.get(fileId);
-        if (!final) throw new Error("missing_download_state");
-        final.etag = result.etag ?? null;
-        debugHook("file.http.complete", {
-          fileId,
-          name,
-          size: final.size,
-          received: result.received,
-          total: result.total,
-          mime: final.mime || result.mime || null,
-          streaming: Boolean(final.streaming),
-          silent,
-        });
-
-        downloadByFileId.delete(fileId);
-        clearSilentFileGet(fileId);
-        finishFileGet(fileId);
-        if (!silent) {
-          try {
-            send({ type: "file_downloaded", file_id: fileId });
-          } catch {
-            // ignore
-          }
-        }
-
-        if (final.streaming && final.streamId) {
-          postStreamEnd(final.streamId);
-          updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "complete", progress: 100, ...(mime ? { mime } : {}) }));
-          if (!silent) store.set({ status: `Скачивание завершено: ${name}` });
-          clearPendingFileViewer(fileId);
-          return;
-        }
-
-        const finalMime = mime || final.mime || result.mime || guessMimeTypeByName(name);
-        const blob = new Blob(final.chunks, { type: finalMime || undefined });
-        const objectUrl = URL.createObjectURL(blob);
-        updateTransferByFileId(fileId, (entry) => ({
-          ...entry,
-          status: "complete",
-          progress: 100,
-          url: objectUrl,
-          ...(finalMime ? { mime: finalMime } : {}),
-        }));
-        if (!silent) store.set({ status: `Файл готов: ${name}` });
-        try {
-          const st = store.get();
-          if (st.selfId && shouldCacheFile(name || "файл", finalMime, size || blob.size || 0)) {
-            void putCachedFileBlob(st.selfId, fileId, blob, {
-              name: name || "файл",
-              mime: finalMime,
-              size: size || blob.size || 0,
-            });
-            void enforceFileCachePolicy(st.selfId, { force: true });
-            clearCachedPreviewAttempt(st.selfId, fileId);
-          }
-        } catch {
-          // ignore
-        }
-        const pending = pendingFileDownloads.get(fileId);
-        if (pending) {
-          pendingFileDownloads.delete(fileId);
-          triggerBrowserDownload(objectUrl, pending.name || name || "файл");
-        }
-        const pv = takePendingFileViewer(fileId);
-        if (pv) {
-          const viewerName = pv.name || name || "файл";
-          const viewerSize = pv.size || size || blob.size || 0;
-          const viewerMime = finalMime || pv.mime || null;
-          store.set({
-            modal: buildFileViewerModalState({
-              fileId,
-              url: objectUrl,
-              name: viewerName,
-              size: viewerSize,
-              mime: viewerMime,
-              caption: pv.caption || null,
-              chatKey: pv.chatKey,
-              msgIdx: pv.msgIdx,
-            }),
-          });
-        }
-      } catch (err) {
-        const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
-        const canFallback =
-          !silent &&
-          !httpLegacyFallbackAttempted.has(fileId) &&
-          (err instanceof TypeError ||
-            /^http_\\d+$/.test(errMsg) ||
-            errMsg === "incomplete_body" ||
-            errMsg === "range_not_satisfiable");
-        if (canFallback) {
-          httpLegacyFallbackAttempted.add(fileId);
-          debugHook("file.http.fallback", { fileId, reason: errMsg, mode: "file_get" });
-          disableFileHttp(errMsg || "http_download_failed");
-          const cur = downloadByFileId.get(fileId);
-          if (cur) {
-            cur.chunks = [];
-            cur.received = 0;
-            cur.lastProgress = 0;
-            cur.etag = null;
-          }
-          updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "downloading", progress: 0, error: null }));
-          store.set({ status: `HTTP-скачивание недоступно (${errMsg || "download_failed"}). Резервный канал…` });
-          try {
-            send({ type: "file_get", file_id: fileId });
-            touchFileGetTimeout(fileId);
-            return;
-          } catch {
-            // ignore
-          }
-        }
-        debugHook("file.http.error", {
-          fileId,
-          reason: errMsg,
-          canFallback,
-          silent,
-          size: size || 0,
-        });
-        rejectHttpFileUrlWaiter(fileId, "download_failed");
-        clearSilentFileGet(fileId);
-        finishFileGet(fileId);
-        pendingFileDownloads.delete(fileId);
-        clearPendingFileViewer(fileId);
-        const download = downloadByFileId.get(fileId);
-        if (download?.streamId) postStreamError(download.streamId, "http_download_failed");
-        downloadByFileId.delete(fileId);
-        updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "error", error: "download_failed" }));
-        if (!silent) store.set({ status: "Ошибка файла: download_failed" });
-      } finally {
-        httpDownloadInFlight.delete(fileId);
-      }
-    })();
+    httpQueueMeta.set(fileId, { url, name, size, mime: mime ?? null, silent: Boolean(silent && !userRequested), queuedAtMs: Date.now() });
+    if (priority === "prefetch") httpQueuePrefetch.push(fileId);
+    else httpQueueHigh.push(fileId);
+    finishFileGet(fileId);
+    scheduleHttpDrain();
     return true;
   }
 
@@ -723,6 +913,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const silent = fileId ? isSilentFileGet(fileId) : false;
     debugHook("file.error", { fileId, reason: detail, silent, peer: peer || null });
     if (fileId) {
+      abortHttpDownload(fileId, `server:${detail}`);
       finishFileGet(fileId);
       dropFileGetQueue(fileId);
       const snap = store.get();
@@ -775,6 +966,33 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       if (t === "file_download_complete") return handleFileDownloadComplete(msg);
       if (t === "file_error") return handleFileError(msg);
       return false;
+    },
+    abortHttpDownload,
+    reset: () => {
+      httpResetToken += 1;
+      httpQueueHigh.length = 0;
+      httpQueuePrefetch.length = 0;
+      httpQueueMeta.clear();
+      httpLegacyFallbackAttempted.clear();
+      httpAbortQuiet.clear();
+      if (httpDrainTimer !== null) {
+        try {
+          window.clearTimeout(httpDrainTimer);
+        } catch {
+          // ignore
+        }
+        httpDrainTimer = null;
+      }
+      for (const [fid, entry] of Array.from(httpInFlight.entries())) {
+        httpAbortQuiet.add(fid);
+        try {
+          entry.controller.abort();
+        } catch {
+          // ignore
+        }
+      }
+      httpInFlight.clear();
+      downloadByFileId.clear();
     },
   };
 }

@@ -14,6 +14,7 @@ export interface LogoutFeatureDeps {
   onPwaPushLogout: () => void;
   resetFileGet: () => void;
   resetFileDownloadActions: () => void;
+  resetFileDownloads: () => void;
   resetPreviewWarmup: () => void;
   resetLoadedForUser: () => void;
   clearBoardScheduleTimer: () => void;
@@ -39,6 +40,7 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
     onPwaPushLogout,
     resetFileGet,
     resetFileDownloadActions,
+    resetFileDownloads,
     resetPreviewWarmup,
     resetLoadedForUser,
     clearBoardScheduleTimer,
@@ -79,6 +81,7 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
     onPwaPushLogout();
     resetFileGet();
     resetFileDownloadActions();
+    resetFileDownloads();
     resetPreviewWarmup();
 
     const toRevoke = (st.fileTransfers || [])
@@ -166,4 +169,3 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
 
   return { logout };
 }
-

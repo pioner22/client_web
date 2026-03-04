@@ -218,6 +218,20 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
   const enqueue = (fileId: string, opts?: { priority?: FileGetPriority; silent?: boolean }) => {
     const fid = String(fileId || "").trim();
     if (!fid) return;
+    const priority = opts?.priority ?? "high";
+    const silent = Boolean(opts?.silent);
+    if (priority === "prefetch" && (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden")) {
+      debugHook("file.get.enqueue.skip", { fileId: fid, reason: "prefetch_blocked", ...queueState() });
+      return;
+    }
+    if (priority === "prefetch" && silent && !store.get().netLeader) {
+      debugHook("file.get.enqueue.skip", { fileId: fid, reason: "not_leader", priority, silent, ...queueState() });
+      return;
+    }
+    if (isDownloadActive(fid)) {
+      debugHook("file.get.enqueue.skip", { fileId: fid, reason: "download_active", priority, silent, ...queueState() });
+      return;
+    }
     if (fileGetInFlight.has(fid) || isFileGetQueued(fid)) {
       debugHook("file.get.enqueue.skip", {
         fileId: fid,
@@ -226,9 +240,6 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
       });
       return;
     }
-    const priority = opts?.priority ?? "high";
-    if (priority === "prefetch" && (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden")) return;
-    const silent = Boolean(opts?.silent);
     fileGetQueueMeta.set(fid, { priority, silent });
     debugHook("file.get.enqueue", {
       fileId: fid,
