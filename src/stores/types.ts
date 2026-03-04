@@ -95,6 +95,8 @@ export interface ContextMenuTarget {
 export interface ContextMenuItem {
   id: string;
   label: string;
+  subLabel?: string;
+  meta?: string;
   icon?: string;
   danger?: boolean;
   disabled?: boolean;

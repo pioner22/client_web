@@ -17,6 +17,9 @@ export interface ForwardModalActions {
 type RowEntry = {
   row: HTMLElement;
   input: HTMLInputElement;
+  kind: TargetRef["kind"];
+  id: string;
+  title: string;
   search: string;
   section: HTMLElement;
 };
@@ -54,7 +57,7 @@ function makeRow(kind: TargetRef["kind"], id: string, title: string, sub: string
   const main = el("span", { class: "forward-row-main" }, mainChildren);
   const row = el("label", { class: "forward-row" }, [input, av, main]);
   const search = [title, sub || "", id].join(" ").toLowerCase();
-  return { row, input, search, section: row };
+  return { row, input, kind, id, title, search, section: row };
 }
 
 function appendSection(
@@ -85,6 +88,7 @@ export function renderForwardModal(
   groups: GroupEntry[],
   boards: BoardEntry[],
   profiles: Record<string, UserProfile>,
+  recentTargets: TargetRef[] | null | undefined,
   message: string | undefined,
   actions: ForwardModalActions
 ): HTMLElement {
@@ -125,6 +129,7 @@ export function renderForwardModal(
   const warnLine = el("div", { class: "modal-warn" }, [message || ""]);
 
   const listWrap = el("div", { class: "forward-list" });
+  const chipsWrap = el("div", { class: "forward-chips hidden", id: "forward-chips" });
 
   const friendRows = (friends || []).map((f) => {
     const id = String(f.id || "").trim();
@@ -150,6 +155,53 @@ export function renderForwardModal(
     return makeRow("board", id, title, sub);
   });
 
+  const rowByKey = new Map<string, RowEntry>();
+  const allRows = [...friendRows, ...groupRows, ...boardRows];
+  for (const row of allRows) {
+    const key = `${row.kind}:${row.id}`;
+    if (!rowByKey.has(key)) rowByKey.set(key, row);
+  }
+
+  const recentTargetsSafe = Array.isArray(recentTargets) ? recentTargets : [];
+  const recentKeySet = new Set<string>();
+  const recentRows = recentTargetsSafe
+    .map((t) => {
+      const kind = t && (t.kind === "dm" || t.kind === "group" || t.kind === "board") ? t.kind : null;
+      const id = t ? String(t.id || "").trim() : "";
+      if (!kind || !id) return null;
+      const key = `${kind}:${id}`;
+      if (recentKeySet.has(key)) return null;
+      recentKeySet.add(key);
+      const row = rowByKey.get(key) || null;
+      if (!row) return null;
+      const main = row.row.querySelector(".forward-row-main")?.cloneNode(true) as HTMLElement | null;
+      const av = avatar(kind, id);
+      av.classList.add("forward-row-avatar");
+      const check = el("span", { class: "forward-row-check", "aria-hidden": "true" }, ["✓"]);
+      const btn = el("button", {
+        class: "forward-row forward-row-recent",
+        type: "button",
+        "data-forward-kind": kind,
+        "data-forward-id": id,
+      }, [av, ...(main ? [main] : []), check]) as HTMLButtonElement;
+      return btn;
+    })
+    .filter((x): x is HTMLButtonElement => Boolean(x))
+    .slice(0, 10);
+
+  const recentSection =
+    recentRows.length
+      ? (() => {
+          const section = el("div", { class: "forward-section forward-section-recent" });
+          const header = el("div", { class: "forward-section-title" }, ["Недавние"]);
+          const body = el("div", { class: "forward-section-body" });
+          recentRows.forEach((row) => body.append(row));
+          section.append(header, body);
+          listWrap.append(section);
+          return section;
+        })()
+      : null;
+
   const sections = [
     appendSection(listWrap, "Контакты", friendRows, "Нет контактов"),
     appendSection(listWrap, "Чаты", groupRows, "Нет чатов"),
@@ -164,19 +216,68 @@ export function renderForwardModal(
     const count = selected.length;
     btnSend.toggleAttribute("disabled", count === 0);
     selectionLine.textContent = count ? `Выбрано: ${count}` : "Выберите получателей";
+
+    const chipItems = Array.from(selected)
+      .map((input) => {
+        const kind = String(input.getAttribute("data-forward-kind") || "").trim() as TargetRef["kind"];
+        const id = String(input.value || "").trim();
+        const key = `${kind}:${id}`;
+        const row = rowByKey.get(key);
+        const title = row?.title || id || "—";
+        return { input, kind, id, title };
+      })
+      .filter((x) => x.id && (x.kind === "dm" || x.kind === "group" || x.kind === "board"));
+
+    if (!chipItems.length) {
+      chipsWrap.classList.add("hidden");
+      chipsWrap.replaceChildren();
+    } else {
+      chipsWrap.classList.remove("hidden");
+      chipsWrap.replaceChildren(
+        ...chipItems.map(({ input, kind, id, title }) => {
+          const av = avatar(kind, id);
+          av.classList.add("forward-chip-avatar");
+          const btn = el("button", { class: "forward-chip", type: "button", title }, [
+            av,
+            el("span", { class: "forward-chip-label" }, [title]),
+            el("span", { class: "forward-chip-x", "aria-hidden": "true" }, ["×"]),
+          ]) as HTMLButtonElement;
+          btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            input.checked = false;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+          });
+          return btn;
+        })
+      );
+    }
+
+    if (recentSection) {
+      for (const row of recentRows) {
+        const kind = String(row.getAttribute("data-forward-kind") || "").trim() as TargetRef["kind"];
+        const id = String(row.getAttribute("data-forward-id") || "").trim();
+        const key = `${kind}:${id}`;
+        const input = rowByKey.get(key)?.input || null;
+        row.classList.toggle("is-selected", Boolean(input && input.checked));
+      }
+    }
   };
 
   const applyFilter = (raw: string) => {
     const query = String(raw || "").trim().toLowerCase();
     let anyVisible = false;
+    const hideRecents = Boolean(query);
+    if (recentSection) recentSection.classList.toggle("hidden", hideRecents);
     sections.forEach((section) => {
       let sectionVisible = false;
+      if (!section.rows.length && !query) sectionVisible = true;
       section.rows.forEach((row) => {
-        const visible = !query || row.search.includes(query);
+        const hiddenByRecents = !query && recentKeySet.size ? recentKeySet.has(`${row.kind}:${row.id}`) : false;
+        const visible = (!query || row.search.includes(query)) && !hiddenByRecents;
         row.row.classList.toggle("hidden", !visible);
         if (visible) sectionVisible = true;
       });
-      section.section.classList.toggle("hidden", !sectionVisible && Boolean(query));
+      section.section.classList.toggle("hidden", !sectionVisible);
       if (sectionVisible) anyVisible = true;
     });
     noResults.classList.toggle("hidden", anyVisible || !query);
@@ -190,6 +291,21 @@ export function renderForwardModal(
   });
 
   queryInput.addEventListener("input", () => applyFilter(queryInput.value));
+
+  if (recentSection) {
+    recentSection.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement | null)?.closest("button.forward-row-recent") as HTMLButtonElement | null;
+      if (!btn) return;
+      e.preventDefault();
+      const kind = String(btn.getAttribute("data-forward-kind") || "").trim() as TargetRef["kind"];
+      const id = String(btn.getAttribute("data-forward-id") || "").trim();
+      const key = `${kind}:${id}`;
+      const input = rowByKey.get(key)?.input || null;
+      if (!input) return;
+      input.checked = !input.checked;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
 
   const submit = () => {
     const inputs = Array.from(box.querySelectorAll<HTMLInputElement>("input[data-forward-kind]:checked"));
@@ -225,6 +341,7 @@ export function renderForwardModal(
       commentInput,
       options,
       queryInput,
+      chipsWrap,
       selectionLine,
       listWrap,
     ]),

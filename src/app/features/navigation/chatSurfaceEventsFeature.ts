@@ -1,6 +1,8 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { messageSelectionKey } from "../../../helpers/chat/chatSelection";
+import { ensureChatMessageLoadedById } from "../../../helpers/chat/ensureHistoryMessage";
 import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
+import { formatTime } from "../../../helpers/time";
 import type { ChatSearchFilter } from "../../../helpers/chat/chatSearch";
 import type { Layout } from "../../../components/layout/types";
 import type { Store } from "../../../stores/store";
@@ -151,6 +153,8 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
     setChatSearchQuery,
     openEmojiPopoverForReaction,
   } = deps;
+
+  let pinnedJumpSeq = 0;
 
   const chatSelectionAnchor = {
     get: getChatSelectionAnchorIdx,
@@ -525,20 +529,45 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
         if (!key || !Array.isArray(ids) || !ids.length) return;
         e.preventDefault();
         const conv = st.conversations[key] || [];
-        const formatPreview = (id: number): string => {
-          const msg = conv.find((m) => typeof m.id === "number" && m.id === id) || null;
-          if (!msg) return `Сообщение #${id}`;
-          const text = String((msg as any)?.text || "").replace(/\s+/g, " ").trim();
-          if (text && !text.startsWith("[file]")) return text;
-          const att = (msg as any)?.attachment;
-          if (att?.kind === "file") return `Файл: ${String(att.name || "файл")}`;
-          return `Сообщение #${id}`;
+        const selfId = st.selfId ? String(st.selfId).trim() : "";
+        const profiles = st.profiles || {};
+        const userLabel = (uidRaw: string): string => {
+          const uid = String(uidRaw || "").trim();
+          if (!uid) return "—";
+          if (selfId && uid === selfId) return "Вы";
+          const p = profiles[uid];
+          const display = p?.display_name ? String(p.display_name).trim() : "";
+          if (display) return display;
+          const handle = p?.handle ? String(p.handle).trim() : "";
+          if (handle) return handle.startsWith("@") ? handle : `@${handle}`;
+          return uid;
         };
-        const items: ContextMenuItem[] = ids.map((id, idx) => ({
-          id: `pinned_jump:${id}`,
-          label: ids.length > 1 ? `${idx + 1}. ${formatPreview(id)}` : formatPreview(id),
-          icon: "📌",
-        }));
+        const formatPreview = (id: number): { label: string; subLabel: string; meta?: string } => {
+          const msg = conv.find((m) => typeof m.id === "number" && m.id === id) || null;
+          if (!msg) return { label: `Сообщение #${id}`, subLabel: "Не загружено" };
+          const rawText = String((msg as any)?.text || "").replace(/\s+/g, " ").trim();
+          const text = rawText && !rawText.startsWith("[file]") ? rawText : "";
+          const att = (msg as any)?.attachment;
+          const base =
+            text ||
+            (att?.kind === "file" ? `Файл: ${String(att.name || "файл")}` : "") ||
+            `Сообщение #${id}`;
+          const label = base.length > 90 ? `${base.slice(0, 87)}…` : base;
+          const from = String((msg as any)?.from || "").trim();
+          const subLabel = from ? userLabel(from) : "—";
+          const ts = typeof (msg as any)?.ts === "number" && Number.isFinite((msg as any).ts) ? formatTime((msg as any).ts) : "";
+          return { label, subLabel, ...(ts ? { meta: ts } : {}) };
+        };
+        const items: ContextMenuItem[] = ids.map((id) => {
+          const preview = formatPreview(id);
+          return {
+            id: `pinned_jump:${id}`,
+            label: preview.label,
+            subLabel: preview.subLabel,
+            ...(preview.meta ? { meta: preview.meta } : {}),
+            icon: "📌",
+          };
+        });
         if (ids.length > 1) {
           items.push({ id: "sep-unpin-all", label: "", separator: true });
           items.push({ id: "pinned_unpin_all", label: "Открепить все", icon: "🗑️", danger: true });
@@ -563,7 +592,88 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
 
       const pinnedJumpBtn = target?.closest("button[data-action='chat-pinned-jump']") as HTMLButtonElement | null;
       if (pinnedJumpBtn) {
-        if (pinnedMessagesUiActions.jumpToActiveForSelected()) e.preventDefault();
+        if (pinnedMessagesUiActions.jumpToActiveForSelected()) {
+          e.preventDefault();
+          return;
+        }
+        const st = store.get();
+        const key = st.selected ? conversationKey(st.selected) : "";
+        const ids = key ? st.pinnedMessages[key] : null;
+        if (!key || !Array.isArray(ids) || !ids.length) return;
+        const activeRaw = st.pinnedMessageActive?.[key];
+        const activeId = typeof activeRaw === "number" && ids.includes(activeRaw) ? activeRaw : ids[0];
+        if (typeof activeId !== "number" || !Number.isFinite(activeId) || activeId <= 0) return;
+        e.preventDefault();
+
+        // Ensure active pinned id is always valid (avoid stale storage).
+        if (st.pinnedMessageActive?.[key] !== activeId) {
+          store.set((prev) => ({ ...prev, pinnedMessageActive: { ...prev.pinnedMessageActive, [key]: activeId } }));
+        }
+
+        const jumpWithVirtualStart = (idx: number) => {
+          const start = Math.max(0, idx - 80);
+          store.set((prev) => ({
+            ...prev,
+            historyVirtualStart: { ...(prev.historyVirtualStart || {}), [key]: start },
+          }));
+          window.setTimeout(() => {
+            pinnedMessagesUiActions.jumpToActiveForSelected();
+          }, 0);
+        };
+
+        const conv = st.conversations[key] || [];
+        const idx = conv.findIndex((m) => typeof m?.id === "number" && Number.isFinite(m.id) && m.id === activeId);
+        if (idx >= 0) {
+          jumpWithVirtualStart(idx);
+          return;
+        }
+
+        pinnedJumpSeq += 1;
+        const seq = pinnedJumpSeq;
+        let cancelled = false;
+        showToast("Загружаем историю…", {
+          kind: "info",
+          timeoutMs: 25000,
+          actions: [{ id: "cancel", label: "Отменить", onClick: () => { cancelled = true; } }],
+        });
+        void (async () => {
+          const shouldCancel = () => {
+            if (cancelled) return true;
+            if (seq !== pinnedJumpSeq) return true;
+            const snap = store.get();
+            const snapKey = snap.selected ? conversationKey(snap.selected) : "";
+            return snapKey !== key;
+          };
+          const res = await ensureChatMessageLoadedById({
+            store,
+            send,
+            chatKey: key,
+            msgId: activeId,
+            maxPages: 10,
+            limit: 200,
+            stepTimeoutMs: 2600,
+            shouldCancel,
+          });
+          if (shouldCancel()) return;
+          if (res.status === "found") {
+            showToast("История загружена", { kind: "success", timeoutMs: 2500 });
+            jumpWithVirtualStart(res.idx);
+            return;
+          }
+          if (res.status === "cancelled") {
+            showToast("Отменено", { kind: "info", timeoutMs: 2500 });
+            return;
+          }
+          if (res.status === "no_conn") {
+            showToast("Нет соединения", { kind: "warn", timeoutMs: 6000 });
+            return;
+          }
+          if (res.status === "timeout") {
+            showToast("Не удалось загрузить историю (таймаут)", { kind: "warn", timeoutMs: 7000 });
+            return;
+          }
+          showToast("Сообщение недоступно", { kind: "info", timeoutMs: 6000 });
+        })();
         return;
       }
 

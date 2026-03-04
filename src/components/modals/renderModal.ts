@@ -56,6 +56,65 @@ function resolveUserLabel(state: AppState, id: string): { label: string; handle:
   return { label: pid, handle: "" };
 }
 
+function forwardRecentTargets(state: AppState, limit = 10): TargetRef[] {
+  const max = Math.max(0, Math.min(24, Math.trunc(Number(limit) || 0)));
+  if (!max) return [];
+
+  const topPeerTs = new Map<string, number>();
+  for (const entry of state.topPeers || []) {
+    const id = String((entry as any)?.id || "").trim();
+    const ts = Number((entry as any)?.last_ts ?? 0);
+    if (!id || !Number.isFinite(ts) || ts <= 0) continue;
+    const prev = topPeerTs.get(id) ?? 0;
+    if (ts > prev) topPeerTs.set(id, ts);
+  }
+
+  const lastTs = (key: string): number => {
+    const conv = state.conversations?.[key] || [];
+    const last = conv.length ? conv[conv.length - 1] : null;
+    const ts = Number((last as any)?.ts ?? 0);
+    return Number.isFinite(ts) && ts > 0 ? ts : 0;
+  };
+
+  const items: Array<{ t: TargetRef; ts: number }> = [];
+
+  for (const f of state.friends || []) {
+    const id = String(f?.id || "").trim();
+    if (!id) continue;
+    const ts = Math.max(lastTs(`dm:${id}`), topPeerTs.get(id) ?? 0);
+    if (ts <= 0) continue;
+    items.push({ t: { kind: "dm", id }, ts });
+  }
+
+  for (const g of state.groups || []) {
+    const id = String(g?.id || "").trim();
+    if (!id) continue;
+    const ts = lastTs(`room:${id}`);
+    if (ts <= 0) continue;
+    items.push({ t: { kind: "group", id }, ts });
+  }
+
+  for (const b of state.boards || []) {
+    const id = String(b?.id || "").trim();
+    if (!id) continue;
+    const ts = lastTs(`room:${id}`);
+    if (ts <= 0) continue;
+    items.push({ t: { kind: "board", id }, ts });
+  }
+
+  items.sort((a, b) => b.ts - a.ts);
+  const seen = new Set<string>();
+  const out: TargetRef[] = [];
+  for (const item of items) {
+    const key = `${item.t.kind}:${item.t.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item.t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 function buildFileViewerMeta(state: AppState, modal: Extract<AppState["modal"], { kind: "file_viewer" }>): FileViewerMeta | null {
   const chatKey = modal.chatKey ? String(modal.chatKey) : "";
   const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
@@ -187,7 +246,8 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
           ? [modal.forwardDraft]
           : [];
     if (!drafts.length) return null;
-    return renderForwardModal(drafts, state.friends || [], state.groups || [], state.boards || [], state.profiles || {}, modal.message, {
+    const recents = forwardRecentTargets(state, 10);
+    return renderForwardModal(drafts, state.friends || [], state.groups || [], state.boards || [], state.profiles || {}, recents, modal.message, {
       onSend: actions.onForwardSend,
       onCancel: actions.onClose,
     });

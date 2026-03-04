@@ -399,7 +399,9 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
       addGroup(fileGroup);
 
       const extraGroup: ContextMenuItem[] = [];
-      extraGroup.push(makeItem("msg_quote", selectedText ? "Цитировать выделенное" : "Цитировать", "❝", { disabled: !canReply || helperBlocked }));
+      if (selectedText) {
+        extraGroup.push(makeItem("msg_quote", "Цитировать выделенное", "❝", { disabled: !canReply || helperBlocked }));
+      }
       if (selectedText) extraGroup.push(makeItem("msg_search_selection", "Искать выделенное", "🔍", { disabled: !msg }));
       if (hasReactions && msgId !== null && msgId > 0) extraGroup.push(makeItem("msg_reactions", "Реакции…", "😊", { disabled: !msg }));
       if (translateText) extraGroup.push(makeItem("msg_translate", "Перевести", "🌐"));

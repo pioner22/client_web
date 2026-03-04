@@ -105,13 +105,18 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     if (it.separator) {
       return el("div", { class: "ctx-sep", role: "separator", "aria-hidden": "true" });
     }
-    const cls = it.danger ? "ctx-item ctx-danger" : "ctx-item";
+    const clsBase = it.danger ? "ctx-item ctx-danger" : "ctx-item";
+    const cls = it.subLabel ? `${clsBase} ctx-item-multiline` : clsBase;
     const icon = it.icon ? el("span", { class: "ctx-icon", "aria-hidden": "true" }, [it.icon]) : null;
-    const label = el("span", { class: "ctx-label" }, [it.label]);
+    const main = el("span", { class: "ctx-main" }, [
+      el("span", { class: "ctx-label" }, [it.label]),
+      ...(it.subLabel ? [el("span", { class: "ctx-sub" }, [it.subLabel])] : []),
+    ]);
+    const meta = it.meta ? el("span", { class: "ctx-meta" }, [it.meta]) : null;
     const btn = el(
       "button",
       { class: cls, type: "button", role: "menuitem", ...(it.disabled ? { disabled: "true" } : {}) },
-      [...(icon ? [icon] : []), label]
+      [...(icon ? [icon] : []), main, ...(meta ? [meta] : [])]
     ) as HTMLButtonElement;
     btn.addEventListener("click", () => {
       if (btn.disabled) return;

@@ -4,6 +4,7 @@ import { saveChatFoldersForUser, sanitizeChatFoldersSnapshot } from "../../../he
 import { sanitizePins, savePinsForUser, togglePin } from "../../../helpers/chat/pins";
 import { isPinnedMessage, savePinnedMessagesForUser } from "../../../helpers/chat/pinnedMessages";
 import { updateOutboxEntry } from "../../../helpers/chat/outbox";
+import { ensureChatMessageLoadedById } from "../../../helpers/chat/ensureHistoryMessage";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
 import { avatarKindForTarget } from "../avatar/avatarFeature";
@@ -134,6 +135,8 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
     ensureVirtualHistoryIndexVisible,
   } = deps;
 
+  let pinnedJumpSeq = 0;
+
   async function handleContextMenuAction(itemId: string) {
     const st = store.get();
     const modal = st.modal;
@@ -155,14 +158,71 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
       const conv = st.conversations[key] || [];
       const idx = conv.findIndex((m) => typeof (m as any)?.id === "number" && (m as any).id === msgId);
       close();
-      if (idx < 0) {
-        showToast("Сообщение пока не загружено", { kind: "info" });
+      store.set((prev) => ({ ...prev, pinnedMessageActive: { ...prev.pinnedMessageActive, [key]: msgId } }));
+      const doJump = (index: number) => {
+        const snap = store.get();
+        const list = snap.conversations[key] || [];
+        const searchActive = Boolean(snap.chatSearchOpen && snap.chatSearchQuery.trim());
+        ensureVirtualHistoryIndexVisible?.(key, list.length, index, searchActive);
+        if (!ensureVirtualHistoryIndexVisible) {
+          store.set((prev) => ({
+            ...prev,
+            historyVirtualStart: { ...(prev.historyVirtualStart || {}), [key]: Math.max(0, index - 80) },
+          }));
+        }
+        window.setTimeout(() => jumpToChatMsgIdx(index), 0);
+      };
+      if (idx >= 0) {
+        doJump(idx);
         return;
       }
-      store.set((prev) => ({ ...prev, pinnedMessageActive: { ...prev.pinnedMessageActive, [key]: msgId } }));
-      const searchActive = Boolean(st.chatSearchOpen && st.chatSearchQuery.trim());
-      ensureVirtualHistoryIndexVisible?.(key, conv.length, idx, searchActive);
-      window.setTimeout(() => jumpToChatMsgIdx(idx), 0);
+
+      pinnedJumpSeq += 1;
+      const seq = pinnedJumpSeq;
+      let cancelled = false;
+      showToast("Загружаем историю…", {
+        kind: "info",
+        timeoutMs: 25000,
+        actions: [{ id: "cancel", label: "Отменить", onClick: () => { cancelled = true; } }],
+      });
+      void (async () => {
+        const shouldCancel = () => {
+          if (cancelled) return true;
+          if (seq !== pinnedJumpSeq) return true;
+          const snap = store.get();
+          const snapKey = snap.selected ? conversationKey(snap.selected) : "";
+          return snapKey !== key;
+        };
+        const res = await ensureChatMessageLoadedById({
+          store,
+          send,
+          chatKey: key,
+          msgId,
+          maxPages: 10,
+          limit: 200,
+          stepTimeoutMs: 2600,
+          shouldCancel,
+        });
+        if (shouldCancel()) return;
+        if (res.status === "found") {
+          showToast("История загружена", { kind: "success", timeoutMs: 2500 });
+          doJump(res.idx);
+          return;
+        }
+        if (res.status === "cancelled") {
+          showToast("Отменено", { kind: "info", timeoutMs: 2500 });
+          return;
+        }
+        if (res.status === "no_conn") {
+          showToast("Нет соединения", { kind: "warn", timeoutMs: 6000 });
+          return;
+        }
+        if (res.status === "timeout") {
+          showToast("Не удалось загрузить историю (таймаут)", { kind: "warn", timeoutMs: 7000 });
+          return;
+        }
+        showToast("Сообщение недоступно", { kind: "info", timeoutMs: 6000 });
+      })();
       return;
     }
 
@@ -737,11 +797,6 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
           close();
           return;
         }
-        const draft = buildHelperDraft(st, selKey, msg);
-        if (!draft) {
-          close();
-          return;
-        }
         const rawText = String(msg.text || "").replace(/\r\n?/g, "\n");
         const trimmedText = rawText.trimEnd();
         const text = trimmedText && !trimmedText.startsWith("[file]") ? trimmedText : "";
@@ -759,7 +814,7 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
         const prevValue = getComposerText();
         const base = prevValue.trimEnd();
         const nextInput = base ? `${base}\n\n${quoted}\n` : `${quoted}\n`;
-        store.set({ replyDraft: draft, forwardDraft: null });
+        store.set({ forwardDraft: null });
         applyComposerInput(nextInput);
         scheduleFocusComposer();
         close();
