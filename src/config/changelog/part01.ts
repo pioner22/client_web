@@ -2,7 +2,7 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
-    version: "0.1.730",
+    version: "0.1.731",
     date: "2026-03-04",
     improved: [
       "Пересылка: пикер получателей стал ближе к Telegram Web — единый список с сортировкой как в сайдбаре (закрепы/недавние).",
