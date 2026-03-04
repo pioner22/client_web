@@ -253,7 +253,6 @@ export type PageKind =
 export type AuthMode = "auto" | "register" | "login";
 
 export type MobileSidebarTab = "chats" | "contacts" | "boards" | "menu";
-export type SidebarChatFilter = "all" | "unread" | "mentions" | "dms" | "groups";
 
 export interface ChatFolderEntry {
   id: string;
@@ -462,7 +461,6 @@ export interface AppState {
   messageView: MessageViewMode;
 
   mobileSidebarTab: MobileSidebarTab;
-  sidebarChatFilter: SidebarChatFilter;
   sidebarFolderId: string;
   sidebarQuery: string;
   sidebarArchiveOpen: boolean;
@@ -493,6 +491,7 @@ export interface AppState {
   selected: TargetRef | null;
   conversations: Record<string, ChatMessage[]>;
   historyLoaded: Record<string, boolean>;
+  historyPreviewOnly: Record<string, boolean>;
   historyCursor: Record<string, number>;
   historyHasMore: Record<string, boolean>;
   historyLoading: Record<string, boolean>;

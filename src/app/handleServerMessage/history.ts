@@ -251,8 +251,17 @@ export function handleHistoryServerMessage(
         ...prev,
         conversations: { ...prev.conversations, [key]: nextConv },
         outbox,
+        historyPreviewOnly: { ...prev.historyPreviewOnly, [key]: true },
       };
       return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
+    }
+
+    const shouldClearPreviewOnly = hasBefore && Number.isFinite(beforeIdValue) && beforeIdValue === 0;
+    const prevPreviewOnly = prev.historyPreviewOnly || {};
+    let nextPreviewOnly = prevPreviewOnly;
+    if (shouldClearPreviewOnly && prevPreviewOnly[key]) {
+      nextPreviewOnly = { ...prevPreviewOnly };
+      delete nextPreviewOnly[key];
     }
 
     const resolvedHasMore = cursorStalled ? false : hasMore;
@@ -263,6 +272,7 @@ export function handleHistoryServerMessage(
       conversations: { ...prev.conversations, [key]: nextConv },
       outbox,
       historyLoaded: { ...prev.historyLoaded, [key]: true },
+      historyPreviewOnly: nextPreviewOnly,
       historyCursor: cursor !== null ? { ...prevCursor, [key]: cursor } : prevCursor,
       historyHasMore: shouldUpdateHasMore ? { ...prevHasMoreMap, [key]: Boolean(resolvedHasMore) } : prevHasMoreMap,
       historyLoading: { ...prevLoadingMap, [key]: false },

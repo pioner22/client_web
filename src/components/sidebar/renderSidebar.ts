@@ -5,7 +5,7 @@ import { formatTime } from "../../helpers/time";
 import { focusElement } from "../../helpers/ui/focus";
 import { isIOS, isStandaloneDisplayMode } from "../../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
-import type { ActionModalPayload, AppState, ChatMessage, ContextMenuTargetKind, FriendEntry, MobileSidebarTab, PageKind, SidebarChatFilter, TargetRef } from "../../stores/types";
+import type { ActionModalPayload, AppState, ChatMessage, ContextMenuTargetKind, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 import {
   attentionHintForPeer,
   avatar,
@@ -32,7 +32,6 @@ export function renderSidebar(
   onCreateGroup: () => void,
   onCreateBoard: () => void,
   onSetMobileSidebarTab: (tab: MobileSidebarTab) => void,
-  onSetSidebarChatFilter: (filter: SidebarChatFilter) => void,
   onSetSidebarFolderId: (folderId: string) => void,
   onSetSidebarQuery: (query: string) => void,
   onAuthOpen: () => void,
@@ -62,7 +61,6 @@ export function renderSidebar(
         selectedId: string;
         mobileTab: string;
         sidebarQuery: string;
-        sidebarChatFilter: string;
         sidebarArchiveOpen: boolean;
         conn: string;
         authed: boolean;
@@ -97,7 +95,6 @@ export function renderSidebar(
     selectedId,
     mobileTab: String(state.mobileSidebarTab || ""),
     sidebarQuery: sidebarQueryRaw,
-    sidebarChatFilter: String(state.sidebarChatFilter || ""),
     sidebarArchiveOpen: state.sidebarArchiveOpen !== false,
     conn: String(state.conn || ""),
     authed: Boolean(state.authed),
@@ -129,7 +126,6 @@ export function renderSidebar(
     prevRender.selectedId === renderState.selectedId &&
     prevRender.mobileTab === renderState.mobileTab &&
     prevRender.sidebarQuery === renderState.sidebarQuery &&
-    prevRender.sidebarChatFilter === renderState.sidebarChatFilter &&
     prevRender.sidebarArchiveOpen === renderState.sidebarArchiveOpen &&
     prevRender.conn === renderState.conn &&
     prevRender.authed === renderState.authed &&
@@ -442,14 +438,6 @@ export function renderSidebar(
   const sel = state.selected;
   const sidebarQuery = sidebarQueryRaw.toLowerCase();
   const hasSidebarQuery = Boolean(sidebarQuery);
-  const sidebarChatFilter: SidebarChatFilter =
-    state.sidebarChatFilter === "unread" ||
-    state.sidebarChatFilter === "mentions" ||
-    state.sidebarChatFilter === "dms" ||
-    state.sidebarChatFilter === "groups"
-      ? state.sidebarChatFilter
-      : "all";
-  const effectiveChatFilter: SidebarChatFilter = hasSidebarQuery ? "all" : sidebarChatFilter;
   const body = (() => {
     const existing =
       typeof (target as HTMLElement | null)?.querySelector === "function"
@@ -562,84 +550,6 @@ export function renderSidebar(
     const unread = Math.max(0, Number(f.unread || 0) || 0);
     const attention = attnSet.has(id);
     return hasConv || hasDraft || unread > 0 || attention;
-  };
-
-
-  const isUnreadDialog = (opts: { unread: number; mention?: boolean; attention?: boolean }): boolean =>
-    opts.unread > 0 || Boolean(opts.mention) || Boolean(opts.attention);
-  const isMentionDialog = (opts: { mention?: boolean; attention?: boolean }): boolean =>
-    Boolean(opts.mention) || Boolean(opts.attention);
-  const passesSidebarChatFilter = (
-    mode: SidebarChatFilter,
-    opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }
-  ): boolean => {
-    if (mode === "unread") return isUnreadDialog(opts);
-    if (mode === "mentions") return isMentionDialog(opts);
-    if (mode === "dms") return opts.kind === "dm";
-    if (mode === "groups") return opts.kind === "group";
-    return true;
-  };
-
-  const unreadDialogsCount = (() => {
-    let count = 0;
-    for (const f of friendMap.values()) {
-      const unread = Math.max(0, Number(f.unread || 0) || 0);
-      const attention = attnSet.has(String(f.id || "").trim());
-      if (isUnreadDialog({ unread, attention })) count += 1;
-    }
-    for (const g of groups) {
-      const k = roomKey(g.id);
-      const unread = computeRoomUnread(k);
-      const mention = mentionForKey(k);
-      if (isUnreadDialog({ unread, mention })) count += 1;
-    }
-    return count;
-  })();
-  const mentionDialogsCount = (() => {
-    let count = 0;
-    for (const f of friendMap.values()) {
-      const id = String(f.id || "").trim();
-      if (!id) continue;
-      const attention = attnSet.has(id);
-      if (isMentionDialog({ attention })) count += 1;
-    }
-    for (const g of groups) {
-      const k = roomKey(g.id);
-      const mention = mentionForKey(k);
-      if (isMentionDialog({ mention })) count += 1;
-    }
-    return count;
-  })();
-
-  const buildChatFilters = (active: SidebarChatFilter, unreadCount: number, mentionCount: number): HTMLElement => {
-    const makeBtn = (value: SidebarChatFilter, label: string, badge?: string) => {
-      const btn = el(
-        "button",
-        {
-          class: active === value ? "sidebar-filter sidebar-filter-active" : "sidebar-filter",
-          type: "button",
-          role: "tab",
-          "aria-selected": String(active === value),
-          "aria-label": label,
-          title: label,
-        },
-        [label]
-      ) as HTMLButtonElement;
-      if (badge) {
-        btn.append(el("span", { class: "sidebar-filter-badge", "aria-hidden": "true" }, [badge]));
-      }
-      btn.addEventListener("click", () => onSetSidebarChatFilter(value));
-      return btn;
-    };
-    const badgeText = unreadCount > 99 ? "99+" : unreadCount > 0 ? String(unreadCount) : "";
-    const mentionText = mentionCount > 99 ? "99+" : mentionCount > 0 ? String(mentionCount) : "";
-    return el("div", { class: "sidebar-filters", role: "tablist", "aria-label": "Фильтр чатов" }, [
-      makeBtn("all", "Все"),
-      makeBtn("unread", "Непрочитанные", badgeText || undefined),
-      makeBtn("mentions", "Упоминания", mentionText || undefined),
-      makeBtn("dms", "Личные"),
-      makeBtn("groups", "Группы"),
-    ]);
   };
 
   const buildFolderTabs = (activeId: string, folders: any[]): HTMLElement | null => {
@@ -958,12 +868,12 @@ export function renderSidebar(
   if (isMobile) {
     renderSidebarMobile({
       target, state, body, isMobile, mobileUi,
-      forceResetScroll, hasSidebarQuery, effectiveChatFilter, unreadDialogsCount, mentionDialogsCount,
+      forceResetScroll, hasSidebarQuery,
       archiveToggle, chatArchiveToggle, boardArchiveToggle, chatArchiveOpen, boardArchiveOpen, archiveOpen,
       chatArchiveCount, boardArchiveCount, buildSidebarArchiveHint, buildSidebarArchiveEmpty,
       pinnedKeys, pinnedSet, archivedSet, groups, boards, sel, drafts,
       matchesQuery, matchesFriend, matchesRoom, isMuted, lastTsForKey, attnSet, mentionForKey, computeRoomUnread,
-      buildSidebarTabButton, buildSidebarSearchBar, buildChatFilters, passesSidebarChatFilter, buildFolderTabs, buildChatlist,
+      buildSidebarTabButton, buildSidebarSearchBar, buildFolderTabs, buildChatlist,
       setBodyChatlistClass, bindHeaderScroll, toggleClass, markCompactAvatarRows, dialogPriority, hasActiveDialogForFriend,
       unknownAttnPeers, contactCandidates, activeContacts, archivedContacts, buildContactRows, buildTopPeerContactRows,
       onSelect, onOpenUser, onSetPage, onCreateGroup, onCreateBoard, onAuthOpen, onAuthLogout,
@@ -1044,13 +954,8 @@ export function renderSidebar(
         : [...(searchBar ? [searchBar] : [])]),
     ]);
     const header = el("div", { class: "sidebar-header" }, [headerStack]);
-    const showChatFilters = false;
-    const chatFiltersRow = showChatFilters
-      ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount)
-      : null;
-    const chatFilterMode: SidebarChatFilter = showChatFilters ? effectiveChatFilter : "all";
-    const passesChatFilter = (opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean =>
-      passesSidebarChatFilter(chatFilterMode, opts);
+    const chatFiltersRow: HTMLElement | null = null;
+    const passesChatFilter = (_opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean => true;
 
     const chatFolders = Array.isArray((state as any).chatFolders) ? (state as any).chatFolders : [];
     const rawFolderId =
@@ -1531,11 +1436,8 @@ export function renderSidebar(
       : [searchBar]),
   ]);
   const header = el("div", { class: "sidebar-header" }, [headerStack]);
-  const showChatFilters = false;
-  const chatFiltersRow = showChatFilters ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount) : null;
-  const chatFilterMode: SidebarChatFilter = showChatFilters ? effectiveChatFilter : "all";
-  const passesChatFilter = (opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean =>
-    passesSidebarChatFilter(chatFilterMode, opts);
+  const chatFiltersRow: HTMLElement | null = null;
+  const passesChatFilter = (_opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean => true;
 
   const chatFolders = Array.isArray((state as any).chatFolders) ? (state as any).chatFolders : [];
   const rawFolderId =

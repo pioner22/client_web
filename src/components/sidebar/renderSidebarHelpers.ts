@@ -13,7 +13,6 @@ import type {
   FriendEntry,
   MobileSidebarTab,
   PageKind,
-  SidebarChatFilter,
   TargetRef,
 } from "../../stores/types";
 
@@ -330,4 +329,3 @@ export function roomRow(
   });
   return btn;
 }
-

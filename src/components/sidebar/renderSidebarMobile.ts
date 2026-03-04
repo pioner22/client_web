@@ -1,6 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
-import type { AppState, BoardEntry, FriendEntry, GroupEntry, MobileSidebarTab, PageKind, SidebarChatFilter, TargetRef } from "../../stores/types";
+import type { AppState, BoardEntry, FriendEntry, GroupEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 import { attentionHintForPeer, displayNameForFriend, friendRow, isRowMenuOpen, previewForConversation, roomRow } from "./renderSidebarHelpers";
 
 export type RenderSidebarMobileCtx = {
@@ -11,9 +11,6 @@ export type RenderSidebarMobileCtx = {
   mobileUi: boolean;
   forceResetScroll: boolean;
   hasSidebarQuery: boolean;
-  effectiveChatFilter: SidebarChatFilter;
-  unreadDialogsCount: number;
-  mentionDialogsCount: number;
   archiveToggle: HTMLElement | null;
   chatArchiveToggle: HTMLElement | null;
   boardArchiveToggle: HTMLElement | null;
@@ -41,11 +38,6 @@ export type RenderSidebarMobileCtx = {
   buildSidebarArchiveEmpty: (label: string) => HTMLElement;
   buildSidebarTabButton: (tab: MobileSidebarTab, activeTab: MobileSidebarTab, label: string) => HTMLButtonElement;
   buildSidebarSearchBar: (placeholder: string, opts?: { action?: HTMLElement }) => HTMLElement;
-  buildChatFilters: (active: SidebarChatFilter, unreadCount: number, mentionCount: number) => HTMLElement;
-  passesSidebarChatFilter: (
-    mode: SidebarChatFilter,
-    opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }
-  ) => boolean;
   buildFolderTabs: (activeId: string, folders: any[]) => HTMLElement | null;
   buildChatlist: (
     fixedRows: HTMLElement[],
@@ -83,9 +75,6 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
     mobileUi,
     forceResetScroll,
     hasSidebarQuery,
-    effectiveChatFilter,
-    unreadDialogsCount,
-    mentionDialogsCount,
     archiveToggle,
     chatArchiveToggle,
     boardArchiveToggle,
@@ -113,8 +102,6 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
     buildSidebarArchiveEmpty,
     buildSidebarTabButton,
     buildSidebarSearchBar,
-    buildChatFilters,
-    passesSidebarChatFilter,
     buildFolderTabs,
     buildChatlist,
     setBodyChatlistClass,
@@ -183,13 +170,8 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
     tabs,
     ...(searchBar ? [searchBar] : []),
   ]);
-  const showChatFilters = false;
-  const chatFiltersRow = showChatFilters
-    ? buildChatFilters(effectiveChatFilter, unreadDialogsCount, mentionDialogsCount)
-    : null;
-  const chatFilterMode: SidebarChatFilter = showChatFilters ? effectiveChatFilter : "all";
-  const passesChatFilter = (opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean =>
-    passesSidebarChatFilter(chatFilterMode, opts);
+  const chatFiltersRow: HTMLElement | null = null;
+  const passesChatFilter = (_opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean => true;
 
   const chatFolders = Array.isArray((state as any).chatFolders) ? (state as any).chatFolders : [];
   const rawFolderId =

@@ -16,7 +16,6 @@ import type {
   MobileSidebarTab,
   PageKind,
   SearchResultEntry,
-  SidebarChatFilter,
   TargetRef,
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";

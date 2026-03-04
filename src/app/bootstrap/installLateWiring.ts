@@ -375,7 +375,6 @@ export function installLateWiring(deps: any) {
     onRoomLeave: roomModerationActionsFeature.onRoomLeave,
     onRoomDisband: roomModerationActionsFeature.onRoomDisband,
     onSetMobileSidebarTab: setMobileSidebarTab,
-    onSetSidebarChatFilter: sidebarPreferencesActionsFeature.onSetSidebarChatFilter,
     onSetSidebarFolderId: sidebarPreferencesActionsFeature.onSetSidebarFolderId,
     onSetSidebarQuery: sidebarPreferencesActionsFeature.onSetSidebarQuery,
     onToggleSidebarArchive: sidebarPreferencesActionsFeature.onToggleSidebarArchive,

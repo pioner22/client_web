@@ -207,7 +207,22 @@ test("mobile sidebar: 4 вкладки (Контакты/Доски/Чаты/М�
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("chats"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(
+          target,
+          mkState("chats"),
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {}
+        );
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
         assert.deepEqual(labels, ["Контакты", "Доски", "Чаты", "Меню"]);
@@ -225,7 +240,22 @@ test("mobile sidebar: Контакты не содержат пункты мен
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("contacts"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(
+          target,
+          mkState("contacts"),
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {}
+        );
         assert.equal(hasText(target, "Поиск"), false);
         assert.equal(hasText(target, "Создать чат"), false);
         assert.equal(hasText(target, "Онлайн"), false);
@@ -243,7 +273,22 @@ test("mobile sidebar: Меню содержит навигацию/создан�
     withDomStubs(
       () => {
         const target = document.createElement("div");
-        helper.renderSidebar(target, mkState("menu"), () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(
+          target,
+          mkState("menu"),
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {}
+        );
         assert.equal(hasText(target, "Навигация"), true);
         assert.equal(hasText(target, "Поиск"), true);
         assert.equal(hasText(target, "Создать чат"), true);
@@ -301,8 +346,10 @@ test("mobile sidebar: поиск фильтрует список и вызыва
           () => {},
           () => {},
           () => {},
+          (q) => calls.push(String(q)),
           () => {},
-          (q) => calls.push(String(q))
+          () => {},
+          () => {}
         );
 
         assert.equal(hasText(target, "Алиса"), true);
@@ -354,7 +401,7 @@ test("mobile sidebar: Чаты = активные ЛС + группы (не ве
           drafts: {},
         };
 
-        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
 
         assert.equal(hasText(target, "111-111-111"), true);
         assert.equal(hasText(target, "Группа 1"), true);

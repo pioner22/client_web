@@ -1,6 +1,6 @@
 import { sanitizeChatFoldersSnapshot } from "../../../helpers/chat/folders";
 import type { Store } from "../../../stores/store";
-import type { AppState, SidebarChatFilter } from "../../../stores/types";
+import type { AppState } from "../../../stores/types";
 
 export interface SidebarPreferencesActionsFeatureDeps {
   store: Store<AppState>;
@@ -10,7 +10,6 @@ export interface SidebarPreferencesActionsFeatureDeps {
 }
 
 export interface SidebarPreferencesActionsFeature {
-  onSetSidebarChatFilter: (filter: SidebarChatFilter) => void;
   onSetSidebarFolderId: (folderId: string) => void;
   onSetSidebarQuery: (query: string) => void;
   onToggleSidebarArchive: () => void;
@@ -20,12 +19,6 @@ export function createSidebarPreferencesActionsFeature(
   deps: SidebarPreferencesActionsFeatureDeps
 ): SidebarPreferencesActionsFeature {
   const { store, sidebarBody, send, saveChatFoldersForUser } = deps;
-
-  const onSetSidebarChatFilter = (filter: SidebarChatFilter) => {
-    const next = filter === "unread" || filter === "mentions" || filter === "dms" || filter === "groups" ? filter : "all";
-    if (store.get().sidebarChatFilter === next) return;
-    store.set({ sidebarChatFilter: next });
-  };
 
   const onSetSidebarFolderId = (folderId: string) => {
     const st = store.get();
@@ -58,7 +51,6 @@ export function createSidebarPreferencesActionsFeature(
   };
 
   return {
-    onSetSidebarChatFilter,
     onSetSidebarFolderId,
     onSetSidebarQuery,
     onToggleSidebarArchive,
