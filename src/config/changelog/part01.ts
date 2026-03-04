@@ -2,6 +2,11 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.732",
+    date: "2026-03-04",
+    fixed: ["Пересылка: пункт «Переслать» в меню сообщения снова открывает окно выбора получателей (forward modal)."],
+  },
+  {
     version: "0.1.731",
     date: "2026-03-04",
     improved: [

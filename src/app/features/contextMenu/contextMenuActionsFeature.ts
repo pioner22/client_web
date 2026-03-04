@@ -1059,8 +1059,8 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
           close();
           return;
         }
-        openForwardModal(draft);
         close();
+        window.setTimeout(() => openForwardModal(draft), 0);
         return;
       }
 
