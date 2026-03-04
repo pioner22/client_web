@@ -53,6 +53,9 @@ let rightPanelTitleEl: HTMLElement | null = null;
 let rightPanelBodyEl: HTMLElement | null = null;
 let callModal: ReturnType<typeof createCallModal> | null = null;
 let callModalKey = "";
+let forwardModalPage: HTMLElement | null = null;
+let forwardModalNode: HTMLElement | null = null;
+let forwardModalKey = "";
 
 function formatDatetimeLocal(ms: number): string {
   const d = new Date(ms);
@@ -120,6 +123,36 @@ function contextMenuPayloadKey(payload: ContextMenuPayload, sheet: boolean): str
   } catch {
     return `${sheet ? 1 : 0}:${pos.x}:${pos.y}:${title}:${items.length}:${reactionBar ? 1 : 0}`;
   }
+}
+
+function forwardModalPayloadKey(modal: Extract<NonNullable<AppState["modal"]>, { kind: "forward_select" }>): string {
+  const drafts =
+    Array.isArray(modal.forwardDrafts) && modal.forwardDrafts.length
+      ? modal.forwardDrafts
+      : modal.forwardDraft
+        ? [modal.forwardDraft]
+        : [];
+  const parts = drafts
+    .map((d) => {
+      const key = String((d as any)?.key ?? "").trim();
+      const id = (d as any)?.id;
+      const localId = String((d as any)?.localId ?? "").trim();
+      const ref = id !== undefined && id !== null ? String(id) : localId;
+      return key && ref ? `${key}:${ref}` : key ? key : ref ? ref : "";
+    })
+    .filter(Boolean);
+  return parts.length ? parts.join("|") : "empty";
+}
+
+function disposeForwardModalCache() {
+  try {
+    (forwardModalNode as any)?.__disposeForwardModal?.();
+  } catch {
+    // ignore
+  }
+  forwardModalNode = null;
+  forwardModalPage = null;
+  forwardModalKey = "";
 }
 
 function formatSenderLabel(state: AppState, senderId: string): string {
@@ -698,8 +731,19 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     callModalKey = "";
   }
 
-  const modalNode =
-    state.modal?.kind === "call"
+  const forwardModal = state.modal?.kind === "forward_select" ? state.modal : null;
+  const forwardInline = !fullScreenActive && Boolean(forwardModal);
+  const forwardPageKey = forwardInline && forwardModal ? `${forwardModalPayloadKey(forwardModal)}:${mobileUi ? 1 : 0}` : "";
+  if (!forwardInline && forwardModalPage) {
+    disposeForwardModalCache();
+  } else if (forwardInline && forwardModalPage && forwardModalKey !== forwardPageKey) {
+    disposeForwardModalCache();
+  }
+  const reuseForwardPage = forwardInline && Boolean(forwardModalPage && forwardModalKey && forwardModalKey === forwardPageKey);
+
+  const modalNode = reuseForwardPage
+    ? null
+    : state.modal?.kind === "call"
       ? callModalNode
       : fullScreenKind
         ? fullScreenKind === "auth"
@@ -753,11 +797,23 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       }
     }
   }
-  if (inlineModal && modalNode) {
-    mountChat(
-      layout,
-      el("div", { class: "page modal-page" }, mobileUi ? [modalNode] : [modalNode, el("div", { class: "msg msg-sys" }, ["Esc — назад"])])
-    );
+  if (inlineModal && state.modal?.kind === "forward_select") {
+    if (reuseForwardPage && forwardModalPage) {
+      const warn = forwardModalPage.querySelector(".modal-warn") as HTMLElement | null;
+      if (warn) warn.textContent = state.modal.message || "";
+      mountChat(layout, forwardModalPage);
+    } else if (modalNode) {
+      forwardModalNode = modalNode;
+      forwardModalKey = forwardPageKey;
+      forwardModalPage = el(
+        "div",
+        { class: "page modal-page" },
+        mobileUi ? [modalNode] : [modalNode, el("div", { class: "msg msg-sys" }, ["Esc — назад"])]
+      );
+      mountChat(layout, forwardModalPage);
+    }
+  } else if (inlineModal && modalNode) {
+    mountChat(layout, el("div", { class: "page modal-page" }, mobileUi ? [modalNode] : [modalNode, el("div", { class: "msg msg-sys" }, ["Esc — назад"])]));
   } else if (state.page === "main") {
     const prevSearch = layout.chatTop.querySelector("#chat-search-input") as HTMLInputElement | null;
     const searchHadFocus = Boolean(prevSearch && document.activeElement === prevSearch);

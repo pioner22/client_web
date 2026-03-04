@@ -374,8 +374,9 @@
 }
 
 .forward-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 18px var(--avatar-size) 1fr;
+  grid-template-columns: var(--avatar-size) 1fr 18px;
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
@@ -398,10 +399,10 @@
   transform: translateY(1px);
 }
 
-.forward-row input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
+.forward-row-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .forward-row-main {
@@ -420,11 +421,6 @@
   color: var(--muted);
 }
 
-.forward-row.forward-row-recent {
-  grid-template-columns: var(--avatar-size) 1fr 18px;
-  text-align: left;
-}
-
 .forward-row-check {
   opacity: 0;
   color: var(--accent);
@@ -433,13 +429,22 @@
   justify-self: end;
 }
 
-.forward-row-recent.is-selected .forward-row-check {
+.forward-row.is-selected .forward-row-check {
   opacity: 1;
 }
 
-.forward-row-recent.is-selected {
+.forward-row.is-selected {
   border-color: color-mix(in srgb, var(--accent), transparent 45%);
   background: color-mix(in srgb, var(--accent), transparent 92%);
+}
+
+.forward-row.is-active {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 70%);
+}
+
+.forward-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 55%);
 }
 
 .forward-chips {

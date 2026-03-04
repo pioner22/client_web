@@ -2,12 +2,21 @@ import { el } from "../../../helpers/dom/el";
 import { applyLegacyIdMask } from "../../../helpers/id/legacyIdMask";
 import { normalizeMemberToken, statusForSearchResult, type MemberTokenStatus } from "../../../helpers/members/memberTokens";
 import { resolveMemberTokensForSubmit, type ResolveMemberTokensResult } from "../../../helpers/members/resolveMemberTokens";
+import { deriveServerSearchQuery } from "../../../helpers/search/serverSearchQuery";
 import type { Store } from "../../../stores/store";
 import type { AppState, SearchResultEntry } from "../../../stores/types";
 
 export type CreateMembersScope = "group_create" | "board_create";
 
 type MembersAddUiStatus = MemberTokenStatus;
+
+const FORWARD_SEARCH_DEBOUNCE_MS = 180;
+const FORWARD_SEARCH_TIMEOUT_MS = 2500;
+const FORWARD_SEARCH_TTL_MS = 10_000;
+
+const FORWARD_SEARCH_LOADING_EVENT = "yagodka:forward-search-loading";
+const FORWARD_SEARCH_RESULT_EVENT = "yagodka:forward-search-result";
+const FORWARD_SEARCH_CLEAR_EVENT = "yagodka:forward-search-clear";
 
 function chipTitle(status: MembersAddUiStatus): string {
   if (status === "ok") return "Найден";
@@ -119,6 +128,13 @@ export function createMembersChipsFeature(deps: MembersChipsFeatureDeps): Member
 
   const membersIgnoreQueries = new Map<string, number>();
 
+  let forwardSearchDebounce: number | null = null;
+  let forwardSearchTimeout: number | null = null;
+  let forwardSearchLastIssued = "";
+  let forwardSearchExpected = "";
+  let forwardSearchExpectedUntil = 0;
+  let forwardSearchInputEl: HTMLInputElement | null = null;
+
   const membersAddStatus = new Map<string, MembersAddUiStatus>();
   const membersAddHandleToId = new Map<string, string>();
   const membersAddQueryToToken = new Map<string, string>();
@@ -146,6 +162,115 @@ export function createMembersChipsFeature(deps: MembersChipsFeatureDeps): Member
   function createMembersState(scope: CreateMembersScope): CreateMembersState {
     return scope === "group_create" ? groupCreateMembers : boardCreateMembers;
   }
+
+  function dispatchForwardEvent(name: string, detail?: any) {
+    try {
+      if (typeof window === "undefined") return;
+      if (typeof (window as any).dispatchEvent !== "function") return;
+      if (typeof CustomEvent !== "function") return;
+      window.dispatchEvent(new CustomEvent(name, { detail }));
+    } catch {
+      // ignore
+    }
+  }
+
+  const clearForwardDebounce = () => {
+    if (forwardSearchDebounce === null) return;
+    window.clearTimeout(forwardSearchDebounce);
+    forwardSearchDebounce = null;
+  };
+
+  const clearForwardTimeout = () => {
+    if (forwardSearchTimeout === null) return;
+    window.clearTimeout(forwardSearchTimeout);
+    forwardSearchTimeout = null;
+  };
+
+  const resetForwardSearch = () => {
+    clearForwardDebounce();
+    clearForwardTimeout();
+    forwardSearchLastIssued = "";
+    forwardSearchExpected = "";
+    forwardSearchExpectedUntil = 0;
+    dispatchForwardEvent(FORWARD_SEARCH_CLEAR_EVENT);
+  };
+
+  const scheduleForwardSearch = (input: HTMLInputElement) => {
+    if (forwardSearchInputEl !== input) {
+      forwardSearchInputEl = input;
+      forwardSearchLastIssued = "";
+      forwardSearchExpected = "";
+      forwardSearchExpectedUntil = 0;
+      clearForwardDebounce();
+      clearForwardTimeout();
+    }
+    clearForwardDebounce();
+    clearForwardTimeout();
+
+    const st = store.get();
+    if (st.modal?.kind !== "forward_select") return;
+
+    const qRaw = String(input.value || "").trim();
+    if (!qRaw) {
+      resetForwardSearch();
+      return;
+    }
+
+    const derived = deriveServerSearchQuery(qRaw);
+    if (!derived) {
+      forwardSearchExpected = "";
+      forwardSearchExpectedUntil = 0;
+      dispatchForwardEvent(FORWARD_SEARCH_CLEAR_EVENT);
+      return;
+    }
+
+    forwardSearchDebounce = window.setTimeout(() => {
+      forwardSearchDebounce = null;
+      const st2 = store.get();
+      if (st2.modal?.kind !== "forward_select") return;
+      if (!st2.authed || st2.conn !== "connected") return;
+
+      const el = document.getElementById("forward-search") as HTMLInputElement | null;
+      const nowRaw = String(el?.value || "").trim();
+      const d2 = deriveServerSearchQuery(nowRaw);
+      if (!d2) {
+        dispatchForwardEvent(FORWARD_SEARCH_CLEAR_EVENT);
+        return;
+      }
+
+      if (d2.query === forwardSearchLastIssued) return;
+      forwardSearchLastIssued = d2.query;
+      forwardSearchExpected = d2.query;
+      forwardSearchExpectedUntil = Date.now() + FORWARD_SEARCH_TTL_MS;
+
+      dispatchForwardEvent(FORWARD_SEARCH_LOADING_EVENT, { query: d2.query, kind: d2.kind });
+      sendSearch(d2.query);
+
+      forwardSearchTimeout = window.setTimeout(() => {
+        forwardSearchTimeout = null;
+        const st3 = store.get();
+        if (st3.modal?.kind !== "forward_select") return;
+        if (!forwardSearchExpected || forwardSearchExpected !== d2.query) return;
+        if (Date.now() > forwardSearchExpectedUntil) return;
+        dispatchForwardEvent(FORWARD_SEARCH_RESULT_EVENT, { query: d2.query, results: [], timeout: true });
+      }, FORWARD_SEARCH_TIMEOUT_MS);
+    }, FORWARD_SEARCH_DEBOUNCE_MS);
+  };
+
+  const handleForwardSearchResult = (msg: any): boolean => {
+    const st = store.get();
+    if (st.modal?.kind !== "forward_select") return false;
+    const q = String(msg?.query ?? "").trim();
+    if (!q) return false;
+    const now = Date.now();
+    if (!forwardSearchExpected || q !== forwardSearchExpected || now > forwardSearchExpectedUntil) return false;
+
+    clearForwardTimeout();
+
+    const results = normalizeSearchResults(msg);
+    dispatchForwardEvent(FORWARD_SEARCH_RESULT_EVENT, { query: q, results });
+    return true;
+  };
 
   function clearMembersAddLookups() {
     membersAddQueryToToken.clear();
@@ -609,6 +734,7 @@ export function createMembersChipsFeature(deps: MembersChipsFeatureDeps): Member
   }
 
   function handleSearchResultMessage(msg: any): boolean {
+    if (handleForwardSearchResult(msg)) return true;
     const q = String(msg?.query ?? "").trim();
     const now = Date.now();
     const exp = q ? membersIgnoreQueries.get(q) : null;
@@ -647,6 +773,11 @@ export function createMembersChipsFeature(deps: MembersChipsFeatureDeps): Member
     const target = e.target as HTMLElement | null;
     if (!target) return;
 
+    if (target.id === "forward-search") {
+      if (st.modal?.kind !== "forward_select") return;
+      scheduleForwardSearch(target as HTMLInputElement);
+      return;
+    }
     if (target.id === "members-add-entry") {
       if (st.modal?.kind !== "members_add") return;
       const input = target as HTMLInputElement;
@@ -846,4 +977,3 @@ export function createMembersChipsFeature(deps: MembersChipsFeatureDeps): Member
     resolveCreateMembersTokensForSubmit,
   };
 }
-

@@ -247,10 +247,25 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
           : [];
     if (!drafts.length) return null;
     const recents = forwardRecentTargets(state, 10);
-    return renderForwardModal(drafts, state.friends || [], state.groups || [], state.boards || [], state.profiles || {}, recents, modal.message, {
-      onSend: actions.onForwardSend,
-      onCancel: actions.onClose,
-    });
+    return renderForwardModal(
+      drafts,
+      state.friends || [],
+      state.groups || [],
+      state.boards || [],
+      state.profiles || {},
+      {
+        pinnedKeys: state.pinned || [],
+        archivedKeys: state.archived || [],
+        conversations: state.conversations || {},
+        topPeers: state.topPeers || [],
+      },
+      recents,
+      modal.message,
+      {
+        onSend: actions.onForwardSend,
+        onCancel: actions.onClose,
+      }
+    );
   }
   if (kind === "board_post") {
     const bid = String(modal.boardId || "").trim();
