@@ -43,6 +43,34 @@
   -webkit-backdrop-filter: none;
 }
 
+.overlay.overlay-auth:not(.hidden) {
+  animation: overlay-auth-fade 180ms ease;
+}
+
+.overlay.overlay-auth:not(.hidden) > .modal {
+  animation: overlay-auth-pop 220ms ease;
+}
+
+@keyframes overlay-auth-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-auth-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (max-width: 600px) {
   .overlay.overlay-viewer {
     background: #000;
@@ -69,6 +97,14 @@
   gap: var(--sp-3);
   text-align: center;
   padding: calc(var(--modal-pad) + var(--sp-3));
+}
+
+.modal-screen .screen-logo {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto -2px;
+  opacity: 0.96;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.22));
 }
 
 .modal-screen .screen-brand {
@@ -122,6 +158,13 @@
 .modal-screen .modal-actions {
   justify-content: center;
   margin-top: var(--sp-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay.overlay-auth:not(.hidden),
+  .overlay.overlay-auth:not(.hidden) > .modal {
+    animation: none;
+  }
 }
 
 .modal-sub {

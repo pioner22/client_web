@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.735",
+    date: "2026-03-05",
+    improved: [
+      "iOS/mobile: история чата теперь скроллится «под» строкой ввода (композер overlay, tweb‑like) — последние сообщения не прячутся (авто‑inset по высоте композера/футера поиска).",
+      "iOS standalone/fullscreen: уменьшили визуальный «подвал» внизу (safe‑area фон ближе к композеру; clamp для app gap).",
+      "Старт: splash‑логотип на загрузке + мягкий fade‑out переход к регистрации/приложению.",
+      "Выход: обновили экран logout (логотип + более продуктовый текст) и добавили плавное появление full‑screen модалок.",
+    ],
+  },
+  {
     version: "0.1.734",
     date: "2026-03-05",
     improved: [

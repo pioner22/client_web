@@ -71,6 +71,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // can clip fixed bottom bars under browser chrome. Prefer visualViewport when it is smaller.
     const USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX = 2;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
+    const MAX_GAP_BOTTOM_PX = 44;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
@@ -114,6 +115,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // Fallback: if screen.height is not available (tests/odd environments), reuse safe-area inset as the "gap".
     // On real iOS devices screen.height exists; we avoid treating safe-area as gap when there is no evidence.
     if (iosStandalone && !screenMax && !gapBottom && safeBottomRaw > 0 && safeBottomRaw <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = safeBottomRaw;
+    if (gapBottom > MAX_GAP_BOTTOM_PX) gapBottom = MAX_GAP_BOTTOM_PX;
     const vv = window.visualViewport;
     const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
     const vvTopRaw = (() => {

@@ -7,7 +7,7 @@ import type { AppState, ChatMessage } from "../../../stores/types";
 
 export interface ChatHostEventsFeatureDeps {
   store: Store<AppState>;
-  layout: Pick<Layout, "chat" | "chatHost" | "inputWrap">;
+  layout: Pick<Layout, "chat" | "chatHost" | "inputWrap" | "chatSearchFooter">;
   getMaxScrollTop: (host: HTMLElement) => number;
   scheduleChatJumpVisibility: () => void;
   maybeRecordLastRead: (key: string) => void;
@@ -352,9 +352,69 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
       lastChatUserScrollAt = Date.now();
     });
 
+    const chatCol = layout.chat.parentElement instanceof HTMLElement ? layout.chat.parentElement : null;
+    const mobileOverlayMq =
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia("(max-width: 600px) and (pointer: coarse)")
+        : null;
+    let insetRaf: number | null = null;
+    let lastComposerH = -1;
+    let lastBottomInset = -1;
+
+    const applyBottomInsets = () => {
+      if (!chatCol) return;
+      const enabled = Boolean(mobileOverlayMq?.matches);
+      if (!enabled) {
+        if (lastComposerH !== -1 || lastBottomInset !== -1) {
+          chatCol.style.removeProperty("--chat-composer-h");
+          chatCol.style.removeProperty("--chat-bottom-inset");
+          lastComposerH = -1;
+          lastBottomInset = -1;
+        }
+        return;
+      }
+
+      const composerH = Math.max(0, Math.round(layout.inputWrap.getBoundingClientRect().height));
+      const searchFooterH = (() => {
+        const el = layout.chatSearchFooter;
+        if (!(el instanceof HTMLElement)) return 0;
+        if (el.classList.contains("hidden")) return 0;
+        return Math.max(0, Math.round(el.getBoundingClientRect().height));
+      })();
+      const bottomInset = composerH + searchFooterH;
+
+      if (composerH !== lastComposerH) {
+        chatCol.style.setProperty("--chat-composer-h", `${composerH}px`);
+        lastComposerH = composerH;
+      }
+      if (bottomInset !== lastBottomInset) {
+        chatCol.style.setProperty("--chat-bottom-inset", `${bottomInset}px`);
+        lastBottomInset = bottomInset;
+      }
+    };
+
+    const scheduleBottomInsets = () => {
+      if (!chatCol) return;
+      if (insetRaf !== null) return;
+      insetRaf = window.requestAnimationFrame(() => {
+        insetRaf = null;
+        applyBottomInsets();
+      });
+    };
+
+    scheduleBottomInsets();
+    try {
+      const anyMq = mobileOverlayMq as unknown as { addEventListener?: (t: "change", cb: () => void) => void; addListener?: (cb: () => void) => void };
+      if (anyMq?.addEventListener) anyMq.addEventListener("change", scheduleBottomInsets);
+      else if (anyMq?.addListener) anyMq.addListener(scheduleBottomInsets);
+    } catch {
+      // ignore
+    }
+
     const chatResizeObserver =
       typeof ResizeObserver === "function"
         ? new ResizeObserver(() => {
+            scheduleBottomInsets();
             scheduleChatStickyResize();
           })
         : null;
@@ -363,6 +423,7 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
       chatResizeObserver?.observe(layout.chatHost);
       chatResizeObserver?.observe(layout.chat);
       chatResizeObserver?.observe(layout.inputWrap);
+      chatResizeObserver?.observe(layout.chatSearchFooter);
     } catch {
       // ignore
     }

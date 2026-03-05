@@ -503,7 +503,43 @@ export function installLateWiring(deps: any) {
   // Remove the boot screen only after the app is ready enough to render UI.
   try {
     const boot = root.querySelector(".boot");
-    if (boot) boot.remove();
+    if (boot instanceof HTMLElement) {
+      const prefersReducedMotion = (() => {
+        try {
+          return typeof window !== "undefined" && typeof window.matchMedia === "function"
+            ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            : false;
+        } catch {
+          return false;
+        }
+      })();
+      const sinceLoad = (() => {
+        try {
+          return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : null;
+        } catch {
+          return null;
+        }
+      })();
+      const minVisibleMs = 420;
+      const startDelay = sinceLoad !== null ? Math.max(0, Math.round(minVisibleMs - sinceLoad)) : 0;
+      const fadeMs = prefersReducedMotion ? 0 : 260;
+
+      window.setTimeout(() => {
+        try {
+          boot.classList.add("boot-out");
+          boot.setAttribute("aria-hidden", "true");
+        } catch {
+          // ignore
+        }
+        window.setTimeout(() => {
+          try {
+            boot.remove();
+          } catch {
+            // ignore
+          }
+        }, fadeMs);
+      }, startDelay);
+    }
   } catch {
     // ignore
   }
