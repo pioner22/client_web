@@ -188,6 +188,33 @@
   text-align: right;
 }
 
+.chat-voice-speed {
+  min-width: 40px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 55%);
+  background: color-mix(in srgb, var(--panel2), transparent 24%);
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none;
+}
+
+.chat-voice-speed:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
+  color: color-mix(in srgb, var(--muted), var(--btn-text) 20%);
+}
+
+.chat-voice[data-voice-state="loading"] .chat-voice-play {
+  filter: saturate(0.75);
+  cursor: progress;
+}
+
+.chat-voice[data-voice-state="loading"] .chat-voice-track::before {
+  opacity: 0.25;
+}
+
 .chat-voice.chat-voice-placeholder {
   opacity: 0.75;
 }

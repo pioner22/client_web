@@ -16,6 +16,14 @@ import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
 import { getCachedLocalMediaAspectRatio } from "../../helpers/chat/localMediaAspectCache";
 import { layoutTelegramAlbum } from "../../helpers/chat/telegramGroupedLayout";
 import {
+  applyVoicePlaybackRate,
+  consumeVoiceAutoplay,
+  cycleVoicePlaybackRate,
+  getVoicePlaybackRate,
+  releaseMediaFocus,
+  takeMediaFocus,
+} from "../../helpers/media/audioSession";
+import {
   HISTORY_VIRTUAL_THRESHOLD,
   HISTORY_VIRTUAL_WINDOW,
   clampVirtualAvg,
@@ -146,6 +154,14 @@ function formatVoiceTime(valueSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatVoiceRate(value: number): string {
+  const raw = Number(value);
+  if (!Number.isFinite(raw) || raw <= 0) return "1x";
+  if (Math.abs(raw - 1.5) < 0.01) return "1.5x";
+  if (Math.abs(raw - 2) < 0.01) return "2x";
+  return `${raw}x`;
+}
+
 function renderVoicePlayer(opts: {
   url: string | null;
   fileId?: string | null;
@@ -160,10 +176,17 @@ function renderVoicePlayer(opts: {
   const bar = el("span", { class: "chat-voice-progress", "aria-hidden": "true" }, [""]);
   const track = el("button", { class: "btn chat-voice-track", type: "button", "aria-label": "Перемотка" }, [bar]);
   const time = el("div", { class: "chat-voice-time" }, ["0:00"]);
+  const voiceLike = isVoiceNoteName(String(opts.name || ""));
+  const speedBtn = voiceLike
+    ? (el("button", { class: "btn chat-voice-speed", type: "button", "aria-label": "Скорость воспроизведения" }, [
+        formatVoiceRate(getVoicePlaybackRate()),
+      ]) as HTMLButtonElement)
+    : null;
   const wrap = el("div", { class: `chat-voice${url ? "" : " chat-voice-placeholder"}`, "data-voice-state": "paused" }, [
     playBtn,
     track,
     time,
+    ...(speedBtn ? [speedBtn] : []),
     ...(audio ? [audio] : []),
   ]);
   wrap.style.setProperty("--voice-progress", "0%");
@@ -181,9 +204,18 @@ function renderVoicePlayer(opts: {
   }
 
   if (!audio) {
-    playBtn.setAttribute("disabled", "true");
     track.setAttribute("disabled", "true");
     time.textContent = "—";
+    if (!fileId) playBtn.setAttribute("disabled", "true");
+    playBtn.setAttribute("aria-label", fileId ? "Загрузить и воспроизвести" : "Недоступно");
+    if (speedBtn) {
+      speedBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const next = cycleVoicePlaybackRate(getVoicePlaybackRate());
+        speedBtn.textContent = formatVoiceRate(next);
+      });
+    }
     return wrap;
   }
 
@@ -210,8 +242,12 @@ function renderVoicePlayer(opts: {
     playBtn.setAttribute("aria-label", state === "playing" ? "Пауза" : "Воспроизвести");
   };
 
-  playBtn.addEventListener("click", () => {
+  playBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (audio.paused) {
+      takeMediaFocus(audio);
+      if (voiceLike) applyVoicePlaybackRate(audio);
       setState("playing");
       void audio.play().catch(() => setState("paused"));
     } else {
@@ -221,6 +257,8 @@ function renderVoicePlayer(opts: {
   });
 
   track.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     const rect = track.getBoundingClientRect();
     const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
     if (rect.width <= 0) return;
@@ -233,11 +271,34 @@ function renderVoicePlayer(opts: {
     }
   });
 
+  if (speedBtn) {
+    speedBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = cycleVoicePlaybackRate(audio.playbackRate || getVoicePlaybackRate());
+      speedBtn.textContent = formatVoiceRate(next);
+      try {
+        audio.playbackRate = next;
+      } catch {
+        // ignore
+      }
+    });
+  }
+
   audio.addEventListener("loadedmetadata", () => {
     duration = Number(audio.duration);
     if (Number.isFinite(duration) && duration > 0) {
       time.textContent = formatVoiceTime(duration);
       setProgressPct(0);
+    }
+    if (voiceLike) {
+      applyVoicePlaybackRate(audio);
+    } else {
+      try {
+        audio.playbackRate = 1;
+      } catch {
+        // ignore
+      }
     }
   });
   audio.addEventListener("timeupdate", () => {
@@ -249,10 +310,33 @@ function renderVoicePlayer(opts: {
   audio.addEventListener("ended", () => {
     setProgressPct(0);
     if (Number.isFinite(duration) && duration > 0) time.textContent = formatVoiceTime(duration);
+    releaseMediaFocus(audio);
     setState("paused");
   });
-  audio.addEventListener("pause", () => setState("paused"));
-  audio.addEventListener("play", () => setState("playing"));
+  audio.addEventListener("pause", () => {
+    releaseMediaFocus(audio);
+    setState("paused");
+  });
+  audio.addEventListener("play", () => {
+    takeMediaFocus(audio);
+    if (voiceLike) {
+      applyVoicePlaybackRate(audio);
+    } else {
+      try {
+        audio.playbackRate = 1;
+      } catch {
+        // ignore
+      }
+    }
+    setState("playing");
+  });
+
+  if (fileId && consumeVoiceAutoplay(fileId)) {
+    takeMediaFocus(audio);
+    if (voiceLike) applyVoicePlaybackRate(audio);
+    setState("playing");
+    void audio.play().catch(() => setState("paused"));
+  }
 
   return wrap;
 }

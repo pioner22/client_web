@@ -2,6 +2,7 @@ import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { messageSelectionKey } from "../../../helpers/chat/chatSelection";
 import { ensureChatMessageLoadedById } from "../../../helpers/chat/ensureHistoryMessage";
 import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
+import { requestVoiceAutoplay } from "../../../helpers/media/audioSession";
 import { formatTime } from "../../../helpers/time";
 import type { ChatSearchFilter } from "../../../helpers/chat/chatSearch";
 import type { Layout } from "../../../components/layout/types";
@@ -194,6 +195,53 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
         if (row) {
           e.preventDefault();
           e.stopPropagation();
+          return;
+        }
+      }
+
+      const voicePlayBtn = target?.closest("button.chat-voice-play") as HTMLButtonElement | null;
+      if (voicePlayBtn) {
+        const wrap = voicePlayBtn.closest("div.chat-voice") as HTMLElement | null;
+        const placeholder = Boolean(wrap?.classList.contains("chat-voice-placeholder"));
+        if (wrap && placeholder) {
+          const fileId = String(wrap.getAttribute("data-file-id") || "").trim();
+          if (!fileId) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          closeMobileSidebar();
+          const st = store.get();
+          if (!requireConnectedAndAuthed(st)) return;
+
+          requestVoiceAutoplay(fileId);
+          try {
+            wrap.setAttribute("data-voice-state", "loading");
+            voicePlayBtn.setAttribute("disabled", "true");
+          } catch {
+            // ignore
+          }
+
+          const name = String(wrap.getAttribute("data-name") || "").trim();
+          store.set({ status: name ? `Загрузка: ${name}` : "Загрузка голосового…" });
+          showToast("Загружаю голосовое…", { kind: "info", timeoutMs: 3200 });
+
+          const isOffer = st.fileOffersIn.some((o) => String(o.id || "").trim() === fileId);
+          if (isOffer) {
+            fileOffersAccept(fileId);
+            window.setTimeout(() => enqueueFileGet(fileId, { priority: "high" }), 0);
+          } else {
+            enqueueFileGet(fileId, { priority: "high" });
+          }
+          window.setTimeout(() => {
+            try {
+              if (!wrap.isConnected) return;
+              if (!wrap.classList.contains("chat-voice-placeholder")) return;
+              wrap.setAttribute("data-voice-state", "paused");
+              voicePlayBtn.removeAttribute("disabled");
+            } catch {
+              // ignore
+            }
+          }, 10_000);
           return;
         }
       }

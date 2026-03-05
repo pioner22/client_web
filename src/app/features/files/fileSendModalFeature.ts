@@ -90,6 +90,23 @@ export function createFileSendModalFeature(deps: FileSendModalFeatureDeps): File
 
   function openFileSendModal(files: File[], target: TargetRef) {
     if (!files.length) return;
+    if (files.length === 1) {
+      const file = files[0];
+      const autoSendKind = file && typeof file === "object" ? String((file as any).__yagodka_auto_send || "") : "";
+      if (autoSendKind === "voice_record") {
+        const st = store.get();
+        if (st.conn !== "connected") {
+          store.set({ status: "Нет соединения" });
+          return;
+        }
+        if (!st.authed) {
+          store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+          return;
+        }
+        sendFile(file, target, "");
+        return;
+      }
+    }
     const st = store.get();
     const captionDisabled = Boolean(st.editing);
     let captionHint = "";
