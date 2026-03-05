@@ -4,9 +4,9 @@
   --toast-accent: var(--focus);
   position: relative;
   overflow: hidden;
-  padding: 12px 44px 12px 14px; /* keep space for the close button */
-  gap: 10px;
-  border-radius: 16px;
+  padding: 10px 42px 10px 12px; /* keep space for the close button */
+  gap: 8px;
+  border-radius: 12px;
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--modal-bg), transparent 6%),
@@ -47,17 +47,17 @@
 }
 
 .toast-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 11px;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  margin-left: 6px; /* keep space from the accent bar */
+  margin-left: 4px; /* keep space from the accent bar */
   background: color-mix(in srgb, var(--toast-accent), transparent 86%);
   border: 1px solid color-mix(in srgb, var(--toast-accent), transparent 72%);
   color: color-mix(in srgb, var(--toast-accent), #ffffff 12%);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -78,13 +78,13 @@
 
 .toast-actions {
   margin-left: auto;
-  gap: 8px;
+  gap: 6px;
 }
 
 .toast-btn {
-  min-height: 30px;
+  min-height: 28px;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: 10px;
   font-size: 12px;
   line-height: 1;
   border-color: color-mix(in srgb, var(--line), transparent 35%);
@@ -95,10 +95,10 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   border-color: color-mix(in srgb, var(--line), transparent 52%);
   background: transparent;
   color: color-mix(in srgb, var(--text-muted), #ffffff 8%);
@@ -123,7 +123,7 @@
   /* Compact enough, but still pleasant (avoid "flat modal" look). */
   width: min(420px, 92vw);
   max-width: min(420px, 92vw);
-  padding: 12px 44px 12px 14px;
+  padding: 10px 42px 10px 12px;
 }
 
 .toast-host[data-toast-placement="center"] .toast-msg {

@@ -1,6 +1,22 @@
 import { el } from "../../helpers/dom/el";
 import type { ToastAction, ToastState } from "../../stores/types";
 
+function toastKey(toast: ToastState): string {
+  const kind = String(toast.kind || "info").trim() || "info";
+  const message = String(toast.message || "");
+  const actionsAll = Array.isArray(toast.actions) ? toast.actions : [];
+  const actions = actionsAll
+    .filter((a) => String(a?.id || "").trim() !== "dismiss")
+    .map((a) => ({
+      id: String(a?.id || "").trim(),
+      label: String(a?.label || "").trim(),
+      primary: Boolean(a?.primary),
+    }))
+    .filter((a) => a.id && a.label);
+  const hasDismiss = actionsAll.some((a) => String(a?.id || "").trim() === "dismiss");
+  return JSON.stringify({ kind, message, actions, hasDismiss });
+}
+
 function toastButton(action: ToastAction): HTMLButtonElement {
   const cls = action.primary ? "btn btn-primary toast-btn" : "btn toast-btn";
   const btn = el("button", { class: cls, type: "button", "data-action": "toast-action", "data-toast-id": action.id }, [
@@ -18,15 +34,20 @@ function toastIconLabel(kind: string): string {
 }
 
 export function renderToast(host: HTMLElement, toast: ToastState | null): void {
+  const hostKey = host as HTMLElement & { __toastKey?: string };
   if (!toast) {
     host.classList.add("hidden");
     host.removeAttribute("data-toast-placement");
+    hostKey.__toastKey = "";
     host.replaceChildren();
     return;
   }
   host.classList.remove("hidden");
   const placement = toast.placement === "center" ? "center" : "bottom";
   host.setAttribute("data-toast-placement", placement);
+  const key = toastKey(toast);
+  if (hostKey.__toastKey === key && host.firstElementChild) return;
+  hostKey.__toastKey = key;
   const kind = toast.kind || "info";
   const actionsAll = Array.isArray(toast.actions) ? toast.actions : [];
   const actions = actionsAll.filter((a) => String(a?.id || "").trim() !== "dismiss");
