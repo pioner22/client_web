@@ -32,10 +32,11 @@ async function loadRenderSidebar() {
   }
 }
 
-function withDomStubs(run, opts = {}) {
+async function withDomStubs(run, opts = {}) {
   const prev = {
     document: globalThis.document,
     window: globalThis.window,
+    navigatorDesc: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
     HTMLElement: globalThis.HTMLElement,
     HTMLInputElement: globalThis.HTMLInputElement,
     HTMLTextAreaElement: globalThis.HTMLTextAreaElement,
@@ -124,18 +125,40 @@ function withDomStubs(run, opts = {}) {
     },
   };
   const isMobile = Boolean(opts.isMobile);
+  const standalone = Boolean(opts.standalone);
+  Object.defineProperty(globalThis, "navigator", {
+    value: {
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64)",
+      standalone,
+      maxTouchPoints: 0,
+    },
+    configurable: true,
+  });
   globalThis.window = {
-    matchMedia: () => ({ matches: isMobile }),
+    matchMedia: (query) => {
+      const q = String(query || "");
+      if (q.includes("max-width: 600px")) return { matches: isMobile };
+      if (q.includes("display-mode: standalone") || q.includes("display-mode: fullscreen")) return { matches: standalone };
+      return { matches: false };
+    },
+    requestAnimationFrame: (cb) => {
+      cb();
+      return 1;
+    },
+    cancelAnimationFrame: () => {},
   };
 
   try {
-    return run();
+    return await run();
   } finally {
     if (prev.document === undefined) delete globalThis.document;
     else globalThis.document = prev.document;
 
     if (prev.window === undefined) delete globalThis.window;
     else globalThis.window = prev.window;
+
+    if (prev.navigatorDesc) Object.defineProperty(globalThis, "navigator", prev.navigatorDesc);
+    else delete globalThis.navigator;
 
     if (prev.HTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = prev.HTMLElement;
@@ -146,6 +169,11 @@ function withDomStubs(run, opts = {}) {
     if (prev.HTMLTextAreaElement === undefined) delete globalThis.HTMLTextAreaElement;
     else globalThis.HTMLTextAreaElement = prev.HTMLTextAreaElement;
   }
+}
+
+async function flushLazySidebarRender() {
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function collectText(node) {
@@ -204,8 +232,8 @@ function mkState(tab) {
 test("mobile sidebar: 4 вкладки (Контакты/Доски/Чаты/Меню)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(
-      () => {
+    await withDomStubs(
+      async () => {
         const target = document.createElement("div");
         helper.renderSidebar(
           target,
@@ -223,6 +251,7 @@ test("mobile sidebar: 4 вкладки (Контакты/Доски/Чаты/М�
           () => {},
           () => {}
         );
+        await flushLazySidebarRender();
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
         assert.deepEqual(labels, ["Контакты", "Доски", "Чаты", "Меню"]);
@@ -237,8 +266,8 @@ test("mobile sidebar: 4 вкладки (Контакты/Доски/Чаты/М�
 test("mobile sidebar: Контакты не содержат пункты меню (они в отдельной вкладке)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(
-      () => {
+    await withDomStubs(
+      async () => {
         const target = document.createElement("div");
         helper.renderSidebar(
           target,
@@ -256,6 +285,7 @@ test("mobile sidebar: Контакты не содержат пункты мен
           () => {},
           () => {}
         );
+        await flushLazySidebarRender();
         assert.equal(hasText(target, "Поиск"), false);
         assert.equal(hasText(target, "Создать чат"), false);
         assert.equal(hasText(target, "Онлайн"), false);
@@ -270,8 +300,8 @@ test("mobile sidebar: Контакты не содержат пункты мен
 test("mobile sidebar: Меню содержит навигацию/создание и подсказки", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(
-      () => {
+    await withDomStubs(
+      async () => {
         const target = document.createElement("div");
         helper.renderSidebar(
           target,
@@ -289,6 +319,7 @@ test("mobile sidebar: Меню содержит навигацию/создан�
           () => {},
           () => {}
         );
+        await flushLazySidebarRender();
         assert.equal(hasText(target, "Навигация"), true);
         assert.equal(hasText(target, "Поиск"), true);
         assert.equal(hasText(target, "Создать чат"), true);
@@ -305,8 +336,8 @@ test("mobile sidebar: Меню содержит навигацию/создан�
 test("mobile sidebar: поиск фильтрует список и вызывает onSetSidebarQuery", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(
-      () => {
+    await withDomStubs(
+      async () => {
         const calls = [];
         const target = document.createElement("div");
         const state = {
@@ -351,6 +382,7 @@ test("mobile sidebar: поиск фильтрует список и вызыва
           () => {},
           () => {}
         );
+        await flushLazySidebarRender();
 
         assert.equal(hasText(target, "Алиса"), true);
         assert.equal(hasText(target, "222-222-222"), false);
@@ -372,8 +404,8 @@ test("mobile sidebar: поиск фильтрует список и вызыва
 test("mobile sidebar: Чаты = активные ЛС + группы (не весь список контактов)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(
-      () => {
+    await withDomStubs(
+      async () => {
         const target = document.createElement("div");
         const state = {
           friends: [
@@ -402,6 +434,7 @@ test("mobile sidebar: Чаты = активные ЛС + группы (не ве
         };
 
         helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
 
         assert.equal(hasText(target, "111-111-111"), true);
         assert.equal(hasText(target, "Группа 1"), true);
@@ -417,8 +450,8 @@ test("mobile sidebar: Чаты = активные ЛС + группы (не ве
 test("mobile sidebar: Контакты показывают всех пользователей (не только активные ЛС)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(
-      () => {
+    await withDomStubs(
+      async () => {
         const target = document.createElement("div");
         const state = {
           friends: [
@@ -446,6 +479,7 @@ test("mobile sidebar: Контакты показывают всех польз�
         };
 
         helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
 
         assert.equal(hasText(target, "111-111-111"), true);
         assert.equal(hasText(target, "222-222-222"), true);
@@ -460,8 +494,8 @@ test("mobile sidebar: Контакты показывают всех польз�
 test("mobile sidebar: pinned rows следуют порядку state.pinned (dm/group вперемешку)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(
-      () => {
+    await withDomStubs(
+      async () => {
         const target = document.createElement("div");
         const state = {
           friends: [
@@ -496,6 +530,7 @@ test("mobile sidebar: pinned rows следуют порядку state.pinned (dm
         };
 
         helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
 
         const chatlists = findAll(target, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
         assert.equal(chatlists.length > 0, true);
@@ -521,8 +556,8 @@ test("mobile sidebar: pinned rows следуют порядку state.pinned (dm
 test("mobile sidebar: Чаты сортируются по активности (last_ts) по убыванию", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(
-      () => {
+    await withDomStubs(
+      async () => {
         const target = document.createElement("div");
         const state = {
           friends: [
@@ -553,6 +588,7 @@ test("mobile sidebar: Чаты сортируются по активности 
         };
 
         helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
 
         const chatlists = findAll(target, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
         assert.equal(chatlists.length > 0, true);
@@ -575,6 +611,41 @@ test("mobile sidebar: Чаты сортируются по активности 
         assert.deepEqual(afterHeader.slice(0, 3), ["dm:222-222-222", "room:g-1", "dm:111-111-111"]);
       },
       { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("standalone sidebar: desktop PWA рендерит tabs без отдельной вкладки меню", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    await withDomStubs(
+      async () => {
+        const target = document.createElement("div");
+        helper.renderSidebar(
+          target,
+          mkState("chats"),
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {}
+        );
+        await flushLazySidebarRender();
+        const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
+        const labels = tabs.map((b) => collectText(b).trim());
+        assert.deepEqual(labels, ["Контакты", "Доски", "Чаты"]);
+        assert.equal(hasText(target, "Меню"), false);
+      },
+      { isMobile: false, standalone: true }
     );
   } finally {
     await helper.cleanup();

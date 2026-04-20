@@ -6,22 +6,26 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { build } from "esbuild";
+import { flushDeferredChatMedia } from "./helpers/flushDeferredChatMedia.mjs";
 
 async function loadRenderChat() {
   const tempDir = await mkdtemp(path.join(tmpdir(), "yagodka-web-test-"));
-  const outfile = path.join(tempDir, "bundle.mjs");
+  const entryFile = path.join(tempDir, "renderChat.js");
   try {
     await build({
       entryPoints: [path.resolve("src/components/chat/renderChat.ts")],
-      outfile,
+      outdir: tempDir,
       bundle: true,
+      splitting: true,
       platform: "node",
       format: "esm",
       target: "node20",
       sourcemap: false,
+      entryNames: "[name]",
+      chunkNames: "chunks/[name]-[hash]",
       logLevel: "silent",
     });
-    const mod = await import(pathToFileURL(outfile).href);
+    const mod = await import(pathToFileURL(entryFile).href);
     if (typeof mod.renderChat !== "function") {
       throw new Error("renderChat export missing");
     }
@@ -173,9 +177,7 @@ function withDomStubs(run) {
     },
   };
 
-  try {
-    return run();
-  } finally {
+  const restore = () => {
     if (prev.document === undefined) delete globalThis.document;
     else globalThis.document = prev.document;
 
@@ -187,6 +189,20 @@ function withDomStubs(run) {
 
     if (prev.HTMLTextAreaElement === undefined) delete globalThis.HTMLTextAreaElement;
     else globalThis.HTMLTextAreaElement = prev.HTMLTextAreaElement;
+  };
+
+  try {
+    const result = run();
+    if (result && typeof result.then === "function") {
+      return result.finally(restore);
+    }
+    restore();
+    return result;
+  } catch (error) {
+    restore();
+    throw error;
+  } finally {
+    // sync cleanup handled above; async cleanup is attached to the returned promise
   }
 }
 
@@ -424,7 +440,7 @@ test("renderChat: avatarsRev инвалидирует рендер (аватар
 test("renderChat: sys action message рендерит кнопки действий", async () => {
   const helper = await loadRenderChat();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const chat = document.createElement("div");
       const chatTop = document.createElement("div");
       const chatSearchResults = document.createElement("div");
@@ -474,9 +490,12 @@ test("renderChat: sys action message рендерит кнопки действ�
       };
 
       helper.renderChat(layout, state);
+      await flushDeferredChatMedia();
 
       const accept = findFirst(chatHost, (n) => n?.getAttribute?.("data-action") === "group-invite-accept");
       const decline = findFirst(chatHost, (n) => n?.getAttribute?.("data-action") === "group-invite-decline");
+      const inviteCard = findFirst(chatHost, (n) => hasClass(n, "invite-card"));
+      assert.ok(inviteCard, "должна быть deferred invite-card surface");
       assert.ok(accept, "должна быть кнопка group-invite-accept");
       assert.ok(decline, "должна быть кнопка group-invite-decline");
     });
@@ -488,7 +507,7 @@ test("renderChat: sys action message рендерит кнопки действ�
 test("renderChat: video file-attachment рендерит video preview button", async () => {
   const helper = await loadRenderChat();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const chat = document.createElement("div");
       const chatTop = document.createElement("div");
       const chatSearchResults = document.createElement("div");
@@ -553,6 +572,7 @@ test("renderChat: video file-attachment рендерит video preview button", 
       };
 
       helper.renderChat(layout, state);
+      await flushDeferredChatMedia();
 
       const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
       assert.ok(fileRow, "должен быть file-row-chat");
@@ -574,7 +594,7 @@ test("renderChat: video file-attachment рендерит video preview button", 
 test("renderChat: iOS video IMG_*.MP4 не должен рендериться как «Фото»", async () => {
   const helper = await loadRenderChat();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const chat = document.createElement("div");
       const chatTop = document.createElement("div");
       const chatSearchResults = document.createElement("div");
@@ -639,6 +659,7 @@ test("renderChat: iOS video IMG_*.MP4 не должен рендериться �
       };
 
       helper.renderChat(layout, state);
+      await flushDeferredChatMedia();
 
       const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
       assert.ok(fileRow, "должен быть file-row-chat");
@@ -656,10 +677,221 @@ test("renderChat: iOS video IMG_*.MP4 не должен рендериться �
   }
 });
 
+test("renderChat: small IMG_*.MP4 сохраняет aspect ratio после deferred swap", async () => {
+  const helper = await loadRenderChat();
+  try {
+    await withDomStubs(async () => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
+      const chatSearchFooter = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
+      chatSearchFooter.className = "chat-search-footer";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+      const state = {
+        selected: { kind: "dm", id: "123-456-789" },
+        conversations: {
+          "dm:123-456-789": [
+            {
+              kind: "in",
+              from: "123-456-789",
+              to: "854-432-319",
+              room: null,
+              text: "",
+              ts: 1700000000,
+              id: 1,
+              attachment: { kind: "file", name: "IMG_3383.MP4", size: 571884, mime: "video/mp4", fileId: "99" },
+            },
+          ],
+        },
+        historyHasMore: {},
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileThumbs: {
+          "99": {
+            url: "blob:thumb",
+            mime: "image/jpeg",
+            w: 108,
+            h: 192,
+            mediaW: 1080,
+            mediaH: 1920,
+          },
+        },
+        fileTransfers: [
+          {
+            localId: "ft-99",
+            id: "99",
+            name: "IMG_3383.MP4",
+            size: 571884,
+            mime: "video/mp4",
+            direction: "in",
+            peer: "123-456-789",
+            room: null,
+            status: "complete",
+            progress: 100,
+            url: "blob:video",
+          },
+        ],
+        fileOffersIn: [],
+        groups: [],
+        boards: [],
+        profiles: {},
+      };
+
+      helper.renderChat(layout, state);
+
+      const previewBefore = findFirst(chatHost, (n) => hasClass(n, "chat-file-preview-video"));
+      assert.ok(previewBefore, "должен быть video preview");
+      assert.equal(previewBefore.style.aspectRatio, String(108 / 192), "placeholder должен зафиксировать ratio по thumb");
+
+      await flushDeferredChatMedia();
+
+      const previewAfter = findFirst(chatHost, (n) => hasClass(n, "chat-file-preview-video"));
+      assert.equal(previewAfter, previewBefore, "deferred swap должен обновить тот же preview mount");
+      assert.equal(previewAfter.style.aspectRatio, String(108 / 192), "final surface не должна терять исходный ratio");
+
+      const video = findFirst(previewAfter, (n) => n && n.tagName === "VIDEO");
+      assert.ok(video, "для малого mp4 после deferred swap должен остаться inline <video>");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderChat: small IMG_*.MP4 предпочитает thumb ratio даже при stale media-aspect cache", async () => {
+  const helper = await loadRenderChat();
+  try {
+    await withDomStubs(async () => {
+      const prevLocalStorage = globalThis.localStorage;
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(String(k)) ? store.get(String(k)) : null),
+        setItem: (k, v) => void store.set(String(k), String(v)),
+        removeItem: (k) => void store.delete(String(k)),
+      };
+
+      try {
+        store.set(
+          "yagodka_media_aspect_cache_v1",
+          JSON.stringify({
+            v: 1,
+            entries: [["99", 16 / 9]],
+          })
+        );
+
+        const chat = document.createElement("div");
+        const chatTop = document.createElement("div");
+        const chatSearchResults = document.createElement("div");
+        const chatSearchFooter = document.createElement("div");
+        const chatHost = document.createElement("div");
+        const chatJump = document.createElement("button");
+        const chatSelectionBar = document.createElement("div");
+        chat.className = "chat";
+        chatTop.className = "chat-top";
+        chatSearchResults.className = "chat-search-results";
+        chatSearchFooter.className = "chat-search-footer";
+        chatHost.className = "chat-host";
+        chatJump.className = "btn chat-jump hidden";
+        chatSelectionBar.className = "chat-selection-bar hidden";
+        chatHost.clientHeight = 120;
+        chatHost.scrollHeight = 2000;
+
+        const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+        const state = {
+          selected: { kind: "dm", id: "123-456-789" },
+          conversations: {
+            "dm:123-456-789": [
+              {
+                kind: "in",
+                from: "123-456-789",
+                to: "854-432-319",
+                room: null,
+                text: "",
+                ts: 1700000000,
+                id: 1,
+                attachment: { kind: "file", name: "IMG_3383.MP4", size: 571884, mime: "video/mp4", fileId: "99" },
+              },
+            ],
+          },
+          historyHasMore: {},
+          historyLoading: {},
+          chatSearchOpen: false,
+          chatSearchQuery: "",
+          chatSearchHits: [],
+          chatSearchPos: 0,
+          pinnedMessages: {},
+          pinnedMessageActive: {},
+          fileThumbs: {
+            "99": {
+              url: "blob:thumb",
+              mime: "image/jpeg",
+              w: 108,
+              h: 192,
+              mediaW: 1080,
+              mediaH: 1920,
+            },
+          },
+          fileTransfers: [
+            {
+              localId: "ft-99",
+              id: "99",
+              name: "IMG_3383.MP4",
+              size: 571884,
+              mime: "video/mp4",
+              direction: "in",
+              peer: "123-456-789",
+              room: null,
+              status: "complete",
+              progress: 100,
+              url: "blob:video",
+            },
+          ],
+          fileOffersIn: [],
+          groups: [],
+          boards: [],
+          profiles: {},
+        };
+
+        helper.renderChat(layout, state);
+
+        const previewBefore = findFirst(chatHost, (n) => hasClass(n, "chat-file-preview-video"));
+        assert.ok(previewBefore, "должен быть video preview");
+        assert.equal(previewBefore.style.aspectRatio, String(108 / 192), "thumb ratio должен победить stale cache ещё до deferred swap");
+
+        await flushDeferredChatMedia();
+
+        const previewAfter = findFirst(chatHost, (n) => hasClass(n, "chat-file-preview-video"));
+        assert.equal(previewAfter.style.aspectRatio, String(108 / 192), "deferred surface не должна возвращаться к stale cached ratio");
+      } finally {
+        if (prevLocalStorage === undefined) delete globalThis.localStorage;
+        else globalThis.localStorage = prevLocalStorage;
+      }
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("renderChat: video file-attachment (large) не рендерит inline <video>", async () => {
   const helper = await loadRenderChat();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const chat = document.createElement("div");
       const chatTop = document.createElement("div");
       const chatSearchResults = document.createElement("div");
@@ -724,6 +956,7 @@ test("renderChat: video file-attachment (large) не рендерит inline <vi
       };
 
       helper.renderChat(layout, state);
+      await flushDeferredChatMedia();
 
       const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
       assert.ok(fileRow, "должен быть file-row-chat");
@@ -746,7 +979,7 @@ test("renderChat: video file-attachment (large) не рендерит inline <vi
 test("renderChat: video file-attachment (mobile UI) не рендерит inline <video>", async () => {
   const helper = await loadRenderChat();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const prevWindow = globalThis.window;
       globalThis.window = {
         matchMedia() {
@@ -818,6 +1051,7 @@ test("renderChat: video file-attachment (mobile UI) не рендерит inline
         };
 
         helper.renderChat(layout, state);
+        await flushDeferredChatMedia();
 
         const preview = findFirst(chatHost, (n) => hasClass(n, "chat-file-preview-video"));
         assert.ok(preview, "должен быть video preview");
@@ -837,7 +1071,7 @@ test("renderChat: video file-attachment (mobile UI) не рендерит inline
 test("renderChat: audio file-attachment рендерит custom audio player (chat-voice)", async () => {
   const helper = await loadRenderChat();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const chat = document.createElement("div");
       const chatTop = document.createElement("div");
       const chatSearchResults = document.createElement("div");
@@ -902,6 +1136,7 @@ test("renderChat: audio file-attachment рендерит custom audio player (ch
       };
 
       helper.renderChat(layout, state);
+      await flushDeferredChatMedia();
 
       const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
       assert.ok(fileRow, "должен быть file-row-chat");

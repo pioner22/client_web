@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { resolveHeaderChatBackAction, resolveHeaderNavBackAction, resolveOverlayInteractionAction } from "./interactionPolicy";
 
 export interface TopbarActionsFeatureDeps {
   store: Store<AppState>;
@@ -43,23 +44,13 @@ export function createTopbarActionsFeature(deps: TopbarActionsFeatureDeps): Topb
   let listenersInstalled = false;
 
   const onOverlayClick = (e: Event) => {
-    const modal = store.get().modal;
-    const kind = modal?.kind;
-    if (kind !== "context_menu" && kind !== "file_viewer") return;
     if (e.target !== overlay) return;
-    if (kind === "file_viewer" && modal && modal.kind === "file_viewer") {
-      const openedAt = modal.openedAtMs;
-      const openedAtMs = typeof openedAt === "number" && Number.isFinite(openedAt) ? openedAt : 0;
-      if (openedAtMs > 0) {
-        const age = Date.now() - openedAtMs;
-        if (age >= 0 && age < 420) {
-          e.preventDefault();
-          return;
-        }
-      }
-    }
+    const action = resolveOverlayInteractionAction(store.get().modal);
+    if (action === "none") return;
     e.preventDefault();
-    closeModal();
+    if (action === "close_modal") {
+      closeModal();
+    }
   };
 
   const onHeaderLeftClick = (e: Event) => {
@@ -68,9 +59,8 @@ export function createTopbarActionsFeature(deps: TopbarActionsFeatureDeps): Topb
     const action = String(btn.dataset.action || "");
     if (action === "nav-back") {
       e.preventDefault();
-      const st = store.get();
-      if (st.modal) return;
-      onSetPageMain();
+      const next = resolveHeaderNavBackAction(store.get());
+      if (next === "set_page_main") onSetPageMain();
       return;
     }
     if (action === "chat-search-open") {
@@ -95,9 +85,8 @@ export function createTopbarActionsFeature(deps: TopbarActionsFeatureDeps): Topb
     }
     if (action === "chat-back") {
       e.preventDefault();
-      const st = store.get();
-      if (st.modal) return;
-      onClearSelectedTarget();
+      const next = resolveHeaderChatBackAction(store.get());
+      if (next === "clear_selected_target") onClearSelectedTarget();
       return;
     }
     if (action !== "sidebar-toggle") return;
@@ -110,6 +99,11 @@ export function createTopbarActionsFeature(deps: TopbarActionsFeatureDeps): Topb
     const btn = (e.target as HTMLElement | null)?.closest("button[data-action]") as HTMLButtonElement | null;
     if (!btn) return;
     const action = String(btn.dataset.action || "");
+    if (action === "auth-open") {
+      e.preventDefault();
+      onAuthOpen();
+      return;
+    }
     if (action === "call-start-audio") {
       e.preventDefault();
       onStartCall("audio");

@@ -1,4 +1,5 @@
-import { normalizeHandle, type MembersChipsFeature } from "../members/membersChipsFeature";
+import type { MembersChipsFeature } from "../members/membersChipsFeature";
+import { normalizeHandle } from "../members/membersInputShared";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 

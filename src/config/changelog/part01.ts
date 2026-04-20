@@ -2,6 +2,196 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.753",
+    date: "2026-03-13",
+    improved: [
+      "Чат стартует чуть легче: одиночные image/video preview теперь оставляют в основном bundle только лёгкий placeholder, а тяжёлый visual preview surface догружается отдельным фоновым чанком.",
+      "Открытие истории на слабых устройствах стало спокойнее: обычный file-row first paint остаётся синхронным, а расширенный preview upgrade path для image/video подключается по требованию.",
+      "Архитектура visual preview стала чище: single-message preview и album/deferred media теперь используют общий deferred preview surface, поэтому дальнейшая полировка media preview меньше раздувает eager `components`.",
+    ],
+    fixed: [
+      "Остаточный single-message image/video preview path больше не держит лишний visual preview код в eager `components` bundle: синхронный shell отделён от полной preview surface.",
+    ],
+  },
+  {
+    version: "0.1.752",
+    date: "2026-03-13",
+    improved: [
+      "Чат стартует ещё легче: редкие system/action/invite сообщения теперь уводят тяжёлый UI карточек и action-surface в отдельный фоновый чанк, не утяжеляя первый показ обычной текстовой истории.",
+      "Invite/system ветки стали спокойнее для слабых устройств: базовый bubble с текстом и кнопками появляется синхронно, а расширенная invite-card поверхность догружается по требованию.",
+      "Архитектура special message rendering стала чище: у sys/action сообщений появился отдельный deferred runtime/surface слой, поэтому дальнейшая полировка invite/system UI меньше раздувает основной chat bundle.",
+    ],
+    fixed: [
+      "Редкие system/invite ветки в чате больше не держат лишний код внутри eager `components` bundle: обычный history path отделён от invite-card и action-heavy surface.",
+    ],
+  },
+  {
+    version: "0.1.751",
+    date: "2026-03-13",
+    improved: [
+      "Чат стартует легче: voice/audio bubble и album-сообщения теперь догружают тяжёлый media UI по требованию, не утяжеляя первый показ обычной текстовой истории.",
+      "Открытие диалога на медленных устройствах стало спокойнее: базовый рендер истории остаётся синхронным, а специальные media-surface ветки подключаются отдельным фоновым чанком.",
+      "Архитектура media-рендера стала чище: у chat media появился отдельный deferred runtime/surface слой, поэтому дальнейшая полировка voice-player и album-grid меньше раздувает основной chat bundle.",
+    ],
+    fixed: [
+      "Специальные media-ветки в чате больше не тянут лишний код в eager `components` bundle: обычные текстовые сообщения и основной history path отделены от album/voice surface.",
+    ],
+  },
+  {
+    version: "0.1.750",
+    date: "2026-03-06",
+    improved: [
+      "История сообщений: album bubble теперь собирается через отдельный surface, поэтому media grid и нижний footer с `caption + meta` читаются как одна связная зона, а не как случайно сложенные блоки.",
+      "Media albums стали ближе к Telegram-подобной композиции: клиент теперь прокидывает реальную ширину мозаики в shell, из-за чего подпись и мета выравниваются по фактической геометрии album, а не по слишком широкому bubble.",
+      "Код album layout стал более пригодным для дальнейшей полировки: tile-ноды теперь получают явные edge-атрибуты top/right/bottom/left, а отдельный CSS-part отвечает только за mosaic-shell, не раздувая старый media-монолит.",
+    ],
+    fixed: [
+      "Mixed-size media groups в истории больше не должны выглядеть как случайная нарезка с оторванным footer: album shell, footer width и outer-edge geometry теперь собраны в один предсказуемый layout-контракт.",
+    ],
+  },
+  {
+    version: "0.1.749",
+    date: "2026-03-06",
+    improved: [
+      "Чатовые service surfaces стали спокойнее на mobile: pinned bar получил более компактный shell с явным pin-marker, cleaner preview и встроенной навигацией по нескольким закрепам.",
+      "Jump-to-bottom и composer permission badges стали менее шумными: floating jump-chip собран плотнее, а denied-indicators у voice/video кнопок уменьшены и лучше вписаны в нижний composer.",
+      "Center warn/error toasts больше не висят по центру истории на телефоне: mobile surface теперь прижимает их ближе к нижней safe-area над композером, чтобы не ломать чтение чата.",
+    ],
+    fixed: [
+      "Pinned/warning/jump surfaces в чате больше не должны выглядеть как набор несогласованных элементов: верхний закреп, нижний jump и mobile warning-toasts собраны в более цельную, менее шумную систему.",
+    ],
+  },
+  {
+    version: "0.1.748",
+    date: "2026-03-06",
+    improved: [
+      "История сообщений: у обычных текстовых сообщений появился явный content-shell для связки `text + meta`, поэтому bubble теперь читается как одна структурная зона, а не как набор разрозненных узлов.",
+      "Message meta в обычных bubble-сообщениях стало более собранным: время, edited и статус теперь живут в компактном footer-chip, который лучше отделяет нижний ритм сообщения от основного текста.",
+      "Код истории стал чище: shell для текстового содержимого вынесен в отдельный helper, а новые правила bubble/meta вынесены в отдельный CSS-part вместо наращивания старых монолитных файлов.",
+    ],
+    fixed: ["Текстовые bubble-сообщения в истории больше не должны выглядеть как «плавающий текст» с отдельно висящим временем: text и meta теперь рендерятся как единый структурный блок."],
+  },
+  {
+    version: "0.1.747",
+    date: "2026-03-06",
+    improved: [
+      "Viewer на mobile/iOS: верхний overlay-header получил более безопасный верхний отступ и более явный top-gradient, поэтому metadata и кнопки больше не липнут к status bar iPhone.",
+      "Mobile viewer: длинные file/author строки в topbar теперь ужимаются и обрезаются предсказуемо, вместо того чтобы расползаться и ломать верхнюю зону экрана.",
+      "Верхняя панель viewer стала чище на узких экранах: actions остаются выровненными сверху, а metadata-текст больше не спорит с ними за место.",
+    ],
+    fixed: ["iPhone viewer header больше не должен конфликтовать со status bar и длинным metadata-текстом, как это было видно на последних screenshot-проверках."],
+  },
+  {
+    version: "0.1.746",
+    date: "2026-03-06",
+    improved: [
+      "Mobile/iOS чат: между историей и overlay-композером появился отдельный bottom breathing room, поэтому последний блок сообщений читается чище и не липнет к нижней панели.",
+      "Jump-to-bottom на телефоне теперь использует тот же нижний gap-контракт, что и история, поэтому floating-кнопка выровнена с новым ритмом нижней зоны чата и не выглядит случайно подвешенной.",
+      "При открытой экранной клавиатуре mobile layout автоматически ужимает этот нижний gap, чтобы не терять вертикальное место и сохранить более плотный runtime-ритм при наборе текста.",
+    ],
+    fixed: ["Нижняя граница истории на mobile/iOS больше не выглядит слишком жёсткой: между последними сообщениями и композером появился управляемый зазор, который не превращается в лишнюю пустоту при открытой клавиатуре."],
+  },
+  {
+    version: "0.1.745",
+    date: "2026-03-06",
+    improved: [
+      "iOS chat composer: нижний shell композера стал ближе к настоящему edge-to-edge, поэтому bar визуально сильнее прижат к нижнему краю iPhone, а не выглядит подвешенным над ним.",
+      "Mobile/iOS: для composer введён отдельный bottom-edge pad override, который опускает chat input ниже, но всё ещё держит controls в безопасной зоне над home indicator.",
+      "Чатовый низ стал визуально цельнее: blur/solid bar и safe-area слой теперь дают более плотное, Telegram-подобное ощущение у нижнего края экрана.",
+    ],
+    fixed: ["iOS chat bottom больше не выглядит как бар с лишним запасом снизу: composer опущен ближе к реальному краю телефона без возврата старых keyboard-gap регрессий."],
+  },
+  {
+    version: "0.1.744",
+    date: "2026-03-06",
+    improved: [
+      "Viewer: нижняя часть media overlay теперь собрана в явный footer shell, где caption, media counter и rail живут как одна структурная зона вместо разрозненных absolute-элементов.",
+      "Viewer: в visual media groups появился контекст позиции `Фото/Видео N из M`, поэтому внутри album и соседних media strip стало яснее, где находится текущее вложение.",
+      "Архитектура viewer стала чище: rail/caption вынесены в отдельный helper, а расчёт нижнего UI теперь опирается на один footer container, а не на ad-hoc сумму высот разных узлов.",
+    ],
+    fixed: ["Viewer footer больше не держится на разрознённых caption/rail overlay-блоках: hover/zoom и bottom-ui measurement теперь работают по единому shell-контейнеру и стабильнее ведут себя при дальнейших правках."],
+  },
+  {
+    version: "0.1.743",
+    date: "2026-03-06",
+    improved: [
+      "История сообщений: у image/video и album появился единый media overlay controls shell, который одинаково держит selection и action controls поверх media bubble.",
+      "История сообщений: placement selection больше не зависит от разрозненных CSS-правил в разных partial-файлах — логика вынесена в явный DOM-shell и отдельные helper-модули.",
+      "Desktop/mobile media interactions стали стабильнее: overlay controls теперь структурно одинаковы у image/video/album, а inline file/audio ветки сохранили свою отдельную схему без смешения.",
+    ],
+    fixed: ["Selection и action controls для media shell больше не расходятся между image/video и album flow: кнопки рендерятся через общий overlay surface, а regressions на старых file-row сценариях прикрыты прямыми тестами."],
+  },
+  {
+    version: "0.1.742",
+    date: "2026-03-06",
+    improved: [
+      "История сообщений: у media/file/album bubble появился явный attachment footer shell, поэтому caption и meta теперь читаются как отдельный структурный блок, а не как случайные соседние элементы.",
+      "История сообщений: image/video c подписью и album-сообщения используют одинаковый stacked footer rhythm для caption + time/status, ближе к системной структуре клиента.",
+      "История сообщений: audio/file attachments без подписи тоже получили предсказуемый meta-only footer, а overlay-meta оставлен только для действительно fullscreen-like visual media без caption.",
+    ],
+    fixed: ["Границы media bubble стали последовательнее: caption/meta больше не смешиваются с содержимым файла ad-hoc, а album/file/audio flows больше не расходятся по DOM-структуре."],
+  },
+  {
+    version: "0.1.741",
+    date: "2026-03-06",
+    improved: [
+      "История сообщений: date и unread separators получили явный shell с линиями и pill-структурой, поэтому границы ленты читаются заметно стабильнее.",
+      "История сообщений: meta-строка сообщения теперь собирается из единых compact items для времени, пометки редактирования и статуса доставки.",
+      "Визуальный ритм истории стал ближе к системному: separators и status/meta больше не выглядят как ad-hoc spacing между bubble-блоками.",
+    ],
+    fixed: ["Unread divider больше не растягивается случайной полосой на всю ширину экрана, а edited/status metadata читаются компактнее и предсказуемее в обычных и media bubble."],
+  },
+  {
+    version: "0.1.740",
+    date: "2026-03-06",
+    improved: [
+      "Отложенная отправка: modal больше не теряет выбранную дату/время при validation/re-render; поле сохраняет введённое значение и фокус остаётся стабильным.",
+      "Modal flows: `forward` и `send_schedule` получили более явную dialog-semantics и выровненную action-row, ближе к общей системе модалок клиента.",
+      "Full-screen состояния: `welcome` и `logout` теперь имеют явные screen-shell semantics; logout надёжнее ведёт себя с клавиатурой, а welcome корректнее объявляет себя как status-состояние.",
+    ],
+    fixed: ["`send_schedule` больше не сбрасывает выбранное время после ошибки валидации; `Escape` теперь последовательно закрывает schedule/logout flows, а cancel-кнопки у modal flows выровнены по вторичному стилю."],
+  },
+  {
+    version: "0.1.739",
+    date: "2026-03-06",
+    improved: [
+      "Меню: coarse-pointer context menu теперь рендерится как более явный sheet с header и кнопкой закрытия, а не как просто список действий под handle.",
+      "Меню/модалки: context menu sheet получил корректную семантику `dialog`, а popup-вариант сохранил `menu`, чтобы поверхности вели себя системнее.",
+      "Подтверждения: confirm modal теперь оформлен как отдельный shell с tone и более явной action-row, ближе к продуктовым модалкам клиента.",
+    ],
+    fixed: ["Confirm modal теперь стабильно закрывается по `Escape`, а cancel-кнопка использует вторичный стиль; sheet/menu и confirm surfaces визуально и поведенчески стали ближе друг к другу."],
+  },
+  {
+    version: "0.1.738",
+    date: "2026-03-06",
+    improved: [
+      "История сообщений: у bubble-групп появились явные роли `single / start / middle / end`, чтобы структура истории была стабильнее и предсказуемее для дальнейшего UI-polish.",
+      "История сообщений: grouped bubbles внутри одного блока теперь стекаются плотнее, а разрыв между независимыми сообщениями читается лучше.",
+      "Архитектура истории: renderChat больше не навешивает group-геометрию ad-hoc — это вынесено в отдельный helper с прямыми тестами.",
+    ],
+    fixed: ["Группы сообщений визуально меньше разваливаются на одинаково отстоящие строки: continuation-сообщения и альбомы теперь читаются как цельный блок."],
+  },
+  {
+    version: "0.1.737",
+    date: "2026-03-06",
+    improved: [
+      "Меню/модалки: добавили явную modal surface model для слоёв inline / overlay-context / overlay-viewer / overlay-auth вместо размазанной логики прямо в renderApp.",
+      "Backdrop lifecycle: правила закрытия по overlay для context menu и file viewer теперь определяются в одном helper и покрыты прямыми unit-тестами.",
+      "Архитектура: renderApp стал тоньше по platform-слою — применение overlay classes и surface routing вынесены в отдельный модуль.",
+    ],
+    fixed: ["File viewer: защита от случайного backdrop-close сразу после открытия теперь живёт в общем overlay policy, а не в локальном обработчике с дублирующей логикой."],
+  },
+  {
+    version: "0.1.736",
+    date: "2026-03-06",
+    improved: [
+      "История сообщений: вынесли явную history layout model для рендера границ date/unread/message/album вместо расчёта всего прямо внутри renderChat.",
+      "История сообщений: virtual slice теперь сохраняет continuation boundary между сообщениями, даже когда рендерится только окно истории.",
+      "Непрочитанные: divider больше не привязывается к системным сообщениям после lastRead и смещается к первому реальному сообщению.",
+    ],
+    fixed: ["Внутренняя структура истории стала предсказуемее: album groups, separators и хвосты групп теперь считаются как отдельные blocks и покрыты прямыми тестами."],
+  },
+  {
     version: "0.1.735",
     date: "2026-03-05",
     improved: [

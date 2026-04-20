@@ -38,7 +38,7 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
     }
     if (token && !autoAuthAttemptedForConn) {
       autoAuthAttemptedForConn = true;
-      store.set({ status: "Авторизация…" });
+      store.set({ status: "Проверяем сохранённую сессию…" });
       send({ type: "auth", session: token });
       return;
     }
@@ -49,14 +49,14 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
       ...prev,
       authMode: prev.authRememberedId ? "login" : "register",
       status: prev.authRememberedId
-        ? "Связь установлена. Нажмите «Войти», чтобы продолжить."
-        : "Связь установлена. Нажмите «Войти», чтобы войти или зарегистрироваться.",
+        ? "Соединение установлено. Введите пароль, чтобы продолжить."
+        : "Соединение установлено. Введите ID и пароль или создайте новый аккаунт.",
     }));
   }
 
   function authLoginFromDom() {
     if (store.get().conn !== "connected") {
-      store.set({ status: "Нет соединения" });
+      store.set({ status: "Нет соединения с сервером" });
       return;
     }
     const id = (document.getElementById("auth-id") as HTMLInputElement | null)?.value?.trim() ?? "";
@@ -74,7 +74,7 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
 
   function authRegisterFromDom() {
     if (store.get().conn !== "connected") {
-      store.set({ status: "Нет соединения" });
+      store.set({ status: "Нет соединения с сервером" });
       return;
     }
     const pw1 = (document.getElementById("auth-pw1") as HTMLInputElement | null)?.value ?? "";

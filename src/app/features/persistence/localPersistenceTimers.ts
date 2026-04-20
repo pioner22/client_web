@@ -4,7 +4,6 @@ import { mergeMessages } from "../../../helpers/chat/mergeMessages";
 import { saveOutboxForUser } from "../../../helpers/chat/outbox";
 import { savePinnedMessagesForUser } from "../../../helpers/chat/pinnedMessages";
 import { saveFileTransfersForUser } from "../../../helpers/files/fileTransferHistory";
-import { getStoredSessionToken } from "../../../helpers/auth/session";
 import { syncOutboxToServiceWorker } from "../../../helpers/pwa/outboxSync";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
@@ -63,7 +62,7 @@ export function scheduleSaveOutbox(store: Store<AppState>) {
       if (!st.selfId) return;
       saveOutboxForUser(st.selfId, st.outbox);
       if (outboxSwReadyForUser === st.selfId) {
-        void syncOutboxToServiceWorker(st.selfId, st.outbox, getStoredSessionToken());
+        void syncOutboxToServiceWorker(st.selfId, st.outbox);
       }
     } catch {
       // ignore
@@ -81,7 +80,7 @@ export function flushOutbox(store: Store<AppState>) {
     if (!st.selfId) return;
     saveOutboxForUser(st.selfId, st.outbox);
     if (outboxSwReadyForUser === st.selfId) {
-      void syncOutboxToServiceWorker(st.selfId, st.outbox, getStoredSessionToken());
+      void syncOutboxToServiceWorker(st.selfId, st.outbox);
     }
   } catch {
     // ignore
@@ -204,4 +203,3 @@ export function flushFileTransfers(store: Store<AppState>) {
     // ignore
   }
 }
-

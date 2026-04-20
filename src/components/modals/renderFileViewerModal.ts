@@ -1,7 +1,9 @@
 import { renderRichText } from "../../helpers/chat/richText";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { el } from "../../helpers/dom/el";
+import { isAudioLikeFile, isImageLikeFile, isVideoLikeFile } from "../../helpers/files/mediaKind";
 import { safeUrl } from "../../helpers/security/safeUrl";
+import { renderViewerFooterShell, type ViewerRailItem } from "./viewerFooterShell";
 
 export interface FileViewerMeta {
   authorId?: string | null;
@@ -9,7 +11,7 @@ export interface FileViewerMeta {
   authorHandle?: string | null;
   authorKind?: "dm" | "group" | "board";
   timestamp?: number | null;
-  rail?: Array<{ msgIdx: number; name: string; kind: "image" | "video"; thumbUrl: string | null; active?: boolean }>;
+  rail?: ViewerRailItem[];
 }
 
 export interface FileViewerModalActions {
@@ -45,14 +47,6 @@ function formatBytes(size: number): string {
   return `${value.toFixed(precision)} ${units[idx]}`;
 }
 
-function normalizeFileName(value: string): string {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const noQuery = raw.split(/[?#]/)[0];
-  const leaf = noQuery.split(/[\\/]/).pop() || "";
-  return leaf.trim().toLowerCase();
-}
-
 function formatViewerDate(ts?: number | null): string {
   const value = Number(ts ?? 0);
   if (!Number.isFinite(value) || value <= 0) return "";
@@ -81,51 +75,6 @@ function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement {
   return a;
 }
 
-const IMAGE_NAME_HINT_RE =
-  /(?:^|[_\-\s\(\)\[\]])(?:img|image|photo|pic|picture|screenshot|screen[_\-\s]?shot|shot|dsc|pxl|selfie|scan|скрин(?:шот)?|фото|картин|изображ|снимок)(?:[_\-\s\(\)\[\]]|\d|$)/;
-const VIDEO_NAME_HINT_RE =
-  /(?:^|[_\-\s\(\)\[\]])(?:video|vid|movie|clip|screencast|screen[_\-\s]?(?:rec|record|recording)|видео|ролик)(?:[_\-\s\(\)\[\]]|\d|$)/;
-const AUDIO_NAME_HINT_RE =
-  /(?:^|[_\-\s\(\)\[\]])(?:audio|voice|sound|music|song|track|record|rec|memo|note|voice[_\-\s]?note|аудио|звук|музык|песня|голос|запис|диктофон|заметк)(?:[_\-\s\(\)\[\]]|\d|$)/;
-
-const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/;
-const VIDEO_EXT_RE = /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/;
-const AUDIO_EXT_RE = /\.(mp3|m4a|aac|wav|ogg|opus|flac)$/;
-
-function isImageFile(name: string, mime?: string | null): boolean {
-  const mt = String(mime || "").toLowerCase();
-  if (mt.startsWith("image/")) return true;
-  if (mt.startsWith("video/") || mt.startsWith("audio/")) return false;
-  const n = normalizeFileName(name);
-  if (!n) return false;
-  if (IMAGE_EXT_RE.test(n)) return true;
-  // iOS often names videos as IMG_XXXX.MP4/MOV; extension must override name hints.
-  if (VIDEO_EXT_RE.test(n) || AUDIO_EXT_RE.test(n)) return false;
-  return IMAGE_NAME_HINT_RE.test(n);
-}
-
-function isVideoFile(name: string, mime?: string | null): boolean {
-  const mt = String(mime || "").toLowerCase();
-  if (mt.startsWith("video/")) return true;
-  if (mt.startsWith("image/") || mt.startsWith("audio/")) return false;
-  const n = normalizeFileName(name);
-  if (!n) return false;
-  if (VIDEO_EXT_RE.test(n)) return true;
-  if (IMAGE_EXT_RE.test(n) || AUDIO_EXT_RE.test(n)) return false;
-  return VIDEO_NAME_HINT_RE.test(n);
-}
-
-function isAudioFile(name: string, mime?: string | null): boolean {
-  const mt = String(mime || "").toLowerCase();
-  if (mt.startsWith("audio/")) return true;
-  if (mt.startsWith("image/") || mt.startsWith("video/")) return false;
-  const n = normalizeFileName(name);
-  if (!n) return false;
-  if (AUDIO_EXT_RE.test(n)) return true;
-  if (IMAGE_EXT_RE.test(n) || VIDEO_EXT_RE.test(n)) return false;
-  return AUDIO_NAME_HINT_RE.test(n);
-}
-
 export function renderFileViewerModal(
   url: string,
   name: string,
@@ -140,9 +89,9 @@ export function renderFileViewerModal(
   const titleText = String(name || "файл");
   const captionRaw = caption ? String(caption).trim() : "";
   const captionText = captionRaw && !captionRaw.startsWith("[file]") ? captionRaw : "";
-  const isImage = isImageFile(titleText, mime);
-  const isVideo = isVideoFile(titleText, mime);
-  const isAudio = isAudioFile(titleText, mime);
+  const isImage = isImageLikeFile(titleText, mime);
+  const isVideo = isVideoLikeFile(titleText, mime);
+  const isAudio = isAudioLikeFile(titleText, mime);
   const isVisual = isImage || isVideo;
   const shouldAutoplay = Boolean(isVideo && opts?.autoplay);
   const posterRaw = isVideo ? String(opts?.posterUrl || "").trim() : "";
@@ -157,9 +106,9 @@ export function renderFileViewerModal(
 
   const modalClasses = ["modal", "modal-viewer"];
   if (isVisual) modalClasses.push("viewer-visual");
-  if (isImage) modalClasses.push("viewer-image");
-  if (isVideo) modalClasses.push("viewer-video");
-  if (isAudio) modalClasses.push("viewer-audio");
+  if (isImage) modalClasses.push("viewer-kind-image");
+  if (isVideo) modalClasses.push("viewer-kind-video");
+  if (isAudio) modalClasses.push("viewer-kind-audio");
   if (captionText) modalClasses.push("viewer-has-caption");
   const box = el("div", { class: modalClasses.join(" "), role: "dialog", "aria-modal": "true" });
 
@@ -192,8 +141,6 @@ export function renderFileViewerModal(
   let zoomBaseH = 0;
   let suppressImageClickUntil = 0;
   let setZoom: ((nextScale: number, focus?: { x: number; y: number } | null) => void) | null = null;
-  let imageEl: HTMLImageElement | null = null;
-  let videoEl: HTMLVideoElement | null = null;
   if (isImage) {
     const zoomBtnOut = el(
       "button",
@@ -436,7 +383,6 @@ export function renderFileViewerModal(
     // Important: do not set `src` before wiring listeners — cached images may fire `load` early,
     // leaving the preloader stuck (notably when navigating with ArrowLeft/ArrowRight).
     const img = el("img", { class: "viewer-img", alt: titleText, decoding: "async" }) as HTMLImageElement;
-    imageEl = img;
     zoomTarget = img;
     const scroll = el("div", { class: "viewer-img-scroll" }, [img]);
     zoomScroll = scroll;
@@ -700,7 +646,6 @@ export function renderFileViewerModal(
       ...(shouldAutoplay ? { autoplay: "true" } : {}),
       "data-allow-audio": "1",
     }) as HTMLVideoElement;
-    videoEl = video;
     if (shouldAutoplay) {
       const attemptPlay = (muted: boolean) => {
         try {
@@ -760,36 +705,9 @@ export function renderFileViewerModal(
 
   const stage = el("div", { class: "viewer-stage" }, [body]);
   const railItems = (meta?.rail || []).filter((x) => x && Number.isFinite(x.msgIdx) && (x.kind === "image" || x.kind === "video"));
-  if (isVisual && actions.onOpenAt && railItems.length > 1) {
+  const footerShell = isVisual ? renderViewerFooterShell({ captionText, railItems, onOpenAt: actions.onOpenAt }) : null;
+  if (isVisual && railItems.length > 1) {
     box.classList.add("viewer-has-rail");
-    const railButtons = railItems.map((item) => {
-      const thumbUrl = item.thumbUrl ? safeUrl(item.thumbUrl, { base: window.location.href, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
-      const classes = ["viewer-rail-item"];
-      if (item.active) classes.push("active");
-      if (item.kind === "video") classes.push("viewer-rail-item-video");
-      const btn = el(
-        "button",
-        {
-          class: classes.join(" "),
-          type: "button",
-          title: item.name,
-          "aria-label": `Открыть: ${item.name}`,
-        },
-        [
-          thumbUrl
-            ? el("img", { class: "viewer-rail-thumb", src: thumbUrl, alt: "", loading: "lazy", decoding: "async" })
-            : el("div", { class: "viewer-rail-thumb viewer-rail-thumb-empty", "aria-hidden": "true" }, [item.kind === "video" ? "Видео" : "Фото"]),
-          item.kind === "video" ? el("div", { class: "viewer-rail-video-badge", "aria-hidden": "true" }, ["▶"]) : "",
-        ]
-      ) as HTMLButtonElement;
-      btn.disabled = Boolean(item.active);
-      btn.addEventListener("click", () => {
-        if (item.active) return;
-        actions.onOpenAt && actions.onOpenAt(item.msgIdx);
-      });
-      return btn;
-    });
-    stage.append(el("div", { class: "viewer-rail" }, railButtons));
   }
   if (isVisual) {
     if (actions.onPrev) {
@@ -811,58 +729,15 @@ export function renderFileViewerModal(
       stage.append(el("div", { class: "viewer-switcher viewer-switcher-next" }, [btnNext]));
     }
   }
-  const captionNode = captionText
+  const captionNode = !isVisual && captionText
     ? el("div", { class: "viewer-caption" }, [el("div", { class: "viewer-caption-body" }, renderRichText(captionText))])
     : null;
 
   const nodes: HTMLElement[] = [header, stage];
-  if (captionNode) {
-    if (isVisual) stage.append(captionNode);
-    else nodes.push(captionNode);
-  }
+  if (footerShell) nodes.push(footerShell);
+  if (captionNode) nodes.push(captionNode);
   nodes.push(actionsRow);
   box.append(...nodes);
-
-  if (isVisual) {
-    const measureBottomUi = () => {
-      const railEl = stage.querySelector(".viewer-rail") as HTMLElement | null;
-      const captionEl = stage.querySelector(".viewer-caption") as HTMLElement | null;
-      const railH = railEl ? railEl.getBoundingClientRect().height : 0;
-      const capH = captionEl ? captionEl.getBoundingClientRect().height : 0;
-      const total = Math.max(0, Math.ceil(railH + capH));
-      box.style.setProperty("--viewer-bottom-ui-h", `${total}px`);
-    };
-
-    const scheduleMeasure = (connectAttempt = 0, reflowAttempt = 0) => {
-      if (!box.isConnected) {
-        if (connectAttempt < 12) {
-          try {
-            window.requestAnimationFrame(() => scheduleMeasure(connectAttempt + 1, reflowAttempt));
-          } catch {
-            scheduleMeasure(connectAttempt + 1, reflowAttempt);
-          }
-        }
-        return;
-      }
-      measureBottomUi();
-      if (reflowAttempt < 4) {
-        try {
-          window.requestAnimationFrame(() => scheduleMeasure(connectAttempt, reflowAttempt + 1));
-        } catch {
-          scheduleMeasure(connectAttempt, reflowAttempt + 1);
-        }
-      }
-    };
-
-    try {
-      window.requestAnimationFrame(() => scheduleMeasure());
-    } catch {
-      scheduleMeasure();
-    }
-
-    imageEl?.addEventListener("load", () => scheduleMeasure(), { once: true });
-    videoEl?.addEventListener("loadedmetadata", () => scheduleMeasure(), { once: true });
-  }
 
   return box;
 }

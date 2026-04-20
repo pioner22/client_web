@@ -116,7 +116,16 @@
 
       function renderAttrs() {
         const keys = ["autocorrect", "spellcheck", "autocapitalize", "autocomplete", "inputmode", "enterkeyhint"];
-        attrs.innerHTML = keys.map((k) => `<code>${k}=${String(field.getAttribute(k))}</code>`).join(" · ");
+        const nodes = [];
+        keys.forEach((k, index) => {
+          const code = document.createElement("code");
+          code.textContent = `${k}=${String(field.getAttribute(k))}`;
+          nodes.push(code);
+          if (index < keys.length - 1) {
+            nodes.push(document.createTextNode(" · "));
+          }
+        });
+        attrs.replaceChildren(...nodes);
       }
 
       document.getElementById("preset-text").addEventListener("click", () => setPreset("text"));

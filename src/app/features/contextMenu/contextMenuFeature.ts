@@ -394,7 +394,6 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
           fileId && st.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean((t as any).url))
         );
         fileGroup.push(makeItem("msg_download", "Скачать", "⬇️", { disabled: !(fileId && (canAct || hasLocalUrl)) }));
-        fileGroup.push(makeItem("msg_copy_link", "Скопировать ссылку", "🔗", { disabled: !(fileId && canAct) }));
       }
       addGroup(fileGroup);
 

@@ -7,6 +7,15 @@ test("mobile composer: Telegram-like бар (blur) и более плотный 
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /@media\s*\(max-width:\s*600px\)\s+and\s+\(pointer:\s*coarse\)\s*\{/);
   assert.match(css, /--composer-input-font-weight:\s*500\s*;/);
+  assert.match(css, /\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(/);
   assert.match(css, /\.input-wrap\s*\{[\s\S]*?backdrop-filter:\s*blur\(10px\)\s*;/);
+  assert.match(css, /\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*var\(--composer-bottom-edge-pad\)\s*;/);
   assert.match(css, /\.composer-field\s*\.input\s*\{[\s\S]*?padding:\s*var\(--composer-input-pad-y\)\s+0\s*;/);
+});
+
+test("mobile composer: iOS override lowers composer closer to the bottom edge", async () => {
+  const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
+  assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(/);
+  assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?padding-top:\s*calc\(var\(--composer-pad-y\)\s*\*\s*0\.75\)\s*;/);
+  assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?background:\s*var\(--composer-bg\)\s*;/);
 });

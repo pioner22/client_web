@@ -1,4 +1,5 @@
 import { guessMimeTypeByName } from "./mimeGuess";
+import { isImageLikeFile as sharedIsImageLikeFile } from "./mediaKind";
 
 const CACHE_VERSION = 1;
 const CACHE_NAME = `yagodka_file_blob_cache_v${CACHE_VERSION}`;
@@ -439,29 +440,8 @@ async function pruneFileCacheForPut(userId: string, keepFileId: string, bytesNee
   saveIndex(uid, kept.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)));
 }
 
-const IMAGE_NAME_HINT_RE =
-  /^(?:img|image|photo|pic|picture|screenshot|screen[_\-\s]?shot|shot|dsc|pxl|selfie|scan|скрин(?:шот)?|фото|картин|изображ|снимок)([_\-\s]|\d|$)/;
-const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/;
-const NON_IMAGE_EXT_RE = /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2|mp3|m4a|aac|wav|ogg|opus|flac)$/;
-
-function normalizeName(value: string): string {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const noQuery = raw.split(/[?#]/)[0];
-  const leaf = noQuery.split(/[\\/]/).pop() || "";
-  return leaf.trim().toLowerCase();
-}
-
 export function isImageLikeFile(name: string, mime?: string | null): boolean {
-  const mt = String(mime || "").toLowerCase();
-  if (mt.startsWith("image/")) return true;
-  if (mt.startsWith("video/") || mt.startsWith("audio/")) return false;
-  const n = normalizeName(name);
-  if (!n) return false;
-  if (IMAGE_EXT_RE.test(n)) return true;
-  // iOS often names videos as IMG_XXXX.MP4/MOV; extension must override name hints.
-  if (NON_IMAGE_EXT_RE.test(n)) return false;
-  return IMAGE_NAME_HINT_RE.test(n);
+  return sharedIsImageLikeFile(name, mime);
 }
 
 function sumIndexSize(entries: CacheIndexEntry[]): number {

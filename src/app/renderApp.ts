@@ -2,7 +2,6 @@ import type { Layout } from "../components/layout/types";
 import type {
   ActionModalPayload,
   AppState,
-  ContextMenuPayload,
   MobileSidebarTab,
   PageKind,
   SearchResultEntry,
@@ -16,132 +15,227 @@ import { renderChat } from "../components/chat/renderChat";
 import { renderFooter } from "../components/footer/renderFooter";
 import { renderModal } from "../components/modals/renderModal";
 import { renderAuthModal } from "../components/modals/renderAuthModal";
-import { createCallModal } from "../components/modals/call/createCallModal";
 import { renderToast } from "../components/toast/renderToast";
 import { el } from "../helpers/dom/el";
 import { conversationKey } from "../helpers/chat/conversationKey";
+import { resetChatHistoryViewportRuntime } from "../helpers/chat/historyViewportRuntime";
 import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
 import { focusElement } from "../helpers/ui/focus";
 import { isIOS } from "../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { maxBoardScheduleDelayMs } from "../helpers/boards/boardSchedule";
-import { createSearchPage, type SearchPage } from "../pages/search/createSearchPage";
-import { createProfilePage, type ProfilePage } from "../pages/profile/createProfilePage";
-import { createUserPage, type UserPage } from "../pages/user/createUserPage";
-import { createRoomPage, type RoomPage } from "../pages/room/createRoomPage";
-import { createFilesPage, type FilesPage } from "../pages/files/createFilesPage";
-import { createHelpPage, type HelpPage } from "../pages/help/createHelpPage";
-import { createGroupCreatePage, type CreateGroupPage } from "../pages/create/createGroupCreatePage";
-import { createBoardCreatePage, type CreateBoardPage } from "../pages/create/createBoardCreatePage";
+import { createLazyCallModalRuntime } from "./bootstrap/lazyCallModalRuntime";
+import { applyOverlaySurface, resolveModalPresentation } from "./features/navigation/modalSurface";
+import {
+  contextMenuPayloadKey,
+  formatDatetimeLocal,
+  formatSenderLabel,
+  forwardModalPayloadKey,
+  mountChat,
+  mountRightCol,
+  parseDatetimeLocal,
+  shouldRenderContextMenuAsSheet,
+} from "./renderAppHelpers";
+import type { SearchPage } from "../pages/search/createSearchPage";
+import type { ProfilePage } from "../pages/profile/createProfilePage";
+import type { SessionsPage } from "../pages/profile/createSessionsPage";
+import type { UserPage } from "../pages/user/createUserPage";
+import type { RoomPage } from "../pages/room/createRoomPage";
+import type { FilesPage } from "../pages/files/createFilesPage";
+import type { HelpPage } from "../pages/help/createHelpPage";
+import type { CreateGroupPage } from "../pages/create/createGroupCreatePage";
+import type { CreateBoardPage } from "../pages/create/createBoardCreatePage";
 import type { AutoDownloadPrefs } from "../helpers/files/autoDownloadPrefs";
 
-let searchPage: SearchPage | null = null;
-let profilePage: ProfilePage | null = null;
-let userPage: UserPage | null = null;
-let groupPage: RoomPage | null = null;
-let boardPage: RoomPage | null = null;
-let filesPage: FilesPage | null = null;
+interface DeferredPage {
+  root: HTMLElement;
+  update: (state: AppState) => void;
+  focus: () => void;
+}
+
+interface DeferredPageRuntime<T extends DeferredPage> {
+  page: T | null;
+  promise: Promise<T | null> | null;
+  loadFailed: boolean;
+  loadingShell: HTMLElement | null;
+  loadingText: HTMLElement | null;
+  focusWhenReady: boolean;
+}
+
+function createDeferredPageRuntime<T extends DeferredPage>(): DeferredPageRuntime<T> {
+  return {
+    page: null,
+    promise: null,
+    loadFailed: false,
+    loadingShell: null,
+    loadingText: null,
+    focusWhenReady: false,
+  };
+}
+
+const searchPageRuntime = createDeferredPageRuntime<SearchPage>();
+const profilePageRuntime = createDeferredPageRuntime<ProfilePage>();
+const sessionsPageRuntime = createDeferredPageRuntime<SessionsPage>();
+const userPageRuntime = createDeferredPageRuntime<UserPage>();
+const groupPageRuntime = createDeferredPageRuntime<RoomPage>();
+const boardPageRuntime = createDeferredPageRuntime<RoomPage>();
+const filesPageRuntime = createDeferredPageRuntime<FilesPage>();
 let helpPage: HelpPage | null = null;
-let groupCreatePage: CreateGroupPage | null = null;
-let boardCreatePage: CreateBoardPage | null = null;
+let helpPagePromise: Promise<HelpPage | null> | null = null;
+let helpPageLoadFailed = false;
+let helpLoadingPage: HTMLElement | null = null;
+let helpLoadingText: HTMLElement | null = null;
+let latestHelpLayout: Layout | null = null;
+let latestHelpState: AppState | null = null;
+let helpFocusWhenReady = false;
+const groupCreatePageRuntime = createDeferredPageRuntime<CreateGroupPage>();
+const boardCreatePageRuntime = createDeferredPageRuntime<CreateBoardPage>();
 let lastPage: PageKind | null = null;
-let rightUserPage: UserPage | null = null;
-let rightGroupPage: RoomPage | null = null;
-let rightBoardPage: RoomPage | null = null;
+const rightUserPageRuntime = createDeferredPageRuntime<UserPage>();
+const rightGroupPageRuntime = createDeferredPageRuntime<RoomPage>();
+const rightBoardPageRuntime = createDeferredPageRuntime<RoomPage>();
 let rightPanelShell: HTMLElement | null = null;
 let rightPanelTitleEl: HTMLElement | null = null;
 let rightPanelBodyEl: HTMLElement | null = null;
-let callModal: ReturnType<typeof createCallModal> | null = null;
-let callModalKey = "";
+const callModalRuntime = createLazyCallModalRuntime();
 let forwardModalPage: HTMLElement | null = null;
 let forwardModalNode: HTMLElement | null = null;
 let forwardModalKey = "";
+let latestDeferredRenderLayout: Layout | null = null;
+let latestDeferredRenderState: AppState | null = null;
 
-function formatDatetimeLocal(ms: number): string {
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const y = d.getFullYear();
-  const m = pad(d.getMonth() + 1);
-  const day = pad(d.getDate());
-  const h = pad(d.getHours());
-  const min = pad(d.getMinutes());
-  return `${y}-${m}-${day}T${h}:${min}`;
+function ensureHelpLoadingPage(): HTMLElement {
+  if (helpLoadingPage && helpLoadingText) return helpLoadingPage;
+  const text = el("div", { class: "msg msg-sys help-page-loading" }, ["Загрузка справки…"]);
+  helpLoadingText = text;
+  helpLoadingPage = el("div", { class: "page info-page help-page-loading-shell" }, [text]);
+  return helpLoadingPage;
 }
 
-function parseDatetimeLocal(value: string): number | null {
-  const v = String(value || "").trim();
-  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mon = Number(m[2]);
-  const day = Number(m[3]);
-  const h = Number(m[4]);
-  const min = Number(m[5]);
-  if (!Number.isFinite(y) || !Number.isFinite(mon) || !Number.isFinite(day) || !Number.isFinite(h) || !Number.isFinite(min)) return null;
-  const d = new Date(y, mon - 1, day, h, min, 0, 0);
-  const ts = d.getTime();
-  return Number.isFinite(ts) ? ts : null;
-}
-
-function shouldRenderContextMenuAsSheet(): boolean {
-  try {
-    return Boolean(window.matchMedia?.("(pointer: coarse)")?.matches || window.matchMedia?.("(hover: none)")?.matches);
-  } catch {
-    return false;
+function mountLoadedHelpPageIfActive() {
+  if (!helpPage || !latestHelpLayout || !latestHelpState || lastPage !== "help") return;
+  mountChat(latestHelpLayout, helpPage.root);
+  helpPage.update(latestHelpState);
+  if (helpFocusWhenReady) {
+    helpFocusWhenReady = false;
+    helpPage.focus();
   }
 }
 
-function contextMenuPayloadKey(payload: ContextMenuPayload, sheet: boolean): string {
-  const title = String(payload?.title || "");
-  const pos = sheet
-    ? { x: 0, y: 0 }
-    : {
-        x: Number.isFinite(Number(payload?.x)) ? Math.round(Number(payload.x)) : 0,
-        y: Number.isFinite(Number(payload?.y)) ? Math.round(Number(payload.y)) : 0,
-      };
-  const items = Array.isArray(payload?.items)
-    ? payload.items.map((it) =>
-        it?.separator
-          ? { separator: 1 }
-          : {
-              id: String(it?.id || ""),
-              label: String(it?.label || ""),
-              icon: String(it?.icon || ""),
-              danger: it?.danger ? 1 : 0,
-              disabled: it?.disabled ? 1 : 0,
-            }
-      )
-    : [];
-  const reactionBar = payload?.reactionBar
-    ? {
-        emojis: Array.isArray(payload.reactionBar.emojis) ? payload.reactionBar.emojis : [],
-        active: String(payload.reactionBar.active || ""),
-      }
-    : null;
-  try {
-    return JSON.stringify({ v: 1, sheet: sheet ? 1 : 0, title, ...pos, items, reactionBar });
-  } catch {
-    return `${sheet ? 1 : 0}:${pos.x}:${pos.y}:${title}:${items.length}:${reactionBar ? 1 : 0}`;
-  }
-}
-
-function forwardModalPayloadKey(modal: Extract<NonNullable<AppState["modal"]>, { kind: "forward_select" }>): string {
-  const drafts =
-    Array.isArray(modal.forwardDrafts) && modal.forwardDrafts.length
-      ? modal.forwardDrafts
-      : modal.forwardDraft
-        ? [modal.forwardDraft]
-        : [];
-  const parts = drafts
-    .map((d) => {
-      const key = String((d as any)?.key ?? "").trim();
-      const id = (d as any)?.id;
-      const localId = String((d as any)?.localId ?? "").trim();
-      const ref = id !== undefined && id !== null ? String(id) : localId;
-      return key && ref ? `${key}:${ref}` : key ? key : ref ? ref : "";
+function ensureHelpPageLoaded(forceRetry = false) {
+  if (helpPage || helpPagePromise) return;
+  if (helpPageLoadFailed && !forceRetry) return;
+  helpPageLoadFailed = false;
+  if (helpLoadingText) helpLoadingText.textContent = "Загрузка справки…";
+  helpPagePromise = import("../pages/help/createHelpPage")
+    .then(({ createHelpPage }) => {
+      const page = createHelpPage();
+      helpPage = page;
+      helpPagePromise = null;
+      mountLoadedHelpPageIfActive();
+      return page;
     })
-    .filter(Boolean);
-  return parts.length ? parts.join("|") : "empty";
+    .catch(() => {
+      helpPagePromise = null;
+      helpPageLoadFailed = true;
+      if (helpLoadingText) helpLoadingText.textContent = "Не удалось загрузить справку";
+      return null;
+    });
+}
+
+function ensureDeferredCenterPageShell<T extends DeferredPage>(runtime: DeferredPageRuntime<T>): HTMLElement {
+  if (runtime.loadingShell && runtime.loadingText) return runtime.loadingShell;
+  const text = el("div", { class: "msg msg-sys page-loading-text" }, ["Загрузка страницы…"]);
+  runtime.loadingText = text;
+  runtime.loadingShell = el("div", { class: "page info-page page-loading-shell" }, [text]);
+  return runtime.loadingShell;
+}
+
+function ensureDeferredRightPanelShell<T extends DeferredPage>(runtime: DeferredPageRuntime<T>): HTMLElement {
+  if (runtime.loadingShell && runtime.loadingText) return runtime.loadingShell;
+  const text = el("div", { class: "msg msg-sys right-col-loading-text" }, ["Загрузка панели…"]);
+  runtime.loadingText = text;
+  runtime.loadingShell = el("div", { class: "right-col-loading-shell" }, [text]);
+  return runtime.loadingShell;
+}
+
+function mountLoadedCenterPageIfActive<T extends DeferredPage>(page: PageKind, runtime: DeferredPageRuntime<T>) {
+  if (!runtime.page || !latestDeferredRenderLayout || !latestDeferredRenderState || lastPage !== page) return;
+  mountChat(latestDeferredRenderLayout, runtime.page.root);
+  runtime.page.update(latestDeferredRenderState);
+  if (runtime.focusWhenReady) {
+    runtime.focusWhenReady = false;
+    runtime.page.focus();
+  }
+}
+
+function ensureDeferredCenterPageLoaded<T extends DeferredPage>(
+  runtime: DeferredPageRuntime<T>,
+  page: PageKind,
+  load: () => Promise<T>,
+  forceRetry = false
+) {
+  if (runtime.page || runtime.promise) return;
+  if (runtime.loadFailed && !forceRetry) return;
+  runtime.loadFailed = false;
+  if (runtime.loadingText) runtime.loadingText.textContent = "Загрузка страницы…";
+  runtime.promise = load()
+    .then((loadedPage) => {
+      runtime.page = loadedPage;
+      runtime.promise = null;
+      mountLoadedCenterPageIfActive(page, runtime);
+      return loadedPage;
+    })
+    .catch(() => {
+      runtime.promise = null;
+      runtime.loadFailed = true;
+      if (runtime.loadingText) runtime.loadingText.textContent = "Не удалось загрузить страницу";
+      return null;
+    });
+}
+
+function renderDeferredCenterPage<T extends DeferredPage>(
+  layout: Layout,
+  state: AppState,
+  page: PageKind,
+  runtime: DeferredPageRuntime<T>,
+  load: () => Promise<T>,
+  pageChanged: boolean
+) {
+  if (runtime.page) {
+    mountChat(layout, runtime.page.root);
+    runtime.page.update(state);
+    if (pageChanged) runtime.page.focus();
+    return;
+  }
+  if (pageChanged) runtime.focusWhenReady = true;
+  mountChat(layout, ensureDeferredCenterPageShell(runtime));
+  ensureDeferredCenterPageLoaded(runtime, page, load, pageChanged);
+}
+
+function ensureDeferredRightPanelLoaded<T extends DeferredPage>(
+  runtime: DeferredPageRuntime<T>,
+  load: () => Promise<T>,
+  onReady: (page: T) => void,
+  forceRetry = false
+) {
+  if (runtime.page || runtime.promise) return;
+  if (runtime.loadFailed && !forceRetry) return;
+  runtime.loadFailed = false;
+  if (runtime.loadingText) runtime.loadingText.textContent = "Загрузка панели…";
+  runtime.promise = load()
+    .then((loadedPage) => {
+      runtime.page = loadedPage;
+      runtime.promise = null;
+      onReady(loadedPage);
+      return loadedPage;
+    })
+    .catch(() => {
+      runtime.promise = null;
+      runtime.loadFailed = true;
+      if (runtime.loadingText) runtime.loadingText.textContent = "Не удалось загрузить панель";
+      return null;
+    });
 }
 
 function disposeForwardModalCache() {
@@ -153,30 +247,6 @@ function disposeForwardModalCache() {
   forwardModalNode = null;
   forwardModalPage = null;
   forwardModalKey = "";
-}
-
-function formatSenderLabel(state: AppState, senderId: string): string {
-  const id = String(senderId || "").trim();
-  if (!id) return "";
-  if (String(state.selfId || "") === id) return "Я";
-  const friend = state.friends.find((f) => f.id === id);
-  const profile = state.profiles?.[id];
-  const displayName = String(friend?.display_name || profile?.display_name || "").trim();
-  const handleRaw = String(friend?.handle || profile?.handle || "").trim();
-  const handle = handleRaw ? (handleRaw.startsWith("@") ? handleRaw : `@${handleRaw}`) : "";
-  if (displayName) return displayName;
-  if (handle) return handle;
-  return id;
-}
-
-function mountChat(layout: Layout, node: HTMLElement) {
-  if (layout.chatHost.childNodes.length === 1 && layout.chatHost.firstChild === node) return;
-  layout.chatHost.replaceChildren(node);
-}
-
-function mountRightCol(layout: Layout, node: HTMLElement) {
-  if (layout.rightCol.childNodes.length === 1 && layout.rightCol.firstChild === node) return;
-  layout.rightCol.replaceChildren(node);
 }
 
 function ensureRightPanelShell(actions: RenderActions): { shell: HTMLElement; title: HTMLElement; body: HTMLElement } {
@@ -222,6 +292,7 @@ export interface RenderActions {
   onAuthLogin: () => void;
   onAuthRegister: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
+  onAuthUseDifferentAccount: () => void;
   onAuthOpen: () => void;
   onAuthLogout: () => void;
   onOpenSidebarToolsMenu: (x: number, y: number) => void;
@@ -234,6 +305,8 @@ export interface RenderActions {
   onApplyPwaUpdate: () => void;
   onSkinChange: (skinId: string) => void;
   onThemeChange: (theme: ThemeMode) => void;
+  onSessionsRefresh: () => void;
+  onSessionsLogoutOthers: () => void;
   onGroupCreate: () => void;
   onBoardCreate: () => void;
   onMembersAdd: () => void;
@@ -292,21 +365,13 @@ export interface RenderActions {
 }
 
 export function renderApp(layout: Layout, state: AppState, actions: RenderActions) {
+  latestDeferredRenderLayout = layout;
+  latestDeferredRenderState = state;
   const pageChanged = state.page !== lastPage;
   lastPage = state.page;
-  const authOnly = !state.authed;
-  const modalKind = state.modal?.kind ?? null;
-  const fullScreenKind =
-    modalKind === "welcome" ||
-    modalKind === "logout" ||
-    modalKind === "update" ||
-    modalKind === "pwa_update" ||
-    modalKind === "auth"
-      ? modalKind
-      : authOnly
-        ? "auth"
-        : null;
-  const fullScreenActive = Boolean(fullScreenKind);
+  const modalPresentation = resolveModalPresentation({ authed: state.authed, modal: state.modal });
+  const fullScreenKind = modalPresentation.fullScreenKind;
+  const fullScreenActive = modalPresentation.fullScreenActive;
 
   // Контекстное меню не должно "ломать" макет и прятать composer.
   // Composer показываем только когда выбран чат/контакт/доска (как в tweb).
@@ -318,7 +383,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const mobileUi = isMobileLikeUi();
   const rightTarget = state.rightPanel;
   const showRightPanel = !fullScreenActive && Boolean(rightTarget && state.page === "main" && !mobileUi);
-  const authModalVisible = fullScreenKind === "auth";
+  const authModalVisible = modalPresentation.authModalVisible;
   if (typeof document !== "undefined") {
     document.body.classList.toggle("has-right-col", showRightPanel);
     document.body.classList.toggle("has-auth-pages", fullScreenActive);
@@ -590,9 +655,12 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const prevMembersRemoveInput =
     state.modal?.kind === "members_remove" ? (document.getElementById("members-remove-input") as HTMLInputElement | null) : null;
   const prevRenameInput = state.modal?.kind === "rename" ? (document.getElementById("rename-name") as HTMLInputElement | null) : null;
+  const prevSendScheduleInput =
+    state.modal?.kind === "send_schedule" ? (document.getElementById("send-schedule-at") as HTMLInputElement | null) : null;
   const hadAuthModal = Boolean(prevAuthIdInput || prevAuthPwInput || prevAuthPw1Input || prevAuthPw2Input || prevAuthSkinSelect);
   const hadFileSendModal = Boolean(prevFileSendCaptionInput);
   const hadBoardPostModal = Boolean(prevBoardPostInput);
+  const hadSendScheduleModal = Boolean(prevSendScheduleInput);
   const prevAuthId = prevAuthIdInput?.value ?? "";
   const prevAuthPw = prevAuthPwInput?.value ?? "";
   const prevAuthPw1 = prevAuthPw1Input?.value ?? "";
@@ -604,11 +672,14 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const prevMembersAddEntry = prevMembersAddEntryInput?.value ?? "";
   const prevMembersRemove = prevMembersRemoveInput?.value ?? "";
   const prevRename = prevRenameInput?.value ?? "";
+  const prevSendScheduleAt = prevSendScheduleInput?.value ?? "";
 
   const modalActions = {
     onAuthLogin: actions.onAuthLogin,
     onAuthRegister: actions.onAuthRegister,
     onAuthModeChange: actions.onAuthModeChange,
+    onAuthOpen: actions.onAuthOpen,
+    onAuthUseDifferentAccount: actions.onAuthUseDifferentAccount,
     onClose: actions.onCloseModal,
     onConfirm: actions.onConfirmModal,
     onBoardPostPublish: actions.onBoardPostPublish,
@@ -646,13 +717,14 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   };
   const authMessage = state.modal?.kind === "auth" ? state.modal.message : undefined;
   const authModalNode = authModalVisible
-    ? renderAuthModal(state.authMode, state.authRememberedId, authMessage, state.skins, state.skin, {
-        onLogin: actions.onAuthLogin,
-        onRegister: actions.onAuthRegister,
-        onModeChange: actions.onAuthModeChange,
-        onSkinChange: actions.onSkinChange,
-        onClose: actions.onCloseModal,
-      })
+      ? renderAuthModal(state.authMode, state.authRememberedId, authMessage, state.skins, state.skin, {
+          onLogin: actions.onAuthLogin,
+          onRegister: actions.onAuthRegister,
+          onModeChange: actions.onAuthModeChange,
+          onUseDifferentAccount: actions.onAuthUseDifferentAccount,
+          onSkinChange: actions.onSkinChange,
+          onClose: actions.onCloseModal,
+        })
     : null;
   const overlayState = layout.overlay as any;
   const reuseContextMenuNode =
@@ -673,62 +745,22 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
 
   const callModalNode =
     state.modal?.kind === "call"
-      ? (() => {
-          const modal = state.modal;
-          const callId = String(modal.callId || "").trim();
-          const targetKey = String(modal.room || modal.to || "").trim();
-          const pendingKey = `call:pending:${modal.mode}:${targetKey}:${String(modal.from || "").trim()}`;
-          const key = callId ? `call:${callId}` : pendingKey;
-          if (!callModal) {
-            callModal = createCallModal({
-              onHangup: actions.onCloseModal,
-              onAccept: (cid) => actions.onCallAccept(cid),
-              onDecline: (cid) => actions.onCallDecline(cid),
-              onOpenExternal: (url) => {
-                try {
-                  window.open(url, "_blank", "noopener,noreferrer");
-                } catch {
-                  // ignore
-                }
-              },
-            });
-            callModalKey = key;
-          } else if (callId && callModalKey === pendingKey) {
-            // Upgrade pending -> callId without recreating; prevents flicker and first-open races.
-            callModalKey = key;
-          } else if (callModalKey !== key) {
+      ? callModalRuntime.render(state, state.modal, {
+          onHangup: actions.onCloseModal,
+          onAccept: (cid) => actions.onCallAccept(cid),
+          onDecline: (cid) => actions.onCallDecline(cid),
+          onOpenExternal: (url) => {
             try {
-              callModal?.destroy();
+              window.open(url, "_blank", "noopener,noreferrer");
             } catch {
               // ignore
             }
-            callModal = createCallModal({
-              onHangup: actions.onCloseModal,
-              onAccept: (cid) => actions.onCallAccept(cid),
-              onDecline: (cid) => actions.onCallDecline(cid),
-              onOpenExternal: (url) => {
-                try {
-                  window.open(url, "_blank", "noopener,noreferrer");
-                } catch {
-                  // ignore
-                }
-              },
-            });
-            callModalKey = key;
-          }
-          callModal.update(state, modal);
-          return callModal.root;
-        })()
+          },
+        })
       : null;
 
-  if (state.modal?.kind !== "call" && callModal) {
-    try {
-      callModal.destroy();
-    } catch {
-      // ignore
-    }
-    callModal = null;
-    callModalKey = "";
+  if (state.modal?.kind !== "call") {
+    callModalRuntime.clear();
   }
 
   const forwardModal = state.modal?.kind === "forward_select" ? state.modal : null;
@@ -765,9 +797,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   // Исключения:
   // - context_menu: всегда поверх (overlay) из-за позиционирования по курсору/тапу
   // - file_viewer: поверх (overlay) как fullscreen viewer (Telegram‑паттерн)
-  const inlineModal = Boolean(
-    !fullScreenActive && state.modal && state.modal.kind !== "context_menu" && state.modal.kind !== "file_viewer" && state.modal.kind !== "call"
-  );
+  const inlineModal = modalPresentation.inlineModal;
   layout.chat.classList.toggle("chat-page", state.page !== "main" || inlineModal);
   const showChatTop = state.page === "main" && !inlineModal && Boolean(state.selected);
   layout.chatTop.classList.toggle("hidden", !showChatTop);
@@ -777,16 +807,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     layout.chatHost.removeAttribute("data-chat-key");
     layout.chatJump.classList.add("hidden");
     const hostState = layout.chatHost as any;
-    if (hostState && hostState.__chatLinesObserver && typeof hostState.__chatLinesObserver.disconnect === "function") {
-      try {
-        hostState.__chatLinesObserver.disconnect();
-      } catch {
-        // ignore
-      }
-    }
+    resetChatHistoryViewportRuntime(layout.chatHost);
     if (hostState) {
-      hostState.__chatLinesObserver = null;
-      hostState.__chatLinesObserved = null;
       hostState.__chatRenderState = null;
     }
     if (pageChanged) {
@@ -835,232 +857,359 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       }
     }
   } else if (state.page === "help") {
-    if (!helpPage) helpPage = createHelpPage();
-    mountChat(layout, helpPage.root);
-    helpPage.update(state);
-    if (pageChanged) helpPage.focus();
+    latestHelpLayout = layout;
+    latestHelpState = state;
+    if (helpPage) {
+      mountChat(layout, helpPage.root);
+      helpPage.update(state);
+      if (pageChanged) helpPage.focus();
+    } else {
+      if (pageChanged) helpFocusWhenReady = true;
+      mountChat(layout, ensureHelpLoadingPage());
+      ensureHelpPageLoaded(pageChanged);
+    }
   } else if (state.page === "group_create") {
-    if (!groupCreatePage) {
-      groupCreatePage = createGroupCreatePage({
-        onCreate: actions.onGroupCreate,
-        onCancel: () => actions.onSetPage("main"),
-      });
-    }
-    mountChat(layout, groupCreatePage.root);
-    groupCreatePage.update(state);
-    if (pageChanged) groupCreatePage.focus();
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "group_create",
+      groupCreatePageRuntime,
+      () =>
+        import("../pages/create/createGroupCreatePage").then(({ createGroupCreatePage }) =>
+          createGroupCreatePage({
+            onCreate: actions.onGroupCreate,
+            onCancel: () => actions.onSetPage("main"),
+          })
+        ),
+      pageChanged
+    );
   } else if (state.page === "board_create") {
-    if (!boardCreatePage) {
-      boardCreatePage = createBoardCreatePage({
-        onCreate: actions.onBoardCreate,
-        onCancel: () => actions.onSetPage("main"),
-      });
-    }
-    mountChat(layout, boardCreatePage.root);
-    boardCreatePage.update(state);
-    if (pageChanged) boardCreatePage.focus();
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "board_create",
+      boardCreatePageRuntime,
+      () =>
+        import("../pages/create/createBoardCreatePage").then(({ createBoardCreatePage }) =>
+          createBoardCreatePage({
+            onCreate: actions.onBoardCreate,
+            onCancel: () => actions.onSetPage("main"),
+          })
+        ),
+      pageChanged
+    );
   } else if (state.page === "search") {
-    if (!searchPage) {
-      searchPage = createSearchPage({
-        onQueryChange: actions.onSearchQueryChange,
-        onSubmit: actions.onSearchSubmit,
-        onSelectTarget: actions.onSelectTarget,
-        onAuthRequest: actions.onAuthRequest,
-        onAuthAccept: actions.onAuthAccept,
-        onAuthDecline: actions.onAuthDecline,
-        onAuthCancel: actions.onAuthCancel,
-        onGroupJoin: actions.onGroupJoin,
-        onBoardJoin: actions.onBoardJoin,
-        onSearchPinToggle: actions.onSearchPinToggle,
-        onSearchServerForward: actions.onSearchServerForward,
-        onOpenHistoryHit: actions.onOpenHistoryHit,
-        onSearchHistoryDelete: actions.onSearchHistoryDelete,
-        onSearchHistoryForward: actions.onSearchHistoryForward,
-      });
-    }
-    mountChat(layout, searchPage.root);
-    searchPage.update(state);
-    if (pageChanged) searchPage.focus();
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "search",
+      searchPageRuntime,
+      () =>
+        import("../pages/search/createSearchPage").then(({ createSearchPage }) =>
+          createSearchPage({
+            onQueryChange: actions.onSearchQueryChange,
+            onSubmit: actions.onSearchSubmit,
+            onSelectTarget: actions.onSelectTarget,
+            onAuthRequest: actions.onAuthRequest,
+            onAuthAccept: actions.onAuthAccept,
+            onAuthDecline: actions.onAuthDecline,
+            onAuthCancel: actions.onAuthCancel,
+            onGroupJoin: actions.onGroupJoin,
+            onBoardJoin: actions.onBoardJoin,
+            onSearchPinToggle: actions.onSearchPinToggle,
+            onSearchServerForward: actions.onSearchServerForward,
+            onOpenHistoryHit: actions.onOpenHistoryHit,
+            onSearchHistoryDelete: actions.onSearchHistoryDelete,
+            onSearchHistoryForward: actions.onSearchHistoryForward,
+          })
+        ),
+      pageChanged
+    );
   } else if (state.page === "profile") {
-    if (!profilePage) {
-      profilePage = createProfilePage({
-        onDraftChange: actions.onProfileDraftChange,
-        onSave: actions.onProfileSave,
-        onRefresh: actions.onProfileRefresh,
-        onSkinChange: actions.onSkinChange,
-        onThemeChange: actions.onThemeChange,
-        onAvatarSelect: actions.onProfileAvatarSelect,
-        onAvatarClear: actions.onProfileAvatarClear,
-        onPushEnable: actions.onPushEnable,
-        onPushDisable: actions.onPushDisable,
-        onNotifyInAppEnable: actions.onNotifyInAppEnable,
-        onNotifyInAppDisable: actions.onNotifyInAppDisable,
-        onNotifySoundEnable: actions.onNotifySoundEnable,
-        onNotifySoundDisable: actions.onNotifySoundDisable,
-        onForcePwaUpdate: actions.onForcePwaUpdate,
-      });
-    }
-    mountChat(layout, profilePage.root);
-    profilePage.update(state);
-    if (pageChanged) profilePage.focus();
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "profile",
+      profilePageRuntime,
+      () =>
+        import("../pages/profile/createProfilePage").then(({ createProfilePage }) =>
+          createProfilePage({
+            onDraftChange: actions.onProfileDraftChange,
+            onSave: actions.onProfileSave,
+            onRefresh: actions.onProfileRefresh,
+            onOpenSessionsPage: () => actions.onSetPage("sessions"),
+            onSkinChange: actions.onSkinChange,
+            onThemeChange: actions.onThemeChange,
+            onAvatarSelect: actions.onProfileAvatarSelect,
+            onAvatarClear: actions.onProfileAvatarClear,
+            onPushEnable: actions.onPushEnable,
+            onPushDisable: actions.onPushDisable,
+            onNotifyInAppEnable: actions.onNotifyInAppEnable,
+            onNotifyInAppDisable: actions.onNotifyInAppDisable,
+            onNotifySoundEnable: actions.onNotifySoundEnable,
+            onNotifySoundDisable: actions.onNotifySoundDisable,
+            onForcePwaUpdate: actions.onForcePwaUpdate,
+          })
+        ),
+      pageChanged
+    );
+  } else if (state.page === "sessions") {
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "sessions",
+      sessionsPageRuntime,
+      () =>
+        import("../pages/profile/createSessionsPage").then(({ createSessionsPage }) =>
+          createSessionsPage({
+            onBackToProfile: () => actions.onSetPage("profile"),
+            onRefresh: actions.onSessionsRefresh,
+            onLogoutOthers: actions.onSessionsLogoutOthers,
+          })
+        ),
+      pageChanged
+    );
   } else if (state.page === "user") {
-    if (!userPage) {
-      userPage = createUserPage({
-        onBack: () => actions.onSetPage("main"),
-        onOpenChat: (id: string) => {
-          actions.onSetPage("main");
-          actions.onSelectTarget({ kind: "dm", id });
-        },
-      });
-    }
-    mountChat(layout, userPage.root);
-    userPage.update(state);
-    if (pageChanged) userPage.focus();
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "user",
+      userPageRuntime,
+      () =>
+        import("../pages/user/createUserPage").then(({ createUserPage }) =>
+          createUserPage({
+            onBack: () => actions.onSetPage("main"),
+            onOpenChat: (id: string) => {
+              actions.onSetPage("main");
+              actions.onSelectTarget({ kind: "dm", id });
+            },
+          })
+        ),
+      pageChanged
+    );
   } else if (state.page === "group") {
-    if (!groupPage) {
-      groupPage = createRoomPage("group", {
-        onBack: () => actions.onSetPage("main"),
-        onOpenChat: (id: string) => {
-          actions.onSetPage("main");
-          actions.onSelectTarget({ kind: "group", id });
-        },
-        onOpenFiles: () => actions.onSetPage("files"),
-        onOpenUser: (id: string) => actions.onOpenUser(id),
-        onGroupJoin: actions.onGroupJoin,
-        onBoardJoin: actions.onBoardJoin,
-        onGroupInviteAccept: actions.onGroupInviteAccept,
-        onGroupInviteDecline: actions.onGroupInviteDecline,
-        onGroupJoinAccept: actions.onGroupJoinAccept,
-        onGroupJoinDecline: actions.onGroupJoinDecline,
-        onBoardInviteJoin: actions.onBoardInviteJoin,
-        onBoardInviteDecline: actions.onBoardInviteDecline,
-        onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
-        onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
-        onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
-        onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
-        onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
-        onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
-        onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
-      });
-    }
-    mountChat(layout, groupPage.root);
-    groupPage.update(state);
-    if (pageChanged) groupPage.focus();
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "group",
+      groupPageRuntime,
+      () =>
+        import("../pages/room/createRoomPage").then(({ createRoomPage }) =>
+          createRoomPage("group", {
+            onBack: () => actions.onSetPage("main"),
+            onOpenChat: (id: string) => {
+              actions.onSetPage("main");
+              actions.onSelectTarget({ kind: "group", id });
+            },
+            onOpenFiles: () => actions.onSetPage("files"),
+            onOpenUser: (id: string) => actions.onOpenUser(id),
+            onGroupJoin: actions.onGroupJoin,
+            onBoardJoin: actions.onBoardJoin,
+            onGroupInviteAccept: actions.onGroupInviteAccept,
+            onGroupInviteDecline: actions.onGroupInviteDecline,
+            onGroupJoinAccept: actions.onGroupJoinAccept,
+            onGroupJoinDecline: actions.onGroupJoinDecline,
+            onBoardInviteJoin: actions.onBoardInviteJoin,
+            onBoardInviteDecline: actions.onBoardInviteDecline,
+            onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
+            onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
+            onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
+            onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
+            onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
+            onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
+            onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
+          })
+        ),
+      pageChanged
+    );
   } else if (state.page === "board") {
-    if (!boardPage) {
-      boardPage = createRoomPage("board", {
-        onBack: () => actions.onSetPage("main"),
-        onOpenChat: (id: string) => {
-          actions.onSetPage("main");
-          actions.onSelectTarget({ kind: "board", id });
-        },
-        onOpenFiles: () => actions.onSetPage("files"),
-        onOpenUser: (id: string) => actions.onOpenUser(id),
-        onGroupJoin: actions.onGroupJoin,
-        onBoardJoin: actions.onBoardJoin,
-        onGroupInviteAccept: actions.onGroupInviteAccept,
-        onGroupInviteDecline: actions.onGroupInviteDecline,
-        onGroupJoinAccept: actions.onGroupJoinAccept,
-        onGroupJoinDecline: actions.onGroupJoinDecline,
-        onBoardInviteJoin: actions.onBoardInviteJoin,
-        onBoardInviteDecline: actions.onBoardInviteDecline,
-        onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
-        onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
-        onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
-        onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
-        onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
-        onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
-        onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
-      });
-    }
-    mountChat(layout, boardPage.root);
-    boardPage.update(state);
-    if (pageChanged) boardPage.focus();
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "board",
+      boardPageRuntime,
+      () =>
+        import("../pages/room/createRoomPage").then(({ createRoomPage }) =>
+          createRoomPage("board", {
+            onBack: () => actions.onSetPage("main"),
+            onOpenChat: (id: string) => {
+              actions.onSetPage("main");
+              actions.onSelectTarget({ kind: "board", id });
+            },
+            onOpenFiles: () => actions.onSetPage("files"),
+            onOpenUser: (id: string) => actions.onOpenUser(id),
+            onGroupJoin: actions.onGroupJoin,
+            onBoardJoin: actions.onBoardJoin,
+            onGroupInviteAccept: actions.onGroupInviteAccept,
+            onGroupInviteDecline: actions.onGroupInviteDecline,
+            onGroupJoinAccept: actions.onGroupJoinAccept,
+            onGroupJoinDecline: actions.onGroupJoinDecline,
+            onBoardInviteJoin: actions.onBoardInviteJoin,
+            onBoardInviteDecline: actions.onBoardInviteDecline,
+            onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
+            onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
+            onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
+            onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
+            onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
+            onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
+            onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
+          })
+        ),
+      pageChanged
+    );
   } else if (state.page === "files") {
-    if (!filesPage) {
-      filesPage = createFilesPage({
-        onFileSend: actions.onFileSend,
-        onFileOfferAccept: actions.onFileOfferAccept,
-        onFileOfferReject: actions.onFileOfferReject,
-        onClearCompleted: actions.onClearCompletedFiles,
-        onAutoDownloadPrefsSave: actions.onAutoDownloadPrefsSave,
-        onOpenUser: actions.onOpenUser,
-      });
-    }
-    mountChat(layout, filesPage.root);
-    filesPage.update(state);
-    if (pageChanged) filesPage.focus();
+    renderDeferredCenterPage(
+      layout,
+      state,
+      "files",
+      filesPageRuntime,
+      () =>
+        import("../pages/files/createFilesPage").then(({ createFilesPage }) =>
+          createFilesPage({
+            onFileSend: actions.onFileSend,
+            onFileOfferAccept: actions.onFileOfferAccept,
+            onFileOfferReject: actions.onFileOfferReject,
+            onClearCompleted: actions.onClearCompletedFiles,
+            onAutoDownloadPrefsSave: actions.onAutoDownloadPrefsSave,
+            onOpenUser: actions.onOpenUser,
+          })
+        ),
+      pageChanged
+    );
   }
 
   if (showRightPanel && rightTarget) {
     const { shell, title, body } = ensureRightPanelShell(actions);
     if (rightTarget.kind === "dm") {
-      if (!rightUserPage) {
-        rightUserPage = createUserPage({
-          onBack: actions.onCloseRightPanel,
-          onOpenChat: (id: string) => actions.onSelectTarget({ kind: "dm", id }),
-        });
-      }
       title.textContent = "Контакт";
-      const viewState = { ...state, userViewId: rightTarget.id, groupViewId: null, boardViewId: null };
-      rightUserPage.update(viewState);
-      body.replaceChildren(rightUserPage.root);
+      if (rightUserPageRuntime.page) {
+        const viewState = { ...state, userViewId: rightTarget.id, groupViewId: null, boardViewId: null };
+        rightUserPageRuntime.page.update(viewState);
+        body.replaceChildren(rightUserPageRuntime.page.root);
+      } else {
+        body.replaceChildren(ensureDeferredRightPanelShell(rightUserPageRuntime));
+        ensureDeferredRightPanelLoaded(
+          rightUserPageRuntime,
+          () =>
+            import("../pages/user/createUserPage").then(({ createUserPage }) =>
+              createUserPage({
+                onBack: actions.onCloseRightPanel,
+                onOpenChat: (id: string) => actions.onSelectTarget({ kind: "dm", id }),
+              })
+            ),
+          (page) => {
+            const activeLayout = latestDeferredRenderLayout;
+            const activeState = latestDeferredRenderState;
+            if (!activeLayout || !activeState) return;
+            const activeTarget = activeState.rightPanel;
+            if (!activeTarget || activeTarget.kind !== "dm") return;
+            const { shell, title, body } = ensureRightPanelShell(actions);
+            title.textContent = "Контакт";
+            const viewState = { ...activeState, userViewId: activeTarget.id, groupViewId: null, boardViewId: null };
+            page.update(viewState);
+            body.replaceChildren(page.root);
+            mountRightCol(activeLayout, shell);
+          }
+        );
+      }
     } else if (rightTarget.kind === "group") {
-      if (!rightGroupPage) {
-        rightGroupPage = createRoomPage("group", {
-          onBack: actions.onCloseRightPanel,
-          onOpenChat: (id: string) => actions.onSelectTarget({ kind: "group", id }),
-          onOpenFiles: () => actions.onSetPage("files"),
-          onOpenUser: (id: string) => actions.onOpenUser(id),
-          onGroupJoin: actions.onGroupJoin,
-          onBoardJoin: actions.onBoardJoin,
-          onGroupInviteAccept: actions.onGroupInviteAccept,
-          onGroupInviteDecline: actions.onGroupInviteDecline,
-          onGroupJoinAccept: actions.onGroupJoinAccept,
-          onGroupJoinDecline: actions.onGroupJoinDecline,
-          onBoardInviteJoin: actions.onBoardInviteJoin,
-          onBoardInviteDecline: actions.onBoardInviteDecline,
-          onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
-          onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
-          onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
-          onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
-          onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
-          onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
-          onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
-        });
-      }
       title.textContent = "Чат";
-      const viewState = { ...state, groupViewId: rightTarget.id, userViewId: null, boardViewId: null };
-      rightGroupPage.update(viewState);
-      body.replaceChildren(rightGroupPage.root);
-    } else if (rightTarget.kind === "board") {
-      if (!rightBoardPage) {
-        rightBoardPage = createRoomPage("board", {
-          onBack: actions.onCloseRightPanel,
-          onOpenChat: (id: string) => actions.onSelectTarget({ kind: "board", id }),
-          onOpenFiles: () => actions.onSetPage("files"),
-          onOpenUser: (id: string) => actions.onOpenUser(id),
-          onGroupJoin: actions.onGroupJoin,
-          onBoardJoin: actions.onBoardJoin,
-          onGroupInviteAccept: actions.onGroupInviteAccept,
-          onGroupInviteDecline: actions.onGroupInviteDecline,
-          onGroupJoinAccept: actions.onGroupJoinAccept,
-          onGroupJoinDecline: actions.onGroupJoinDecline,
-          onBoardInviteJoin: actions.onBoardInviteJoin,
-          onBoardInviteDecline: actions.onBoardInviteDecline,
-          onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
-          onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
-          onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
-          onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
-          onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
-          onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
-          onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
-        });
+      if (rightGroupPageRuntime.page) {
+        const viewState = { ...state, groupViewId: rightTarget.id, userViewId: null, boardViewId: null };
+        rightGroupPageRuntime.page.update(viewState);
+        body.replaceChildren(rightGroupPageRuntime.page.root);
+      } else {
+        body.replaceChildren(ensureDeferredRightPanelShell(rightGroupPageRuntime));
+        ensureDeferredRightPanelLoaded(
+          rightGroupPageRuntime,
+          () =>
+            import("../pages/room/createRoomPage").then(({ createRoomPage }) =>
+              createRoomPage("group", {
+                onBack: actions.onCloseRightPanel,
+                onOpenChat: (id: string) => actions.onSelectTarget({ kind: "group", id }),
+                onOpenFiles: () => actions.onSetPage("files"),
+                onOpenUser: (id: string) => actions.onOpenUser(id),
+                onGroupJoin: actions.onGroupJoin,
+                onBoardJoin: actions.onBoardJoin,
+                onGroupInviteAccept: actions.onGroupInviteAccept,
+                onGroupInviteDecline: actions.onGroupInviteDecline,
+                onGroupJoinAccept: actions.onGroupJoinAccept,
+                onGroupJoinDecline: actions.onGroupJoinDecline,
+                onBoardInviteJoin: actions.onBoardInviteJoin,
+                onBoardInviteDecline: actions.onBoardInviteDecline,
+                onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
+                onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
+                onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
+                onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
+                onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
+                onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
+                onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
+              })
+            ),
+          (page) => {
+            const activeLayout = latestDeferredRenderLayout;
+            const activeState = latestDeferredRenderState;
+            if (!activeLayout || !activeState) return;
+            const activeTarget = activeState.rightPanel;
+            if (!activeTarget || activeTarget.kind !== "group") return;
+            const { shell, title, body } = ensureRightPanelShell(actions);
+            title.textContent = "Чат";
+            const viewState = { ...activeState, groupViewId: activeTarget.id, userViewId: null, boardViewId: null };
+            page.update(viewState);
+            body.replaceChildren(page.root);
+            mountRightCol(activeLayout, shell);
+          }
+        );
       }
+    } else if (rightTarget.kind === "board") {
       title.textContent = "Доска";
-      const viewState = { ...state, boardViewId: rightTarget.id, userViewId: null, groupViewId: null };
-      rightBoardPage.update(viewState);
-      body.replaceChildren(rightBoardPage.root);
+      if (rightBoardPageRuntime.page) {
+        const viewState = { ...state, boardViewId: rightTarget.id, userViewId: null, groupViewId: null };
+        rightBoardPageRuntime.page.update(viewState);
+        body.replaceChildren(rightBoardPageRuntime.page.root);
+      } else {
+        body.replaceChildren(ensureDeferredRightPanelShell(rightBoardPageRuntime));
+        ensureDeferredRightPanelLoaded(
+          rightBoardPageRuntime,
+          () =>
+            import("../pages/room/createRoomPage").then(({ createRoomPage }) =>
+              createRoomPage("board", {
+                onBack: actions.onCloseRightPanel,
+                onOpenChat: (id: string) => actions.onSelectTarget({ kind: "board", id }),
+                onOpenFiles: () => actions.onSetPage("files"),
+                onOpenUser: (id: string) => actions.onOpenUser(id),
+                onGroupJoin: actions.onGroupJoin,
+                onBoardJoin: actions.onBoardJoin,
+                onGroupInviteAccept: actions.onGroupInviteAccept,
+                onGroupInviteDecline: actions.onGroupInviteDecline,
+                onGroupJoinAccept: actions.onGroupJoinAccept,
+                onGroupJoinDecline: actions.onGroupJoinDecline,
+                onBoardInviteJoin: actions.onBoardInviteJoin,
+                onBoardInviteDecline: actions.onBoardInviteDecline,
+                onRemoveMember: (kind, roomId, memberId) => actions.onRoomMemberRemove(kind, roomId, memberId),
+                onBlockToggle: (memberId) => actions.onBlockToggle(memberId),
+                onWriteToggle: (kind, roomId, memberId, value) => actions.onRoomWriteToggle(kind, roomId, memberId, value),
+                onRefresh: (kind, roomId) => actions.onRoomRefresh(kind, roomId),
+                onInfoSave: (kind, roomId, description, rules) => actions.onRoomInfoSave(kind, roomId, description, rules),
+                onLeave: (kind, roomId) => actions.onRoomLeave(kind, roomId),
+                onDisband: (kind, roomId) => actions.onRoomDisband(kind, roomId),
+              })
+            ),
+          (page) => {
+            const activeLayout = latestDeferredRenderLayout;
+            const activeState = latestDeferredRenderState;
+            if (!activeLayout || !activeState) return;
+            const activeTarget = activeState.rightPanel;
+            if (!activeTarget || activeTarget.kind !== "board") return;
+            const { shell, title, body } = ensureRightPanelShell(actions);
+            title.textContent = "Доска";
+            const viewState = { ...activeState, boardViewId: activeTarget.id, userViewId: null, groupViewId: null };
+            page.update(viewState);
+            body.replaceChildren(page.root);
+            mountRightCol(activeLayout, shell);
+          }
+        );
+      }
     }
     mountRightCol(layout, shell);
   } else {
@@ -1070,38 +1219,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   renderFooter(layout.footer, state);
   renderToast(layout.toastHost, state.toast);
 
-  if (fullScreenKind && modalNode) {
-    layout.overlay.classList.remove("hidden");
-    layout.overlay.classList.remove("overlay-context");
-    layout.overlay.classList.remove("overlay-context-sheet");
-    layout.overlay.classList.remove("overlay-viewer");
-    layout.overlay.classList.add("overlay-auth");
-    layout.overlay.replaceChildren(modalNode);
-  } else if ((state.modal?.kind === "file_viewer" || state.modal?.kind === "call") && modalNode) {
-    layout.overlay.classList.remove("hidden");
-    layout.overlay.classList.remove("overlay-context");
-    layout.overlay.classList.remove("overlay-context-sheet");
-    layout.overlay.classList.add("overlay-viewer");
-    layout.overlay.classList.remove("overlay-auth");
-    if (layout.overlay.firstElementChild !== modalNode) {
-      layout.overlay.replaceChildren(modalNode);
-    }
-  } else if (state.modal?.kind === "context_menu" && modalNode) {
-    layout.overlay.classList.remove("hidden");
-    layout.overlay.classList.remove("overlay-viewer");
-    layout.overlay.classList.remove("overlay-auth");
-    layout.overlay.classList.add("overlay-context");
-    layout.overlay.classList.toggle("overlay-context-sheet", modalNode.classList.contains("ctx-menu-sheet"));
-    if (layout.overlay.firstElementChild !== modalNode) {
-      layout.overlay.replaceChildren(modalNode);
-    }
-  } else {
-    layout.overlay.classList.add("hidden");
-    layout.overlay.classList.remove("overlay-context");
-    layout.overlay.classList.remove("overlay-context-sheet");
-    layout.overlay.classList.remove("overlay-viewer");
-    layout.overlay.classList.remove("overlay-auth");
-    layout.overlay.replaceChildren();
+  applyOverlaySurface(layout.overlay, modalPresentation.overlaySurface, modalNode);
+  if (!modalPresentation.overlaySurface || !modalNode) {
     overlayState.__ctxMenuKey = null;
   }
 
@@ -1200,6 +1319,19 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     });
   }
 
+  if (state.modal?.kind === "send_schedule") {
+    const input = document.getElementById("send-schedule-at") as HTMLInputElement | null;
+    if (input && hadSendScheduleModal && input.value !== prevSendScheduleAt) input.value = prevSendScheduleAt;
+    queueMicrotask(() => {
+      if (!input) return;
+      if (prevActiveId === "send-schedule-at") {
+        focusElement(input);
+      } else if (!hadSendScheduleModal && !input.disabled) {
+        focusElement(input);
+      }
+    });
+  }
+
   if (state.modal?.kind === "confirm") {
     queueMicrotask(() => {
       const host = inlineModal ? layout.chat : layout.overlay;
@@ -1213,6 +1345,13 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       const host = inlineModal ? layout.chat : layout.overlay;
       const btn = host.querySelector(".modal .btn") as HTMLButtonElement | null;
       if (btn) btn.focus();
+    });
+  }
+
+  if (state.modal?.kind === "logout") {
+    queueMicrotask(() => {
+      const btn = layout.overlay.querySelector(".modal-logout .btn") as HTMLButtonElement | null;
+      if (btn) focusElement(btn);
     });
   }
 }

@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
+import { canDrainFilePrefetch, canDrainFileRuntime, isFileRuntimeDocumentVisible } from "./fileRuntimePolicy";
 
 type AutoDownloadKind = "image" | "video" | "audio" | "file";
 
@@ -118,10 +119,10 @@ export function createPreviewAutoFetchFeature(
 
   const autoFetchVisiblePreviews = async () => {
     const st = store.get();
-    if (!st.authed || st.conn !== "connected") return;
+    if (!canDrainFileRuntime(st)) return;
     if (st.page !== "main" || !st.selected) return;
     if (!st.selfId) return;
-    if (document.visibilityState === "hidden") return;
+    if (!isFileRuntimeDocumentVisible()) return;
 
     const now = Date.now();
     const convoKey = conversationKey(st.selected);
@@ -362,7 +363,7 @@ export function createPreviewAutoFetchFeature(
       : new Set<string>();
 
     const restoredIds = new Set<string>([...restoredThumbIds, ...restoredMediaIds, ...restoredAudioIds]);
-    if (!store.get().netLeader) return;
+    if (!canDrainFilePrefetch(store.get(), { prefetchAllowed: devicePrefetchAllowed, requireLeader: true })) return;
     for (const t of restoreTasks) {
       if (restoredIds.has(t.fileId)) continue;
       const isVisibleMedia = t.kind === "image" || t.kind === "video";
@@ -383,7 +384,7 @@ export function createPreviewAutoFetchFeature(
     if (st.page !== "main") return;
     if (!st.selected) return;
     if (st.modal && st.modal.kind !== "context_menu") return;
-    if (document.visibilityState === "hidden") return;
+    if (!isFileRuntimeDocumentVisible()) return;
 
     const key = conversationKey(st.selected);
     if (!key) return;
@@ -484,8 +485,7 @@ export function createPreviewAutoFetchFeature(
           const latest = store.get();
           const latestUid = latest.selfId;
           if (!latestUid) continue;
-          if (latest.conn !== "connected") continue;
-          if (!latest.netLeader) continue;
+          if (!canDrainFilePrefetch(latest, { prefetchAllowed: devicePrefetchAllowed, requireLeader: true })) continue;
           // Only prefetch small media to avoid wasting traffic/storage.
           if (t.kind !== "video" && t.size > WARMUP_PREFETCH_MAX_BYTES) continue;
           const k = `${latestUid}:${t.fileId}`;

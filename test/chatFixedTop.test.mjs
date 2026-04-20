@@ -9,19 +9,22 @@ import { build } from "esbuild";
 
 async function loadRenderChat() {
   const tempDir = await mkdtemp(path.join(tmpdir(), "yagodka-web-test-"));
-  const outfile = path.join(tempDir, "bundle.mjs");
+  const entryFile = path.join(tempDir, "renderChat.js");
   try {
     await build({
       entryPoints: [path.resolve("src/components/chat/renderChat.ts")],
-      outfile,
+      outdir: tempDir,
       bundle: true,
+      splitting: true,
       platform: "node",
       format: "esm",
       target: "node20",
       sourcemap: false,
+      entryNames: "[name]",
+      chunkNames: "chunks/[name]-[hash]",
       logLevel: "silent",
     });
-    const mod = await import(pathToFileURL(outfile).href);
+    const mod = await import(pathToFileURL(entryFile).href);
     if (typeof mod.renderChat !== "function") {
       throw new Error("renderChat export missing");
     }

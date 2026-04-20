@@ -14,6 +14,7 @@ export function renderHeader(layout: Layout, state: AppState) {
   if (state.page === "search") title = "Поиск";
   else if (state.page === "help") title = "Info";
   else if (state.page === "profile") title = "Профиль";
+  else if (state.page === "sessions") title = "Сессии";
   else if (state.page === "user") {
     const id = String(state.userViewId || "").trim();
     const p = id ? state.profiles?.[id] : null;
@@ -85,9 +86,25 @@ export function renderHeader(layout: Layout, state: AppState) {
   const meetReady = Boolean(getMeetBaseUrl());
   const canCall = Boolean(showCallActions && meetReady && state.authed && state.conn === "connected" && state.modal?.kind !== "call");
   const showChatMenu = Boolean(state.page === "main" && state.selected);
+  const showAuthButton = Boolean(!state.authed && state.authMode !== "auto");
   const statusLabel = state.status || "";
   const statusEl = el("span", { class: "hdr-status" }, [statusLabel]);
   const actionButtons: HTMLElement[] = [];
+  if (showAuthButton) {
+    actionButtons.push(
+      el(
+        "button",
+        {
+          class: "hdr-auth",
+          type: "button",
+          title: "Войти или зарегистрироваться",
+          "aria-label": "Войти или зарегистрироваться",
+          "data-action": "auth-open",
+        },
+        ["Войти"]
+      )
+    );
+  }
   if (showCallActions) {
     actionButtons.push(
       el(

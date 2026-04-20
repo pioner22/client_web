@@ -1,6 +1,7 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { upsertConversation } from "../../../helpers/chat/upsertConversation";
 import { arrayBufferToBase64 } from "../../../helpers/files/base64";
+import { liftFileHttpTokenToBearer, rememberFileHttpBearer } from "../../../helpers/files/fileHttpAuth";
 import { guessMimeTypeByName } from "../../../helpers/files/mimeGuess";
 import { nowTs } from "../../../helpers/time";
 import type { Store } from "../../../stores/store";
@@ -203,11 +204,14 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
       const MAX_RETRIES = 4;
       const baseDelayMs = 400;
       const maxDelayMs = 5000;
+      const httpAuth = liftFileHttpTokenToBearer(url);
+      const httpUrl = httpAuth.url || url;
+      const httpHeaders = httpAuth.headers;
 
       let offset = 0;
       const resyncOffset = async () => {
         try {
-          const res = await fetch(url, { method: "HEAD" });
+          const res = await fetch(httpUrl, { method: "HEAD", headers: httpHeaders });
           lastHttpStatus = res.status;
           const off = Number(res.headers.get("Upload-Offset") || "");
           if (Number.isFinite(off) && off >= 0) {
@@ -229,9 +233,10 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
         while (!upload.aborted && !progressed) {
           try {
             if (upload.aborted) break;
-            const res = await fetch(url, {
+            const res = await fetch(httpUrl, {
               method: "PATCH",
               headers: {
+                ...httpHeaders,
                 "Tus-Resumable": "1.0.0",
                 "Upload-Offset": String(offset),
                 "Content-Type": "application/offset+octet-stream",
@@ -494,6 +499,13 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
       }
       store.set({ status: `Загрузка на сервер: ${upload.file.name || "файл"}` });
       const uploadUrl = typeof msg?.upload_url === "string" ? String(msg.upload_url).trim() : "";
+      const uploadAuthToken =
+        typeof msg?.upload_auth_token === "string" ? String(msg.upload_auth_token).trim() : "";
+      if (uploadUrl && uploadAuthToken) {
+        rememberFileHttpBearer(uploadUrl, uploadAuthToken, {
+          base: typeof window !== "undefined" && typeof window.location?.href === "string" ? window.location.href : null,
+        });
+      }
       if (uploadUrl) void uploadFileHttp(upload, uploadUrl);
       else void uploadFileChunks(upload);
       return true;
@@ -556,4 +568,3 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
     abortUploadByFileId,
   };
 }
-

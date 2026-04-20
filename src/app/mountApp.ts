@@ -20,9 +20,11 @@ import type {
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { convoSig } from "../helpers/chat/convoSig";
+import { getChatHistoryViewportRuntime } from "../helpers/chat/historyViewportRuntime";
 import { messageSelectionKey } from "../helpers/chat/chatSelection";
 import { getCachedMediaAspectRatio } from "../helpers/chat/mediaAspectCache";
 import { prefetchHistoryMediaFromHistoryResult } from "../helpers/chat/historyMediaPrefetch";
+import { createChatStickyBottomState, isChatStickyBottomActive } from "../helpers/chat/stickyBottom";
 import { createChatSearchCounts, type ChatSearchFilter } from "../helpers/chat/chatSearch";
 import { saveArchivedForUser, toggleArchived } from "../helpers/chat/archives";
 import { saveChatFoldersForUser } from "../helpers/chat/folders";
@@ -32,7 +34,7 @@ import { putCachedFileBlob } from "../helpers/files/fileBlobCache";
 import { loadAutoDownloadPrefs, saveAutoDownloadPrefs, type AutoDownloadPrefs } from "../helpers/files/autoDownloadPrefs";
 import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { installNotificationSoundUnlock } from "../helpers/notify/notifySound";
-import { getTabNotifier } from "../helpers/notify/tabNotifier";
+import { getTabNotifier } from "../helpers/notify/tabNotifierLazy";
 import { getOrCreateInstanceId } from "../helpers/device/clientTags";
 import { applyTheme } from "../helpers/theme/theme";
 import { applyMessageView } from "../helpers/ui/messageView";
@@ -43,7 +45,20 @@ import { autosizeInput } from "../helpers/ui/autosizeInput";
 import { applyLegacyIdMask } from "../helpers/id/legacyIdMask";
 import { createInitialState } from "./createInitialState";
 import { handleServerMessage } from "./handleServerMessage";
+import {
+  createMountModalBridge,
+  createMountNavigationBridge,
+  normalizeChatSearchFilter,
+  sameChatSearchCounts,
+  sameNumberArray,
+} from "./mountActionBridges";
 import { installLateWiring } from "./bootstrap/installLateWiring";
+import { createLazyChatSearchUiRuntime } from "./bootstrap/lazyChatSearchUiRuntime";
+import { createLazyContextMenuActionsRuntime } from "./bootstrap/lazyContextMenuActionsRuntime";
+import { createLazyDebugTools } from "./bootstrap/lazyDebugTools";
+import { createLazyEmojiPopoverRuntime, type EmojiPopoverFeature } from "./bootstrap/lazyEmojiPopoverRuntime";
+import { createLazyMembersChipsRuntime } from "./bootstrap/lazyMembersChipsRuntime";
+import { createLazyPwaRuntime } from "./bootstrap/lazyPwaRuntime";
 import { createGatewayClientFeature } from "./features/net/gatewayClientFeature";
 import { createCallsFeature, type CallsFeature } from "./features/calls/callsFeature";
 import { createFileViewerFeature, type FileViewerFeature, type PendingFileViewer } from "./features/files/fileViewerFeature";
@@ -77,9 +92,8 @@ import { createHotkeyAdapterActionsFeature } from "./features/hotkeys/hotkeyAdap
 import { createHotkeysFeature } from "./features/hotkeys/hotkeysFeature";
 import { createVirtualHistoryFeature, type VirtualHistoryFeature } from "./features/history/virtualHistoryFeature";
 import { createContextMenuFeature, type ContextMenuFeature } from "./features/contextMenu/contextMenuFeature";
-import { createContextMenuActionsFeature, type ContextMenuActionsFeature } from "./features/contextMenu/contextMenuActionsFeature";
+import type { ContextMenuActionsFeature } from "./features/contextMenu/contextMenuActionsFeature";
 import { createContextMenuAdapterActionsFeature } from "./features/contextMenu/contextMenuAdapterActionsFeature";
-import { createRoomModerationActionsFeature } from "./features/contextMenu/roomModerationActionsFeature";
 import {
   flushDrafts,
   flushFileTransfers,
@@ -96,20 +110,13 @@ import { installPresenceLifecycleFeature } from "./features/persistence/presence
 import { createRestartStateFeature } from "./features/persistence/restartStateFeature";
 import { applyRestartStateSnapshot } from "./features/persistence/restartStateRestoreFeature";
 import { createUserLocalStateHydrationFeature, type UserLocalStateHydrationFeature } from "./features/persistence/userLocalStateHydrationFeature";
-import { createMembersChipsFeature, type MembersChipsFeature } from "./features/members/membersChipsFeature";
 import { createOutboxFeature, OUTBOX_SCHEDULE_GRACE_MS, type OutboxFeature } from "./features/outbox/outboxFeature";
 import { createSidebarPreferencesActionsFeature } from "./features/sidebar/sidebarPreferencesActionsFeature";
 import { createSidebarOverlayFeature, type SidebarOverlayFeature } from "./features/sidebar/sidebarOverlayFeature";
-import {
-  formatSearchHistorySenderLabel,
-  formatSearchHistoryShareText,
-  formatSearchHistoryTargetLabel,
-  formatSearchServerShareText,
-} from "./features/search/searchShareFormatters";
+import { formatSearchHistorySenderLabel, formatSearchHistoryTargetLabel } from "./features/search/searchResultLabels";
 import { createSearchInputActionsFeature } from "./features/search/searchInputActionsFeature";
 import { createSearchHistoryActionsFeature } from "./features/search/searchHistoryActionsFeature";
 import { createChatSearchSyncFeature, type ChatSearchSyncFeature } from "./features/search/chatSearchSyncFeature";
-import { createChatSearchUiFeature } from "./features/search/chatSearchUiFeature";
 import { createOpenChatFromSearchFeature } from "./features/search/openChatFromSearchFeature";
 import { searchableMessagesForSelected } from "./features/search/searchableMessagesFeature";
 import { createProfileActionsFeature } from "./features/profile/profileActionsFeature";
@@ -117,11 +124,6 @@ import { avatarKindForTarget, createAvatarFeature, type AvatarFeature } from "./
 import { createAuthFeature, type AuthFeature } from "./features/auth/authFeature";
 import { createLogoutFeature, type LogoutFeature } from "./features/auth/logoutFeature";
 import { createAuthUiActionsFeature } from "./features/auth/authUiActionsFeature";
-import { createPwaNotifyFeature, type PwaNotifyFeature } from "./features/pwa/pwaNotifyFeature";
-import { createPwaPushFeature, type PwaPushFeature } from "./features/pwa/pwaPushFeature";
-import { createPwaShareFeature, type PwaShareFeature } from "./features/pwa/pwaShareFeature";
-import { createPwaUpdateFeature, type PwaUpdateFeature } from "./features/pwa/pwaUpdateFeature";
-import { createPwaInstallPromptFeature } from "./features/pwa/pwaInstallPromptFeature";
 import { createNotifyActionsFeature } from "./features/pwa/notifyActionsFeature";
 import { createActionModalRoutingFeature } from "./features/navigation/actionModalRoutingFeature";
 import { createChatTargetSelectionFeature } from "./features/navigation/chatTargetSelectionFeature";
@@ -170,11 +172,9 @@ import { installSidebarChatContextInteractionsFeature } from "./features/navigat
 import { createThemeSkinActionsFeature } from "./features/navigation/themeSkinActionsFeature";
 import { renderApp } from "./renderApp";
 import { applyIosInputAssistantWorkaround, isIOS, isStandaloneDisplayMode } from "../helpers/ui/iosInputAssistant";
-import { installDebugHud } from "../helpers/ui/debugHud";
 import { installSidebarLeftResize } from "../helpers/ui/sidebarLeftResize";
 import { renderBoardPost } from "../helpers/boards/boardPost";
 import { maxBoardScheduleDelayMs, saveBoardScheduleForUser } from "../helpers/boards/boardSchedule";
-import { createEmojiPopoverFeature, type EmojiPopoverFeature } from "./features/emoji/emojiPopoverFeature";
 import { createToastFeature } from "./features/ui/toastFeature";
 
 const ROOM_INFO_MAX = 2000;
@@ -188,7 +188,11 @@ export function mountApp(root: HTMLElement) {
   window.visualViewport?.addEventListener("resize", handleMessageViewResize);
   const iosStandalone = isIOS() && isStandaloneDisplayMode();
   const layout = createLayout(root, { iosStandalone });
-  const debugHud = installDebugHud({ mount: root, chatHost: layout.chatHost, getState: () => store.get() });
+  const { debugHud, bindDebugMonitor } = createLazyDebugTools({
+    mount: root,
+    chatHost: layout.chatHost,
+    getState: () => store.get(),
+  });
   installSidebarLeftResize(layout.sidebar, layout.sidebarResizeHandle);
   installNotificationSoundUnlock();
   const tabNotifier = getTabNotifier(getOrCreateInstanceId);
@@ -209,18 +213,72 @@ export function mountApp(root: HTMLElement) {
   let authFeature: AuthFeature | null = null;
   let logoutFeature: LogoutFeature | null = null;
   let outboxFeature: OutboxFeature | null = null;
-  let membersChipsFeature: MembersChipsFeature | null = null;
   let localVideoThumbFeature: LocalVideoThumbFeature | null = null;
-  let pwaUpdateFeature: PwaUpdateFeature | null = null;
-  let pwaNotifyFeature: PwaNotifyFeature | null = null;
-  let pwaPushFeature: PwaPushFeature | null = null;
-  let pwaShareFeature: PwaShareFeature | null = null;
   let emojiPopoverFeature: EmojiPopoverFeature | null = null;
   let boardEditorPreviewSyncFeature: BoardEditorPreviewSyncFeature | null = null;
   let boardPostScheduleFeature: BoardPostScheduleFeature | null = null;
   let sendChatFeature: SendChatFeature | null = null;
   let chatSearchSyncFeature: ChatSearchSyncFeature | null = null;
   let userLocalStateHydrationFeature: UserLocalStateHydrationFeature | null = null;
+  const {
+    setPage,
+    openUserPage,
+    openGroupPage,
+    openBoardPage,
+    openRightPanel,
+    closeRightPanel,
+    requestHistory,
+    enqueueHistoryPreview,
+    requestMoreHistory,
+    scheduleHistoryWarmup,
+    clearPendingHistoryRequests,
+    maybeSendMessageRead,
+    maybeSendRoomRead,
+    selectTarget,
+    clearSelectedTarget,
+    scrollToChatMsgIdx,
+    jumpToChatMsgIdx,
+    openChatFromSearch,
+    setChatSearchDate,
+    closeChatSearch,
+    openChatSearch,
+    setChatSearchQuery,
+    setChatSearchFilter,
+    toggleChatSearchResults,
+    setChatSearchPos,
+    stepChatSearch,
+    focusChatSearch,
+  } = createMountNavigationBridge({
+    getPageNavigationFeature: () => pageNavigationFeature,
+    getHistoryFeature: () => historyFeature,
+    getReadReceiptsFeature: () => readReceiptsFeature,
+    getChatTargetSelectionFeature: () => chatTargetSelectionFeature,
+    getChatJumpFeature: () => chatJumpFeature,
+    getOpenChatFromSearchFeature: () => openChatFromSearchFeature,
+    getChatSearchUiFeature: () => chatSearchUiFeature,
+  });
+  const {
+    openActionModal,
+    openGroupCreateModal,
+    openBoardCreateModal,
+    openMembersAddModal,
+    openMembersRemoveModal,
+    openRenameModal,
+    openConfirmModal,
+    createGroup,
+    createBoard,
+    membersAddSubmit,
+    membersRemoveSubmit,
+    renameSubmit,
+    sendScheduleSubmit,
+    sendScheduleWhenOnlineSubmit,
+  } = createMountModalBridge({
+    getActionModalRoutingFeature: () => actionModalRoutingFeature,
+    getModalOpenersFeature: () => modalOpenersFeature,
+    getRoomCreateSubmitFeature: () => roomCreateSubmitFeature,
+    getRoomMembersSubmitFeature: () => roomMembersSubmitFeature,
+    getScheduleSubmitFeature: () => scheduleSubmitFeature,
+  });
 
   function scheduleBoardEditorPreview() {
     boardEditorPreviewSyncFeature?.scheduleBoardEditorPreview();
@@ -303,7 +361,7 @@ export function mountApp(root: HTMLElement) {
     document.addEventListener("focusin", (e) => maybeApplyIosInputAssistant(e.target), true);
   }
 
-  pwaShareFeature = createPwaShareFeature({
+  const pwaRuntime = createLazyPwaRuntime({
     store,
     input: layout.input,
     autosizeInput,
@@ -311,27 +369,17 @@ export function mountApp(root: HTMLElement) {
     showToast,
     canSendFiles: () => Boolean(fileUpload),
     sendFile: (file, target, caption) => fileUpload?.sendFile(file, target, caption),
+    send: (payload) => gateway.send(payload),
+    setPage,
+    selectTarget,
   });
-  pwaShareFeature.installEventListeners();
+  const { pwaShareFeature, pwaNotifyFeature, enablePush, disablePush } = pwaRuntime;
 
   window.addEventListener("yagodka:pwa-stream-ready", (e: Event) => {
     const ev = e as CustomEvent;
     const detail = ev?.detail as any;
     fileDownloadActions?.handlePwaStreamReady(detail);
   });
-  pwaNotifyFeature = createPwaNotifyFeature({ store, setPage, selectTarget });
-  pwaNotifyFeature.installEventListeners();
-
-  pwaPushFeature = createPwaPushFeature({ store, send: (payload) => gateway.send(payload) });
-  pwaPushFeature.installAutoSync();
-
-  async function enablePush(): Promise<void> {
-    await pwaPushFeature?.enablePush();
-  }
-
-  async function disablePush(): Promise<void> {
-    await pwaPushFeature?.disablePush();
-  }
   const lastReadSentAt = new Map<string, number>();
   const lastReadSavedAt = new Map<string, number>();
   let lastUserInputAt = Date.now();
@@ -450,6 +498,12 @@ export function mountApp(root: HTMLElement) {
     getComposerRawText: () => String(layout.input.value || ""),
     markUserActivity,
   });
+  const membersChipsFeature = createLazyMembersChipsRuntime({
+    store,
+    chatHost: layout.chat,
+    sendSearch: (query) => gateway.send({ type: "search", query }),
+  });
+  membersChipsFeature.installEventListeners();
   const forwardActionsFeature = createForwardActionsFeature({
     store,
     showToast,
@@ -457,6 +511,7 @@ export function mountApp(root: HTMLElement) {
     buildHelperDraft,
     sendChat,
     resolveChatSelection,
+    prepareMembersChips: () => membersChipsFeature.startDeferredBoot(),
   });
   const fileViewerActionsFeature = createFileViewerActionsFeature({
     store,
@@ -695,13 +750,14 @@ export function mountApp(root: HTMLElement) {
     const k = String(key || "").trim();
     if (!k) return;
     const host = layout.chatHost;
-    const hostState = host as any;
-    hostState.__stickBottom = { key: k, active: true, at: Date.now() };
+    const runtime = getChatHistoryViewportRuntime(host);
+    runtime.stickyBottom = createChatStickyBottomState(host, k, true);
     const stickNow = () => {
       if (String(host.getAttribute("data-chat-key") || "") !== k) return;
-      const st = hostState.__stickBottom;
-      if (!st || st.key !== k || !st.active) return;
+      const st = runtime.stickyBottom;
+      if (!isChatStickyBottomActive(host, st, k)) return;
       host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
+      runtime.stickyBottom = createChatStickyBottomState(host, k, true);
       maybeRecordLastRead(k);
     };
     queueMicrotask(stickNow);
@@ -757,7 +813,6 @@ export function mountApp(root: HTMLElement) {
     store,
     closeModal,
     jumpToChatMsgIdx,
-    requestFreshHttpDownloadUrl,
     tryOpenFileViewerFromCache,
     enqueueFileGet,
     setPendingFileViewer: (next) => {
@@ -938,11 +993,6 @@ export function mountApp(root: HTMLElement) {
   });
   chatSurfaceEventsFeature.install();
 
-  createPwaInstallPromptFeature({
-    showToast,
-    setPage,
-  }).installEventListeners();
-
   function syncNavOverlay() {
     sidebarOverlay?.syncNavOverlay();
   }
@@ -1022,7 +1072,7 @@ export function mountApp(root: HTMLElement) {
   const { gateway } = createGatewayClientFeature({
     store,
     getGatewayUrl,
-    handleSearchResultMessage: (msg) => membersChipsFeature?.handleSearchResultMessage(msg) ?? false,
+    handleSearchResultMessage: (msg) => membersChipsFeature.handleSearchResultMessage(msg),
     handleHistoryResultMessage: (msg) => {
       historyFeature?.handleHistoryResultMessage(msg); prefetchHistoryMediaFromHistoryResult(msg, { getState: () => store.get(), devicePrefetchAllowed: deviceCaps.prefetchAllowed, autoDownloadCachePolicyFeature, enqueueFileGet });
     },
@@ -1068,10 +1118,9 @@ export function mountApp(root: HTMLElement) {
   };
 
   const reconnectGateway = () => {
-    // Сбрасываем серверную авторизацию через переподключение.
-    gateway.close();
-    // Важно: после manual-close шлюз не делает авто-reconnect, поэтому сразу подключаемся заново.
-    // Иначе пользователю приходится делать ручной refresh, чтобы снова войти.
+    // После logout сервер сам рвёт текущую auth-сессию, поэтому здесь достаточно
+    // гарантировать наличие живого соединения. Не делаем gateway.close():
+    // для multiplex transport это разрушает текущий экземпляр и ломает re-login flow.
     gateway.connect();
   };
 
@@ -1081,7 +1130,7 @@ export function mountApp(root: HTMLElement) {
     clearToast,
     resetAutoAuthAttempt: () => authFeature?.resetAutoAuthAttempt(),
     onHistoryLogout: () => historyFeature?.onLogout(),
-    onPwaPushLogout: () => pwaPushFeature?.onLogout(),
+    onPwaPushLogout: () => pwaRuntime.onLogout(),
     resetFileGet: () => fileGet?.reset(),
     resetFileDownloadActions: () => fileDownloadActions?.reset(),
     resetFileDownloads: () => fileDownload?.reset(),
@@ -1105,13 +1154,6 @@ export function mountApp(root: HTMLElement) {
     store,
     send: (payload) => gateway.send(payload),
   });
-
-  membersChipsFeature = createMembersChipsFeature({
-    store,
-    chatHost: layout.chat,
-    sendSearch: (query) => gateway.send({ type: "search", query }),
-  });
-  membersChipsFeature.installEventListeners();
 
   callsFeature = createCallsFeature({
     store,
@@ -1177,8 +1219,8 @@ export function mountApp(root: HTMLElement) {
     footer: layout.footer,
     mobileSidebarMq,
     floatingSidebarMq,
-    resetGroupCreateMembers: () => membersChipsFeature?.resetCreateMembers("group_create"),
-    resetBoardCreateMembers: () => membersChipsFeature?.resetCreateMembers("board_create"),
+    resetGroupCreateMembers: () => membersChipsFeature.resetCreateMembers("group_create"),
+    resetBoardCreateMembers: () => membersChipsFeature.resetCreateMembers("board_create"),
     closeEmojiPopover: () => emojiPopoverFeature?.close(),
     closeMobileSidebar: () => closeMobileSidebar(),
     setMobileSidebarOpen,
@@ -1186,38 +1228,6 @@ export function mountApp(root: HTMLElement) {
     send: (payload) => gateway.send(payload),
   });
   pageNavigationFeature.installFooterNav();
-
-  function setPage(page: PageKind) {
-    pageNavigationFeature.setPage(page);
-  }
-
-  function openUserPage(id: string) {
-    pageNavigationFeature.openUserPage(id);
-  }
-
-  function openGroupPage(id: string) {
-    pageNavigationFeature.openGroupPage(id);
-  }
-
-  function openBoardPage(id: string) {
-    pageNavigationFeature.openBoardPage(id);
-  }
-
-  function openRightPanel(target: TargetRef) {
-    pageNavigationFeature.openRightPanel(target);
-  }
-
-  function closeRightPanel() {
-    pageNavigationFeature.closeRightPanel();
-  }
-
-  function requestHistory(t: TargetRef, opts?: { force?: boolean; deltaLimit?: number; prefetchBefore?: boolean }) {
-    historyFeature?.requestHistory(t, opts);
-  }
-
-  function enqueueHistoryPreview(t: TargetRef) {
-    historyFeature?.enqueueHistoryPreview(t);
-  }
 
   installPreviewOutboxWatchersFeature({
     store,
@@ -1227,32 +1237,12 @@ export function mountApp(root: HTMLElement) {
     scheduleSavePinnedMessages: () => scheduleSavePinnedMessages(store),
   });
 
-  function requestMoreHistory() {
-    historyFeature?.requestMoreHistory();
-  }
-
-  function scheduleHistoryWarmup() {
-    historyFeature?.scheduleWarmup(); historyFeature?.scheduleBackfill();
-  }
-
-  function clearPendingHistoryRequests() {
-    historyFeature?.clearPendingRequests();
-  }
-
   const readReceiptsFeature = createReadReceiptsFeature({
     store,
     send: (payload) => gateway.send(payload),
     lastReadSentAt,
     lastReadSavedAt,
   });
-
-  function maybeSendMessageRead(peerId: string, upToId?: number | null) {
-    readReceiptsFeature.maybeSendMessageRead(peerId, upToId);
-  }
-
-  function maybeSendRoomRead(roomId: string, upToId: number) {
-    readReceiptsFeature.maybeSendRoomRead(roomId, upToId);
-  }
 
   const chatTargetSelectionFeature = createChatTargetSelectionFeature({
     store,
@@ -1277,18 +1267,6 @@ export function mountApp(root: HTMLElement) {
     saveLastActiveTarget,
   });
 
-  function selectTarget(t: TargetRef) {
-    chatTargetSelectionFeature.selectTarget(t);
-  }
-
-  function clearSelectedTarget() {
-    chatTargetSelectionFeature.clearSelectedTarget();
-  }
-
-  function scrollToChatMsgIdx(idx: number) {
-    chatJumpFeature.scrollToChatMsgIdx(idx);
-  }
-
   const chatJumpFeature = createChatJumpFeature({
     chatRoot: layout.chat,
     chatHost: layout.chatHost,
@@ -1300,11 +1278,7 @@ export function mountApp(root: HTMLElement) {
     persistPinnedMessages: savePinnedMessagesForUser,
   });
 
-  function jumpToChatMsgIdx(idx: number) {
-    chatJumpFeature.jumpToChatMsgIdx(idx);
-  }
-
-  const chatSearchUiFeature = createChatSearchUiFeature({
+  const chatSearchUiFeature = createLazyChatSearchUiRuntime({
     store,
     chatRoot: layout.chat,
     showToast,
@@ -1322,46 +1296,6 @@ export function mountApp(root: HTMLElement) {
     scrollToChatMsgIdx,
   });
 
-  function openChatFromSearch(target: TargetRef, query: string, msgIdx?: number) {
-    openChatFromSearchFeature.openChatFromSearch(target, query, msgIdx);
-  }
-
-  function setChatSearchDate(value: string) {
-    chatSearchUiFeature.setChatSearchDate(value);
-  }
-
-  function closeChatSearch() {
-    chatSearchUiFeature.closeChatSearch();
-  }
-
-  function openChatSearch() {
-    chatSearchUiFeature.openChatSearch();
-  }
-
-  function setChatSearchQuery(query: string) {
-    chatSearchUiFeature.setChatSearchQuery(query);
-  }
-
-  function setChatSearchFilter(next: ChatSearchFilter) {
-    chatSearchUiFeature.setChatSearchFilter(next);
-  }
-
-  function toggleChatSearchResults(force?: boolean) {
-    chatSearchUiFeature.toggleChatSearchResults(force);
-  }
-
-  function setChatSearchPos(pos: number) {
-    chatSearchUiFeature.setChatSearchPos(pos);
-  }
-
-  function stepChatSearch(dir: 1 | -1) {
-    chatSearchUiFeature.stepChatSearch(dir);
-  }
-
-  function focusChatSearch(selectAll = false) {
-    chatSearchUiFeature.focusChatSearch(selectAll);
-  }
-
   const actionModalRoutingFeature = createActionModalRoutingFeature({
     store,
     closeMobileSidebar: () => closeMobileSidebar(),
@@ -1374,8 +1308,9 @@ export function mountApp(root: HTMLElement) {
     store,
     closeMobileSidebar: () => closeMobileSidebar(),
     resetCreateMembers: (scope) => {
-      membersChipsFeature?.resetCreateMembers(scope);
+      membersChipsFeature.resetCreateMembers(scope);
     },
+    prepareMembersChips: () => membersChipsFeature.startDeferredBoot(),
   });
 
   const roomCreateSubmitFeature = createRoomCreateSubmitFeature({
@@ -1425,87 +1360,6 @@ export function mountApp(root: HTMLElement) {
     scheduleSaveOutbox: () => scheduleSaveOutbox(store),
     drainOutbox: () => outboxFeature?.drainOutbox(),
   });
-
-  function normalizeChatSearchFilter(filter: ChatSearchFilter, counts: ReturnType<typeof createChatSearchCounts>): ChatSearchFilter {
-    if (filter === "all") return "all";
-    return counts[filter] > 0 ? filter : "all";
-  }
-
-  function sameChatSearchCounts(a: ReturnType<typeof createChatSearchCounts>, b: ReturnType<typeof createChatSearchCounts>): boolean {
-    return a.all === b.all && a.media === b.media && a.files === b.files && a.links === b.links && a.audio === b.audio;
-  }
-
-  function sameNumberArray(a: number[], b: number[]): boolean {
-    if (a === b) return true;
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i += 1) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
-  }
-
-  function openActionModal(payload: ActionModalPayload) {
-    actionModalRoutingFeature.openActionModal(payload);
-  }
-
-  function openGroupCreateModal() {
-    modalOpenersFeature.openGroupCreateModal();
-  }
-
-  function openBoardCreateModal() {
-    modalOpenersFeature.openBoardCreateModal();
-  }
-
-  function openMembersAddModal(targetKind: "group" | "board", targetId: string) {
-    modalOpenersFeature.openMembersAddModal(targetKind, targetId);
-  }
-
-  function openMembersRemoveModal(targetKind: "group" | "board", targetId: string) {
-    modalOpenersFeature.openMembersRemoveModal(targetKind, targetId);
-  }
-
-  function openRenameModal(targetKind: "group" | "board", targetId: string) {
-    modalOpenersFeature.openRenameModal(targetKind, targetId);
-  }
-
-  function openConfirmModal(payload: {
-    title: string;
-    message: string;
-    action: ConfirmAction;
-    confirmLabel?: string;
-    cancelLabel?: string;
-    danger?: boolean;
-  }) {
-    modalOpenersFeature.openConfirmModal(payload);
-  }
-
-  function createGroup() {
-    roomCreateSubmitFeature.createGroup();
-  }
-
-  function createBoard() {
-    roomCreateSubmitFeature.createBoard();
-  }
-
-  function membersAddSubmit() {
-    roomMembersSubmitFeature.membersAddSubmit();
-  }
-
-  function membersRemoveSubmit() {
-    roomMembersSubmitFeature.membersRemoveSubmit();
-  }
-
-  function renameSubmit() {
-    roomMembersSubmitFeature.renameSubmit();
-  }
-
-  function sendScheduleSubmit() {
-    scheduleSubmitFeature.sendScheduleSubmit();
-  }
-
-  function sendScheduleWhenOnlineSubmit() {
-    scheduleSubmitFeature.sendScheduleWhenOnlineSubmit();
-  }
 
   function nextTransferId() {
     transferSeq += 1;
@@ -1648,7 +1502,7 @@ export function mountApp(root: HTMLElement) {
     saveBoardScheduleForUser,
   });
 
-  emojiPopoverFeature = createEmojiPopoverFeature({
+  emojiPopoverFeature = createLazyEmojiPopoverRuntime({
     store,
     inputWrap: layout.inputWrap,
     input: layout.input,
@@ -1788,7 +1642,7 @@ export function mountApp(root: HTMLElement) {
     },
     closeFileSendModalIfFileSend: () => fileSendModalFeature?.closeModalIfFileSend() ?? false,
     clearMembersAddLookups: () => {
-      membersChipsFeature?.clearMembersAddLookups();
+      membersChipsFeature.clearMembersAddLookups();
     },
   });
 
@@ -1826,7 +1680,7 @@ export function mountApp(root: HTMLElement) {
       virtualHistoryFeature?.ensureIndexVisible(key, convLen, idx, searchActive),
   });
 
-  contextMenuActionsFeature = createContextMenuActionsFeature({
+  contextMenuActionsFeature = createLazyContextMenuActionsRuntime({
     store,
     send: (payload: any) => gateway.send(payload),
     closeModal,
@@ -1854,7 +1708,6 @@ export function mountApp(root: HTMLElement) {
     toggleChatSelection,
     setChatSelectionAnchorIdx: (idx: number | null) => (chatSelectionAnchorIdx = idx),
     closeMobileSidebar,
-    requestFreshHttpDownloadUrl,
     beginFileDownload: contextMenuAdapterActionsFeature.beginFileDownload,
     openChatSearch,
     setChatSearchQuery,
@@ -1877,7 +1730,6 @@ export function mountApp(root: HTMLElement) {
     drainOutbox: contextMenuAdapterActionsFeature.drainOutbox,
     ensureVirtualHistoryIndexVisible: contextMenuAdapterActionsFeature.ensureVirtualHistoryIndexVisible,
   });
-
 
   const late = installLateWiring({
     store,
@@ -1911,7 +1763,6 @@ export function mountApp(root: HTMLElement) {
     markUserInput: markUserActivity,
     contextMenuFeature,
     contextMenuActionsFeature,
-    emojiPopoverFeature,
     avatarFeature,
     outboxFeature,
     fileDownloadActions,
@@ -1931,6 +1782,7 @@ export function mountApp(root: HTMLElement) {
     openGroupCreateModal,
     openBoardCreateModal,
     debugHud,
+    bindDebugMonitor,
     openConfirmModal,
     openActionModal,
     showToast,
@@ -1997,4 +1849,5 @@ export function mountApp(root: HTMLElement) {
   });
   userLocalStateHydrationFeature = late.userLocalStateHydrationFeature;
   chatSearchSyncFeature = late.chatSearchSyncFeature;
+  pwaRuntime.startDeferredBoot();
 }

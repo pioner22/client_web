@@ -1,9 +1,10 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
-import { setCachedLocalMediaAspectRatio } from "../../../helpers/chat/localMediaAspectCache";
-import { clampMediaAspectRatio, setCachedMediaAspectRatio } from "../../../helpers/chat/mediaAspectCache";
+import { getChatHistoryViewportRuntime } from "../../../helpers/chat/historyViewportRuntime";
+import { createChatStickyBottomState, isChatHostNearBottom, isChatStickyBottomActive } from "../../../helpers/chat/stickyBottom";
 import type { Layout } from "../../../components/layout/types";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
+import { createLazyChatHostDeferredRuntime } from "./chatHostDeferredRuntime";
 
 export interface ChatHostEventsFeatureDeps {
   store: Store<AppState>;
@@ -43,12 +44,6 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
   let lastChatUserScrollAt = 0;
   let viewportReadRaf: number | null = null;
   let lastViewportReadAt = 0;
-  let chatStickyResizeRaf: number | null = null;
-  let chatTouchStartX = 0;
-  let chatTouchStartY = 0;
-  let chatTouchTracking = false;
-  const CHAT_TOUCH_JITTER_PX = 12;
-  const CHAT_TOUCH_JITTER_SQ = CHAT_TOUCH_JITTER_PX * CHAT_TOUCH_JITTER_PX;
 
   const findLastVisibleMessageIndex = (host: HTMLElement): number | null => {
     const linesEl = host.querySelector(".chat-lines");
@@ -113,52 +108,6 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
     });
   };
 
-  const applyMediaAspectRatio = (el: HTMLElement, ratio: number, meta?: { duration?: number | null }) => {
-    const button = el.closest("button.chat-file-preview") as HTMLButtonElement | null;
-    if (!button) return;
-    if (button.getAttribute("data-media-fixed") === "1") return;
-    const clamped = clampMediaAspectRatio(ratio);
-    button.style.aspectRatio = String(clamped);
-    const fileId = String(button.getAttribute("data-file-id") || "").trim();
-    const localId = String(button.getAttribute("data-local-id") || "").trim();
-    if (localId) setCachedLocalMediaAspectRatio(localId, clamped);
-    if (fileId) setCachedMediaAspectRatio(fileId, clamped);
-
-    const msg = button.closest("div.msg") as HTMLElement | null;
-    if (!msg) return;
-    if (msg.getAttribute("data-msg-album") === "1" || msg.classList.contains("msg-album")) return;
-
-    const name = String(button.getAttribute("data-name") || "").trim().toLowerCase();
-    const mime = String(button.getAttribute("data-mime") || "").trim().toLowerCase();
-    const size = Number(button.getAttribute("data-size") || 0) || 0;
-    const fileKind = String(button.getAttribute("data-file-kind") || "").trim();
-    const isSquare = clamped >= 0.85 && clamped <= 1.18;
-    const setFlag = (attr: string, ok: boolean) => {
-      if (ok) msg.setAttribute(attr, "1");
-      else msg.removeAttribute(attr);
-    };
-
-    const caption = String(button.getAttribute("data-caption") || "").trim();
-    if (caption) {
-      setFlag("data-msg-sticker", false);
-      setFlag("data-msg-round-video", false);
-      return;
-    }
-
-    const isSticker = fileKind === "image" && isSquare && size > 0 && size <= 600_000 && (mime === "image/webp" || name.endsWith(".webp"));
-    const duration = typeof meta?.duration === "number" && Number.isFinite(meta.duration) ? meta.duration : null;
-    const isRoundVideo = fileKind === "video" && isSquare && size > 0 && size <= 25_000_000 && (duration === null || duration <= 75);
-
-    setFlag("data-msg-sticker", isSticker);
-    setFlag("data-msg-round-video", isRoundVideo);
-  };
-
-  const setInlineVideoState = (video: HTMLVideoElement, state: "playing" | "paused") => {
-    const preview = video.closest("button.chat-file-preview") as HTMLButtonElement | null;
-    if (!preview || !preview.classList.contains("chat-file-preview-video")) return;
-    preview.dataset.videoState = state;
-  };
-
   const shouldForceVideoMute = (video: HTMLVideoElement): boolean => {
     if (video.dataset.allowAudio === "1") return false;
     if (video.dataset.userUnmuted === "1") return false;
@@ -172,33 +121,29 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
     if (!video.hasAttribute("muted")) video.setAttribute("muted", "");
   };
 
-  const markVideoUserUnmuted = (video: HTMLVideoElement) => {
-    if (video.dataset.userUnmuted === "1") return;
-    if (!video.muted && video.volume > 0) {
-      video.dataset.userUnmuted = "1";
-    }
+  const markUserChatScroll = () => {
+    const now = Date.now();
+    lastChatUserScrollAt = now;
+    const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
+    if (!key) return;
+    const runtime = getChatHistoryViewportRuntime(layout.chatHost);
+    const stick = runtime.stickyBottom;
+    if (!stick || stick.key !== key || !stick.active) return;
+    if (isChatHostNearBottom(layout.chatHost)) return;
+    runtime.stickyBottom = createChatStickyBottomState(layout.chatHost, key, false, now);
   };
 
-  const scheduleChatStickyResize = () => {
-    if (chatStickyResizeRaf !== null) return;
-    chatStickyResizeRaf = window.requestAnimationFrame(() => {
-      chatStickyResizeRaf = null;
-      const host = layout.chatHost;
-      const key = String(host.getAttribute("data-chat-key") || "");
-      if (!key) return;
-      const st = (host as any).__stickBottom;
-      if (!st || !st.active || st.key !== key) return;
-      st.at = Date.now();
-      host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
-      maybeRecordLastRead(key);
-      scheduleViewportReadUpdate();
-      scheduleChatJumpVisibility();
-    });
-  };
-
-  const resetChatTouch = () => {
-    chatTouchTracking = false;
-  };
+  const deferredRuntime = createLazyChatHostDeferredRuntime({
+    store,
+    layout,
+    getMaxScrollTop,
+    scheduleChatJumpVisibility,
+    maybeRecordLastRead,
+    scheduleAutoFetchVisiblePreviews,
+    ensureVideoMutedDefault,
+    scheduleViewportReadUpdate,
+    markUserChatScroll,
+  });
 
   const install = () => {
     layout.chatHost.addEventListener(
@@ -207,15 +152,14 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
         const scrollTop = layout.chatHost.scrollTop;
         const scrollingUp = scrollTop < lastChatScrollTop;
         lastChatScrollTop = scrollTop;
-        const hostState = layout.chatHost as any;
         const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
         const now = Date.now();
         const userScrollRecent = now - lastChatUserScrollAt < 2000;
-        const atBottom = scrollTop >= getMaxScrollTop(layout.chatHost) - 24;
+        const atBottom = isChatHostNearBottom(layout.chatHost);
         if (key) {
-          const unreadMap: Map<string, unknown> | undefined = hostState.__chatUnreadAnchors;
-          const unreadClearArmed: Set<string> = hostState.__chatUnreadClearArmed || new Set();
-          hostState.__chatUnreadClearArmed = unreadClearArmed;
+          const runtime = getChatHistoryViewportRuntime(layout.chatHost);
+          const unreadMap: Map<string, unknown> = runtime.unreadAnchors;
+          const unreadClearArmed = runtime.unreadClearArmed;
           if (unreadMap && unreadMap.has(key)) {
             if (!atBottom && userScrollRecent) unreadClearArmed.add(key);
             if (atBottom && unreadClearArmed.has(key)) {
@@ -225,15 +169,13 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
           } else {
             unreadClearArmed.delete(key);
           }
-          const stick = hostState.__stickBottom;
+          const stick = runtime.stickyBottom;
           if (!stick || stick.key !== key) {
-            hostState.__stickBottom = { key, active: atBottom, at: now };
+            runtime.stickyBottom = createChatStickyBottomState(layout.chatHost, key, atBottom, now);
           } else if (atBottom) {
-            stick.active = true;
-            stick.at = now;
-          } else if (userScrollRecent) {
-            stick.active = false;
-            stick.at = now;
+            runtime.stickyBottom = createChatStickyBottomState(layout.chatHost, key, true, now);
+          } else if (userScrollRecent || isChatStickyBottomActive(layout.chatHost, stick, key)) {
+            runtime.stickyBottom = createChatStickyBottomState(layout.chatHost, key, false, now);
           }
         }
         scheduleChatJumpVisibility();
@@ -250,255 +192,7 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
       scheduleAutoFetchVisiblePreviews();
       maybeAutoFillHistoryViewport();
     });
-
-    layout.chatHost.addEventListener(
-      "load",
-      (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLImageElement)) return;
-        if (!target.classList.contains("chat-file-img")) return;
-        const ratio = (target.naturalWidth || 0) / Math.max(1, target.naturalHeight || 0);
-        applyMediaAspectRatio(target, ratio);
-      },
-      true
-    );
-
-    layout.chatHost.addEventListener(
-      "loadedmetadata",
-      (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLVideoElement)) return;
-        if (!target.classList.contains("chat-file-video")) return;
-        const ratio = (target.videoWidth || 0) / Math.max(1, target.videoHeight || 0);
-        applyMediaAspectRatio(target, ratio, { duration: target.duration });
-      },
-      true
-    );
-
-    if (typeof document !== "undefined") {
-      const handleVideoAutoMute = (event: Event) => {
-        const target = event.target;
-        if (target instanceof HTMLVideoElement) ensureVideoMutedDefault(target);
-      };
-      const handleVideoVolumeChange = (event: Event) => {
-        const target = event.target;
-        if (target instanceof HTMLVideoElement) markVideoUserUnmuted(target);
-      };
-      const handleExclusiveMediaPlay = (event: Event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLAudioElement || target instanceof HTMLVideoElement)) return;
-        const nodes = document.querySelectorAll("audio, video");
-        for (const node of Array.from(nodes)) {
-          if (!(node instanceof HTMLAudioElement || node instanceof HTMLVideoElement)) continue;
-          if (node === target) continue;
-          if (node.paused) continue;
-          try {
-            node.pause();
-          } catch {
-            // ignore
-          }
-        }
-      };
-      document.addEventListener("play", handleVideoAutoMute, true);
-      document.addEventListener("loadedmetadata", handleVideoAutoMute, true);
-      document.addEventListener("volumechange", handleVideoVolumeChange, true);
-      document.addEventListener("play", handleExclusiveMediaPlay, true);
-    }
-
-    layout.chatHost.addEventListener(
-      "play",
-      (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLVideoElement)) return;
-        if (!target.classList.contains("chat-file-video")) return;
-        setInlineVideoState(target, "playing");
-      },
-      true
-    );
-
-    layout.chatHost.addEventListener(
-      "pause",
-      (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLVideoElement)) return;
-        if (!target.classList.contains("chat-file-video")) return;
-        setInlineVideoState(target, "paused");
-      },
-      true
-    );
-
-    const markUserChatScroll = () => {
-      lastChatUserScrollAt = Date.now();
-    };
-    layout.chatHost.addEventListener("wheel", markUserChatScroll, { passive: true });
-    layout.chatHost.addEventListener("touchstart", markUserChatScroll, { passive: true });
-    layout.chatHost.addEventListener("touchmove", markUserChatScroll, { passive: true });
-    layout.chatHost.addEventListener("pointerdown", markUserChatScroll, { passive: true });
-
-    window.addEventListener("keydown", (event) => {
-      if (event.defaultPrevented) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const key = event.key;
-      if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "PageUp" && key !== "PageDown" && key !== "Home" && key !== "End" && key !== " " && key !== "Spacebar") {
-        return;
-      }
-      const target = event.target;
-      if (target instanceof HTMLElement) {
-        if (target.closest("input, textarea, [contenteditable='true']")) return;
-      }
-      const st = store.get();
-      if (st.page !== "main") return;
-      if (!st.selected) return;
-      lastChatUserScrollAt = Date.now();
-    });
-
-    const chatCol = layout.chat.parentElement instanceof HTMLElement ? layout.chat.parentElement : null;
-    const mobileOverlayMq =
-      typeof window !== "undefined" && typeof window.matchMedia === "function"
-        ? window.matchMedia("(max-width: 600px) and (pointer: coarse)")
-        : null;
-    let insetRaf: number | null = null;
-    let lastComposerH = -1;
-    let lastBottomInset = -1;
-
-    const applyBottomInsets = () => {
-      if (!chatCol) return;
-      const enabled = Boolean(mobileOverlayMq?.matches);
-      if (!enabled) {
-        if (lastComposerH !== -1 || lastBottomInset !== -1) {
-          chatCol.style.removeProperty("--chat-composer-h");
-          chatCol.style.removeProperty("--chat-bottom-inset");
-          lastComposerH = -1;
-          lastBottomInset = -1;
-        }
-        return;
-      }
-
-      const composerH = Math.max(0, Math.round(layout.inputWrap.getBoundingClientRect().height));
-      const searchFooterH = (() => {
-        const el = layout.chatSearchFooter;
-        if (!(el instanceof HTMLElement)) return 0;
-        if (el.classList.contains("hidden")) return 0;
-        return Math.max(0, Math.round(el.getBoundingClientRect().height));
-      })();
-      const bottomInset = composerH + searchFooterH;
-
-      if (composerH !== lastComposerH) {
-        chatCol.style.setProperty("--chat-composer-h", `${composerH}px`);
-        lastComposerH = composerH;
-      }
-      if (bottomInset !== lastBottomInset) {
-        chatCol.style.setProperty("--chat-bottom-inset", `${bottomInset}px`);
-        lastBottomInset = bottomInset;
-      }
-    };
-
-    const scheduleBottomInsets = () => {
-      if (!chatCol) return;
-      if (insetRaf !== null) return;
-      insetRaf = window.requestAnimationFrame(() => {
-        insetRaf = null;
-        applyBottomInsets();
-      });
-    };
-
-    scheduleBottomInsets();
-    try {
-      const anyMq = mobileOverlayMq as unknown as { addEventListener?: (t: "change", cb: () => void) => void; addListener?: (cb: () => void) => void };
-      if (anyMq?.addEventListener) anyMq.addEventListener("change", scheduleBottomInsets);
-      else if (anyMq?.addListener) anyMq.addListener(scheduleBottomInsets);
-    } catch {
-      // ignore
-    }
-
-    const chatResizeObserver =
-      typeof ResizeObserver === "function"
-        ? new ResizeObserver(() => {
-            scheduleBottomInsets();
-            scheduleChatStickyResize();
-          })
-        : null;
-
-    try {
-      chatResizeObserver?.observe(layout.chatHost);
-      chatResizeObserver?.observe(layout.chat);
-      chatResizeObserver?.observe(layout.inputWrap);
-      chatResizeObserver?.observe(layout.chatSearchFooter);
-    } catch {
-      // ignore
-    }
-
-    layout.chatHost.addEventListener(
-      "load",
-      (event) => {
-        const target = event.target as unknown;
-        if (!(target instanceof HTMLImageElement)) return;
-        scheduleChatStickyResize();
-      },
-      true
-    );
-
-    layout.chatHost.addEventListener(
-      "loadedmetadata",
-      (event) => {
-        const target = event.target as unknown;
-        if (!(target instanceof HTMLVideoElement || target instanceof HTMLAudioElement)) return;
-        scheduleChatStickyResize();
-      },
-      true
-    );
-
-    layout.chatHost.addEventListener(
-      "touchstart",
-      (event) => {
-        const ev = event as TouchEvent;
-        if (ev.touches.length !== 1) {
-          chatTouchTracking = false;
-          return;
-        }
-        const target = ev.target as HTMLElement | null;
-        if (target) {
-          if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) {
-            chatTouchTracking = false;
-            return;
-          }
-          if (target.closest("button, a")) {
-            chatTouchTracking = false;
-            return;
-          }
-        }
-        chatTouchStartX = ev.touches[0].clientX;
-        chatTouchStartY = ev.touches[0].clientY;
-        chatTouchTracking = true;
-      },
-      { passive: true }
-    );
-
-    layout.chatHost.addEventListener(
-      "touchmove",
-      (event) => {
-        if (!chatTouchTracking) return;
-        const ev = event as TouchEvent;
-        if (ev.touches.length !== 1) return;
-        const dx = ev.touches[0].clientX - chatTouchStartX;
-        const dy = ev.touches[0].clientY - chatTouchStartY;
-        if (dx * dx + dy * dy < CHAT_TOUCH_JITTER_SQ) return;
-        const host = layout.chatHost;
-        const top = host.scrollTop <= 0;
-        const bottom = host.scrollTop >= getMaxScrollTop(host) - 1;
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-        const isMostlyHorizontal = absDx > absDy + 10;
-        if (!isMostlyHorizontal) return;
-        if (top || bottom) {
-          event.preventDefault();
-        }
-      },
-      { passive: false }
-    );
-
-    layout.chatHost.addEventListener("touchend", resetChatTouch, { passive: true });
-    layout.chatHost.addEventListener("touchcancel", resetChatTouch, { passive: true });
+    deferredRuntime.startDeferredBoot();
   };
 
   return {

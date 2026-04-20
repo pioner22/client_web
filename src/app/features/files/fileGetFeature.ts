@@ -1,5 +1,7 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { rememberFileHttpBearer } from "../../../helpers/files/fileHttpAuth";
+import { canDrainFilePrefetch, canDrainFileRuntime, resolveFileGetEnqueuePolicy } from "./fileRuntimePolicy";
 
 type FileGetPriority = "high" | "prefetch";
 
@@ -220,12 +222,14 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     if (!fid) return;
     const priority = opts?.priority ?? "high";
     const silent = Boolean(opts?.silent);
-    if (priority === "prefetch" && (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden")) {
-      debugHook("file.get.enqueue.skip", { fileId: fid, reason: "prefetch_blocked", ...queueState() });
-      return;
-    }
-    if (priority === "prefetch" && silent && !store.get().netLeader) {
-      debugHook("file.get.enqueue.skip", { fileId: fid, reason: "not_leader", priority, silent, ...queueState() });
+    const decision = resolveFileGetEnqueuePolicy({
+      priority,
+      silent,
+      prefetchAllowed: deviceCaps.prefetchAllowed,
+      state: store.get(),
+    });
+    if (!decision.allow) {
+      debugHook("file.get.enqueue.skip", { fileId: fid, reason: decision.reason, priority, silent, ...queueState() });
       return;
     }
     if (isDownloadActive(fid)) {
@@ -371,8 +375,8 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
 
   const drain = () => {
     const st = store.get();
-    if (st.conn !== "connected" || !st.authed) return;
-    const canPrefetch = deviceCaps.prefetchAllowed && document.visibilityState !== "hidden";
+    if (!canDrainFileRuntime(st)) return;
+    const canPrefetch = canDrainFilePrefetch(st, { prefetchAllowed: deviceCaps.prefetchAllowed });
     while (fileGetQueueHigh.length && fileGetInFlight.size < FILE_GET_MAX_CONCURRENCY) {
       const fileId = fileGetQueueHigh.shift();
       if (!fileId) continue;
@@ -480,6 +484,18 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     if (!waiter) return false;
     const url = typeof msg?.url === "string" ? String(msg.url).trim() : "";
     const thumbUrl = typeof msg?.thumb_url === "string" ? String(msg.thumb_url).trim() : "";
+    const authToken = typeof msg?.auth_token === "string" ? String(msg.auth_token).trim() : "";
+    const thumbAuthToken = typeof msg?.thumb_auth_token === "string" ? String(msg.thumb_auth_token).trim() : "";
+    if (url && authToken) {
+      rememberFileHttpBearer(url, authToken, {
+        base: typeof window !== "undefined" && typeof window.location?.href === "string" ? window.location.href : null,
+      });
+    }
+    if (thumbUrl && thumbAuthToken) {
+      rememberFileHttpBearer(thumbUrl, thumbAuthToken, {
+        base: typeof window !== "undefined" && typeof window.location?.href === "string" ? window.location.href : null,
+      });
+    }
     httpFileUrlWaiters.delete(fileId);
     const startedAt = fileGetStartedAtMs.get(fileId);
     const elapsed = startedAt ? Date.now() - startedAt : 0;

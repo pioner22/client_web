@@ -1,28 +1,17 @@
 import { el } from "../../helpers/dom/el";
 import { formatTime } from "../../helpers/time";
 import { conversationKey } from "../../helpers/chat/conversationKey";
-import { messageSelectionKey } from "../../helpers/chat/chatSelection";
 import { isPinnedMessage } from "../../helpers/chat/pinnedMessages";
 import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import type { AppState, ChatMessage, ChatMessageRef, FileOfferIn, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { fileBadge } from "../../helpers/files/fileBadge";
+import { isAudioLikeFile, isImageLikeFile, isVideoLikeFile, normalizeFileName } from "../../helpers/files/mediaKind";
 import { safeUrl } from "../../helpers/security/safeUrl";
 import { renderRichText } from "../../helpers/chat/richText";
 import { renderBoardPost } from "../../helpers/boards/boardPost";
-import type { Layout } from "../layout/types";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
-import { getCachedLocalMediaAspectRatio } from "../../helpers/chat/localMediaAspectCache";
-import { layoutTelegramAlbum } from "../../helpers/chat/telegramGroupedLayout";
-import {
-  applyVoicePlaybackRate,
-  consumeVoiceAutoplay,
-  cycleVoicePlaybackRate,
-  getVoicePlaybackRate,
-  releaseMediaFocus,
-  takeMediaFocus,
-} from "../../helpers/media/audioSession";
 import {
   HISTORY_VIRTUAL_THRESHOLD,
   HISTORY_VIRTUAL_WINDOW,
@@ -33,6 +22,22 @@ import {
   shouldVirtualize,
 } from "../../helpers/chat/virtualHistory";
 import { CHAT_SEARCH_FILTERS } from "../../helpers/chat/chatSearch";
+import { renderAttachmentFooterShell } from "./attachmentFooterShell";
+import { renderDeferredVoicePlayer } from "./chatDeferredMediaRuntime";
+import { renderDeferredSysMessage } from "./chatSpecialMessageRuntime";
+import { renderDeferredVisualPreview } from "./chatVisualPreviewRuntime";
+import { CHAT_MEDIA_PREVIEW_SCALE, type FileAttachmentInfo, isVideoNoteName, resolvePreviewBaseWidthPx } from "./chatVisualPreviewShared";
+import { renderMediaOverlayControls } from "./mediaOverlayControls";
+import { renderMessageContentShell } from "./messageContentShell";
+import { renderMessageSelectionControl } from "./messageSelectionControl";
+export {
+  type ChatShiftAnchor,
+  type UnreadDividerAnchor,
+  captureChatShiftAnchor,
+  findChatShiftAnchorElement,
+  findUnreadAnchorIndex,
+  unreadAnchorForMessage,
+} from "../../helpers/chat/historyViewportAnchors";
 
 export function dayKey(ts: number): string {
   try {
@@ -145,202 +150,6 @@ export function formatBytes(size: number): string {
   return `${value.toFixed(precision)} ${units[idx]}`;
 }
 
-function formatVoiceTime(valueSeconds: number): string {
-  const raw = Number(valueSeconds);
-  if (!Number.isFinite(raw) || raw <= 0) return "0:00";
-  const total = Math.max(0, Math.round(raw));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-function formatVoiceRate(value: number): string {
-  const raw = Number(value);
-  if (!Number.isFinite(raw) || raw <= 0) return "1x";
-  if (Math.abs(raw - 1.5) < 0.01) return "1.5x";
-  if (Math.abs(raw - 2) < 0.01) return "2x";
-  return `${raw}x`;
-}
-
-function renderVoicePlayer(opts: {
-  url: string | null;
-  fileId?: string | null;
-  name?: string | null;
-  size?: number | null;
-  mime?: string | null;
-  msgIdx?: number | null;
-}): HTMLElement {
-  const url = opts.url;
-  const audio = url ? (el("audio", { class: "chat-voice-audio", src: url, preload: "metadata" }) as HTMLAudioElement) : null;
-  const playBtn = el("button", { class: "btn chat-voice-play", type: "button", "aria-label": "Воспроизвести" }, [""]);
-  const bar = el("span", { class: "chat-voice-progress", "aria-hidden": "true" }, [""]);
-  const track = el("button", { class: "btn chat-voice-track", type: "button", "aria-label": "Перемотка" }, [bar]);
-  const time = el("div", { class: "chat-voice-time" }, ["0:00"]);
-  const voiceLike = isVoiceNoteName(String(opts.name || ""));
-  const speedBtn = voiceLike
-    ? (el("button", { class: "btn chat-voice-speed", type: "button", "aria-label": "Скорость воспроизведения" }, [
-        formatVoiceRate(getVoicePlaybackRate()),
-      ]) as HTMLButtonElement)
-    : null;
-  const wrap = el("div", { class: `chat-voice${url ? "" : " chat-voice-placeholder"}`, "data-voice-state": "paused" }, [
-    playBtn,
-    track,
-    time,
-    ...(speedBtn ? [speedBtn] : []),
-    ...(audio ? [audio] : []),
-  ]);
-  wrap.style.setProperty("--voice-progress", "0%");
-
-  const fileId = String(opts.fileId || "").trim();
-  if (fileId) {
-    wrap.setAttribute("data-file-kind", "audio");
-    wrap.setAttribute("data-file-id", fileId);
-    wrap.setAttribute("data-name", String(opts.name || ""));
-    wrap.setAttribute("data-size", String(Number(opts.size || 0) || 0));
-    if (opts.mime) wrap.setAttribute("data-mime", String(opts.mime));
-    if (typeof opts.msgIdx === "number" && Number.isFinite(opts.msgIdx)) {
-      wrap.setAttribute("data-msg-idx", String(Math.trunc(opts.msgIdx)));
-    }
-  }
-
-  if (!audio) {
-    track.setAttribute("disabled", "true");
-    time.textContent = "—";
-    if (!fileId) playBtn.setAttribute("disabled", "true");
-    playBtn.setAttribute("aria-label", fileId ? "Загрузить и воспроизвести" : "Недоступно");
-    if (speedBtn) {
-      speedBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const next = cycleVoicePlaybackRate(getVoicePlaybackRate());
-        speedBtn.textContent = formatVoiceRate(next);
-      });
-    }
-    return wrap;
-  }
-
-  const canWireControls =
-    typeof (playBtn as any).addEventListener === "function" &&
-    typeof (track as any).addEventListener === "function" &&
-    typeof (audio as any).addEventListener === "function" &&
-    typeof (audio as any).play === "function" &&
-    typeof (audio as any).pause === "function";
-  if (!canWireControls) {
-    playBtn.setAttribute("disabled", "true");
-    track.setAttribute("disabled", "true");
-    time.textContent = "—";
-    return wrap;
-  }
-
-  let duration = 0;
-  const setProgressPct = (pct: number) => {
-    const safe = Math.max(0, Math.min(100, Math.round(pct)));
-    wrap.style.setProperty("--voice-progress", `${safe}%`);
-  };
-  const setState = (state: "playing" | "paused") => {
-    wrap.setAttribute("data-voice-state", state);
-    playBtn.setAttribute("aria-label", state === "playing" ? "Пауза" : "Воспроизвести");
-  };
-
-  playBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (audio.paused) {
-      takeMediaFocus(audio);
-      if (voiceLike) applyVoicePlaybackRate(audio);
-      setState("playing");
-      void audio.play().catch(() => setState("paused"));
-    } else {
-      audio.pause();
-      setState("paused");
-    }
-  });
-
-  track.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = track.getBoundingClientRect();
-    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-    if (rect.width <= 0) return;
-    const ratio = x / rect.width;
-    if (!Number.isFinite(duration) || duration <= 0) return;
-    try {
-      audio.currentTime = Math.max(0, Math.min(duration, ratio * duration));
-    } catch {
-      // ignore
-    }
-  });
-
-  if (speedBtn) {
-    speedBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const next = cycleVoicePlaybackRate(audio.playbackRate || getVoicePlaybackRate());
-      speedBtn.textContent = formatVoiceRate(next);
-      try {
-        audio.playbackRate = next;
-      } catch {
-        // ignore
-      }
-    });
-  }
-
-  audio.addEventListener("loadedmetadata", () => {
-    duration = Number(audio.duration);
-    if (Number.isFinite(duration) && duration > 0) {
-      time.textContent = formatVoiceTime(duration);
-      setProgressPct(0);
-    }
-    if (voiceLike) {
-      applyVoicePlaybackRate(audio);
-    } else {
-      try {
-        audio.playbackRate = 1;
-      } catch {
-        // ignore
-      }
-    }
-  });
-  audio.addEventListener("timeupdate", () => {
-    if (!Number.isFinite(duration) || duration <= 0) return;
-    const pct = (audio.currentTime / duration) * 100;
-    setProgressPct(pct);
-    time.textContent = formatVoiceTime(Math.max(0, duration - audio.currentTime));
-  });
-  audio.addEventListener("ended", () => {
-    setProgressPct(0);
-    if (Number.isFinite(duration) && duration > 0) time.textContent = formatVoiceTime(duration);
-    releaseMediaFocus(audio);
-    setState("paused");
-  });
-  audio.addEventListener("pause", () => {
-    releaseMediaFocus(audio);
-    setState("paused");
-  });
-  audio.addEventListener("play", () => {
-    takeMediaFocus(audio);
-    if (voiceLike) {
-      applyVoicePlaybackRate(audio);
-    } else {
-      try {
-        audio.playbackRate = 1;
-      } catch {
-        // ignore
-      }
-    }
-    setState("playing");
-  });
-
-  if (fileId && consumeVoiceAutoplay(fileId)) {
-    takeMediaFocus(audio);
-    if (voiceLike) applyVoicePlaybackRate(audio);
-    setState("playing");
-    void audio.play().catch(() => setState("paused"));
-  }
-
-  return wrap;
-}
-
 export function resolveUserAccent(seed: string): string | null {
   const s = String(seed ?? "").trim();
   if (!s) return null;
@@ -348,67 +157,11 @@ export function resolveUserAccent(seed: string): string | null {
   return `hsl(${hue} 68% 58%)`;
 }
 
-export function normalizeFileName(value: string): string {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const noQuery = raw.split(/[?#]/)[0];
-  const leaf = noQuery.split(/[\\/]/).pop() || "";
-  return leaf.trim().toLowerCase();
-}
+export { normalizeFileName, isImageLikeFile, isVideoLikeFile, isAudioLikeFile };
 
 function isVoiceNoteName(name: string): boolean {
   const n = normalizeFileName(name);
   return n.startsWith("voice_") || n.startsWith("voice-note") || n.startsWith("voice_note") || n.includes("_voice_note");
-}
-
-function isVideoNoteName(name: string): boolean {
-  const n = normalizeFileName(name);
-  return n.startsWith("video_note") || n.startsWith("video-note") || n.includes("_video_note");
-}
-
-export const IMAGE_NAME_HINT_RE =
-  /(?:^|[_\-\s\(\)\[\]])(?:img|image|photo|pic|picture|screenshot|screen[_\-\s]?shot|shot|dsc|pxl|selfie|scan|скрин(?:шот)?|фото|картин|изображ|снимок)(?:[_\-\s\(\)\[\]]|\d|$)/;
-export const VIDEO_NAME_HINT_RE =
-  /(?:^|[_\-\s\(\)\[\]])(?:video|vid|movie|clip|screencast|screen[_\-\s]?(?:rec|record|recording)|видео|ролик)(?:[_\-\s\(\)\[\]]|\d|$)/;
-export const AUDIO_NAME_HINT_RE =
-  /(?:^|[_\-\s\(\)\[\]])(?:audio|voice|sound|music|song|track|record|rec|memo|note|voice[_\-\s]?note|аудио|звук|музык|песня|голос|запис|диктофон|заметк)(?:[_\-\s\(\)\[\]]|\d|$)/;
-
-export const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/;
-export const VIDEO_EXT_RE = /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/;
-export const AUDIO_EXT_RE = /\.(mp3|m4a|aac|wav|ogg|opus|flac)$/;
-
-export function isImageFile(name: string, mime?: string | null): boolean {
-  const mt = String(mime || "").toLowerCase();
-  if (mt.startsWith("image/")) return true;
-  if (mt.startsWith("video/") || mt.startsWith("audio/")) return false;
-  const n = normalizeFileName(name);
-  if (!n) return false;
-  if (IMAGE_EXT_RE.test(n)) return true;
-  // iOS often names videos as IMG_XXXX.MP4/MOV; extension must override name hints.
-  if (VIDEO_EXT_RE.test(n) || AUDIO_EXT_RE.test(n)) return false;
-  return IMAGE_NAME_HINT_RE.test(n);
-}
-
-export function isVideoFile(name: string, mime?: string | null): boolean {
-  const mt = String(mime || "").toLowerCase();
-  if (mt.startsWith("video/")) return true;
-  if (mt.startsWith("image/") || mt.startsWith("audio/")) return false;
-  const n = normalizeFileName(name);
-  if (!n) return false;
-  if (VIDEO_EXT_RE.test(n)) return true;
-  if (IMAGE_EXT_RE.test(n) || AUDIO_EXT_RE.test(n)) return false;
-  return VIDEO_NAME_HINT_RE.test(n);
-}
-
-export function isAudioFile(name: string, mime?: string | null): boolean {
-  const mt = String(mime || "").toLowerCase();
-  if (mt.startsWith("audio/")) return true;
-  if (mt.startsWith("image/") || mt.startsWith("video/")) return false;
-  const n = normalizeFileName(name);
-  if (!n) return false;
-  if (AUDIO_EXT_RE.test(n)) return true;
-  if (IMAGE_EXT_RE.test(n) || VIDEO_EXT_RE.test(n)) return false;
-  return AUDIO_NAME_HINT_RE.test(n);
 }
 
 export function transferStatus(entry: FileTransferEntry): string {
@@ -584,35 +337,6 @@ export function trimSearchPreview(text: string, maxLen = 180): string {
   return `${t.slice(0, Math.max(0, maxLen - 1))}…`;
 }
 
-export type FileAttachmentInfo = {
-  name: string;
-  size: number;
-  mime: string | null;
-  fileId: string | null;
-  url: string | null;
-  thumbUrl: string | null;
-  thumbW: number | null;
-  thumbH: number | null;
-  mediaW: number | null;
-  mediaH: number | null;
-  transfer: FileTransferEntry | null;
-  offer: FileOfferIn | null;
-  statusLine: string;
-  isImage: boolean;
-  isVideo: boolean;
-  isAudio: boolean;
-  hasProgress: boolean;
-};
-
-export const CHAT_MEDIA_PREVIEW_SCALE = 0.33;
-export const CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX = 420;
-
-export function resolvePreviewBaseWidthPx(info: FileAttachmentInfo): number | null {
-  const w = info.thumbW || info.mediaW || CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX;
-  if (!Number.isFinite(w) || w <= 0) return null;
-  return Math.trunc(w);
-}
-
 export type AlbumItem = {
   idx: number;
   msg: ChatMessage;
@@ -620,22 +344,26 @@ export type AlbumItem = {
 };
 
 export function buildMessageMeta(m: ChatMessage): HTMLElement[] {
-  const meta: HTMLElement[] = [el("span", { class: "msg-time" }, [formatTime(m.ts)])];
+  const meta: HTMLElement[] = [el("span", { class: "msg-meta-item msg-time" }, [formatTime(m.ts)])];
   if (m.edited) {
     const editedTs = typeof m.edited_ts === "number" && Number.isFinite(m.edited_ts) ? m.edited_ts : null;
     const time = editedTs !== null ? formatTime(editedTs) : "";
     meta.push(
       el(
         "span",
-        { class: "msg-edited", "aria-label": "Изменено", ...(time ? { title: `Изменено: ${time}` } : {}) },
-        [time ? `изменено ${time}` : "изменено"]
+        {
+          class: "msg-meta-item msg-edited",
+          "aria-label": time ? `Изменено в ${time}` : "Изменено",
+          ...(time ? { title: `Изменено: ${time}` } : { title: "Изменено" }),
+        },
+        ["ред."]
       )
     );
   }
   const status = m.kind === "out" ? statusLabel(m) : "";
   if (status) {
     meta.push(
-      el("span", { class: `msg-status msg-status-${m.status || "delivered"}`, title: statusTitle(m) || undefined }, [status])
+      el("span", { class: `msg-meta-item msg-status msg-status-${m.status || "delivered"}`, title: statusTitle(m) || undefined }, [status])
     );
   }
   return meta;
@@ -741,9 +469,9 @@ export function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { 
         ? "Входящий файл (принять в «Файлы»)"
         : "Входящий файл (принять в «Файлы» / F7)"
       : "";
-  const isImage = isImageFile(name, mime);
-  const isVideo = isVideoFile(name, mime);
-  const isAudio = isAudioFile(name, mime);
+  const isImage = isImageLikeFile(name, mime);
+  const isVideo = isVideoLikeFile(name, mime);
+  const isAudio = isAudioLikeFile(name, mime);
   const hasProgress = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
   const fileId = att.fileId ? String(att.fileId) : transfer?.id ? String(transfer.id) : offer?.id ? String(offer.id) : null;
   const thumbUrl =
@@ -776,149 +504,6 @@ export function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { 
     isAudio,
     hasProgress,
   };
-}
-
-function renderMediaProgressOverlay(transfer: FileTransferEntry): HTMLElement | null {
-  if (transfer.status !== "uploading" && transfer.status !== "downloading") return null;
-  const progress = Math.max(0, Math.min(100, Math.round(transfer.progress || 0)));
-  const label = transfer.status === "uploading" ? `Загрузка ${progress}%` : `Скачивание ${progress}%`;
-  const candy = el("span", { class: "file-progress-candy", "aria-hidden": "true" });
-  candy.style.setProperty("--file-progress", `${progress}%`);
-  return el(
-    "span",
-    {
-      class: "chat-media-progress",
-      role: "progressbar",
-      title: label,
-      "aria-label": label,
-      "aria-valuemin": "0",
-      "aria-valuemax": "100",
-      "aria-valuenow": String(progress),
-    },
-    [candy]
-  );
-}
-
-export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: { className?: string; msgIdx?: number; caption?: string | null }): HTMLElement | null {
-  if (!info.isImage) return null;
-  const previewUrl = info.thumbUrl || info.url;
-  if (!previewUrl && !info.fileId) return null;
-  const classes = previewUrl ? ["chat-file-preview"] : ["chat-file-preview", "chat-file-preview-empty"];
-  if (opts?.className) classes.push(opts.className);
-  const fixedAspect = Boolean(opts?.className && opts.className.split(/\s+/).includes("chat-file-preview-album"));
-  const attrs: Record<string, string | undefined> = {
-    class: classes.join(" "),
-    type: "button",
-    "data-action": "open-file-viewer",
-    "data-file-kind": "image",
-    "data-name": info.name,
-    "data-size": String(info.size || 0),
-    ...(fixedAspect ? { "data-media-fixed": "1" } : {}),
-    "aria-label": `Открыть: ${info.name}`,
-  };
-  if (info.transfer?.localId) attrs["data-local-id"] = info.transfer.localId;
-  const progressOverlay = info.transfer ? renderMediaProgressOverlay(info.transfer) : null;
-  if (progressOverlay) attrs["data-media-progress"] = "1";
-  if (info.url) attrs["data-url"] = info.url;
-  if (info.fileId) attrs["data-file-id"] = info.fileId;
-  if (info.mime) attrs["data-mime"] = info.mime;
-  if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
-  if (opts?.caption) attrs["data-caption"] = opts.caption;
-
-  const child = previewUrl
-    ? el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" })
-    : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
-  const btnChildren: HTMLElement[] = [child];
-  if (progressOverlay) btnChildren.push(progressOverlay);
-  const btn = el("button", attrs, btnChildren) as HTMLButtonElement;
-  if (!fixedAspect) {
-    const cachedRatio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
-    const cachedLocalRatio = !cachedRatio && info.transfer?.localId ? getCachedLocalMediaAspectRatio(info.transfer.localId) : null;
-    const ratio = cachedRatio ?? cachedLocalRatio;
-    if (ratio) btn.style.aspectRatio = String(ratio);
-  }
-  return btn;
-}
-
-export function renderVideoPreviewButton(
-  info: FileAttachmentInfo,
-  opts?: { className?: string; msgIdx?: number; caption?: string | null; mobileUi?: boolean }
-): HTMLElement | null {
-  if (!info.isVideo) return null;
-  const fixedAspect = Boolean(opts?.className && opts.className.split(/\s+/).includes("chat-file-preview-album"));
-  const videoNote = !fixedAspect && isVideoNoteName(info.name);
-  const mobileUi = Boolean(opts?.mobileUi);
-  const progressOverlay = info.transfer ? renderMediaProgressOverlay(info.transfer) : null;
-  const bytes = Number(info.size || 0) || 0;
-  const INLINE_VIDEO_MAX_BYTES = 8 * 1024 * 1024;
-  const canInlineVideo = Boolean(!fixedAspect && info.url && !mobileUi && bytes > 0 && bytes <= INLINE_VIDEO_MAX_BYTES);
-  const previewUrl = fixedAspect ? info.thumbUrl : canInlineVideo ? info.url : info.thumbUrl;
-  if (!previewUrl && !info.fileId) return null;
-  const hasVisual = Boolean(previewUrl);
-  const classes = hasVisual
-    ? ["chat-file-preview", "chat-file-preview-video"]
-    : ["chat-file-preview", "chat-file-preview-video", "chat-file-preview-empty"];
-  if (opts?.className) classes.push(opts.className);
-  if (videoNote) classes.push("chat-file-preview-video-note");
-  const attrs: Record<string, string | undefined> = {
-    class: classes.join(" "),
-    type: "button",
-    "data-action": "open-file-viewer",
-    ...(fixedAspect ? { "data-media-fixed": "1" } : {}),
-    ...(canInlineVideo ? { "data-video-state": "paused" } : {}),
-    ...(progressOverlay ? { "data-media-progress": "1" } : {}),
-    "data-file-kind": "video",
-    "data-name": info.name,
-    "data-size": String(info.size || 0),
-    "aria-label": `Открыть: ${info.name}`,
-  };
-  if (info.transfer?.localId) attrs["data-local-id"] = info.transfer.localId;
-  if (info.url) attrs["data-url"] = info.url;
-  if (info.fileId) attrs["data-file-id"] = info.fileId;
-  if (info.mime) attrs["data-mime"] = info.mime;
-  if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
-  if (opts?.caption) attrs["data-caption"] = opts.caption;
-
-  const children: HTMLElement[] = [
-    canInlineVideo
-	      ? (() => {
-	          const video = el("video", {
-	            class: "chat-file-video",
-	            src: info.url || undefined,
-	            preload: "metadata",
-	            playsinline: "true",
-	            muted: "true",
-	            loop: "true",
-            ...(info.thumbUrl ? { poster: info.thumbUrl } : {}),
-          }) as HTMLVideoElement;
-          video.muted = true;
-          video.defaultMuted = true;
-          return video;
-        })()
-      : previewUrl
-        ? (el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" }) as HTMLImageElement)
-        : (el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Видео"]) as HTMLDivElement),
-  ];
-  if (canInlineVideo) {
-    if (!progressOverlay) {
-      children.push(el("span", { class: "chat-file-video-toggle", "data-action": "media-toggle", "aria-hidden": "true" }, [""]));
-    }
-  } else if (!progressOverlay) {
-    children.push(el("span", { class: "chat-file-video-toggle", "aria-hidden": "true" }, [""]));
-  }
-  if (progressOverlay) children.push(progressOverlay);
-  const btn = el("button", attrs, children) as HTMLButtonElement;
-  if (!fixedAspect) {
-    if (videoNote) {
-      btn.style.aspectRatio = "1 / 1";
-    } else {
-      const cachedRatio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
-      const cachedLocalRatio = !cachedRatio && info.transfer?.localId ? getCachedLocalMediaAspectRatio(info.transfer.localId) : null;
-      const ratio = cachedRatio ?? cachedLocalRatio;
-      if (ratio) btn.style.aspectRatio = String(ratio);
-    }
-  }
-  return btn;
 }
 
 export function isWebpStickerCandidate(info: FileAttachmentInfo, ratio: number): boolean {
@@ -977,93 +562,6 @@ export function skeletonMsg(kind: "in" | "out", seed: number): HTMLElement {
   children.push(el("div", { class: "msg-avatar" }, [el("span", { class: "avatar avatar-skel", "aria-hidden": "true" }, [""])]));
   children.push(body);
   return el("div", { class: `msg msg-${kind} msg-skel`, "aria-hidden": "true" }, children);
-}
-
-export type ChatShiftAnchor = {
-  key: string;
-  msgKey?: string;
-  msgId?: number;
-  rectBottom: number;
-  scrollTop: number;
-};
-
-export type UnreadDividerAnchor = {
-  msgKey?: string;
-  msgId?: number;
-};
-
-export function unreadAnchorForMessage(msg: ChatMessage): UnreadDividerAnchor {
-  const msgKey = messageSelectionKey(msg);
-  const rawId = msg?.id;
-  const msgId = typeof rawId === "number" && Number.isFinite(rawId) && rawId > 0 ? rawId : undefined;
-  return { ...(msgKey ? { msgKey } : {}), ...(msgId ? { msgId } : {}) };
-}
-
-export function findUnreadAnchorIndex(msgs: ChatMessage[], anchor: UnreadDividerAnchor): number {
-  if (!Array.isArray(msgs) || msgs.length === 0) return -1;
-  if (anchor.msgKey) {
-    const idx = msgs.findIndex((m) => messageSelectionKey(m) === anchor.msgKey);
-    if (idx >= 0) return idx;
-  }
-  if (anchor.msgId !== undefined) {
-    const idx = msgs.findIndex((m) => {
-      const raw = m?.id;
-      return typeof raw === "number" && Number.isFinite(raw) && raw === anchor.msgId;
-    });
-    if (idx >= 0) return idx;
-  }
-  return -1;
-}
-
-export function captureChatShiftAnchor(host: HTMLElement, key: string): ChatShiftAnchor | null {
-  const lines = host.firstElementChild as HTMLElement | null;
-  if (!lines) return null;
-  const hostRect = host.getBoundingClientRect();
-  const children = Array.from(lines.children) as HTMLElement[];
-  let fallback: HTMLElement | null = null;
-  let lastVisible: { element: HTMLElement; rect: DOMRect } | null = null;
-  for (const child of children) {
-    if (!child.classList.contains("msg")) continue;
-    if (!fallback) fallback = child;
-    const rect = child.getBoundingClientRect();
-    if (rect.bottom >= hostRect.top && rect.top <= hostRect.bottom) {
-      lastVisible = { element: child, rect };
-    } else if (lastVisible && rect.top > hostRect.bottom) {
-      break;
-    }
-  }
-  const picked = lastVisible ?? (fallback ? { element: fallback, rect: fallback.getBoundingClientRect() } : null);
-  if (!picked) return null;
-  const msgKey = String(picked.element.getAttribute("data-msg-key") || "").trim();
-  const rawMsgId = picked.element.getAttribute("data-msg-id");
-  const msgId = rawMsgId ? Number(rawMsgId) : NaN;
-  return {
-    key,
-    msgKey: msgKey || undefined,
-    msgId: Number.isFinite(msgId) ? msgId : undefined,
-    rectBottom: picked.rect.bottom,
-    scrollTop: host.scrollTop,
-  };
-}
-
-export function findChatShiftAnchorElement(host: HTMLElement, anchor: ChatShiftAnchor): HTMLElement | null {
-  const lines = host.firstElementChild as HTMLElement | null;
-  if (!lines) return null;
-  const children = Array.from(lines.children) as HTMLElement[];
-  for (const child of children) {
-    if (!child.classList.contains("msg")) continue;
-    if (anchor.msgKey) {
-      if (child.getAttribute("data-msg-key") === anchor.msgKey) return child;
-      continue;
-    }
-    if (anchor.msgId !== undefined) {
-      const raw = child.getAttribute("data-msg-id");
-      if (!raw) continue;
-      const msgId = Number(raw);
-      if (Number.isFinite(msgId) && msgId === anchor.msgId) return child;
-    }
-  }
-  return null;
 }
 
 export const EMOJI_SEGMENT_RE = /\p{Extended_Pictographic}/u;
@@ -1131,6 +629,7 @@ export function applyMessageDataset(
     album?: boolean;
     sticker?: boolean;
     roundVideo?: boolean;
+    footerKind?: string;
   }
 ) {
   const setData = (name: string, value?: string) => {
@@ -1145,6 +644,7 @@ export function applyMessageDataset(
   setData("data-msg-attach", meta.attachKind);
   setData("data-msg-file", meta.fileKind);
   setData("data-msg-action", meta.actionKind);
+  setData("data-msg-footer", meta.footerKind);
   if (meta.refKind) {
     setData("data-msg-ref", meta.refKind);
     setFlag("data-msg-has-ref", true);
@@ -1166,149 +666,16 @@ export function messageLine(
   friendLabels?: Map<string, string>,
   opts?: { mobileUi: boolean; boardUi?: boolean; msgIdx?: number; selectionMode?: boolean; selected?: boolean }
 ): HTMLElement {
-  const actionBtn = (
-    label: string,
-    attrs: Record<string, string>,
-    cls: string,
-    baseClass: string = "msg-action-btn"
-  ): HTMLElement => el("button", { class: `btn ${baseClass} ${cls}`.trim(), type: "button", ...attrs }, [label]);
-
-
-  function renderInviteCard(payload: any, text: string): HTMLElement | null {
-    if (!payload || typeof payload !== "object") return null;
-    const kind = String(payload.kind || "");
-    if (kind !== "group_invite" && kind !== "board_invite") return null;
-    const isGroup = kind === "group_invite";
-    const roomId = String(payload.groupId || payload.group_id || payload.boardId || payload.board_id || "").trim();
-    if (!roomId) return null;
-    const name = String(payload.name || "").trim() || null;
-    const handle = String(payload.handle || "").trim() || null;
-    const from = String(payload.from || "").trim();
-    const description = String(payload.description || "").trim();
-    const rules = String(payload.rules || "").trim();
-    const title = text || (isGroup ? "Приглашение в чат" : "Приглашение в доску");
-    const label = roomLabel(name, roomId, handle);
-
-    const metaLines: HTMLElement[] = [];
-    metaLines.push(el("div", { class: "invite-meta-line" }, [isGroup ? `Чат: ${label}` : `Доска: ${label}`]));
-    if (from) metaLines.push(el("div", { class: "invite-meta-line" }, [`От: ${from}`]));
-    const meta = el("div", { class: "invite-meta" }, metaLines);
-
-    const sections: HTMLElement[] = [];
-    if (description) {
-      sections.push(el("div", { class: "invite-section" }, [el("div", { class: "invite-section-title" }, ["Описание"]), renderMultilineText(description)]));
-    }
-    if (rules) {
-      sections.push(el("div", { class: "invite-section" }, [el("div", { class: "invite-section-title" }, ["Правила"]), renderMultilineText(rules)]));
-    }
-    if (!sections.length) {
-      sections.push(el("div", { class: "invite-empty" }, ["Описание и правила не указаны"]));
-    }
-
-    const baseAttrs: Record<string, string> = isGroup ? { "data-group-id": roomId } : { "data-board-id": roomId };
-    if (from) baseAttrs["data-from"] = from;
-
-    const actions = el("div", { class: "invite-actions" }, [
-      actionBtn(
-        "Вступить",
-        { ...baseAttrs, "data-action": isGroup ? "group-invite-accept" : "board-invite-accept" },
-        "btn-primary",
-        "invite-action-btn"
-      ),
-      actionBtn(
-        "Отклонить",
-        { ...baseAttrs, "data-action": isGroup ? "group-invite-decline" : "board-invite-decline" },
-        "",
-        "invite-action-btn"
-      ),
-      actionBtn(
-        "Спам",
-        { ...baseAttrs, "data-action": isGroup ? "group-invite-block" : "board-invite-block" },
-        "btn-danger",
-        "invite-action-btn"
-      ),
-    ]);
-
-    return el("div", { class: "invite-card" }, [el("div", { class: "invite-title" }, [title]), meta, ...sections, actions]);
-  }
-
-  function sysActions(payload: any): HTMLElement | null {
-    if (!payload || typeof payload !== "object") return null;
-    const kind = String(payload.kind || "");
-    const buttons: HTMLElement[] = [];
-
-    if (kind === "auth_in") {
-      const peer = String(payload.peer || "").trim();
-      if (peer) {
-        buttons.push(actionBtn("Принять", { "data-action": "auth-accept", "data-peer": peer }, "btn-primary"));
-        buttons.push(actionBtn("Отклонить", { "data-action": "auth-decline", "data-peer": peer }, "btn-danger"));
-      }
-    } else if (kind === "auth_out") {
-      const peer = String(payload.peer || "").trim();
-      if (peer) {
-        buttons.push(actionBtn("Отменить", { "data-action": "auth-cancel", "data-peer": peer }, "btn-danger"));
-      }
-    } else if (kind === "group_invite") {
-      const groupId = String(payload.groupId || payload.group_id || "").trim();
-      if (groupId) {
-        buttons.push(actionBtn("Принять", { "data-action": "group-invite-accept", "data-group-id": groupId }, "btn-primary"));
-        buttons.push(actionBtn("Отклонить", { "data-action": "group-invite-decline", "data-group-id": groupId }, "btn-danger"));
-      }
-    } else if (kind === "group_join_request") {
-      const groupId = String(payload.groupId || payload.group_id || "").trim();
-      const peer = String(payload.from || payload.peer || "").trim();
-      if (groupId && peer) {
-        buttons.push(
-          actionBtn("Принять", { "data-action": "group-join-accept", "data-group-id": groupId, "data-peer": peer }, "btn-primary")
-        );
-        buttons.push(
-          actionBtn("Отклонить", { "data-action": "group-join-decline", "data-group-id": groupId, "data-peer": peer }, "btn-danger")
-        );
-      }
-    } else if (kind === "board_invite") {
-      const boardId = String(payload.boardId || payload.board_id || "").trim();
-      if (boardId) {
-        buttons.push(actionBtn("Принять", { "data-action": "board-invite-accept", "data-board-id": boardId }, "btn-primary"));
-        buttons.push(actionBtn("Отклонить", { "data-action": "board-invite-decline", "data-board-id": boardId }, "btn-danger"));
-      }
-    }
-
-    if (!buttons.length) return null;
-    return el("div", { class: "msg-actions" }, buttons);
-  }
-
   if (m.kind === "sys") {
-    const bodyChildren: HTMLElement[] = [];
     const actionKind = m.attachment?.kind === "action" ? String(m.attachment.payload?.kind || "") : "";
-    if (m.attachment?.kind === "action") {
-      const card = renderInviteCard(m.attachment.payload, m.text);
-      if (card) {
-        bodyChildren.push(card);
-        const line = el("div", { class: "msg msg-sys" }, [el("div", { class: "msg-body" }, bodyChildren)]);
-        applyMessageDataset(line, m.kind, {
-          boardUi: Boolean(opts?.boardUi && state.selected?.kind === "board"),
-          mobileUi: opts?.mobileUi,
-          attachKind: m.attachment?.kind,
-          actionKind,
-          hasText: Boolean(String(m.text || "").trim()),
-        });
-        return line;
-      }
-    }
-    const emojiOnlySys = isEmojiOnlyText(m.text || "");
-    bodyChildren.push(el("div", { class: `msg-text${emojiOnlySys ? " msg-emoji-only" : ""}` }, renderRichText(m.text)));
-    if (m.attachment?.kind === "action") {
-      const actions = sysActions(m.attachment.payload);
-      if (actions) bodyChildren.push(actions);
-    }
-    const line = el("div", { class: "msg msg-sys" }, [el("div", { class: "msg-body" }, bodyChildren)]);
+    const line = renderDeferredSysMessage({ message: m });
     applyMessageDataset(line, m.kind, {
       boardUi: Boolean(opts?.boardUi && state.selected?.kind === "board"),
       mobileUi: opts?.mobileUi,
       attachKind: m.attachment?.kind,
       actionKind,
       hasText: Boolean(String(m.text || "").trim()),
-      emojiOnly: emojiOnlySys,
+      emojiOnly: isEmojiOnlyText(m.text || ""),
     });
     return line;
   }
@@ -1325,9 +692,12 @@ export function messageLine(
   const canOpenProfile = Boolean(displayFromId);
   const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
   const meta = buildMessageMeta(m);
+  const metaNode = el("div", { class: "msg-meta" }, meta);
   const bodyChildren: HTMLElement[] = [];
   let fileRowEl: HTMLElement | null = null;
   let selectionBtnPlacedInFileRow = false;
+  let visualMediaActions: HTMLElement[] = [];
+  let footerKind = "";
   if (showFrom) {
     const attrs = canOpenProfile
       ? {
@@ -1412,7 +782,7 @@ export function messageLine(
         mainChildren.splice(
           1,
           0,
-          renderVoicePlayer({
+          renderDeferredVoicePlayer({
             url: url || null,
             fileId: info.fileId,
             name: info.name,
@@ -1425,7 +795,7 @@ export function messageLine(
         mainChildren.splice(
           1,
           0,
-          renderVoicePlayer({
+          renderDeferredVoicePlayer({
             url: url || null,
             fileId: info.fileId,
             name: info.name,
@@ -1462,10 +832,7 @@ export function messageLine(
       );
     }
 
-    const rowChildren: HTMLElement[] = [
-      el("div", { class: "file-main" }, mainChildren),
-      el("div", { class: "file-actions" }, actions),
-    ];
+    const rowChildren: HTMLElement[] = [el("div", { class: "file-main" }, mainChildren)];
 
     const caption = String(m.text || "").trim();
     const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
@@ -1477,7 +844,7 @@ export function messageLine(
     const roundVideoCandidate = canApplyMediaFlags && ratio !== null ? isRoundVideoCandidate(info, ratio) : false;
     if (isVisualMedia) {
       const previewOpts = { caption: viewerCaption, msgIdx: opts?.msgIdx, mobileUi: opts?.mobileUi };
-      const preview = isImage ? renderImagePreviewButton(info, previewOpts) : renderVideoPreviewButton(info, previewOpts);
+      const preview = renderDeferredVisualPreview({ info, opts: previewOpts });
       if (preview) rowChildren.unshift(preview);
     }
 
@@ -1487,6 +854,8 @@ export function messageLine(
       : isAudio
         ? `file-row file-row-chat file-row-audio${voice ? " file-row-voice" : ""}`
         : "file-row file-row-chat";
+    if (!isVisualMedia) rowChildren.push(el("div", { class: "file-actions" }, actions));
+    else visualMediaActions = actions;
     fileRowEl = el("div", { class: fileRowClass }, rowChildren);
     if (isVisualMedia && !opts?.mobileUi) {
       if (!stickerCandidate && !roundVideoCandidate) {
@@ -1500,17 +869,17 @@ export function messageLine(
       }
     }
     bodyChildren.push(fileRowEl);
+    let captionNode: HTMLElement | null = null;
     if (viewerCaption) {
       const emojiOnlyCaption = isEmojiOnlyText(viewerCaption);
       hasCaption = true;
       hasText = true;
       emojiOnly = emojiOnlyCaption;
       const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
-      if (boardUi && !emojiOnlyCaption) {
-        bodyChildren.push(el("div", { class: "msg-text msg-caption msg-text-board" }, [renderBoardPost(viewerCaption)]));
-      } else {
-        bodyChildren.push(el("div", { class: `msg-text msg-caption${emojiOnlyCaption ? " msg-emoji-only" : ""}` }, renderRichText(viewerCaption)));
-      }
+      captionNode =
+        boardUi && !emojiOnlyCaption
+          ? el("div", { class: "msg-text msg-caption msg-text-board" }, [renderBoardPost(viewerCaption)])
+          : el("div", { class: `msg-text msg-caption${emojiOnlyCaption ? " msg-emoji-only" : ""}` }, renderRichText(viewerCaption));
     }
     fileKind = isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : "file";
 
@@ -1518,19 +887,25 @@ export function messageLine(
       sticker = stickerCandidate;
       roundVideo = roundVideoCandidate;
     }
+    if (captionNode || !isVisualMedia) {
+      bodyChildren.push(renderAttachmentFooterShell({ caption: captionNode, meta: metaNode, media: isVisualMedia }));
+      footerKind = "stacked";
+    } else {
+      bodyChildren.push(metaNode);
+      footerKind = "overlay";
+    }
   } else {
     const trimmedText = String(m.text || "").trim();
     const textEmojiOnly = isEmojiOnlyText(trimmedText);
     hasText = Boolean(trimmedText);
     emojiOnly = textEmojiOnly;
     const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
-    if (boardUi && !textEmojiOnly) {
-      bodyChildren.push(el("div", { class: "msg-text msg-text-board" }, [renderBoardPost(m.text)]));
-    } else {
-      bodyChildren.push(el("div", { class: `msg-text${textEmojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(m.text)));
-    }
+    const textNode =
+      boardUi && !textEmojiOnly
+        ? el("div", { class: "msg-text msg-text-board" }, [renderBoardPost(m.text)])
+        : el("div", { class: `msg-text${textEmojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(m.text));
+    bodyChildren.push(renderMessageContentShell(textNode, metaNode));
   }
-  bodyChildren.push(el("div", { class: "msg-meta" }, meta));
   const reacts = renderReactions(m);
   if (reacts) bodyChildren.push(reacts);
   const selectionMode = Boolean(opts?.selectionMode);
@@ -1540,19 +915,10 @@ export function messageLine(
     m.attachment?.kind === "action" || m.status === "sending" || m.status === "queued" || m.status === "error";
   const selectionBtn =
     selectionMode && selectionIdx !== null && !selectionDisabled
-      ? el(
-          "button",
-          {
-            class: `btn msg-select${selected ? " msg-select-on" : ""}`,
-            type: "button",
-            "data-action": "msg-select-toggle",
-            "data-msg-idx": String(selectionIdx),
-            title: selected ? "Снять выбор" : "Выбрать",
-            "aria-label": selected ? "Снять выбор" : "Выбрать",
-            ...(selected ? { "aria-pressed": "true" } : { "aria-pressed": "false" }),
-          },
-          [selected ? "✓" : ""]
-        )
+      ? renderMessageSelectionControl({
+          selectionIdx,
+          selected,
+        })
       : null;
 
   if (selectionBtn && fileRowEl && !Boolean(opts?.boardUi)) {
@@ -1561,8 +927,11 @@ export function messageLine(
       fileRowEl.prepend(selectionBtn);
     } else if (fileKind === "image" || fileKind === "video") {
       selectionBtnPlacedInFileRow = true;
-      fileRowEl.append(selectionBtn);
     }
+  }
+  if (fileRowEl && (fileKind === "image" || fileKind === "video")) {
+    const overlayControls = renderMediaOverlayControls({ selectionBtn, actions: visualMediaActions });
+    if (overlayControls) fileRowEl.append(overlayControls);
   }
 
   const lineChildren: HTMLElement[] = [];
@@ -1604,196 +973,7 @@ export function messageLine(
     fileKind,
     sticker,
     roundVideo,
-  });
-  const accent = resolveUserAccent(accentId);
-  if (accent) {
-    line.style.setProperty("--msg-accent", accent);
-    line.style.setProperty("--msg-from-color", accent);
-  }
-  return line;
-}
-
-export function renderAlbumLine(
-  state: AppState,
-  items: AlbumItem[],
-  friendLabels?: Map<string, string>,
-  opts?: {
-    selectionMode?: boolean;
-    selected?: boolean;
-    partial?: boolean;
-    groupStartIdx?: number;
-    groupEndIdx?: number;
-    albumLayout?: { maxWidth: number; minWidth: number; spacing: number };
-  }
-): HTMLElement {
-  const first = items[0];
-  const last = items[items.length - 1];
-  const fromId = String(first.msg.from || "").trim();
-  const selfId = String(state.selfId || "").trim();
-  const displayFromId = first.msg.kind === "out" ? selfId : fromId;
-  const accentId = displayFromId;
-  const resolvedLabel = displayFromId ? resolveUserLabel(state, displayFromId, friendLabels) : "";
-  const fromLabel = resolvedLabel && resolvedLabel !== "—" ? resolvedLabel : first.msg.kind === "out" ? "Я" : "—";
-  const fromHandle = displayFromId ? resolveUserHandle(state, displayFromId) : "";
-  const showHandle = Boolean(fromHandle && !fromLabel.includes(fromHandle));
-  const titleLabel = showHandle ? `${fromLabel} ${fromHandle}` : fromLabel;
-  const showFrom = true;
-  const canOpenProfile = Boolean(displayFromId);
-  const albumCaption = (() => {
-    let unique: string | null = null;
-    for (const item of items) {
-      const c = extractFileCaptionText(item?.msg?.text);
-      if (!c) continue;
-      if (unique === null) unique = c;
-      else if (unique !== c) return "";
-    }
-    return unique ?? "";
-  })();
-  const bodyChildren: HTMLElement[] = [];
-  if (showFrom) {
-    const attrs = canOpenProfile
-      ? {
-          class: "msg-from msg-from-btn",
-          type: "button",
-          "data-action": "user-open",
-          "data-user-id": displayFromId,
-          title: `Профиль: ${titleLabel}`,
-        }
-      : { class: "msg-from" };
-    const labelChildren = [el("span", { class: "msg-from-name" }, [fromLabel])];
-    if (showHandle) labelChildren.push(el("span", { class: "msg-from-handle" }, [fromHandle]));
-    const node = canOpenProfile ? el("button", attrs, labelChildren) : el("div", attrs, labelChildren);
-    bodyChildren.push(node);
-  }
-  const ref = first.msg.reply || first.msg.forward;
-  const refKind = first.msg.reply ? "reply" : first.msg.forward ? "forward" : undefined;
-  if (ref) {
-    const kind = first.msg.reply ? "reply" : "forward";
-    const refNode = renderMessageRef(state, ref, kind, friendLabels);
-    if (refNode) bodyChildren.push(refNode);
-  }
-
-  const selectionMode = Boolean(opts?.selectionMode);
-  const selected = Boolean(opts?.selected);
-  const partial = Boolean(opts?.partial);
-  const selectionIdx = typeof last.idx === "number" && Number.isFinite(last.idx) ? Math.trunc(last.idx) : null;
-  let selectionBtnPlacedInGrid = false;
-  const selectionBtn =
-    selectionMode && selectionIdx !== null
-      ? el(
-          "button",
-          {
-            class: `btn msg-select${selected || partial ? " msg-select-on" : ""}${partial ? " msg-select-partial" : ""}`,
-            type: "button",
-            "data-action": "msg-select-toggle",
-            "data-msg-idx": String(selectionIdx),
-            ...(typeof opts?.groupStartIdx === "number" && Number.isFinite(opts.groupStartIdx)
-              ? { "data-msg-group-start": String(Math.trunc(opts.groupStartIdx)) }
-              : {}),
-            ...(typeof opts?.groupEndIdx === "number" && Number.isFinite(opts.groupEndIdx)
-              ? { "data-msg-group-end": String(Math.trunc(opts.groupEndIdx)) }
-              : {}),
-            title: selected ? "Снять выбор" : partial ? "Выбрать всё" : "Выбрать",
-            "aria-label": selected ? "Снять выбор" : partial ? "Выбрать всё" : "Выбрать",
-            ...(selected ? { "aria-pressed": "true" } : partial ? { "aria-pressed": "mixed" } : { "aria-pressed": "false" }),
-          },
-          [selected ? "✓" : partial ? "–" : ""]
-        )
-      : null;
-
-  const gridItems: HTMLElement[] = [];
-  const hasCaption = Boolean(albumCaption);
-  const emojiOnly = hasCaption ? isEmojiOnlyText(albumCaption) : false;
-  const albumFileKind = items.every((it) => it && it.info && it.info.isVideo) ? "video" : "image";
-  const layoutCfg = opts?.albumLayout ?? { maxWidth: 420, minWidth: 100, spacing: 1 };
-  const sizes = items.map((item) => {
-    const w = item.info.thumbW || item.info.mediaW;
-    const h = item.info.thumbH || item.info.mediaH;
-    if (w && h) return { w, h };
-    const ratio =
-      (item.info.fileId ? getCachedMediaAspectRatio(item.info.fileId) : null) ??
-      (item.info.transfer?.localId ? getCachedLocalMediaAspectRatio(item.info.transfer.localId) : null);
-    const r = typeof ratio === "number" && Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
-    return { w: Math.max(1, Math.round(1000 * r)), h: 1000 };
-  });
-  const layout = (() => {
-    try {
-      return layoutTelegramAlbum(sizes, layoutCfg);
-    } catch {
-      return null;
-    }
-  })();
-  const albumW = layout && Number.isFinite(layout.width) && layout.width > 0 ? layout.width : null;
-  const albumH = layout && Number.isFinite(layout.height) && layout.height > 0 ? layout.height : null;
-  const layoutOk = Boolean(albumW && albumH && layout && Array.isArray(layout.layout) && layout.layout.length === items.length);
-  for (let i = 0; i < items.length; i += 1) {
-    const item = items[i];
-    const viewerCaption = extractFileCaptionText(item.msg.text) || albumCaption;
-    const preview = item.info.isImage
-      ? renderImagePreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx, caption: viewerCaption })
-      : item.info.isVideo
-        ? renderVideoPreviewButton(item.info, { className: "chat-file-preview-album", msgIdx: item.idx, caption: viewerCaption })
-        : null;
-    if (!preview) continue;
-    const lay = layoutOk && layout ? layout.layout[i] : null;
-    const style = lay && albumW && albumH ? `width: ${(lay.geometry.width / albumW) * 100}%; height: ${(lay.geometry.height / albumH) * 100}%; top: ${(lay.geometry.y / albumH) * 100}%; left: ${(lay.geometry.x / albumW) * 100}%;` : "";
-    const wrap = el("div", { class: "chat-album-item", "data-msg-idx": String(item.idx), ...(layoutOk && style ? { style } : {}) }, [preview]);
-    gridItems.push(wrap);
-  }
-  const grid = el("div", { class: layoutOk ? "chat-album-grid chat-album-grid-mosaic" : "chat-album-grid", "data-count": String(items.length) }, gridItems);
-  if (layoutOk && albumW && albumH) {
-    grid.style.width = `${Math.round(albumW)}px`;
-    grid.style.height = `${Math.round(albumH)}px`;
-  }
-  if (selectionBtn) {
-    selectionBtnPlacedInGrid = true;
-    grid.append(selectionBtn);
-  }
-  bodyChildren.push(grid);
-  if (albumCaption) {
-    bodyChildren.push(
-      el("div", { class: `msg-text msg-caption${emojiOnly ? " msg-emoji-only" : ""}` }, renderRichText(albumCaption))
-    );
-  }
-  bodyChildren.push(el("div", { class: "msg-meta" }, buildMessageMeta(last.msg)));
-  const reacts = renderReactions(last.msg);
-  if (reacts) bodyChildren.push(reacts);
-
-  const lineChildren: HTMLElement[] = [];
-  if (displayFromId) {
-    const avatarNode = avatar("dm", displayFromId);
-    if (canOpenProfile) {
-      lineChildren.push(
-        el("div", { class: "msg-avatar" }, [
-          el(
-            "button",
-            { class: "msg-avatar-btn", type: "button", "data-action": "user-open", "data-user-id": displayFromId, title: `Профиль: ${titleLabel}` },
-            [avatarNode]
-          ),
-        ])
-      );
-    } else {
-      lineChildren.push(el("div", { class: "msg-avatar" }, [avatarNode]));
-    }
-  }
-  const bodyNode = el("div", { class: "msg-body" }, bodyChildren);
-  if (first.msg.kind === "out") {
-    lineChildren.push(bodyNode);
-    if (selectionBtn && !selectionBtnPlacedInGrid) lineChildren.push(selectionBtn);
-  } else {
-    if (selectionBtn && !selectionBtnPlacedInGrid) lineChildren.push(selectionBtn);
-    lineChildren.push(bodyNode);
-  }
-  const line = el("div", { class: `msg msg-${first.msg.kind} msg-attach msg-album` }, lineChildren);
-  applyMessageDataset(line, first.msg.kind, {
-    refKind,
-    hasReacts: Boolean(reacts),
-    hasCaption,
-    hasText: hasCaption,
-    emojiOnly,
-    attachKind: first.msg.attachment?.kind ? String(first.msg.attachment.kind) : "file",
-    fileKind: albumFileKind,
-    album: true,
+    footerKind,
   });
   const accent = resolveUserAccent(accentId);
   if (accent) {

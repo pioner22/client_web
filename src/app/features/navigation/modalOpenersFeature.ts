@@ -7,6 +7,7 @@ export interface ModalOpenersFeatureDeps {
   store: Store<AppState>;
   closeMobileSidebar: () => void;
   resetCreateMembers: (scope: "group_create" | "board_create") => void;
+  prepareMembersChips?: () => void;
 }
 
 export interface ModalOpenersFeature {
@@ -26,7 +27,7 @@ export interface ModalOpenersFeature {
 }
 
 export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalOpenersFeature {
-  const { store, closeMobileSidebar, resetCreateMembers } = deps;
+  const { store, closeMobileSidebar, resetCreateMembers, prepareMembersChips } = deps;
 
   const resolveRoomTitle = (targetKind: RoomTargetKind, targetId: string) => {
     const st = store.get();
@@ -39,6 +40,7 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
 
   const openGroupCreateModal = () => {
     closeMobileSidebar();
+    prepareMembersChips?.();
     const st = store.get();
     if (!st.authed) {
       store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
@@ -50,6 +52,7 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
 
   const openBoardCreateModal = () => {
     closeMobileSidebar();
+    prepareMembersChips?.();
     const st = store.get();
     if (!st.authed) {
       store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
@@ -63,6 +66,7 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
     const st = store.get();
     if (!st.authed) return;
     closeMobileSidebar();
+    prepareMembersChips?.();
     const { title } = resolveRoomTitle(targetKind, targetId);
     store.set({ modal: { kind: "members_add", targetKind, targetId, title } });
   };

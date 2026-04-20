@@ -4,6 +4,7 @@ import type { AppState } from "../../stores/types";
 
 export function renderFooter(target: HTMLElement, state: AppState) {
   const mobileUi = isMobileLikeUi();
+  const profileAreaOpen = state.page === "profile" || state.page === "sessions";
   target.classList.toggle("hidden", mobileUi);
   if (mobileUi) {
     target.replaceChildren();
@@ -23,10 +24,10 @@ export function renderFooter(target: HTMLElement, state: AppState) {
   const tabProfile = el(
     "button",
     {
-      class: state.page === "profile" ? "footer-tab footer-tab-active" : "footer-tab",
+      class: profileAreaOpen ? "footer-tab footer-tab-active" : "footer-tab",
       type: "button",
       role: "tab",
-      "aria-selected": String(state.page === "profile"),
+      "aria-selected": String(profileAreaOpen),
       "data-action": "nav-profile",
     },
     ["Профиль"]

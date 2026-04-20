@@ -165,6 +165,79 @@
   flex-wrap: wrap;
 }
 
+.profile-section-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.profile-session-list {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.profile-session-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 35%);
+  background: color-mix(in srgb, var(--panel2), transparent 18%);
+}
+
+.profile-session-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.profile-session-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.profile-session-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel), transparent 18%);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 35%);
+}
+
+.profile-session-chip-current {
+  color: color-mix(in srgb, var(--accent), white 10%);
+  border-color: color-mix(in srgb, var(--accent), transparent 45%);
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+}
+
+.profile-session-meta {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.profile-session-empty {
+  padding: 12px;
+  border-radius: var(--r-md);
+  border: 1px dashed color-mix(in srgb, var(--line), transparent 35%);
+  background: color-mix(in srgb, var(--panel), transparent 62%);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .theme-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;

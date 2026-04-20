@@ -21,6 +21,8 @@ export interface ProfileActionsFeature {
   onSearchServerForward: (items: SearchResultEntry[]) => void;
   onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onProfileRefresh: () => void;
+  onSessionsRefresh: () => void;
+  onSessionsLogoutOthers: () => void;
   onProfileAvatarSelect: (file: File | null) => void;
   onProfileAvatarClear: () => void;
 }
@@ -66,6 +68,26 @@ export function createProfileActionsFeature(deps: ProfileActionsFeatureDeps): Pr
     send({ type: "profile_get" });
   };
 
+  const onSessionsRefresh = () => {
+    const st = store.get();
+    if (st.conn !== "connected" || !st.authed) return;
+    send({ type: "sessions_list" });
+    store.set({
+      sessionDevicesStatus: "Обновляем список активных сессий…",
+      status: "Обновляем список активных сессий…",
+    });
+  };
+
+  const onSessionsLogoutOthers = () => {
+    const st = store.get();
+    if (st.conn !== "connected" || !st.authed) return;
+    send({ type: "sessions_logout_others" });
+    store.set({
+      sessionDevicesStatus: "Отключаем другие устройства…",
+      status: "Отключаем другие устройства…",
+    });
+  };
+
   const onProfileAvatarSelect = (file: File | null) => {
     getAvatarFeature()?.setProfileAvatar(file);
   };
@@ -79,6 +101,8 @@ export function createProfileActionsFeature(deps: ProfileActionsFeatureDeps): Pr
     onSearchServerForward,
     onProfileSave,
     onProfileRefresh,
+    onSessionsRefresh,
+    onSessionsLogoutOthers,
     onProfileAvatarSelect,
     onProfileAvatarClear,
   };

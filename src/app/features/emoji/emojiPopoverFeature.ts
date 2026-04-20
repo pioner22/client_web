@@ -1,5 +1,6 @@
 import { el } from "../../../helpers/dom/el";
-import { EMOJI_RECENTS_ID, insertTextAtSelection, loadEmojiCatalog, updateEmojiRecents } from "../../../helpers/ui/emoji";
+import { EMOJI_RECENTS_ID, loadEmojiCatalog, updateEmojiRecents } from "../../../helpers/ui/emoji";
+import { insertTextAtSelection } from "../../../helpers/ui/textSelection";
 import type { EmojiCategory } from "../../../helpers/ui/emojiCatalog";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";

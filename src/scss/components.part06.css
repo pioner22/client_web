@@ -1,0 +1,44 @@
+.msg-content-shell {
+  min-width: 0;
+  display: grid;
+  gap: var(--msg-content-gap, 4px);
+  align-self: stretch;
+}
+
+.msg-content-shell > .msg-text {
+  min-width: 0;
+}
+
+.chat:not(.chat-board) {
+  --msg-content-gap: calc(var(--sp-1) + 1px);
+}
+
+.chat:not(.chat-board) .msg:not(.msg-attach) .msg-content-shell .msg-meta {
+  margin: 0;
+  min-height: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  align-self: flex-end;
+}
+
+.chat:not(.chat-board) .msg.msg-in:not(.msg-attach) .msg-content-shell .msg-meta {
+  background: color-mix(in srgb, var(--msg-in-border-color) 30%, transparent);
+  border-color: color-mix(in srgb, var(--msg-in-border-color) 55%, transparent);
+}
+
+.chat:not(.chat-board) .msg.msg-out:not(.msg-attach) .msg-content-shell .msg-meta {
+  background: color-mix(in srgb, var(--focus) 16%, transparent);
+  border-color: color-mix(in srgb, var(--focus) 26%, transparent);
+}
+
+.chat:not(.chat-board) .msg:not(.msg-attach) .msg-content-shell .msg-meta-item + .msg-meta-item::before {
+  opacity: 0.38;
+}
+
+.chat:not(.chat-board) .msg.msg-in:not(.msg-attach) .msg-content-shell .msg-text {
+  color: var(--msg-text-in-color);
+}
+
+.chat:not(.chat-board) .msg.msg-out:not(.msg-attach) .msg-content-shell .msg-text {
+  color: var(--msg-text-out-color);
+}

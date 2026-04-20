@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { resolveEscapeInteractionAction } from "../navigation/interactionPolicy";
 
 export interface HotkeysFeatureDeps {
   store: Store<AppState>;
@@ -126,28 +127,30 @@ export function createHotkeysFeature(deps: HotkeysFeatureDeps): HotkeysFeature {
     }
 
     if (e.key === "Escape") {
-      if (!st.modal && (isMobileSidebarOpen() || isFloatingSidebarOpen())) {
-        e.preventDefault();
-        onCloseMobileSidebar();
-        return;
-      }
-      if (st.modal) {
-        e.preventDefault();
+      const action = resolveEscapeInteractionAction({
+        ...st,
+        mobileSidebarOpen: isMobileSidebarOpen(),
+        floatingSidebarOpen: isFloatingSidebarOpen(),
+      });
+      if (action === "none") return;
+      e.preventDefault();
+      if (action === "close_modal") {
         onCloseModal();
         return;
       }
-      if (st.chatSearchOpen) {
-        e.preventDefault();
+      if (action === "close_chat_search") {
         onCloseChatSearch();
         return;
       }
-      if (st.rightPanel) {
-        e.preventDefault();
+      if (action === "close_sidebar") {
+        onCloseMobileSidebar();
+        return;
+      }
+      if (action === "close_right_panel") {
         onCloseRightPanel();
         return;
       }
-      if (st.page !== "main") {
-        e.preventDefault();
+      if (action === "set_page_main") {
         onSetMainPage();
       }
       return;

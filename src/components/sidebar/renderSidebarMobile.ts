@@ -497,7 +497,7 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
   }
 
   // Menu tab: действия и навигация.
-  const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
+  const profileRow = roomRow("☺", "Профиль", state.page === "profile" || state.page === "sessions", () => onSetPage("profile"), undefined, {
     sub: "Имя, @handle, аватар",
     time: null,
     hasDraft: false,

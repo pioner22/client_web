@@ -1,5 +1,6 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { fileBadge } from "../../../helpers/files/fileBadge";
+import { classifyAudioAttachment } from "../../../helpers/files/audioAttachmentKind";
 import type { ChatSearchFlags } from "../../../helpers/chat/chatSearch";
 import type { AppState, ChatMessage } from "../../../stores/types";
 
@@ -28,7 +29,8 @@ export function searchableMessagesForSelected(st: AppState) {
       if (badge.kind === "image" || badge.kind === "video") {
         flags.media = true;
       } else if (badge.kind === "audio") {
-        flags.audio = true;
+        const audioKind = classifyAudioAttachment(attachment.name, attachment.mime);
+        flags[audioKind] = true;
       } else {
         flags.files = true;
       }

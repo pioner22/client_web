@@ -1,3 +1,6 @@
+import { getChatHistoryViewportRuntime } from "../../../helpers/chat/historyViewportRuntime";
+import { createChatStickyBottomState } from "../../../helpers/chat/stickyBottom";
+
 export interface ChatJumpFeatureDeps {
   chatRoot: HTMLElement;
   chatHost: HTMLElement;
@@ -100,16 +103,16 @@ export function createChatJumpFeature(deps: ChatJumpFeatureDeps): ChatJumpFeatur
       const hostRect = host.getBoundingClientRect();
       const dividerRect = unreadDivider.getBoundingClientRect();
       const dividerTop = dividerRect.top - hostRect.top + host.scrollTop;
-      const viewportBottom = host.scrollTop + host.clientHeight;
-      if (dividerTop > viewportBottom - 12) {
-        smoothScrollChatHostTo(dividerTop - 12);
-        if (key) (host as any).__stickBottom = { key, active: false, at: Date.now() };
-        scheduleChatJumpVisibility();
-        return;
+        const viewportBottom = host.scrollTop + host.clientHeight;
+        if (dividerTop > viewportBottom - 12) {
+          smoothScrollChatHostTo(dividerTop - 12);
+          if (key) getChatHistoryViewportRuntime(host).stickyBottom = createChatStickyBottomState(host, key, false);
+          scheduleChatJumpVisibility();
+          return;
+        }
       }
-    }
-    smoothScrollChatHostTo(Math.max(0, host.scrollHeight - host.clientHeight));
-    if (key) (host as any).__stickBottom = { key, active: true, at: Date.now() };
+      smoothScrollChatHostTo(Math.max(0, host.scrollHeight - host.clientHeight));
+    if (key) getChatHistoryViewportRuntime(host).stickyBottom = createChatStickyBottomState(host, key, true);
     scheduleChatJumpVisibility();
   };
 

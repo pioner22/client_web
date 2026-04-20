@@ -7,6 +7,7 @@ export interface AuthModalActions {
   onLogin: () => void;
   onRegister: () => void;
   onModeChange: (mode: "register" | "login") => void;
+  onUseDifferentAccount: () => void;
   onSkinChange: (skinId: string) => void;
   onClose: () => void;
 }
@@ -19,6 +20,47 @@ export function renderAuthModal(
   currentSkin: string,
   actions: AuthModalActions
 ): HTMLElement {
+  const rememberedIdValue = String(rememberedId ?? "").trim();
+  const hasRememberedId = mode === "login" && Boolean(rememberedIdValue);
+  const showSkinPicker = mode !== "auto" && (mode === "register" || !hasRememberedId);
+
+  const headerCopy = (() => {
+    if (mode === "auto") {
+      return {
+        chip: "Сохранённая сессия",
+        subtitle: "Проверяем вход на этом устройстве",
+        noteLines: [
+          "Если сессия ещё действительна, откроем чаты без повторного ввода ID.",
+        ],
+      };
+    }
+    if (mode === "register") {
+      return {
+        chip: "Новый аккаунт",
+        subtitle: "Создание нового ID",
+        noteLines: [
+          "После регистрации мы покажем новый ID, его лучше сразу сохранить.",
+        ],
+      };
+    }
+    if (hasRememberedId) {
+      return {
+        chip: "Быстрый вход",
+        subtitle: "Продолжить вход на этом устройстве",
+        noteLines: [
+          "Сохранённый ID уже подставлен. Обычно достаточно ввести пароль или выбрать другой аккаунт.",
+        ],
+      };
+    }
+    return {
+      chip: "Вход по ID",
+      subtitle: "Вход по ID или @логину",
+      noteLines: [
+        "Введите ID или @логин и пароль, чтобы продолжить.",
+      ],
+    };
+  })();
+
   function wrapWithIdEditAction(input: HTMLInputElement, hasRemembered: boolean): HTMLElement {
     if (!hasRemembered) return input;
     const toggle = el(
@@ -102,10 +144,10 @@ export function renderAuthModal(
   ]);
   const header = el("div", { class: "auth-header" }, [
     el("div", { class: "auth-header-top" }, [brand, btnClose]),
-    el("div", { class: "subtitle auth-subtitle" }, ["Вход и синхронизация"]),
+    el("div", { class: "auth-chip-row" }, [el("div", { class: "auth-status-chip" }, [headerCopy.chip])]),
+    el("div", { class: "subtitle auth-subtitle" }, [headerCopy.subtitle]),
     el("div", { class: "auth-note" }, [
-      el("span", { class: "auth-note-line" }, ["Сессия сохранится на этом устройстве."]),
-      el("span", { class: "auth-note-line" }, ["Пароль мы не сохраняем."]),
+      ...headerCopy.noteLines.map((line) => el("span", { class: "auth-note-line" }, [line])),
     ]),
   ]);
 
@@ -128,10 +170,13 @@ export function renderAuthModal(
       ? el("div", { class: "modal-body input-wrapper" })
       : (el("form", { class: "modal-body input-wrapper", id: formId, autocomplete: "off", method: "post" }) as HTMLFormElement);
   if (mode === "auto") {
+    const useOtherAccount = el("button", { class: "btn btn-secondary", type: "button" }, ["Другой аккаунт"]) as HTMLButtonElement;
+    useOtherAccount.addEventListener("click", () => actions.onUseDifferentAccount());
     body.append(
-      el("div", { class: "modal-title" }, ["Вход"]),
-      el("div", { class: "modal-help" }, ["Проверяем сохранённую сессию…"]),
-      el("div", { class: "modal-help" }, ["Если не удаётся войти — выберите «Регистрация» или «Войти по ID»."])
+      el("div", { class: "modal-title" }, ["Почти готово"]),
+      el("div", { class: "modal-help" }, ["Проверяем сохранённую сессию и восстанавливаем вход в мессенджер."]),
+      el("div", { class: "modal-help" }, ["Если нужно войти под другим аккаунтом, можно переключиться прямо сейчас."]),
+      el("div", { class: "modal-actions modal-actions-compose auth-inline-actions" }, [useOtherAccount])
     );
   } else if (mode === "register") {
     const pw1Input = el("input", {
@@ -164,14 +209,14 @@ export function renderAuthModal(
     }) as HTMLInputElement;
     body.append(
       el("div", { class: "modal-title" }, ["Регистрация"]),
+      el("div", { class: "modal-help auth-section-lead" }, ["Создадим новый аккаунт и сразу покажем ваш ID."]),
       el("label", { class: "modal-label", for: "auth-pw1" }, ["Пароль:"]),
       wrapWithPasswordToggle(pw1Input),
       el("label", { class: "modal-label", for: "auth-pw2" }, ["Подтверждение пароля:"]),
       wrapWithPasswordToggle(pw2Input),
-      el("div", { class: "modal-help" }, ["После регистрации вы получите новый ID. Сохраните его."])
+      el("div", { class: "modal-help" }, ["Используйте пароль, который сможете восстановить или безопасно сохранить."])
     );
   } else {
-    const hasRemembered = Boolean(String(rememberedId ?? "").trim());
     const idInput = el("input", {
       class: "modal-input",
       id: "auth-id",
@@ -185,13 +230,13 @@ export function renderAuthModal(
       autocapitalize: "off",
       spellcheck: "false",
       enterkeyhint: "next",
-      value: rememberedId ?? "",
+      value: rememberedIdValue,
     }) as HTMLInputElement;
     let autoSelected = false;
     idInput.addEventListener("focus", () => {
       if (autoSelected) return;
-      if (!hasRemembered) return;
-      if (idInput.value !== (rememberedId ?? "")) return;
+      if (!hasRememberedId) return;
+      if (idInput.value !== rememberedIdValue) return;
       autoSelected = true;
       try {
         idInput.select();
@@ -216,14 +261,42 @@ export function renderAuthModal(
       spellcheck: "false",
       enterkeyhint: "done",
     }) as HTMLInputElement;
+    const manualIdBlock = el("div", { class: `auth-manual-id${hasRememberedId ? " auth-manual-id-hidden" : ""}` }, [
+      el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин:"]),
+      wrapWithIdEditAction(idInput, hasRememberedId),
+    ]);
+    const sessionCard =
+      hasRememberedId
+        ? (() => {
+            const switchBtn = el("button", { class: "btn btn-secondary", type: "button" }, ["Другой аккаунт"]) as HTMLButtonElement;
+            switchBtn.addEventListener("click", () => actions.onUseDifferentAccount());
+            return el("div", { class: "auth-session-card" }, [
+              el("div", { class: "auth-session-label" }, ["Сохранённый аккаунт"]),
+              el("div", { class: "auth-session-id" }, [rememberedIdValue]),
+              el("div", { class: "auth-session-copy" }, [
+                "Введите пароль, чтобы продолжить в этом аккаунте, или переключитесь на другой ID.",
+              ]),
+              el("div", { class: "auth-session-actions" }, [switchBtn]),
+            ]);
+          })()
+        : null;
 
     body.append(
       el("div", { class: "modal-title" }, ["Вход"]),
-      el("div", { class: "modal-help" }, ["Введите ID или @логин и пароль."]),
-      el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин:"]),
-      wrapWithIdEditAction(idInput, hasRemembered),
+      el("div", { class: "modal-help auth-section-lead" }, [
+        hasRememberedId
+          ? "ID уже сохранён на этом устройстве. Обычно достаточно ввести пароль."
+          : "Введите ID или @логин и пароль, чтобы войти в мессенджер.",
+      ]),
+      ...(sessionCard ? [sessionCard] : []),
+      manualIdBlock,
       el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль:"]),
-      wrapWithPasswordToggle(pwInput)
+      wrapWithPasswordToggle(pwInput),
+      el("div", { class: "modal-help" }, [
+        hasRememberedId
+          ? "Пароль нигде не показывается и нужен только для подтверждения входа."
+          : "Можно использовать числовой ID вида 123-456-789 или @логин.",
+      ])
     );
   }
 
@@ -232,7 +305,15 @@ export function renderAuthModal(
     header,
     tabs,
     body,
-    el("div", { class: "auth-extra" }, [skinLabel, skinSelect]),
+    ...(showSkinPicker
+      ? [
+          el("div", { class: "auth-extra" }, [
+            skinLabel,
+            skinSelect,
+            el("div", { class: "modal-help auth-extra-help" }, ["Оформление можно поменять и позже, уже после входа."]),
+          ]),
+        ]
+      : []),
     message ? el("div", { class: "modal-warn" }, [message]) : el("div", { class: "modal-warn" }),
     mode === "auto" ? el("div", { class: "modal-actions" }) : el("div", { class: "modal-actions" }, btnOk ? [btnOk] : [])
   );

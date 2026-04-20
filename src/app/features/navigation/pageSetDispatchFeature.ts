@@ -21,6 +21,10 @@ export function createPageSetDispatchFeature(deps: PageSetDispatchFeatureDeps): 
       send({ type: "profile_get" });
       return;
     }
+    if (page === "sessions" && st.authed && st.conn === "connected") {
+      send({ type: "sessions_list" });
+      return;
+    }
     if (page === "group" && st.authed && st.conn === "connected" && st.groupViewId) {
       send({ type: "group_info", group_id: st.groupViewId });
       return;

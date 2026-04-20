@@ -6,34 +6,23 @@ import { copyText } from "../../helpers/dom/copyText";
 import { loadAutoDownloadPrefs, saveAutoDownloadPrefs } from "../../helpers/files/autoDownloadPrefs";
 import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../../helpers/notify/notifyPrefs";
 import { autosizeInput } from "../../helpers/ui/autosizeInput";
-import { installDebugMonitorFeature } from "../features/debug/debugMonitorFeature";
-import { createContextMenuAdapterActionsFeature } from "../features/contextMenu/contextMenuAdapterActionsFeature";
-import { createRoomModerationActionsFeature } from "../features/contextMenu/roomModerationActionsFeature";
+import { createLazyNavigationDeferredRuntime } from "./lazyNavigationDeferredRuntime";
+import { createLazyRoomModerationActionsRuntime } from "./lazyRoomModerationActionsRuntime";
+import { createLazyPwaUpdateRuntime } from "./lazyPwaUpdateRuntime";
 import { createFileActionsFeature } from "../features/files/fileActionsFeature";
-import { createHotkeyActionsFeature } from "../features/hotkeys/hotkeyActionsFeature";
-import { createHotkeyAdapterActionsFeature } from "../features/hotkeys/hotkeyAdapterActionsFeature";
-import { createHotkeysFeature } from "../features/hotkeys/hotkeysFeature";
 import { installEditingEndSyncFeature } from "../features/history/editingEndSyncFeature";
 import { createAuthUiActionsFeature } from "../features/auth/authUiActionsFeature";
 import { createActionsAccountFeature } from "../features/navigation/actionsAccountFeature";
-import { createActionsCustomAdapterFeature } from "../features/navigation/actionsCustomAdapterFeature";
 import { createActionsUiOpenersFeature } from "../features/navigation/actionsUiOpenersFeature";
 import { installMainRenderSubscriptionFeature } from "../features/navigation/mainRenderSubscriptionFeature";
 import { createPageSetDispatchFeature } from "../features/navigation/pageSetDispatchFeature";
-import { installSidebarChatContextInteractionsFeature } from "../features/navigation/sidebarChatContextInteractionsFeature";
-import { createNotifyActionsFeature } from "../features/pwa/notifyActionsFeature";
-import { createPwaUpdateFeature } from "../features/pwa/pwaUpdateFeature";
 import { installHistoryCachePersistFeature } from "../features/persistence/historyCachePersistFeature";
 import { flushDrafts, flushOutbox, scheduleSaveHistoryCache } from "../features/persistence/localPersistenceTimers";
 import { applyRestartStateSnapshot } from "../features/persistence/restartStateRestoreFeature";
 import { createRestartStateFeature } from "../features/persistence/restartStateFeature";
 import { createUserLocalStateHydrationFeature } from "../features/persistence/userLocalStateHydrationFeature";
-import { createProfileActionsFeature } from "../features/profile/profileActionsFeature";
 import { createChatSearchSyncFeature } from "../features/search/chatSearchSyncFeature";
-import { createSearchHistoryActionsFeature } from "../features/search/searchHistoryActionsFeature";
-import { createSearchInputActionsFeature } from "../features/search/searchInputActionsFeature";
 import { searchableMessagesForSelected } from "../features/search/searchableMessagesFeature";
-import { formatSearchHistorySenderLabel, formatSearchHistoryShareText, formatSearchHistoryTargetLabel, formatSearchServerShareText } from "../features/search/searchShareFormatters";
 import { createSidebarPreferencesActionsFeature } from "../features/sidebar/sidebarPreferencesActionsFeature";
 import { renderApp } from "../renderApp";
 
@@ -62,7 +51,6 @@ export function installLateWiring(deps: any) {
     markUserInput,
     contextMenuFeature,
     contextMenuActionsFeature,
-    emojiPopoverFeature,
     avatarFeature,
     outboxFeature,
     fileDownloadActions,
@@ -82,6 +70,7 @@ export function installLateWiring(deps: any) {
     openGroupCreateModal,
     openBoardCreateModal,
     debugHud,
+    bindDebugMonitor,
     openConfirmModal,
     openActionModal,
     showToast,
@@ -147,20 +136,14 @@ export function installLateWiring(deps: any) {
   } = deps as any;
 
   try {
-    installDebugMonitorFeature({
-      store,
-      gateway,
-      mount: root,
-      chatHost: layout.chatHost,
-      debugHud,
-    });
+    bindDebugMonitor?.({ store, gateway });
   } catch {
     // ignore
   }
 
   const restartStateFeature = createRestartStateFeature();
 
-  const pwaUpdateFeature = createPwaUpdateFeature({
+  const pwaUpdateRuntime = createLazyPwaUpdateRuntime({
     store,
     send: (payload) => gateway.send(payload),
     flushBeforeReload: () => {
@@ -172,110 +155,124 @@ export function installLateWiring(deps: any) {
     hasPendingHistoryActivityForUpdate: () => historyFeature?.hasPendingActivityForUpdate() ?? false,
     hasPendingPreviewActivityForUpdate: () => previewAutoFetchFeature.hasPendingActivityForUpdate(),
   });
-  pwaUpdateFeature.installEventListeners();
+  pwaUpdateRuntime.startDeferredBoot();
 
   async function applyPwaUpdateNow(opts?: { mode?: "auto" | "manual"; buildId?: string }) {
-    await pwaUpdateFeature?.applyPwaUpdateNow(opts);
+    await pwaUpdateRuntime.applyPwaUpdateNow(opts);
   }
 
   function forceUpdateReload(reason?: string) {
-    pwaUpdateFeature?.forceUpdateReload(reason);
+    pwaUpdateRuntime.forceUpdateReload(reason);
   }
 
   async function forcePwaUpdate() {
-    await pwaUpdateFeature?.forcePwaUpdate();
+    await pwaUpdateRuntime.forcePwaUpdate();
   }
 
   function scheduleAutoApplyPwaUpdate(delayMs = 800) {
-    pwaUpdateFeature?.scheduleAutoApplyPwaUpdate(delayMs);
+    pwaUpdateRuntime.scheduleAutoApplyPwaUpdate(delayMs);
   }
 
-  const hotkeyActionsFeature = createHotkeyActionsFeature({
-    store,
-    send: (payload) => gateway.send(payload),
-    closeMobileSidebar,
-    closeModal,
-    setPage,
-    logout,
-    openGroupCreateModal,
-    openBoardCreateModal,
-    toggleDebugHud: () => {
-      debugHud.toggle();
-      return debugHud.isEnabled();
+  const navigationDeferredRuntime = createLazyNavigationDeferredRuntime({
+    hotkeyActions: {
+      store,
+      send: (payload) => gateway.send(payload),
+      closeMobileSidebar,
+      closeModal,
+      setPage,
+      logout,
+      openGroupCreateModal,
+      openBoardCreateModal,
+      toggleDebugHud: () => {
+        debugHud.toggle();
+        return debugHud.isEnabled();
+      },
     },
-  });
-
-  const hotkeyAdapterActionsFeature = createHotkeyAdapterActionsFeature({
-    onHotkey: hotkeyActionsFeature.handleHotkey,
-    onManualPwaUpdate: () => {
-      void applyPwaUpdateNow({ mode: "manual" });
+    hotkeyAdapterActions: {
+      onManualPwaUpdate: () => {
+        void applyPwaUpdateNow({ mode: "manual" });
+      },
+      onFileViewerNavigate: fileViewer.navigate,
+      onOpenChatSearch: openChatSearch,
+      onCloseMobileSidebar: closeMobileSidebar,
+      onCloseModal: closeModal,
+      onCloseChatSearch: closeChatSearch,
+      onCloseRightPanel: closeRightPanel,
+      onSetMainPage: () => setPage("main"),
+      isMobileSidebarOpen,
+      isFloatingSidebarOpen,
     },
-    onFileViewerNavigate: fileViewer.navigate,
-    onOpenChatSearch: openChatSearch,
-    onCloseMobileSidebar: closeMobileSidebar,
-    onCloseModal: closeModal,
-    onCloseChatSearch: closeChatSearch,
-    onCloseRightPanel: closeRightPanel,
-    onSetMainPage: () => setPage("main"),
-    isMobileSidebarOpen,
-    isFloatingSidebarOpen,
-  });
-
-  const hotkeysFeature = createHotkeysFeature({
-    store,
-    hotkeysRoot: layout.hotkeys,
-    ...hotkeyAdapterActionsFeature,
-  });
-  hotkeysFeature.installEventListeners();
-
-  installSidebarChatContextInteractionsFeature({
-    store,
-    sidebar: layout.sidebar,
-    sidebarBody: layout.sidebarBody,
-    chat: layout.chat,
-    chatHost: layout.chatHost,
-    coarsePointerMq,
-    mobileSidebarMq,
-    isMobileSidebarOpen,
-    setMobileSidebarTab,
-    isChatMessageSelectable,
-    setChatSelectionValueAtIdx,
-    setChatSelectionAnchorIdx,
-    setSuppressMsgSelectToggleClickUntil,
-    setSuppressChatClickUntil,
-    getSuppressChatClickUntil,
-    setMsgContextSelection,
-    openContextMenu: (target, x, y) => {
-      contextMenuFeature?.openContextMenu(target, x, y);
+    hotkeys: {
+      store,
+      hotkeysRoot: layout.hotkeys,
     },
-    onReplySwipeCommit: (swipeKey, swipeIdx) => {
-      const st = store.get();
-      if (st.editing || !st.selected || !swipeKey) return;
-      const key = conversationKey(st.selected);
-      if (!key || key !== swipeKey) return;
-      const conv = st.conversations[key] || null;
-      const msg = conv && swipeIdx >= 0 && swipeIdx < conv.length ? conv[swipeIdx] : null;
-      const draft = msg ? buildHelperDraft(st, key, msg) : null;
-      if (!draft) return;
-      setSuppressChatClickUntil(Date.now() + 800);
-      store.set({ replyDraft: draft, forwardDraft: null });
-      scheduleFocusComposer();
+    sidebarChatContextInteractions: {
+      store,
+      sidebar: layout.sidebar,
+      sidebarBody: layout.sidebarBody,
+      chat: layout.chat,
+      chatHost: layout.chatHost,
+      coarsePointerMq,
+      mobileSidebarMq,
+      isMobileSidebarOpen,
+      setMobileSidebarTab,
+      isChatMessageSelectable,
+      setChatSelectionValueAtIdx,
+      setChatSelectionAnchorIdx,
+      setSuppressMsgSelectToggleClickUntil,
+      setSuppressChatClickUntil,
+      getSuppressChatClickUntil,
+      setMsgContextSelection,
+      openContextMenu: (target, x, y) => {
+        contextMenuFeature?.openContextMenu(target, x, y);
+      },
+      onReplySwipeCommit: (swipeKey, swipeIdx) => {
+        const st = store.get();
+        if (st.editing || !st.selected || !swipeKey) return;
+        const key = conversationKey(st.selected);
+        if (!key || key !== swipeKey) return;
+        const conv = st.conversations[key] || null;
+        const msg = conv && swipeIdx >= 0 && swipeIdx < conv.length ? conv[swipeIdx] : null;
+        const draft = msg ? buildHelperDraft(st, key, msg) : null;
+        if (!draft) return;
+        setSuppressChatClickUntil(Date.now() + 800);
+        store.set({ replyDraft: draft, forwardDraft: null });
+        scheduleFocusComposer();
+      },
     },
-  });
-
-  const roomModerationActionsFeature = createRoomModerationActionsFeature({
-    store,
-    send: (payload) => gateway.send(payload),
-    openConfirmModal,
-    showToast,
-    saveRoomInfo: roomInfoSubmitFeature.saveRoomInfo,
-  });
-
-  const sidebarPreferencesActionsFeature = createSidebarPreferencesActionsFeature({
-    store,
-    sidebarBody: layout.sidebarBody,
-    send: (payload) => gateway.send(payload),
-    saveChatFoldersForUser,
+    profileActions: {
+      store,
+      send: (payload) => gateway.send(payload),
+      markUserInput,
+      buildSearchServerShareText: () => "",
+      tryAppendShareTextToSelected: (text) => Boolean(pwaShareFeature?.tryAppendShareTextToSelected(text)),
+      copyText,
+      getAvatarFeature: () => avatarFeature,
+    },
+    searchInputActions: {
+      store,
+      send: (payload) => gateway.send(payload),
+      markUserInput,
+    },
+    searchHistoryActions: {
+      store,
+      send: (payload) => gateway.send(payload),
+      savePinsForUser,
+      savePinnedMessagesForUser,
+    },
+    notifyActions: {
+      store,
+      enablePush,
+      disablePush,
+      setNotifyInAppEnabled,
+      setNotifySoundEnabled,
+      syncNotifyPrefsToServiceWorker: () => {
+        pwaNotifyFeature?.syncNotifyPrefsToServiceWorker();
+      },
+      forcePwaUpdate,
+    },
+    tryAppendSearchShareTextToSelected: (text) => Boolean(pwaShareFeature?.tryAppendShareTextToSelected(text)),
+    copyText,
   });
 
   const authUiActionsFeature = createAuthUiActionsFeature({
@@ -290,17 +287,19 @@ export function installLateWiring(deps: any) {
     setTheme,
   });
 
-  const searchInputActionsFeature = createSearchInputActionsFeature({
+  const roomModerationActionsFeature = createLazyRoomModerationActionsRuntime({
     store,
     send: (payload) => gateway.send(payload),
-    markUserInput,
+    openConfirmModal,
+    showToast,
+    saveRoomInfo: roomInfoSubmitFeature.saveRoomInfo,
   });
 
-  const searchHistoryActionsFeature = createSearchHistoryActionsFeature({
+  const sidebarPreferencesActionsFeature = createSidebarPreferencesActionsFeature({
     store,
+    sidebarBody: layout.sidebarBody,
     send: (payload) => gateway.send(payload),
-    savePinsForUser,
-    savePinnedMessagesForUser,
+    saveChatFoldersForUser,
   });
 
   const fileActionsFeature = createFileActionsFeature({
@@ -314,35 +313,6 @@ export function installLateWiring(deps: any) {
     },
   });
 
-  const profileActionsFeature = createProfileActionsFeature({
-    store,
-    send: (payload) => gateway.send(payload),
-    markUserInput,
-    buildSearchServerShareText: (state, items) => formatSearchServerShareText(state, items),
-    tryAppendShareTextToSelected: (text) => Boolean(pwaShareFeature?.tryAppendShareTextToSelected(text)),
-    copyText,
-    getAvatarFeature: () => avatarFeature,
-  });
-
-  const notifyActionsFeature = createNotifyActionsFeature({
-    store,
-    enablePush,
-    disablePush,
-    setNotifyInAppEnabled,
-    setNotifySoundEnabled,
-    syncNotifyPrefsToServiceWorker: () => {
-      pwaNotifyFeature?.syncNotifyPrefsToServiceWorker();
-    },
-    forcePwaUpdate,
-  });
-
-  const actionsCustomAdapterFeature = createActionsCustomAdapterFeature({
-    store,
-    formatSearchHistoryShareText,
-    tryAppendShareTextToSelected: (text) => Boolean(pwaShareFeature?.tryAppendShareTextToSelected(text)),
-    copyText,
-    handleContextMenuAction: async (itemId: string) => await contextMenuActionsFeature?.handleContextMenuAction(itemId),
-  });
   const pageSetDispatchFeature = createPageSetDispatchFeature({
     store,
     setPage,
@@ -354,8 +324,8 @@ export function installLateWiring(deps: any) {
   });
   const actionsAccountFeature = createActionsAccountFeature({
     authUiActions: authUiActionsFeature,
-    profileActions: profileActionsFeature,
-    notifyActions: notifyActionsFeature,
+    profileActions: navigationDeferredRuntime,
+    notifyActions: navigationDeferredRuntime,
   });
   const actions = {
     onSelectTarget: selectTarget,
@@ -415,14 +385,16 @@ export function installLateWiring(deps: any) {
     onFileOfferReject: fileActionsFeature.onFileOfferReject,
     onClearCompletedFiles: fileActionsFeature.onClearCompletedFiles,
     onAutoDownloadPrefsSave: fileActionsFeature.onAutoDownloadPrefsSave,
-    onSearchQueryChange: searchInputActionsFeature.onSearchQueryChange,
-    onSearchSubmit: searchInputActionsFeature.onSearchSubmit,
+    onSearchQueryChange: navigationDeferredRuntime.onSearchQueryChange,
+    onSearchSubmit: navigationDeferredRuntime.onSearchSubmit,
     onBoardPostPublish: publishBoardPost,
     onOpenHistoryHit: openChatFromSearch,
-    onSearchPinToggle: searchHistoryActionsFeature.onSearchPinToggle,
-    onSearchHistoryDelete: searchHistoryActionsFeature.onSearchHistoryDelete,
-    onSearchHistoryForward: actionsCustomAdapterFeature.onSearchHistoryForward,
-    onContextMenuAction: actionsCustomAdapterFeature.onContextMenuAction,
+    onSearchPinToggle: navigationDeferredRuntime.onSearchPinToggle,
+    onSearchHistoryDelete: navigationDeferredRuntime.onSearchHistoryDelete,
+    onSearchHistoryForward: navigationDeferredRuntime.onSearchHistoryForward,
+    onContextMenuAction: (itemId: string) => {
+      void contextMenuActionsFeature?.handleContextMenuAction(itemId);
+    },
     onConfirmModal: modalSubmitFeature.confirmSubmit,
   };
 
@@ -468,6 +440,7 @@ export function installLateWiring(deps: any) {
     getVirtualHistoryFeature: () => virtualHistoryFeature,
     scheduleChatJumpVisibility,
     onMembersAddModalVisible: () => {
+      membersChipsFeature?.startDeferredBoot?.();
       membersChipsFeature?.renderMembersAddChips();
       membersChipsFeature?.drainMembersAddLookups();
     },
@@ -496,6 +469,7 @@ export function installLateWiring(deps: any) {
   });
 
   renderApp(layout, store.get(), actions);
+  navigationDeferredRuntime.startDeferredBoot();
 
   void initSkins();
   gateway.connect();

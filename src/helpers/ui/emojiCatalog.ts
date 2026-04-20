@@ -1,4 +1,4 @@
-import { EMOJI_RECENTS_ID } from "./emoji";
+import { EMOJI_RECENTS_ID } from "./emojiShared";
 
 export interface EmojiCategory {
   id: string;

@@ -17,6 +17,7 @@ export interface ForwardActionsFeatureDeps {
   buildHelperDraft: (st: AppState, key: string, msg: ChatMessage) => MessageHelperDraft | null;
   sendChat: (opts?: SendChatPayload) => void;
   resolveChatSelection: (st: AppState) => Selection;
+  prepareMembersChips?: () => void;
 }
 
 export interface ForwardActionsFeature {
@@ -27,7 +28,7 @@ export interface ForwardActionsFeature {
 }
 
 export function createForwardActionsFeature(deps: ForwardActionsFeatureDeps): ForwardActionsFeature {
-  const { store, showToast, closeModal, buildHelperDraft, sendChat, resolveChatSelection } = deps;
+  const { store, showToast, closeModal, buildHelperDraft, sendChat, resolveChatSelection, prepareMembersChips } = deps;
 
   const openForwardModal = (draftInput: MessageHelperDraft | MessageHelperDraft[]) => {
     const st = store.get();
@@ -38,6 +39,7 @@ export function createForwardActionsFeature(deps: ForwardActionsFeatureDeps): Fo
       store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
       return;
     }
+    prepareMembersChips?.();
     store.set({
       modal: {
         kind: "forward_select",

@@ -248,6 +248,7 @@ export type PageKind =
   | "main"
   | "search"
   | "profile"
+  | "sessions"
   | "user"
   | "group"
   | "board"
@@ -426,6 +427,18 @@ export interface UserProfile {
   client_web_version?: string | null;
 }
 
+export interface SessionDeviceEntry {
+  current: boolean;
+  online: boolean;
+  client_kind?: string | null;
+  client_version?: string | null;
+  user_agent?: string | null;
+  ip_masked?: string | null;
+  issued_at?: number | null;
+  last_used_at?: number | null;
+  expires_at?: number | null;
+}
+
 export type ToastKind = "info" | "success" | "warn" | "error";
 
 export interface ToastAction {
@@ -539,6 +552,8 @@ export interface AppState {
   profileDraftHandle: string;
   profileDraftBio: string;
   profileDraftStatus: string;
+  sessionDevices: SessionDeviceEntry[];
+  sessionDevicesStatus: string | null;
 
   toast: ToastState | null;
   modal: ModalState | null;

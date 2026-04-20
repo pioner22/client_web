@@ -12,7 +12,7 @@ test("calls: header buttons have call actions", async () => {
 
 test("calls: modal renderer supports kind=call", async () => {
   const src = await readFile(path.resolve("src/app/renderApp.ts"), "utf8");
-  assert.match(src, /createCallModal/);
+  assert.match(src, /createLazyCallModalRuntime/);
   assert.match(src, /state\.modal\?\.kind\s*===\s*["']call["']/);
 });
 
@@ -36,6 +36,13 @@ test("calls: client sends call_invite_ack and dedupes same call invite", async (
   const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
   assert.match(src, /call_invite_ack/);
   assert.match(src, /currentCallId === callId/);
+});
+
+test("calls: popup-blocked mobile accept does not report false success", async () => {
+  const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
+  assert.match(src, /const opened = window\.open\(u, "_blank", "noopener,noreferrer"\);/);
+  assert.match(src, /return Boolean\(opened\);/);
+  assert.match(src, /Браузер заблокировал новую вкладку/);
 });
 
 test("calls: jitsi external API uses configured meet host", async () => {

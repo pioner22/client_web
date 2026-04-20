@@ -1,14 +1,10 @@
 import { el } from "../../helpers/dom/el";
-import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
-import { formatTime } from "../../helpers/time";
-import { focusElement } from "../../helpers/ui/focus";
 import { isIOS, isStandaloneDisplayMode } from "../../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
-import type { ActionModalPayload, AppState, ChatMessage, ContextMenuTargetKind, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
+import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 import {
   attentionHintForPeer,
-  avatar,
   collectAttentionPeers,
   collectSelfMentionHandles,
   compactOneLine,
@@ -19,8 +15,11 @@ import {
   previewForConversation,
   roomRow,
 } from "./renderSidebarHelpers";
-import type { SidebarRowMeta } from "./renderSidebarHelpers";
-import { renderSidebarMobile } from "./renderSidebarMobile";
+import { clearDeferredSidebarMenu, renderSidebarMenuDeferred } from "./renderSidebarMenuRuntime";
+import { clearDeferredSidebarDesktopTabs, renderSidebarDesktopTabsDeferred } from "./renderSidebarDesktopTabsRuntime";
+import { clearDeferredSidebarMobile, renderSidebarMobileDeferred } from "./renderSidebarMobileRuntime";
+import { clearDeferredSidebarStandalone, renderSidebarStandaloneDeferred } from "./renderSidebarStandaloneRuntime";
+import { createSidebarRenderTools } from "./renderSidebarUiTools";
 
 export function renderSidebar(
   target: HTMLElement,
@@ -152,98 +151,6 @@ export function renderSidebar(
   if (canSkipRender) return;
   hostState.__sidebarRenderState = renderState;
 
-  const toggleClass = (node: HTMLElement | null | undefined, cls: string, enabled: boolean) => {
-    if (!node) return;
-    const list = (node as HTMLElement).classList;
-    if (list && typeof list.toggle === "function") {
-      list.toggle(cls, enabled);
-      return;
-    }
-    const raw = String((node as any).className || "");
-    const parts = raw.split(/\s+/).filter(Boolean);
-    const has = parts.includes(cls);
-    if (enabled && !has) parts.push(cls);
-    if (!enabled && has) parts.splice(parts.indexOf(cls), 1);
-    (node as any).className = parts.join(" ");
-  };
-  const markCompactAvatarRows = (rows: Array<HTMLElement | null | undefined>): HTMLElement[] => {
-    const out: HTMLElement[] = [];
-    for (const row of rows) {
-      if (!row) continue;
-      toggleClass(row, "row-avatar-compact", true);
-      out.push(row);
-    }
-    return out;
-  };
-  const dialogPriority = (opts: { hasDraft: boolean; unread?: number; attention?: boolean; mention?: boolean }): number => {
-    let score = 0;
-    if (opts.mention) score += 4;
-    if (opts.hasDraft) score += 3;
-    if ((opts.unread || 0) > 0) score += 2;
-    if (opts.attention) score += 1;
-    return score;
-  };
-  const buildSidebarHeaderToolbar = (activeTab: "contacts" | "boards" | "chats" | "menu"): HTMLElement => {
-    const menuBtn = el(
-      "button",
-      {
-        class: activeTab === "menu" ? "btn sidebar-header-btn sidebar-header-btn-active" : "btn sidebar-header-btn",
-        type: "button",
-        title: "Меню",
-        "aria-label": "Меню",
-      },
-      ["☰"]
-    ) as HTMLButtonElement;
-    menuBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (typeof onOpenSidebarToolsMenu === "function") {
-        const rect = menuBtn.getBoundingClientRect();
-        onOpenSidebarToolsMenu(rect.right, rect.bottom);
-        return;
-      }
-      onSetMobileSidebarTab("menu");
-    });
-
-    const isBoardTab = activeTab === "boards";
-    const createLabel = isBoardTab ? "Создать доску" : "Создать чат";
-    const createBtn = el(
-      "button",
-      {
-        class: "btn sidebar-header-btn sidebar-header-btn-primary",
-        type: "button",
-        title: createLabel,
-        "aria-label": createLabel,
-      },
-      ["+"]
-    ) as HTMLButtonElement;
-    createBtn.addEventListener("click", () => {
-      if (isBoardTab) {
-        onCreateBoard();
-        return;
-      }
-      onCreateGroup();
-    });
-
-    return el("div", { class: "sidebar-header-toolbar" }, [menuBtn, createBtn]);
-  };
-
-  const buildSidebarTabButton = (tab: MobileSidebarTab, activeTab: MobileSidebarTab, label: string): HTMLButtonElement => {
-    const btn = el(
-      "button",
-      {
-        class: activeTab === tab ? "sidebar-tab sidebar-tab-active" : "sidebar-tab",
-        type: "button",
-        role: "tab",
-        "aria-selected": String(activeTab === tab),
-        title: label,
-      },
-      [label]
-    ) as HTMLButtonElement;
-    btn.addEventListener("click", () => onSetMobileSidebarTab(tab));
-    return btn;
-  };
-
   const roomUnreadCache = new Map<string, number>();
   const computeRoomUnread = (key: string): number => {
     if (!key.startsWith("room:")) return 0;
@@ -290,114 +197,12 @@ export function renderSidebar(
     roomUnreadCache.set(key, count);
     return count;
   };
-  const lastSeenTs = (f: FriendEntry): number => {
-    const raw = (f as any).last_seen_at;
-    if (!raw) return 0;
-    if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
-    if (raw instanceof Date) {
-      const ts = raw.getTime();
-      return Number.isFinite(ts) ? ts : 0;
-    }
-    const ts = Date.parse(String(raw));
-    return Number.isFinite(ts) ? ts : 0;
-  };
-  const formatLastSeenLabel = (ts: number): string | null => {
-    if (!Number.isFinite(ts) || ts <= 0) return null;
-    const now = Date.now();
-    const diff = Math.max(0, now - ts);
-    const minute = 60 * 1000;
-    const hour = 60 * minute;
-    const day = 24 * hour;
-    if (diff < minute) return "был(а) только что";
-    if (diff < hour) {
-      const mins = Math.max(1, Math.floor(diff / minute));
-      return `был(а) ${mins} мин назад`;
-    }
-    if (diff < day) {
-      const hours = Math.max(1, Math.floor(diff / hour));
-      return `был(а) ${hours} ч назад`;
-    }
-    const date = new Date(ts);
-    if (!Number.isFinite(date.getTime())) return null;
-    const label = date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
-    return `был(а) ${label}`;
-  };
   const lastTsForKey = (key: string): number => {
     const conv = state.conversations[key] || [];
     const last = conv.length ? conv[conv.length - 1] : null;
     const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
     return Math.max(0, ts);
   };
-  const contactStatusLabel = (f: FriendEntry): string | null => {
-    const parts: string[] = [];
-    if (f.online) {
-      parts.push("в сети");
-    } else {
-      const seenLabel = formatLastSeenLabel(lastSeenTs(f));
-      if (seenLabel) parts.push(seenLabel);
-    }
-    const id = String(f.id || "").trim();
-    const rawHandle = String(f.handle || state.profiles?.[id]?.handle || "").trim();
-    const handle = rawHandle.replace(/^@/, "");
-    if (handle) parts.push(`@${handle}`);
-    return parts.length ? parts.join(" · ") : null;
-  };
-  const compareContactsByPresence = (a: FriendEntry, b: FriendEntry): number => {
-    const aOnline = Boolean(a.online);
-    const bOnline = Boolean(b.online);
-    if (aOnline !== bOnline) return aOnline ? -1 : 1;
-    const aSeen = lastSeenTs(a);
-    const bSeen = lastSeenTs(b);
-    if (aSeen !== bSeen) return bSeen - aSeen;
-    return displayNameForFriend(state, a).localeCompare(displayNameForFriend(state, b), "ru", { sensitivity: "base" });
-  };
-  const buildContactRows = (items: FriendEntry[], opts?: { sort?: boolean }): HTMLElement[] => {
-    const ordered = items.slice();
-    if (opts?.sort !== false) ordered.sort(compareContactsByPresence);
-    return markCompactAvatarRows(
-      ordered.map((f) => {
-        const meta: SidebarRowMeta = {
-          sub: contactStatusLabel(f),
-          time: null,
-          hasDraft: false,
-          reactionEmoji: null,
-        };
-        const rowFriend = f.unread ? { ...f, unread: 0 } : f;
-        return friendRow(
-          state,
-          rowFriend,
-          Boolean(sel && sel.kind === "dm" && sel.id === f.id),
-          meta,
-          onSelect,
-          onOpenUser,
-          attnSet.has(f.id)
-        );
-      })
-    );
-  };
-  const buildTopPeerContactRows = (items: FriendEntry[]): { ids: Set<string>; rows: HTMLElement[] } => {
-    const topPeers = Array.isArray(state.topPeers) ? state.topPeers : [];
-    if (!topPeers.length || !items.length) return { ids: new Set(), rows: [] };
-    const byId = new Map<string, FriendEntry>();
-    for (const f of items) {
-      const id = String(f?.id || "").trim();
-      if (!id || byId.has(id)) continue;
-      byId.set(id, f);
-    }
-    const ids = new Set<string>();
-    const entries: FriendEntry[] = [];
-    for (const entry of topPeers) {
-      const id = String((entry as any)?.id || "").trim();
-      if (!id || ids.has(id)) continue;
-      const f = byId.get(id);
-      if (!f) continue;
-      ids.add(id);
-      entries.push(f);
-      if (entries.length >= 12) break;
-    }
-    return { ids, rows: entries.length ? buildContactRows(entries, { sort: false }) : [] };
-  };
-
   const drafts = state.drafts || {};
   const pinnedKeys = state.pinned || [];
   const pinnedSet = new Set(pinnedKeys);
@@ -449,6 +254,40 @@ export function renderSidebar(
     return el("div", { class: "sidebar-body" });
   })();
   if (!(target as any)._sidebarBody) (target as any)._sidebarBody = body;
+  const {
+    toggleClass,
+    markCompactAvatarRows,
+    dialogPriority,
+    buildSidebarHeaderToolbar,
+    buildSidebarTabButton,
+    buildContactRows,
+    buildTopPeerContactRows,
+    bindHeaderScroll,
+    buildFolderTabs,
+    buildSidebarSearchBar,
+    buildSidebarArchiveToggle,
+    buildSidebarArchiveHint,
+    buildSidebarArchiveEmpty,
+    buildChatlist,
+    clearVirtualChatlist,
+  } = createSidebarRenderTools({
+    body,
+    state,
+    selected: sel,
+    drafts,
+    attnSet,
+    sidebarQueryRaw,
+    disableSearchWhileTyping,
+    onSetMobileSidebarTab,
+    onSetSidebarFolderId,
+    onSetSidebarQuery,
+    onOpenUser,
+    onSelect,
+    onOpenSidebarToolsMenu,
+    onCreateGroup,
+    onCreateBoard,
+    onToggleSidebarArchive,
+  });
   toggleClass(body, "sidebar-mobile-body", isMobile);
   const setBodyChatlistClass = (children: HTMLElement[]) => {
     const hasChatlist = children.some((child) => Boolean(child?.classList?.contains("chatlist")));
@@ -504,19 +343,6 @@ export function renderSidebar(
       return false;
     }
   })();
-  const bindHeaderScroll = (header: HTMLElement | null) => {
-    const prev = (body as any)._sidebarHeaderScrollHandler as (() => void) | undefined;
-    if (prev) body.removeEventListener("scroll", prev);
-    if (!header) {
-      delete (body as any)._sidebarHeaderScrollHandler;
-      return;
-    }
-    const handler = () => toggleClass(header, "sidebar-header-scrolled", (body as any).scrollTop > 0);
-    (body as any)._sidebarHeaderScrollHandler = handler;
-    body.addEventListener("scroll", handler, { passive: true });
-    handler();
-  };
-
   const matchesQuery = (raw: string): boolean => {
     if (!hasSidebarQuery) return true;
     return String(raw || "").toLowerCase().includes(sidebarQuery);
@@ -551,120 +377,6 @@ export function renderSidebar(
     const attention = attnSet.has(id);
     return hasConv || hasDraft || unread > 0 || attention;
   };
-
-  const buildFolderTabs = (activeId: string, folders: any[]): HTMLElement | null => {
-    const list = Array.isArray(folders) ? folders : [];
-    if (!list.length) return null;
-    const normActive = String(activeId || "all").trim().toLowerCase() || "all";
-    const makeBtn = (id: string, label: string) => {
-      const active = normActive === id;
-      const btn = el(
-        "button",
-        {
-          class: active ? "sidebar-filter sidebar-filter-active" : "sidebar-filter",
-          type: "button",
-          role: "tab",
-          "aria-selected": String(active),
-          "aria-label": label,
-          title: label,
-        },
-        [label]
-      ) as HTMLButtonElement;
-      btn.addEventListener("click", () => onSetSidebarFolderId(id));
-      return btn;
-    };
-
-    const items: HTMLElement[] = [makeBtn("all", "Все")];
-    for (const f of list) {
-      const id = String((f as any)?.id || "").trim().toLowerCase();
-      if (!id || id === "all" || id === "archive") continue;
-      const title = String((f as any)?.title || "").trim();
-      if (!title) continue;
-      const emoji = typeof (f as any)?.emoji === "string" ? String((f as any).emoji).trim() : "";
-      const label = emoji ? `${emoji} ${title}` : title;
-      items.push(makeBtn(id, label));
-    }
-    return el("div", { class: "sidebar-filters sidebar-folders", role: "tablist", "aria-label": "Папки" }, items);
-  };
-
-  const buildSidebarSearchBar = (placeholder: string, opts?: { action?: HTMLElement }): HTMLElement => {
-    const input = el("input", {
-      class: "sidebar-search-input",
-      type: "search",
-      placeholder,
-      "aria-label": "Поиск",
-      "data-ios-assistant": "off",
-      autocomplete: "off",
-      autocorrect: "off",
-      autocapitalize: "off",
-      spellcheck: "false",
-      enterkeyhint: "search",
-    }) as HTMLInputElement;
-    const searchIcon = el("span", { class: "sidebar-search-icon", "aria-hidden": "true" }, ["🔍"]);
-    input.value = sidebarQueryRaw;
-    input.disabled = disableSearchWhileTyping;
-    const clearBtn = el(
-      "button",
-      {
-        class: "btn sidebar-search-clear",
-        type: "button",
-        title: "Очистить",
-        "aria-label": "Очистить",
-      },
-      ["×"]
-    ) as HTMLButtonElement;
-    const updateClearState = () => toggleClass(clearBtn, "hidden", !input.value.trim());
-    updateClearState();
-    input.addEventListener("input", () => {
-      onSetSidebarQuery(input.value);
-      updateClearState();
-    });
-    input.addEventListener("search", () => {
-      onSetSidebarQuery(input.value);
-      updateClearState();
-    });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        input.value = "";
-        onSetSidebarQuery("");
-        updateClearState();
-      }
-    });
-    clearBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      input.value = "";
-      onSetSidebarQuery("");
-      updateClearState();
-      focusElement(input);
-    });
-    const children: HTMLElement[] = [searchIcon, input, clearBtn];
-    if (opts?.action) children.push(opts.action);
-    return el("div", { class: "sidebar-searchbar" }, children);
-  };
-  const buildSidebarArchiveToggle = (count: number, active: boolean): HTMLElement => {
-    const label = count > 0 ? `Архив (${count})` : "Архив";
-    const btn = el(
-      "button",
-      {
-        class: active ? "btn sidebar-archive-toggle sidebar-archive-toggle-active" : "btn sidebar-archive-toggle",
-        type: "button",
-        "aria-pressed": String(active),
-        title: label,
-      },
-      [label]
-    ) as HTMLButtonElement;
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      onToggleSidebarArchive();
-    });
-    return btn;
-  };
-  const buildSidebarArchiveHint = (): HTMLElement =>
-    el("div", { class: "sidebar-archive-hint" }, [
-      "Чтобы вернуть из архива: ПКМ/долгое нажатие по чату → «Убрать из архива».",
-    ]);
-  const buildSidebarArchiveEmpty = (label: string): HTMLElement => el("div", { class: "sidebar-archive-empty" }, [label]);
 
   const archivedKeys = Array.isArray(state.archived) ? state.archived : [];
   const archivedSet = new Set(archivedKeys);
@@ -717,156 +429,14 @@ export function renderSidebar(
   const archiveVisible = archiveCount > 0;
   const archiveOpen = archiveVisible && state.sidebarArchiveOpen !== false;
   const archiveToggle = archiveVisible ? buildSidebarArchiveToggle(archiveCount, archiveOpen) : null;
-  const wrapChatlist = (children: HTMLElement[]): HTMLElement => el("div", { class: "chatlist virtual-chatlist" }, children);
-  const VIRTUAL_CHATLIST_MIN_ROWS = 80;
-  const VIRTUAL_CHATLIST_OVERSCAN = 6;
-  const clearVirtualChatlist = () => {
-    const prev = (body as any)._virtualChatlistCleanup as (() => void) | undefined;
-    if (prev) prev();
-    delete (body as any)._virtualChatlistCleanup;
-  };
-  const buildVirtualChatlistBlock = (rows: HTMLElement[]): HTMLElement => {
-    const topSpacer = el("div", { class: "chatlist-virtual-spacer", "aria-hidden": "true" });
-    const bottomSpacer = el("div", { class: "chatlist-virtual-spacer", "aria-hidden": "true" });
-    const items = el("div", { class: "chatlist-virtual-items" });
-    const block = el("div", { class: "chatlist-virtual-block" }, [topSpacer, items, bottomSpacer]);
-    const state = {
-      active: true,
-      start: -1,
-      end: -1,
-      raf: 0 as number | 0,
-      rowHeight: 0,
-    };
-    const measureRenderedRowHeight = (): number => {
-      const el = items.firstElementChild as HTMLElement | null;
-      if (!el) return 0;
-      try {
-        const rect = el.getBoundingClientRect();
-        const h = Math.round(rect.height || 0);
-        return h > 0 ? h : 0;
-      } catch {
-        return 0;
-      }
-    };
-    const readRowHeight = (): number => {
-      if (state.rowHeight > 0) return state.rowHeight;
-      const measured = measureRenderedRowHeight();
-      if (measured > 0) return measured;
-      try {
-        const raw = getComputedStyle(body).getPropertyValue("--row-min-h").trim();
-        const parsed = parseFloat(raw);
-        if (Number.isFinite(parsed) && parsed > 0) return parsed;
-      } catch {
-        // ignore
-      }
-      return 56;
-    };
-    const readBlockOffset = (): number => {
-      try {
-        const bodyRect = body.getBoundingClientRect();
-        const blockRect = block.getBoundingClientRect();
-        const offset = blockRect.top - bodyRect.top + body.scrollTop;
-        if (Number.isFinite(offset)) return offset;
-      } catch {
-        // ignore
-      }
-      return block.offsetTop || 0;
-    };
-    const update = () => {
-      if (!state.active) return;
-      const rowHeight = readRowHeight();
-      const viewportHeight = body.clientHeight || 0;
-      const offset = readBlockOffset();
-      const virtualScrollTop = Math.max(0, body.scrollTop - offset);
-      let start = Math.max(0, Math.floor(virtualScrollTop / rowHeight) - VIRTUAL_CHATLIST_OVERSCAN);
-      let end = Math.min(rows.length, Math.ceil((virtualScrollTop + viewportHeight) / rowHeight) + VIRTUAL_CHATLIST_OVERSCAN);
-      if (start === state.start && end === state.end && state.rowHeight > 0) return;
-      state.start = start;
-      state.end = end;
-      items.replaceChildren(...rows.slice(start, end));
-      let effectiveHeight = rowHeight;
-      const measured = measureRenderedRowHeight();
-      if (measured > 0 && Math.abs(measured - rowHeight) > 1) {
-        state.rowHeight = measured;
-        effectiveHeight = measured;
-        const nextStart = Math.max(0, Math.floor(virtualScrollTop / measured) - VIRTUAL_CHATLIST_OVERSCAN);
-        const nextEnd = Math.min(
-          rows.length,
-          Math.ceil((virtualScrollTop + viewportHeight) / measured) + VIRTUAL_CHATLIST_OVERSCAN
-        );
-        if (nextStart !== start || nextEnd !== end) {
-          start = nextStart;
-          end = nextEnd;
-          state.start = start;
-          state.end = end;
-          items.replaceChildren(...rows.slice(start, end));
-        }
-      } else if (measured > 0 && state.rowHeight === 0) {
-        state.rowHeight = measured;
-        effectiveHeight = measured;
-      }
-      topSpacer.style.height = `${start * effectiveHeight}px`;
-      bottomSpacer.style.height = `${(rows.length - end) * effectiveHeight}px`;
-    };
-    const onScroll = () => {
-      if (state.raf) return;
-      try {
-        state.raf = window.requestAnimationFrame(() => {
-          state.raf = 0;
-          update();
-        });
-      } catch {
-        state.raf = 0;
-        update();
-      }
-    };
-    const onResize = () => {
-      state.rowHeight = 0;
-      onScroll();
-    };
-    body.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
-    try {
-      window.requestAnimationFrame(update);
-    } catch {
-      update();
-    }
-    (body as any)._virtualChatlistCleanup = () => {
-      state.active = false;
-      body.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
-      if (state.raf) {
-        try {
-          window.cancelAnimationFrame(state.raf);
-        } catch {
-          // ignore
-        }
-      }
-    };
-    return block;
-  };
-  const buildChatlist = (
-    fixedRows: HTMLElement[],
-    rows: HTMLElement[],
-    emptyLabel?: string,
-    opts?: { virtual?: boolean }
-  ): HTMLElement => {
-    const children: HTMLElement[] = [...fixedRows];
-    if (!rows.length) {
-      if (emptyLabel) children.push(el("div", { class: "pane-section" }, [emptyLabel]));
-      return wrapChatlist(children);
-    }
-    const allowVirtual = opts?.virtual !== false;
-    if (!allowVirtual || rows.length < VIRTUAL_CHATLIST_MIN_ROWS) return wrapChatlist([...children, ...rows]);
-    const block = buildVirtualChatlistBlock(rows);
-    children.push(block);
-    return wrapChatlist(children);
-  };
   clearVirtualChatlist();
 
 
   if (isMobile) {
-    renderSidebarMobile({
+    clearDeferredSidebarDesktopTabs(target);
+    clearDeferredSidebarMenu(target);
+    clearDeferredSidebarStandalone(target);
+    renderSidebarMobileDeferred({
       target, state, body, isMobile, mobileUi,
       forceResetScroll, hasSidebarQuery,
       archiveToggle, chatArchiveToggle, boardArchiveToggle, chatArchiveOpen, boardArchiveOpen, archiveOpen,
@@ -880,493 +450,76 @@ export function renderSidebar(
     });
     return;
   }
+  clearDeferredSidebarMobile(target);
 
   if ("dataset" in target) delete (target as HTMLElement).dataset.sidebarTab;
 
   // PWA (standalone/fullscreen): tabs should behave like mobile (separate views),
   // not just as "scroll-to" shortcuts.
   if (isStandaloneDisplayMode()) {
-    const rawTab = state.mobileSidebarTab;
-    const showMenuTab = isMobile;
-    const defaultTab: MobileSidebarTab = unknownAttnPeers.length ? "contacts" : "chats";
-    let activeTab: MobileSidebarTab =
-      rawTab === "contacts" || rawTab === "boards" || (showMenuTab && rawTab === "menu") ? rawTab : defaultTab;
-    if (!showMenuTab && activeTab === "menu") activeTab = defaultTab;
-    if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
-    const prevTab = String((target as any)._pwaSidebarPrevTab || "").trim();
-    const didSwitchTab = Boolean(prevTab && prevTab !== activeTab);
-    const forceTopTab = Boolean(forceResetScroll || !prevTab || didSwitchTab);
-    if (forceTopTab && !forceResetScroll) {
-      try {
-        (target as HTMLElement).dataset.sidebarResetScroll = "1";
-        body.dataset.sidebarResetScroll = "1";
-      } catch {
-        // ignore
-      }
-    }
-
-    const tabContacts = buildSidebarTabButton("contacts", activeTab, "Контакты");
-    const tabBoards = buildSidebarTabButton("boards", activeTab, "Доски");
-    const tabChats = buildSidebarTabButton("chats", activeTab, "Чаты");
-    const tabMenu = showMenuTab ? buildSidebarTabButton("menu", activeTab, "Меню") : null;
-
-    const tabs = el(
-      "div",
-      {
-        class: showMenuTab
-          ? "sidebar-tabs sidebar-tabs-desktop sidebar-tabs-pwa sidebar-tabs-standalone"
-          : "sidebar-tabs sidebar-tabs-desktop sidebar-tabs-standalone",
-        role: "tablist",
-        "aria-label": "Раздел",
-      },
-      [tabContacts, tabBoards, tabChats, ...(tabMenu ? [tabMenu] : [])]
-    );
-    const tabsList = [tabContacts, tabBoards, tabChats, ...(tabMenu ? [tabMenu] : [])];
-    tabs.addEventListener("keydown", (e) => {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      const dir = e.key === "ArrowRight" ? 1 : -1;
-      const idx = tabsList.findIndex((b) => b === document.activeElement);
-      const next = idx < 0 ? 0 : (idx + dir + tabsList.length) % tabsList.length;
-      e.preventDefault();
-      tabsList[next]?.focus();
+    clearDeferredSidebarDesktopTabs(target);
+    clearDeferredSidebarMenu(target);
+    renderSidebarStandaloneDeferred({
+      target,
+      state,
+      body,
+      isMobile,
+      mobileUi,
+      forceResetScroll,
+      hasSidebarQuery,
+      archiveToggle,
+      chatArchiveToggle,
+      boardArchiveToggle,
+      chatArchiveOpen,
+      boardArchiveOpen,
+      archiveOpen,
+      chatArchiveCount,
+      boardArchiveCount,
+      pinnedKeys,
+      pinnedSet,
+      archivedSet,
+      groups,
+      boards,
+      sel,
+      drafts,
+      matchesQuery,
+      matchesFriend,
+      matchesRoom,
+      isMuted,
+      lastTsForKey,
+      attnSet,
+      mentionForKey,
+      computeRoomUnread,
+      buildSidebarArchiveHint,
+      buildSidebarArchiveEmpty,
+      buildSidebarHeaderToolbar,
+      buildSidebarTabButton,
+      buildSidebarSearchBar,
+      buildFolderTabs,
+      buildChatlist,
+      setBodyChatlistClass,
+      bindHeaderScroll,
+      toggleClass,
+      markCompactAvatarRows,
+      dialogPriority,
+      hasActiveDialogForFriend,
+      unknownAttnPeers,
+      contactCandidates,
+      activeContacts,
+      archivedContacts,
+      buildContactRows,
+      buildTopPeerContactRows,
+      onSelect,
+      onOpenUser,
+      onSetPage,
+      onCreateGroup,
+      onCreateBoard,
+      onAuthOpen,
+      onAuthLogout,
     });
-
-    const searchBarAction =
-      activeTab === "contacts"
-        ? archiveToggle
-        : activeTab === "chats"
-          ? chatArchiveToggle
-          : activeTab === "boards"
-            ? boardArchiveToggle
-            : null;
-    const searchBar =
-      showMenuTab && activeTab === "menu"
-        ? null
-        : buildSidebarSearchBar(
-            activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск",
-            searchBarAction ? { action: searchBarAction } : undefined
-          );
-    const headerToolbar = buildSidebarHeaderToolbar(activeTab);
-    const headerStack = el("div", { class: "sidebar-header-stack" }, [
-      headerToolbar,
-      ...(activeTab === "menu"
-        ? [el("div", { class: "sidebar-header-title" }, ["Меню"])]
-        : [...(searchBar ? [searchBar] : [])]),
-    ]);
-    const header = el("div", { class: "sidebar-header" }, [headerStack]);
-    const chatFiltersRow: HTMLElement | null = null;
-    const passesChatFilter = (_opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean => true;
-
-    const chatFolders = Array.isArray((state as any).chatFolders) ? (state as any).chatFolders : [];
-    const rawFolderId =
-      activeTab === "chats" ? String((state as any).sidebarFolderId || "all").trim().toLowerCase() : "all";
-    const matchedFolder =
-      rawFolderId !== "all"
-        ? chatFolders.find((f: any) => String(f?.id || "").trim().toLowerCase() === rawFolderId)
-        : null;
-    const activeFolderId = matchedFolder ? rawFolderId : "all";
-    const includeSet = matchedFolder
-      ? new Set<string>((Array.isArray(matchedFolder.include) ? matchedFolder.include : []).map((x: any) => String(x || "").trim()).filter(Boolean))
-      : null;
-    const excludeSet = matchedFolder
-      ? new Set<string>((Array.isArray(matchedFolder.exclude) ? matchedFolder.exclude : []).map((x: any) => String(x || "").trim()).filter(Boolean))
-      : null;
-    const folderAllowsKey = (key: string): boolean => {
-      if (!matchedFolder) return true;
-      const k = String(key || "").trim();
-      if (!k) return false;
-      if (excludeSet && excludeSet.has(k)) return false;
-      if (!includeSet || !includeSet.size) return false;
-      return includeSet.has(k);
-    };
-    const folderTabsRow = activeTab === "chats" ? buildFolderTabs(activeFolderId, chatFolders) : null;
-
-    const pinnedBoardRows: HTMLElement[] = [];
-    const pinnedDialogRowByKey = new Map<string, HTMLElement>();
-    const pinnedContactEntries: FriendEntry[] = [];
-    for (const key of pinnedKeys) {
-      if (key.startsWith("dm:")) {
-        const id = key.slice(3);
-        const f = state.friends.find((x) => x.id === id);
-        if (!f) continue;
-        if (!matchesFriend(f)) continue;
-        const k = dmKey(f.id);
-        const unread = Math.max(0, Number(f.unread || 0) || 0);
-        const attention = attnSet.has(f.id);
-        if (activeTab === "chats" && !folderAllowsKey(k)) continue;
-        if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
-        const meta = previewForConversation(state, k, "dm", drafts[k]);
-        const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention);
-        pinnedDialogRowByKey.set(key, row);
-        pinnedContactEntries.push(f);
-        continue;
-      }
-      if (key.startsWith("room:")) {
-        const id = key.slice(5);
-        const g = groups.find((x) => x.id === id);
-        if (g) {
-          if (!matchesRoom(g)) continue;
-          const k = roomKey(g.id);
-          const meta = previewForConversation(state, k, "room", drafts[k]);
-          const unread = computeRoomUnread(k);
-          const mention = mentionForKey(k);
-          if (activeTab === "chats" && !folderAllowsKey(k)) continue;
-          if (!passesChatFilter({ kind: "group", unread, mention })) continue;
-          const row = roomRow(
-            null,
-            String(g.name || g.id),
-            Boolean(sel && sel.kind === "group" && sel.id === g.id),
-            () => onSelect({ kind: "group", id: g.id }),
-            { kind: "group", id: g.id },
-            meta,
-            { mention, muted: isMuted(g.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "group", g.id) }
-          );
-          pinnedDialogRowByKey.set(key, row);
-          continue;
-        }
-        const b = boards.find((x) => x.id === id);
-        if (b) {
-          if (!matchesRoom(b)) continue;
-          const k = roomKey(b.id);
-          const meta = previewForConversation(state, k, "room", drafts[k]);
-          const unread = computeRoomUnread(k);
-          pinnedBoardRows.push(
-            roomRow(
-              null,
-              String(b.name || b.id),
-              Boolean(sel && sel.kind === "board" && sel.id === b.id),
-              () => onSelect({ kind: "board", id: b.id }),
-              { kind: "board", id: b.id },
-              meta,
-              { muted: isMuted(b.id), unread, pinned: true, menuOpen: isRowMenuOpen(state, "board", b.id) }
-            )
-          );
-        }
-      }
-    }
-
-    const mountPwa = (children: HTMLElement[]) => {
-      setBodyChatlistClass(children);
-      body.replaceChildren(...children);
-      const nodes: HTMLElement[] = [];
-      if (header) nodes.push(header);
-      nodes.push(tabs);
-      nodes.push(body);
-      target.replaceChildren(...nodes);
-      bindHeaderScroll(header);
-      (target as any)._pwaSidebarPrevTab = activeTab;
-      if (!forceTopTab) return;
-      try {
-        body.scrollTop = 0;
-        body.scrollLeft = 0;
-      } catch {
-        // ignore
-      }
-      try {
-        window.requestAnimationFrame(() => {
-          try {
-            body.scrollTop = 0;
-            body.scrollLeft = 0;
-          } catch {
-            // ignore
-          }
-        });
-      } catch {
-        // ignore
-      }
-    };
-
-	    if (activeTab === "chats") {
-	      const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
-	      const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
-	      const archivedItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
-
-	      for (const f of state.friends || []) {
-	        const id = String(f?.id || "").trim();
-	        if (!id) continue;
-	        const k = dmKey(id);
-	        if (pinnedSet.has(k)) continue;
-	        if (!folderAllowsKey(k)) continue;
-	        if (!hasActiveDialogForFriend(f)) continue;
-	        if (!matchesFriend(f)) continue;
-	        const meta = previewForConversation(state, k, "dm", drafts[k]);
-	        const label = displayNameForFriend(state, f);
-	        const unread = Math.max(0, Number(f.unread || 0) || 0);
-	        const attention = attnSet.has(id);
-	        if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
-	        const item = {
-	          sortTs: lastTsForKey(k),
-	          priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
-	          label,
-	          row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attention),
-	        };
-	        if (!hasSidebarQuery && archivedSet.has(k)) archivedItems.push(item);
-	        else dialogItems.push(item);
-	      }
-
-	      for (const g of restGroups) {
-	        if (!matchesRoom(g)) continue;
-	        const k = roomKey(g.id);
-	        if (!folderAllowsKey(k)) continue;
-	        const meta = previewForConversation(state, k, "room", drafts[k]);
-	        const unread = computeRoomUnread(k);
-	        const mention = mentionForKey(k);
-	        const label = String(g.name || g.id);
-	        if (!passesChatFilter({ kind: "group", unread, mention })) continue;
-	        const item = {
-	          sortTs: lastTsForKey(k),
-	          priority: dialogPriority({ hasDraft: meta.hasDraft, mention, unread }),
-	          label,
-	          row: roomRow(
-	            null,
-	            label,
-	            Boolean(sel && sel.kind === "group" && sel.id === g.id),
-	            () => onSelect({ kind: "group", id: g.id }),
-	            { kind: "group", id: g.id },
-	            meta,
-	            { mention, muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
-	          ),
-	        };
-	        if (!hasSidebarQuery && archivedSet.has(k)) archivedItems.push(item);
-	        else dialogItems.push(item);
-	      }
-
-	      dialogItems.sort(
-	        (a, b) =>
-	          b.sortTs - a.sortTs ||
-	          b.priority - a.priority ||
-	          a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
-	      );
-	      archivedItems.sort(
-	        (a, b) =>
-	          b.sortTs - a.sortTs ||
-	          b.priority - a.priority ||
-	          a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
-	      );
-	      const dialogRows = dialogItems.map((x) => x.row);
-	      const archivedRows = archivedItems.map((x) => x.row);
-	      const pinnedDialogRows = pinnedKeys
-	        .map((key) => pinnedDialogRowByKey.get(key))
-	        .filter(Boolean) as HTMLElement[];
-
-	      const chatFixedRows: HTMLElement[] = [];
-	      if (pinnedDialogRows.length) {
-	        chatFixedRows.push(...pinnedDialogRows);
-	      }
-	      chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
-	      const archiveBlock = chatArchiveOpen
-	        ? [
-	            el("div", { class: "pane-section pane-section-archive" }, [`Архив (${chatArchiveCount})`]),
-	            buildSidebarArchiveHint(),
-	            ...(archivedRows.length ? archivedRows : [buildSidebarArchiveEmpty("По текущему фильтру в архиве нет чатов.")]),
-	          ]
-	        : [];
-	      const chatRows = archiveBlock.length ? [...archiveBlock, ...dialogRows] : dialogRows;
-	      const chatList = buildChatlist(
-	        chatFixedRows,
-	        chatRows,
-	        hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)",
-	        { virtual: !chatArchiveOpen }
-	      );
-	      mountPwa([...(folderTabsRow ? [folderTabsRow] : []), ...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
-	      return;
-	    }
-
-	    if (activeTab === "boards") {
-	      const restBoards = boards.filter((b) => !pinnedSet.has(roomKey(b.id)));
-	      const boardItems: Array<{ sortTs: number; row: HTMLElement }> = [];
-	      const archivedItems: Array<{ sortTs: number; row: HTMLElement }> = [];
-	      for (const b of restBoards) {
-	        if (!matchesRoom(b)) continue;
-	        const k = roomKey(b.id);
-	        const meta = previewForConversation(state, k, "room", drafts[k]);
-	        const unread = computeRoomUnread(k);
-	        const item = {
-	          sortTs: lastTsForKey(k),
-	          row: roomRow(
-	            null,
-	            String(b.name || b.id),
-	            Boolean(sel && sel.kind === "board" && sel.id === b.id),
-	            () => onSelect({ kind: "board", id: b.id }),
-	            { kind: "board", id: b.id },
-	            meta,
-	            { muted: isMuted(b.id), unread, menuOpen: isRowMenuOpen(state, "board", b.id) }
-	          ),
-	        };
-	        if (!hasSidebarQuery && archivedSet.has(k)) archivedItems.push(item);
-	        else boardItems.push(item);
-	      }
-	      boardItems.sort((a, b) => b.sortTs - a.sortTs);
-	      archivedItems.sort((a, b) => b.sortTs - a.sortTs);
-	      const boardRows = boardItems.map((x) => x.row);
-	      const archivedRows = archivedItems.map((x) => x.row);
-
-	      const boardFixedRows: HTMLElement[] = [];
-	      if (pinnedBoardRows.length) {
-	        boardFixedRows.push(...pinnedBoardRows);
-	      }
-	      boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
-	      const archiveBlock = boardArchiveOpen
-	        ? [
-	            el("div", { class: "pane-section pane-section-archive" }, [`Архив (${boardArchiveCount})`]),
-	            buildSidebarArchiveHint(),
-	            ...archivedRows,
-	          ]
-	        : [];
-	      const rows = archiveBlock.length ? [...archiveBlock, ...boardRows] : boardRows;
-	      const boardList = buildChatlist(
-	        boardFixedRows,
-	        rows,
-	        hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)",
-	        { virtual: !boardArchiveOpen }
-	      );
-	      mountPwa([boardList]);
-	      return;
-	    }
-
-    if (activeTab === "contacts") {
-      const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
-      const contactRowsAll = buildContactRows(contactCandidates);
-      const { ids: topPeerIds, rows: topPeerRows } = buildTopPeerContactRows(activeContacts);
-      const activeContactRows = buildContactRows(activeContacts.filter((f) => !topPeerIds.has(f.id)));
-      const archivedContactRows = buildContactRows(archivedContacts);
-      const archiveBlock =
-        archiveOpen && archivedContactRows.length
-          ? [el("div", { class: "pane-section pane-section-archive" }, [`Архив (${archivedContactRows.length})`]), ...archivedContactRows]
-          : [];
-
-      if (hasSidebarQuery) {
-        const unknownAttnRows = unknownAttnPeers
-          .filter((id) => matchesQuery(id))
-          .map((id) => {
-            const k = dmKey(id);
-            const meta = previewForConversation(state, k, "dm", drafts[k]);
-            const hint = attentionHintForPeer(state, id);
-            const meta2 = meta.sub ? meta : { ...meta, sub: hint };
-            const pseudo: FriendEntry = { id, online: false, unread: 0 };
-            return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
-          });
-        const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsAll]);
-        const contactFixedRows: HTMLElement[] = [];
-        if (pinnedContactRowsCompact.length) {
-          contactFixedRows.push(...pinnedContactRowsCompact);
-        }
-        if (allRows.length) {
-          contactFixedRows.push(el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]));
-        }
-        const contactList = buildChatlist(contactFixedRows, allRows, "(ничего не найдено)");
-        mountPwa([contactList]);
-        return;
-      }
-
-      const unknownAttnRows = markCompactAvatarRows(
-        unknownAttnPeers
-        .map((id) => {
-          const k = dmKey(id);
-          const meta = previewForConversation(state, k, "dm", drafts[k]);
-          const hint = attentionHintForPeer(state, id);
-          const meta2 = meta.sub ? meta : { ...meta, sub: hint };
-          const pseudo: FriendEntry = { id, online: false, unread: 0 };
-          return friendRow(state, pseudo, Boolean(sel && sel.kind === "dm" && sel.id === id), meta2, onSelect, onOpenUser, true);
-        })
-      );
-
-      const contactFixedRows: HTMLElement[] = [];
-      if (pinnedContactRowsCompact.length) {
-        contactFixedRows.push(...pinnedContactRowsCompact);
-      }
-      if (unknownAttnRows.length) {
-        contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
-      }
-      if (topPeerRows.length) {
-        contactFixedRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
-      }
-      if (activeContactRows.length && !archiveBlock.length) {
-        contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
-      }
-      const contactRows = (() => {
-        if (!archiveBlock.length) return activeContactRows;
-        const rows: HTMLElement[] = [...archiveBlock];
-        if (activeContactRows.length) rows.push(el("div", { class: "pane-section" }, ["Контакты"]), ...activeContactRows);
-        return rows;
-      })();
-      const contactList = buildChatlist(contactFixedRows, contactRows, undefined, { virtual: !archiveOpen });
-      mountPwa([contactList]);
-      return;
-    }
-
-    // Menu tab (PWA): actions/navigation.
-    const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
-      sub: "Имя, @handle, аватар",
-      time: null,
-      hasDraft: false,
-    });
-    toggleClass(profileRow, "row-settings", true);
-    profileRow.setAttribute("title", "Настройки профиля и интерфейса");
-    const searchRow = roomRow("🔍", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
-      sub: "Глобальный поиск",
-      time: null,
-      hasDraft: false,
-    });
-    searchRow.setAttribute("title", "Глобальный поиск");
-    const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
-      sub: "История и загрузки",
-      time: null,
-      hasDraft: false,
-    });
-    filesRow.setAttribute("title", "Передача файлов и история");
-    const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
-
-    const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
-      sub: "Групповой чат и приглашения",
-      time: null,
-      hasDraft: false,
-    });
-    createGroupRow.setAttribute("title", "Создать новый чат");
-    const createBoardRow = roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard(), undefined, {
-      sub: "Лента объявлений и новости",
-      time: null,
-      hasDraft: false,
-    });
-    createBoardRow.setAttribute("title", "Создать новую доску");
-    const infoRow = roomRow("?", "Info", state.page === "help", () => onSetPage("help"), undefined, {
-      sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
-      time: null,
-      hasDraft: false,
-    });
-    infoRow.setAttribute("title", mobileUi ? "Справка и журнал обновлений" : "Подсказки по клавишам и журнал обновлений");
-
-    const accountRows: HTMLElement[] = [];
-    if (state.conn === "connected" && !state.authed) {
-      const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
-        sub: "Вход или регистрация",
-        time: null,
-        hasDraft: false,
-      });
-      loginRow.setAttribute("title", "Войти или зарегистрироваться");
-      accountRows.push(loginRow);
-    } else if (state.authed) {
-      const logoutRow = roomRow("⏻", "Выход", false, () => onAuthLogout(), undefined, {
-        sub: "Завершить сессию",
-        time: null,
-        hasDraft: false,
-      });
-      logoutRow.setAttribute("title", "Выйти из аккаунта");
-      accountRows.push(logoutRow);
-    }
-
-    mountPwa([
-      el("div", { class: "pane-section" }, ["Навигация"]),
-      ...navRows,
-      ...(accountRows.length ? [el("div", { class: "pane-section" }, ["Аккаунт"]), ...accountRows] : []),
-      el("div", { class: "pane-section" }, ["Создание"]),
-      createGroupRow,
-      createBoardRow,
-      el("div", { class: "pane-section" }, ["Справка"]),
-      infoRow,
-    ]);
     return;
   }
+  clearDeferredSidebarStandalone(target);
 
   // Desktop (browser): compact tabs (Контакты/Доски/Чаты), меню через кнопку в шапке.
   type DesktopTab = "contacts" | "boards" | "chats" | "menu";
@@ -1464,6 +617,7 @@ export function renderSidebar(
   const folderTabsRow = activeDesktopTab === "chats" ? buildFolderTabs(activeFolderId, chatFolders) : null;
 
   const pinnedBoardRows: HTMLElement[] = [];
+  const pinnedContactEntries: FriendEntry[] = [];
   const pinnedDialogRowByKey = new Map<string, HTMLElement>();
   for (const key of pinnedKeys) {
     if (key.startsWith("dm:")) {
@@ -1479,6 +633,7 @@ export function renderSidebar(
       const meta = previewForConversation(state, k, "dm", drafts[k]);
       const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention);
       pinnedDialogRowByKey.set(key, row);
+      pinnedContactEntries.push(f);
       continue;
     }
     if (!key.startsWith("room:")) continue;
@@ -1577,81 +732,24 @@ export function renderSidebar(
   };
 
   if (activeDesktopTab === "menu") {
-    const profileRow = roomRow("☺", "Профиль", state.page === "profile", () => onSetPage("profile"), undefined, {
-      sub: "Имя, @handle, аватар",
-      time: null,
-      hasDraft: false,
+    clearDeferredSidebarDesktopTabs(target);
+    renderSidebarMenuDeferred({
+      target,
+      state,
+      mobileUi,
+      onSetPage,
+      onCreateGroup,
+      onCreateBoard,
+      onAuthOpen,
+      onAuthLogout,
+      mountDesktop,
     });
-    toggleClass(profileRow, "row-settings", true);
-    profileRow.setAttribute("title", "Настройки профиля и интерфейса");
-    const searchRow = roomRow("🔍", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
-      sub: "Глобальный поиск",
-      time: null,
-      hasDraft: false,
-    });
-    searchRow.setAttribute("title", "Глобальный поиск");
-    const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
-      sub: "История и загрузки",
-      time: null,
-      hasDraft: false,
-    });
-    filesRow.setAttribute("title", "Передача файлов и история");
-    const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
-
-    const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
-      sub: "Групповой чат и приглашения",
-      time: null,
-      hasDraft: false,
-    });
-    createGroupRow.setAttribute("title", "Создать новый групповой чат");
-    const createBoardRow = roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard(), undefined, {
-      sub: "Доска (чтение всем, запись владельцу)",
-      time: null,
-      hasDraft: false,
-    });
-    createBoardRow.setAttribute("title", "Создать новую доску");
-    const createRows: HTMLElement[] = [createGroupRow, createBoardRow];
-
-    const infoRow = roomRow("?", "Info", state.page === "help", () => onSetPage("help"), undefined, {
-      sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
-      time: null,
-      hasDraft: false,
-    });
-    infoRow.setAttribute("title", mobileUi ? "Справка и журнал обновлений" : "Подсказки по клавишам и журнал обновлений");
-
-    const accountRows: HTMLElement[] = [];
-    if (state.conn === "connected" && !state.authed) {
-      const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
-        sub: "Вход или регистрация",
-        time: null,
-        hasDraft: false,
-      });
-      loginRow.setAttribute("title", "Войти или зарегистрироваться");
-      accountRows.push(loginRow);
-    } else if (state.authed) {
-      const logoutIcon = mobileUi ? "⏻" : "⎋";
-      const logoutRow = roomRow(logoutIcon, mobileUi ? "Выход" : "Выход (F10)", false, () => onAuthLogout(), undefined, {
-        sub: "Завершить сессию",
-        time: null,
-        hasDraft: false,
-      });
-      logoutRow.setAttribute("title", mobileUi ? "Выйти из аккаунта" : "Выйти из аккаунта (F10)");
-      accountRows.push(logoutRow);
-    }
-
-    mountDesktop([
-      el("div", { class: "pane-section" }, ["Навигация"]),
-      ...navRows,
-      ...(accountRows.length ? [el("div", { class: "pane-section" }, ["Аккаунт"]), ...accountRows] : []),
-      el("div", { class: "pane-section" }, ["Создание"]),
-      ...createRows,
-      el("div", { class: "pane-section" }, ["Справка"]),
-      infoRow,
-    ]);
     return;
   }
+  clearDeferredSidebarMenu(target);
 
   if (activeDesktopTab === "chats") {
+    clearDeferredSidebarDesktopTabs(target);
     const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
     const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
     const archivedItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
@@ -1747,112 +845,33 @@ export function renderSidebar(
     return;
   }
 
-  if (activeDesktopTab === "boards") {
-    const restBoards = boards.filter((b) => !pinnedSet.has(roomKey(b.id)));
-    const boardItems: Array<{ sortTs: number; row: HTMLElement }> = [];
-    const archivedItems: Array<{ sortTs: number; row: HTMLElement }> = [];
-    for (const b of restBoards) {
-      if (!matchesRoom(b)) continue;
-      const k = roomKey(b.id);
-      const meta = previewForConversation(state, k, "room", drafts[k]);
-      const unread = computeRoomUnread(k);
-      const item = {
-        sortTs: lastTsForKey(k),
-        row: roomRow(
-          null,
-          String(b.name || b.id),
-          Boolean(sel && sel.kind === "board" && sel.id === b.id),
-          () => onSelect({ kind: "board", id: b.id }),
-          { kind: "board", id: b.id },
-          meta,
-          { muted: isMuted(b.id), unread, menuOpen: isRowMenuOpen(state, "board", b.id) }
-        ),
-      };
-      if (!hasSidebarQuery && archivedSet.has(k)) archivedItems.push(item);
-      else boardItems.push(item);
-    }
-    boardItems.sort((a, b) => b.sortTs - a.sortTs);
-    archivedItems.sort((a, b) => b.sortTs - a.sortTs);
-    const boardRows = boardItems.map((x) => x.row);
-    const archivedRows = archivedItems.map((x) => x.row);
-
-    const boardFixedRows: HTMLElement[] = [];
-    if (pinnedBoardRows.length) {
-      boardFixedRows.push(...pinnedBoardRows);
-    }
-    boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
-    const archiveBlock = boardArchiveOpen
-      ? [
-          el("div", { class: "pane-section pane-section-archive" }, [`Архив (${boardArchiveCount})`]),
-          buildSidebarArchiveHint(),
-          ...archivedRows,
-        ]
-      : [];
-    const rows = archiveBlock.length ? [...archiveBlock, ...boardRows] : boardRows;
-    const boardList = buildChatlist(
-      boardFixedRows,
-      rows,
-      hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)",
-      { virtual: !boardArchiveOpen }
-    );
-    mountDesktop([boardList]);
-    return;
-  }
-
-  // Contacts tab.
-  const pinnedContactEntries: FriendEntry[] = [];
-  for (const key of pinnedKeys) {
-    if (!key.startsWith("dm:")) continue;
-    const id = key.slice(3);
-    const f = state.friends.find((x) => x.id === id);
-    if (!f) continue;
-    if (!matchesFriend(f)) continue;
-    pinnedContactEntries.push(f);
-  }
-  const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
-  const contactRowsAll = buildContactRows(contactCandidates);
-  const { ids: topPeerIds, rows: topPeerRows } = buildTopPeerContactRows(activeContacts);
-  const activeContactRows = buildContactRows(activeContacts.filter((f) => !topPeerIds.has(f.id)));
-  const archivedContactRows = buildContactRows(archivedContacts);
-  const archiveBlock =
-    archiveOpen && archivedContactRows.length
-      ? [el("div", { class: "pane-section pane-section-archive" }, [`Архив (${archivedContactRows.length})`]), ...archivedContactRows]
-      : [];
-
-  if (hasSidebarQuery) {
-    const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsAll]);
-    const contactFixedRows: HTMLElement[] = [];
-    if (pinnedContactRowsCompact.length) {
-      contactFixedRows.push(...pinnedContactRowsCompact);
-    }
-    if (allRows.length) {
-      contactFixedRows.push(el("div", { class: "pane-section" }, [`Результаты (${allRows.length})`]));
-    }
-    const contactList = buildChatlist(contactFixedRows, allRows, "(ничего не найдено)");
-    mountDesktop([contactList]);
-    return;
-  }
-
-  const compactUnknownAttnRows = markCompactAvatarRows(unknownAttnRows);
-  const contactFixedRows: HTMLElement[] = [];
-  if (pinnedContactRowsCompact.length) {
-    contactFixedRows.push(...pinnedContactRowsCompact);
-  }
-  if (compactUnknownAttnRows.length) {
-    contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
-  }
-  if (topPeerRows.length) {
-    contactFixedRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
-  }
-  if (activeContactRows.length && !archiveBlock.length) {
-    contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
-  }
-  const contactRows = (() => {
-    if (!archiveBlock.length) return activeContactRows;
-    const rows: HTMLElement[] = [...archiveBlock];
-    if (activeContactRows.length) rows.push(el("div", { class: "pane-section" }, ["Контакты"]), ...activeContactRows);
-    return rows;
-  })();
-  const contactList = buildChatlist(contactFixedRows, contactRows, undefined, { virtual: !archiveOpen });
-  mountDesktop([contactList]);
+  renderSidebarDesktopTabsDeferred({
+    target,
+    kind: activeDesktopTab === "boards" ? "boards" : "contacts",
+    state,
+    boards,
+    sel,
+    drafts,
+    archivedSet,
+    hasSidebarQuery,
+    boardArchiveOpen,
+    boardArchiveCount,
+    archiveOpen,
+    pinnedBoardRows,
+    pinnedContactEntries,
+    unknownAttnRows,
+    activeContacts,
+    archivedContacts,
+    matchesRoom,
+    computeRoomUnread,
+    lastTsForKey,
+    isMuted,
+    buildSidebarArchiveHint,
+    buildChatlist,
+    markCompactAvatarRows,
+    buildContactRows,
+    buildTopPeerContactRows,
+    onSelect,
+    mountDesktop,
+  });
 }

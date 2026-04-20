@@ -1,4 +1,3 @@
-import { getStoredSessionToken } from "../../../helpers/auth/session";
 import { requestOutboxSnapshot, syncOutboxToServiceWorker } from "../../../helpers/pwa/outboxSync";
 import { updateOutboxEntry, type OutboxMap } from "../../../helpers/chat/outbox";
 import type { Store } from "../../../stores/store";
@@ -136,7 +135,7 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
       setOutboxSwReadyForUser(uid);
       outboxSyncPendingForUser = null;
       try {
-        void syncOutboxToServiceWorker(uid, store.get().outbox, getStoredSessionToken());
+        void syncOutboxToServiceWorker(uid, store.get().outbox);
       } catch {
         // ignore
       }

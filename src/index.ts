@@ -1,5 +1,4 @@
 import "./scss/style.css";
-import { registerServiceWorker } from "./helpers/pwa/registerServiceWorker";
 import { applySkin, getStoredSkinId } from "./helpers/skin/skin";
 import { applyTheme, resolveInitialTheme } from "./helpers/theme/theme";
 import { installAppViewportHeightVar } from "./helpers/ui/appViewport";
@@ -19,5 +18,9 @@ installFancyCaret();
 installEnvironmentAgent(root);
 void import("./app/mountApp").then(({ mountApp }) => {
   mountApp(root);
-  registerServiceWorker();
+  void import("./helpers/pwa/registerServiceWorker")
+    .then(({ registerServiceWorker }) => {
+      registerServiceWorker();
+    })
+    .catch(() => {});
 });

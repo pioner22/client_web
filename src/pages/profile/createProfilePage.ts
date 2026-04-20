@@ -8,6 +8,7 @@ export interface ProfilePageActions {
   onDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onRefresh: () => void;
+  onOpenSessionsPage: () => void;
   onSkinChange: (skinId: string) => void;
   onThemeChange: (theme: ThemeMode) => void;
   onAvatarSelect: (file: File | null) => void;
@@ -133,6 +134,11 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const btnPwaUpdate = el("button", { class: "btn btn-primary", type: "button" }, ["Принудительно обновить PWA"]);
   const pwaUpdateActions = el("div", { class: "profile-actions" }, [btnPwaUpdate]);
 
+  const sessionsHint = el("div", { class: "profile-hint" }, ["Список устройств и управление сессиями открываются отдельно, чтобы профиль оставался компактным."]);
+  const sessionsSummary = el("div", { class: "profile-hint" }, ["Откройте отдельную страницу, чтобы посмотреть устройства и при необходимости завершить другие сессии."]);
+  const btnOpenSessions = el("button", { class: "btn", type: "button" }, ["Открыть сессии"]);
+  const sessionsActions = el("div", { class: "profile-actions" }, [btnOpenSessions]);
+
   const btnSave = el("button", { class: "btn btn-primary", type: "button" }, ["Сохранить"]);
   const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
   const actionsRow = el("div", { class: "page-actions" }, [btnSave, btnRefresh]);
@@ -173,10 +179,18 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     skinHint,
   ]);
 
+  const sessionsCard = el("div", { class: "profile-card" }, [
+    el("div", { class: "profile-card-title" }, ["Сессии"]),
+    sessionsHint,
+    sessionsSummary,
+    sessionsActions,
+  ]);
+
   const root = el("div", { class: "page page-profile" }, [
     title,
     head,
     account,
+    sessionsCard,
     ui,
     actionsRow,
     ...(hint ? [hint] : []),
@@ -202,6 +216,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   btnNotifySoundOn.addEventListener("click", () => actions.onNotifySoundEnable());
   btnNotifySoundOff.addEventListener("click", () => actions.onNotifySoundDisable());
   btnPwaUpdate.addEventListener("click", () => actions.onForcePwaUpdate());
+  btnOpenSessions.addEventListener("click", () => actions.onOpenSessionsPage());
 
   avatarPreview.addEventListener("click", () => avatarFile.click());
   btnAvatarUpload.addEventListener("click", () => avatarFile.click());
@@ -321,6 +336,19 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     else if (state.pwaUpdateAvailable) updateText = "Доступно обновление PWA — нажмите, чтобы применить";
     pwaUpdateHint.textContent = updateText;
     btnPwaUpdate.disabled = !swSupported;
+
+    const sessionEntries = Array.isArray(state.sessionDevices) ? state.sessionDevices : [];
+    const otherCount = sessionEntries.filter((entry) => !entry.current).length;
+    sessionsHint.textContent =
+      state.sessionDevicesStatus || "Список устройств и управление сессиями открываются отдельно, чтобы профиль оставался компактным.";
+    if (!sessionEntries.length) {
+      sessionsSummary.textContent = "Откройте отдельную страницу, чтобы посмотреть устройства и при необходимости завершить другие сессии.";
+    } else if (!otherCount) {
+      sessionsSummary.textContent = "Сейчас известна только текущая сессия. Подробности и управление доступны на отдельной странице.";
+    } else {
+      sessionsSummary.textContent = `Сейчас известно сессий: ${sessionEntries.length}. Других устройств: ${otherCount}. Подробности и управление доступны на отдельной странице.`;
+    }
+    btnOpenSessions.disabled = !(state.authed && state.conn === "connected");
   }
 
   return {

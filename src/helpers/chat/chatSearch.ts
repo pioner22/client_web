@@ -1,10 +1,13 @@
-export type ChatSearchFilter = "all" | "media" | "files" | "links" | "audio";
+import { extractSearchQueryFilters, type SearchQueryFilters } from "../search/searchQueryFilters";
+
+export type ChatSearchFilter = "all" | "media" | "files" | "links" | "music" | "voice";
 
 export interface ChatSearchFlags {
   media?: boolean;
   files?: boolean;
   links?: boolean;
-  audio?: boolean;
+  music?: boolean;
+  voice?: boolean;
 }
 
 export interface ChatSearchableMessage {
@@ -19,7 +22,8 @@ export interface ChatSearchCounts {
   media: number;
   files: number;
   links: number;
-  audio: number;
+  music: number;
+  voice: number;
 }
 
 export const CHAT_SEARCH_FILTERS: Array<{ id: ChatSearchFilter; label: string }> = [
@@ -27,51 +31,15 @@ export const CHAT_SEARCH_FILTERS: Array<{ id: ChatSearchFilter; label: string }>
   { id: "media", label: "Медиа" },
   { id: "files", label: "Файлы" },
   { id: "links", label: "Ссылки" },
-  { id: "audio", label: "Аудио" },
+  { id: "music", label: "Музыка" },
+  { id: "voice", label: "Голос" },
 ];
-
-const CHAT_SEARCH_FROM_RE = /^(from|от):(.+)$/i;
-const CHAT_SEARCH_TAG_RE = /^#([a-z0-9_а-яё-]{1,64})$/i;
-
-type ChatSearchFilters = {
-  text: string;
-  from: string;
-  hashtags: string[];
-};
 
 function norm(input: string): string {
   return String(input || "")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function extractChatSearchFilters(raw: string): ChatSearchFilters {
-  const tokens = String(raw ?? "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  const rest: string[] = [];
-  const tags = new Set<string>();
-  let from = "";
-  for (const token of tokens) {
-    const fromMatch = token.match(CHAT_SEARCH_FROM_RE);
-    if (fromMatch) {
-      const value = String(fromMatch[2] || "").trim();
-      if (value && !from) {
-        from = value;
-        continue;
-      }
-    }
-    const tagMatch = token.match(CHAT_SEARCH_TAG_RE);
-    if (tagMatch) {
-      const tag = String(tagMatch[1] || "").trim().toLowerCase();
-      if (tag) tags.add(tag);
-      continue;
-    }
-    rest.push(token);
-  }
-  return { text: rest.join(" "), from, hashtags: Array.from(tags) };
 }
 
 function matchesFilter(flags: ChatSearchFlags | undefined, filter: ChatSearchFilter): boolean {
@@ -86,7 +54,7 @@ function matchesHashtags(text: string, hashtags: string[]): boolean {
   return hashtags.every((tag) => hay.includes(`#${tag}`));
 }
 
-function matchesQuery(message: ChatSearchableMessage, filters: ChatSearchFilters): boolean {
+function matchesQuery(message: ChatSearchableMessage, filters: SearchQueryFilters): boolean {
   const qText = norm(filters.text);
   const from = norm(filters.from);
   const hashtags = filters.hashtags;
@@ -107,11 +75,11 @@ function matchesQuery(message: ChatSearchableMessage, filters: ChatSearchFilters
 }
 
 export function createChatSearchCounts(): ChatSearchCounts {
-  return { all: 0, media: 0, files: 0, links: 0, audio: 0 };
+  return { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 };
 }
 
 export function computeChatSearchCounts(messages: ChatSearchableMessage[], query: string): ChatSearchCounts {
-  const filters = extractChatSearchFilters(query);
+  const filters = extractSearchQueryFilters(query);
   const qText = norm(filters.text);
   const from = norm(filters.from);
   const hashtags = filters.hashtags;
@@ -124,13 +92,14 @@ export function computeChatSearchCounts(messages: ChatSearchableMessage[], query
     if (m.flags?.media) counts.media += 1;
     if (m.flags?.files) counts.files += 1;
     if (m.flags?.links) counts.links += 1;
-    if (m.flags?.audio) counts.audio += 1;
+    if (m.flags?.music) counts.music += 1;
+    if (m.flags?.voice) counts.voice += 1;
   }
   return counts;
 }
 
 export function computeChatSearchHits(messages: ChatSearchableMessage[], query: string, filter: ChatSearchFilter = "all"): number[] {
-  const filters = extractChatSearchFilters(query);
+  const filters = extractSearchQueryFilters(query);
   const qText = norm(filters.text);
   const from = norm(filters.from);
   const hashtags = filters.hashtags;

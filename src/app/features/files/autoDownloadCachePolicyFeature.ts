@@ -1,7 +1,7 @@
 import { DEFAULT_AUTO_DOWNLOAD_PREFS, loadAutoDownloadPrefs, type AutoDownloadPrefs } from "../../../helpers/files/autoDownloadPrefs";
-import { cleanupFileCache, getFileCacheStats, isImageLikeFile } from "../../../helpers/files/fileBlobCache";
+import { cleanupFileCache, getFileCacheStats } from "../../../helpers/files/fileBlobCache";
 import { loadFileCachePrefs, saveFileCachePrefs } from "../../../helpers/files/fileCachePrefs";
-import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
+import { isMediaLikeFile as sharedIsMediaLikeFile, resolveMediaKind } from "../../../helpers/files/mediaKind";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 
@@ -22,19 +22,6 @@ export interface AutoDownloadCachePolicyFeature {
   shouldCachePreview: (name: string, mime: string | null | undefined, size: number) => boolean;
   shouldCacheFile: (name: string, mime: string | null | undefined, size: number) => boolean;
   isMediaLikeFile: (name: string, mime: string | null | undefined) => boolean;
-}
-
-const VIDEO_NAME_HINT_RE =
-  /^(?:video|vid|movie|clip|screencast|screen[_\-\s]?(?:rec|record|recording)|видео|ролик)([_\-\s]|\d|$)/;
-const AUDIO_NAME_HINT_RE =
-  /^(?:audio|voice|sound|music|song|track|record|rec|memo|note|voice[_\-\s]?note|аудио|звук|музык|песня|голос|запис|диктофон|заметк)([_\-\s]|\d|$)/;
-
-function normalizeFileName(value: string): string {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const noQuery = raw.split(/[?#]/)[0];
-  const leaf = noQuery.split(/[\\/]/).pop() || "";
-  return leaf.trim().toLowerCase();
 }
 
 export function createAutoDownloadCachePolicyFeature(
@@ -94,12 +81,7 @@ export function createAutoDownloadCachePolicyFeature(
   };
 
   const isMediaLikeFile = (name: string, mime: string | null | undefined): boolean => {
-    const mt = String(mime || "").toLowerCase();
-    if (mt.startsWith("image/") || mt.startsWith("video/") || mt.startsWith("audio/")) return true;
-    const n = normalizeFileName(name);
-    if (isImageLikeFile(n, mt)) return true;
-    if (VIDEO_NAME_HINT_RE.test(n) || AUDIO_NAME_HINT_RE.test(n)) return true;
-    return /\.(mp4|m4v|mov|webm|ogv|mkv|mp3|m4a|aac|wav|ogg|opus|flac)$/.test(n);
+    return sharedIsMediaLikeFile(name, mime, null);
   };
 
   const resolveAutoDownloadKind = (
@@ -107,12 +89,8 @@ export function createAutoDownloadCachePolicyFeature(
     mime: string | null | undefined,
     hint?: string | null
   ): AutoDownloadKind => {
-    const h = String(hint || "").trim().toLowerCase();
-    if (h === "image" || h === "video" || h === "audio") return h;
-    if (isImageLikeFile(name, mime)) return "image";
-    if (isVideoLikeFile(name, mime)) return "video";
-    if (isMediaLikeFile(name, mime)) return "audio";
-    return "file";
+    const kind = resolveMediaKind(name, mime, hint);
+    return kind === "image" || kind === "video" || kind === "audio" ? kind : "file";
   };
 
   const autoDownloadCapBytes = (userId: string | null, kind: AutoDownloadKind): number => {

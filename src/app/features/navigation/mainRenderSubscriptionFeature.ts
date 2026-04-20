@@ -5,7 +5,6 @@ import type { AppState, TargetRef } from "../../../stores/types";
 import type { RenderActions } from "../../renderApp";
 
 interface MainHistoryFeature {
-  applyPrependAnchorAfterRender: (st: AppState) => void;
   applyPendingAutoScrollAfterRender: (st: AppState) => void;
   maybeBootstrapPrefetch: (st: AppState) => void;
 }
@@ -100,7 +99,6 @@ export function installMainRenderSubscriptionFeature(deps: MainRenderSubscriptio
     if (getChatSearchSyncFeature()?.maybeSyncChatSearchState()) return;
     renderApp(layout, st, actions);
     syncNavOverlay();
-    getHistoryFeature()?.applyPrependAnchorAfterRender(st);
     if (getVirtualHistoryFeature()?.maybeClampStartAtTop(st)) return;
     getHistoryFeature()?.applyPendingAutoScrollAfterRender(st);
     scheduleChatJumpVisibility();

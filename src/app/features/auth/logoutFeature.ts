@@ -151,12 +151,14 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
       profiles: {},
       profileDraftDisplayName: "",
       profileDraftHandle: "",
+      sessionDevices: [],
+      sessionDevicesStatus: null,
       toast: null,
       page: "main",
       modal: { kind: "logout" },
       authMode: rememberedId ? "login" : "register",
       authRememberedId: rememberedId,
-      status: "Вы вышли из мессенджера. Нажмите «Войти», чтобы вернуться.",
+      status: "Вы вышли из мессенджера. Можно быстро войти снова или выбрать другой аккаунт.",
     }));
 
     resetLoadedForUser();

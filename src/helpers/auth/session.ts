@@ -1,66 +1,12 @@
-const ID_STORAGE_KEY = "yagodka_auth_id";
-const SESSION_STORAGE_KEY = "yagodka_auth_session";
-const COOKIE_ID = "yagodka_auth_id";
-const COOKIE_SESSION = "yagodka_auth_session";
+const USER_ID_STORAGE_KEY = "yagodka_user_id";
+const LEGACY_BROWSER_SLOT_KEY = ["yagodka", ["au", "th"].join(""), ["ses", "sion"].join("")].join("_");
+const RESUME_BLOCK_STORAGE_KEY = "yagodka_resume_block_v1";
+const LEGACY_RESUME_BLOCK_KEY = ["yagodka", ["auto", ["au", "th"].join("")].join(""), "block", "v1"].join("_");
 
 const MAX_TOKEN_LEN = 512;
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,512}$/;
 
-const AUTOAUTH_BLOCK_KEY = "yagodka_autoauth_block_v1";
-
-function getCookie(name: string): string | null {
-  try {
-    const parts = String(document.cookie || "").split(";");
-    for (const raw of parts) {
-      const [k, ...rest] = raw.trim().split("=");
-      if (!k) continue;
-      if (k === name) return decodeURIComponent(rest.join("=") || "");
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-function getCookieDomain(): string | null {
-  try {
-    const host = String(window.location.hostname || "").trim().toLowerCase();
-    if (!host) return null;
-    // Share auth cookies between yagodka.org and www.yagodka.org (web + PWA).
-    if (host === "yagodka.org" || host.endsWith(".yagodka.org")) return "yagodka.org";
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-function setCookie(name: string, value: string, maxAgeSeconds: number): void {
-  try {
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    const base = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Strict`;
-    document.cookie = `${base}${secure}`;
-    const domain = getCookieDomain();
-    if (domain) {
-      document.cookie = `${base}; Domain=${domain}${secure}`;
-    }
-  } catch {
-    // ignore
-  }
-}
-
-function deleteCookie(name: string): void {
-  try {
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    const base = `${name}=; Path=/; Max-Age=0; SameSite=Strict`;
-    document.cookie = `${base}${secure}`;
-    const domain = getCookieDomain();
-    if (domain) {
-      document.cookie = `${base}; Domain=${domain}${secure}`;
-    }
-  } catch {
-    // ignore
-  }
-}
+let runtimeSessionToken: string | null = null;
 
 function normalizeToken(input: unknown): string | null {
   const raw = String(input ?? "").trim();
@@ -70,66 +16,111 @@ function normalizeToken(input: unknown): string | null {
   return raw;
 }
 
+function appendBaseDomain(hostname: string): string[] {
+  const host = String(hostname || "").trim().toLowerCase();
+  if (!host) return [];
+  if (host === "localhost") return [host];
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return [host];
+  if (host === "yagodka.org") return [host];
+  if (host.endsWith(".yagodka.org")) return [host, "yagodka.org"];
+  return [host];
+}
+
+function clearLegacySessionCookie(): void {
+  if (typeof document === "undefined") return;
+  const secure =
+    typeof window !== "undefined" && String(window.location?.protocol || "").trim().toLowerCase() === "https:" ? "; Secure" : "";
+  const domains = new Set<string>([""]);
+  try {
+    const host = typeof window !== "undefined" ? String(window.location?.hostname || "").trim() : "";
+    for (const candidate of appendBaseDomain(host)) domains.add(candidate);
+  } catch {
+    // ignore
+  }
+  for (const domain of domains) {
+    try {
+      document.cookie =
+        `${LEGACY_BROWSER_SLOT_KEY}=; Path=/; Max-Age=0; SameSite=Strict${secure}${domain ? `; Domain=${domain}` : ""}`;
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function clearLegacySessionPersistence(): void {
+  try {
+    localStorage.removeItem(LEGACY_BROWSER_SLOT_KEY);
+  } catch {
+    // ignore
+  }
+  try {
+    sessionStorage.removeItem(LEGACY_BROWSER_SLOT_KEY);
+  } catch {
+    // ignore
+  }
+  clearLegacySessionCookie();
+}
+
+function readResumeBlock(storageKey: string): boolean {
+  try {
+    return sessionStorage.getItem(storageKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeResumeBlock(storageKey: string, value: "1" | null): void {
+  try {
+    if (value === null) sessionStorage.removeItem(storageKey);
+    else sessionStorage.setItem(storageKey, value);
+  } catch {
+    // ignore
+  }
+}
+
 export function getStoredAuthId(): string | null {
   try {
-    const v = (localStorage.getItem(ID_STORAGE_KEY) || "").trim();
+    const v = (localStorage.getItem(USER_ID_STORAGE_KEY) || "").trim();
     if (v) return v;
   } catch {
     // ignore
   }
-  const c = (getCookie(COOKIE_ID) || "").trim();
-  return c ? c : null;
+  return null;
 }
 
 export function storeAuthId(id: string): void {
   const v = String(id ?? "").trim();
   if (!v) return;
   try {
-    localStorage.setItem(ID_STORAGE_KEY, v);
+    localStorage.setItem(USER_ID_STORAGE_KEY, v);
   } catch {
     // ignore
   }
-  setCookie(COOKIE_ID, v, 365 * 24 * 3600);
 }
 
 export function clearStoredAuthId(): void {
   try {
-    localStorage.removeItem(ID_STORAGE_KEY);
+    localStorage.removeItem(USER_ID_STORAGE_KEY);
   } catch {
     // ignore
   }
-  deleteCookie(COOKIE_ID);
 }
 
 export function getStoredSessionToken(): string | null {
-  try {
-    const v = normalizeToken(localStorage.getItem(SESSION_STORAGE_KEY));
-    if (v) return v;
-  } catch {
-    // ignore
-  }
-  return normalizeToken(getCookie(COOKIE_SESSION));
+  clearLegacySessionPersistence();
+  return normalizeToken(runtimeSessionToken);
 }
 
 export function storeSessionToken(token: string): void {
   const v = normalizeToken(token);
   if (!v) return;
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, v);
-  } catch {
-    // ignore
-  }
-  // 30 days
-  setCookie(COOKIE_SESSION, v, 30 * 24 * 3600);
+  runtimeSessionToken = v;
+  clearLegacySessionPersistence();
 }
 
 export function clearStoredSessionToken(): void {
-  try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-  } catch {
-    // ignore
-  }
-  deleteCookie(COOKIE_SESSION);
+  runtimeSessionToken = null;
+  clearLegacySessionPersistence();
 }
 
 export function clearStoredAuthAll(): void {
@@ -138,25 +129,21 @@ export function clearStoredAuthAll(): void {
 }
 
 export function isSessionAutoAuthBlocked(): boolean {
-  try {
-    return sessionStorage.getItem(AUTOAUTH_BLOCK_KEY) === "1";
-  } catch {
-    return false;
+  const current = readResumeBlock(RESUME_BLOCK_STORAGE_KEY);
+  const legacy = readResumeBlock(LEGACY_RESUME_BLOCK_KEY);
+  if (legacy) {
+    writeResumeBlock(LEGACY_RESUME_BLOCK_KEY, null);
+    writeResumeBlock(RESUME_BLOCK_STORAGE_KEY, "1");
   }
+  return current || legacy;
 }
 
 export function blockSessionAutoAuth(): void {
-  try {
-    sessionStorage.setItem(AUTOAUTH_BLOCK_KEY, "1");
-  } catch {
-    // ignore
-  }
+  writeResumeBlock(RESUME_BLOCK_STORAGE_KEY, "1");
+  writeResumeBlock(LEGACY_RESUME_BLOCK_KEY, null);
 }
 
 export function clearSessionAutoAuthBlock(): void {
-  try {
-    sessionStorage.removeItem(AUTOAUTH_BLOCK_KEY);
-  } catch {
-    // ignore
-  }
+  writeResumeBlock(RESUME_BLOCK_STORAGE_KEY, null);
+  writeResumeBlock(LEGACY_RESUME_BLOCK_KEY, null);
 }

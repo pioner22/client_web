@@ -3,7 +3,7 @@ import type { AppState, TargetRef } from "../../../stores/types";
 import type { Store } from "../../../stores/store";
 import { buildMeetJoinUrl, type CallMode } from "../../../helpers/calls/meetUrl";
 import { isMobileLikeUi } from "../../../helpers/ui/mobileLike";
-import type { TabNotifier } from "../../../helpers/notify/tabNotifier";
+import type { TabNotifierLike } from "../../../helpers/notify/tabNotifierLazy";
 
 export type ToastFn = (
   message: string,
@@ -20,7 +20,7 @@ export interface CallsFeatureDeps {
   store: Store<AppState>;
   send: (payload: any) => void;
   showToast: ToastFn;
-  tabNotifier: TabNotifier;
+  tabNotifier: TabNotifierLike;
   formatTargetLabel: (st: AppState, target: TargetRef) => string;
   formatSenderLabel: (st: AppState, senderId: string) => string;
 }
@@ -65,8 +65,8 @@ function tryOpenExternal(url: string): boolean {
   const u = String(url || "").trim();
   if (!u) return false;
   try {
-    window.open(u, "_blank", "noopener,noreferrer");
-    return true;
+    const opened = window.open(u, "_blank", "noopener,noreferrer");
+    return Boolean(opened);
   } catch {
     return false;
   }
@@ -335,6 +335,11 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         showToast("Звонок открыт в новой вкладке", { kind: "success", timeoutMs: 6000 });
         return;
       }
+      showToast("Браузер заблокировал новую вкладку. Используйте кнопку «Открыть отдельно».", {
+        kind: "warn",
+        timeoutMs: 7000,
+        placement: "center",
+      });
     }
 
     store.set((prev) => {

@@ -1,15 +1,15 @@
 import { el } from "../../helpers/dom/el";
-import { formatTime } from "../../helpers/time";
 import { conversationKey } from "../../helpers/chat/conversationKey";
+import { markHistoryViewportCompensation } from "../../helpers/chat/historyViewportCoordinator";
+import { type ChatShiftAnchor, type UnreadDividerAnchor, captureChatShiftAnchor, findChatShiftAnchorElement } from "../../helpers/chat/historyViewportAnchors";
+import { captureAndStoreChatShiftAnchor, disconnectChatHistoryViewportObserver, getChatHistoryViewportRuntime } from "../../helpers/chat/historyViewportRuntime";
 import { messageSelectionKey } from "../../helpers/chat/chatSelection";
 import { isPinnedMessage } from "../../helpers/chat/pinnedMessages";
-import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import type { AppState, ChatMessage, ChatMessageRef, FileOfferIn, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { fileBadge } from "../../helpers/files/fileBadge";
 import { safeUrl } from "../../helpers/security/safeUrl";
 import { renderRichText } from "../../helpers/chat/richText";
-import { renderBoardPost } from "../../helpers/boards/boardPost";
 import type { Layout } from "../layout/types";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
@@ -23,31 +23,18 @@ import {
   shouldVirtualize,
 } from "../../helpers/chat/virtualHistory";
 import { CHAT_SEARCH_FILTERS } from "../../helpers/chat/chatSearch";
+import { createChatStickyBottomState, isChatStickyBottomActive } from "../../helpers/chat/stickyBottom";
+import { resolveUnreadDivider } from "./historyLayoutModel";
+import { buildHistoryRenderSurface } from "./historyRenderSurface";
+import { clearDeferredPinnedSurface, renderPinnedDeferred, renderSearchAuxDeferred } from "./chatAuxRuntime";
+import { keepActiveControlVisible } from "../../helpers/ui/keepActiveControlVisible";
+import { renderChatSearchBarSurface, renderChatSelectionBarSurface } from "./chatTopSurface";
 
 import {
-  AlbumItem,
-  ChatShiftAnchor,
   EMPTY_CHAT,
   EMPTY_HITS,
-  UnreadDividerAnchor,
-  captureChatShiftAnchor,
   chatTitleNodes,
-  dayKey,
-  findChatShiftAnchorElement,
-  findUnreadAnchorIndex,
-  formatDayLabel,
-  formatSelectionCount,
   formatUserLabel,
-  getFileAttachmentInfo,
-  extractFileCaptionText,
-  isAlbumCandidate,
-  messageLine,
-  renderAlbumLine,
-  resolveUserLabel,
-  searchResultPreview,
-  skeletonMsg,
-  trimSearchPreview,
-  unreadAnchorForMessage,
 } from "./renderChatHelpers";
 
 function transferProgressTickOnly(prev: AppState["fileTransfers"], next: AppState["fileTransfers"]): boolean {
@@ -180,29 +167,25 @@ export function renderChat(layout: Layout, state: AppState) {
   const keyChanged = key !== prevKey;
   const prevScrollTop = scrollHost.scrollTop;
   const atBottomBefore = scrollHost.scrollTop >= maxScrollTop() - 24;
-  const sticky = hostState.__stickBottom;
-  const stickyActive = Boolean(sticky && sticky.active && sticky.key === key);
+  const viewportRuntime = getChatHistoryViewportRuntime(scrollHost);
+  const sticky = viewportRuntime.stickyBottom;
+  const stickyActive = isChatStickyBottomActive(scrollHost, sticky, key);
   const cachedMessages = key ? (state.conversations?.[key] ?? EMPTY_CHAT) : EMPTY_CHAT;
   const allowSticky = Boolean(key && (state.historyLoaded?.[key] || cachedMessages.length));
   // NOTE: autoscroll-on-open/sent is handled in app/mountApp.ts (pendingChatAutoScroll).
   // Here we only keep pinned-bottom stable during re-renders/content growth for the *current* chat.
   const shouldStick = Boolean(key && !keyChanged && allowSticky && (stickyActive || atBottomBefore));
   const preShiftAnchor = key && !keyChanged && !shouldStick ? captureChatShiftAnchor(scrollHost, key) : null;
-  if (keyChanged && hostState.__stickBottom) hostState.__stickBottom = null;
-  if (keyChanged && hostState.__chatShiftAnchor) hostState.__chatShiftAnchor = null;
+  if (keyChanged && viewportRuntime.stickyBottom) viewportRuntime.stickyBottom = null;
+  if (keyChanged && viewportRuntime.shiftAnchor) viewportRuntime.shiftAnchor = null;
   else if (key) {
-    if (shouldStick) hostState.__stickBottom = { key, active: true, at: Date.now() };
-    else if (hostState.__stickBottom && hostState.__stickBottom.key === key) hostState.__stickBottom.active = false;
-  }
-  scrollHost.setAttribute("data-chat-key", key);
-  if (!key && hostState.__chatLinesObserver && typeof hostState.__chatLinesObserver.disconnect === "function") {
-    try {
-      hostState.__chatLinesObserver.disconnect();
-      hostState.__chatLinesObserved = null;
-    } catch {
-      // ignore
+    if (shouldStick) viewportRuntime.stickyBottom = createChatStickyBottomState(scrollHost, key, true);
+    else if (viewportRuntime.stickyBottom && viewportRuntime.stickyBottom.key === key) {
+      viewportRuntime.stickyBottom = createChatStickyBottomState(scrollHost, key, false);
     }
   }
+  scrollHost.setAttribute("data-chat-key", key);
+  if (!key && viewportRuntime.linesObserver) disconnectChatHistoryViewportObserver(scrollHost);
 
   // No selected chat: keep the main area empty (mobile starts from the sidebar tabs).
   if (!key) {
@@ -399,8 +382,7 @@ export function renderChat(layout: Layout, state: AppState) {
   const virtualThreshold = slowNetwork ? 200 : constrained ? 240 : HISTORY_VIRTUAL_THRESHOLD;
   const virtualWindow = slowNetwork ? 160 : constrained ? 200 : HISTORY_VIRTUAL_WINDOW;
   const virtualEnabled = Boolean(key && shouldVirtualize(msgs.length, searchActive, virtualThreshold));
-  const virtualAvgMap: Map<string, number> = hostState.__chatVirtualAvgHeights || new Map();
-  hostState.__chatVirtualAvgHeights = virtualAvgMap;
+  const virtualAvgMap = viewportRuntime.virtualAvgHeights;
   const avgHeight = clampVirtualAvg(key ? virtualAvgMap.get(key) : null);
   const maxVirtualStart = getVirtualMaxStart(msgs.length, virtualWindow);
   const preferredStart = virtualEnabled && shouldStick ? maxVirtualStart : state.historyVirtualStart?.[key];
@@ -408,242 +390,54 @@ export function renderChat(layout: Layout, state: AppState) {
   const virtualEnd = virtualEnabled ? getVirtualEnd(msgs.length, virtualStart, virtualWindow) : msgs.length;
   const topSpacerHeight = virtualEnabled ? Math.max(0, virtualStart) * avgHeight : 0;
   const bottomSpacerHeight = virtualEnabled ? Math.max(0, msgs.length - virtualEnd) * avgHeight : 0;
-  const lineItems: HTMLElement[] = [];
   const lines: HTMLElement[] = [];
-  let prevDay = "";
-  let prevMsg: ChatMessage | null = null;
-  const unreadMap: Map<string, UnreadDividerAnchor> = hostState.__chatUnreadAnchors || new Map();
-  hostState.__chatUnreadAnchors = unreadMap;
+  const unreadMap = viewportRuntime.unreadAnchors;
   if (keyChanged && key) {
     unreadMap.delete(key);
-    const armed: Set<string> | undefined = hostState.__chatUnreadClearArmed;
-    if (armed && typeof armed.delete === "function") armed.delete(key);
+    viewportRuntime.unreadClearArmed.delete(key);
   }
 
-  let unreadIdx = -1;
-  let unreadCount = 0;
-
-  if (!searchActive && key) {
-    const saved = unreadMap.get(key);
-    if (saved) {
-      const idx = findUnreadAnchorIndex(msgs, saved);
-      if (idx >= 0) {
-        unreadIdx = idx;
-      }
-    }
+  const unreadResolved = resolveUnreadDivider({
+    key,
+    msgs,
+    searchActive,
+    selected: state.selected,
+    friends: state.friends,
+    lastRead: state.lastRead,
+    savedAnchor: key ? unreadMap.get(key) ?? null : null,
+    virtualEnabled,
+    virtualStart,
+  });
+  if (key && unreadResolved.anchor && (unreadResolved.anchor.msgKey || unreadResolved.anchor.msgId !== undefined)) {
+    unreadMap.set(key, unreadResolved.anchor);
   }
 
-  if (unreadIdx < 0 && state.selected?.kind === "dm" && !searchActive) {
-    const peerId = String(state.selected?.id || "").trim();
-    const unread = (state.friends || []).find((f) => f.id === peerId)?.unread ?? 0;
-    if (unread > 0 && msgs.length > 0) {
-      let idx = Math.max(0, Math.min(msgs.length - 1, msgs.length - unread));
-      while (idx < msgs.length && msgs[idx]?.kind === "sys") idx += 1;
-      if (idx < msgs.length) unreadIdx = idx;
-    }
-  } else if (unreadIdx < 0 && !searchActive && key) {
-    const marker = state.lastRead?.[key];
-    const lastReadId = Number(marker?.id ?? 0);
-    const lastReadAt = Number(marker?.ts ?? 0);
-    if (lastReadId > 0 && msgs.length > 0) {
-      const idx = msgs.findIndex((m) => Number(m?.id ?? 0) > lastReadId);
-      if (idx >= 0) unreadIdx = idx;
-    } else if (lastReadAt > 0 && msgs.length > 0) {
-      const idx = msgs.findIndex((m) => Number(m?.ts ?? 0) > lastReadAt);
-      if (idx >= 0) unreadIdx = idx;
-    }
-  }
-
-  if (!searchActive && key && unreadIdx >= 0 && unreadIdx < msgs.length) {
-    unreadCount = Math.max(0, msgs.length - unreadIdx);
-    const anchor = unreadAnchorForMessage(msgs[unreadIdx]);
-    if (anchor.msgKey || anchor.msgId !== undefined) unreadMap.set(key, anchor);
-  }
-
-  const unreadInsertIdx = unreadIdx >= 0 && virtualEnabled && unreadIdx < virtualStart ? virtualStart : unreadIdx;
-  if (virtualEnabled && virtualStart > 0) {
-    const prev = msgs[virtualStart - 1];
-    if (prev) {
-      prevDay = dayKey(prev.ts);
-      prevMsg = prev.kind === "sys" ? null : prev;
-    }
-  }
-  const isGroupTail = (idx: number, msg: ChatMessage) => {
-    const nextIdx = idx + 1;
-    if (nextIdx >= msgs.length) return true;
-    if (nextIdx === unreadInsertIdx) return true;
-    const nextMsg = msgs[nextIdx];
-    if (!nextMsg || nextMsg.kind === "sys") return true;
-    const curDay = dayKey(msg.ts);
-    const nextDay = dayKey(nextMsg.ts);
-    if (curDay && nextDay && curDay !== nextDay) return true;
-    return !isMessageContinuation(msg, nextMsg);
-  };
-  const albumMin = 2;
-  const albumMax = 12;
-  const albumGapSeconds = 121;
-  for (let msgIdx = virtualStart; msgIdx < virtualEnd; msgIdx += 1) {
-    const m = msgs[msgIdx];
-    const dk = dayKey(m.ts);
-    if (dk && dk !== prevDay) {
-      prevDay = dk;
-      lineItems.push(
-        el("div", { class: "msg-sep msg-date", "aria-hidden": "true" }, [el("span", { class: "msg-sep-text" }, [formatDayLabel(m.ts)])])
-      );
-      prevMsg = null;
-    }
-    if (msgIdx === unreadInsertIdx) {
-      const unreadLabel = unreadCount > 0 ? `Непрочитанные (${unreadCount})` : "Непрочитанные";
-      lineItems.push(
-        el("div", { class: "msg-sep msg-unread", role: "separator", "aria-label": unreadLabel }, [
-          el("span", { class: "msg-sep-text" }, [unreadLabel]),
-        ])
-      );
-      prevMsg = null;
-    }
-
-    const info = getFileAttachmentInfo(state, m, { mobileUi });
-    if (isAlbumCandidate(m, info)) {
-      const group: AlbumItem[] = [{ idx: msgIdx, msg: m, info }];
-      let groupCaption: string | null = (() => {
-        const c = extractFileCaptionText(m.text);
-        return c ? c : null;
-      })();
-      let scan = msgIdx + 1;
-      while (scan < virtualEnd) {
-        const next = msgs[scan];
-        if (dk && dayKey(next.ts) !== dk) break;
-        const nextInfo = getFileAttachmentInfo(state, next, { mobileUi });
-        if (!isAlbumCandidate(next, nextInfo)) break;
-        if (!isMessageContinuation(group[group.length - 1].msg, next, { maxGapSeconds: albumGapSeconds })) break;
-        const nextCaption = extractFileCaptionText(next.text);
-        if (groupCaption && nextCaption && nextCaption !== groupCaption) break;
-        if (!groupCaption && nextCaption) groupCaption = nextCaption;
-        group.push({ idx: scan, msg: next, info: nextInfo });
-        scan += 1;
-        if (group.length >= albumMax) break;
-      }
-      if (group.length >= albumMin) {
-		        const groupCounts = (() => {
-		          let selectedCount = 0;
-		          let selectableCount = 0;
-		          for (const item of group) {
-		            const selKey = messageSelectionKey(item.msg);
-		            if (!selKey) continue;
-		            selectableCount += 1;
-		            if (selectionSet && selectionSet.has(selKey)) selectedCount += 1;
-		          }
-		          const anySelected = selectedCount > 0;
-		          const allSelected = selectableCount > 0 && selectedCount === selectableCount;
-		          const partial = anySelected && !allSelected;
-		          return { anySelected, allSelected, partial };
-		        })();
-		        const lastIdx = group[group.length - 1].idx;
-		        const line = renderAlbumLine(state, group, friendLabels, {
-		          selectionMode: selectionCount > 0,
-		          selected: groupCounts.allSelected,
-		          partial: groupCounts.partial,
-		          groupStartIdx: group[0].idx,
-		          groupEndIdx: lastIdx,
-              albumLayout,
-		        });
-		        if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
-		        const lastItem = group[group.length - 1];
-		        if (!boardUi && lastItem?.msg?.kind !== "sys" && isGroupTail(lastItem.idx, lastItem.msg)) line.classList.add("msg-tail");
-		        const hit = hitSet ? group.some((item) => hitSet.has(item.idx)) : false;
-		        const active = activeMsgIdx !== null && group.some((item) => item.idx === activeMsgIdx);
-		        if (groupCounts.anySelected) line.classList.add("msg-selected");
-		        line.setAttribute("data-msg-idx", String(lastIdx));
-		        line.setAttribute("data-msg-group-start", String(group[0].idx));
-		        line.setAttribute("data-msg-group-end", String(lastIdx));
-		        const groupMsgId = Number(group[group.length - 1].msg.id ?? NaN);
-		        if (Number.isFinite(groupMsgId)) line.setAttribute("data-msg-id", String(groupMsgId));
-		        const groupMsgKey = messageSelectionKey(group[group.length - 1].msg);
-		        if (groupMsgKey) line.setAttribute("data-msg-key", groupMsgKey);
-        if (hit) line.classList.add("msg-hit");
-        if (active) line.classList.add("msg-hit-active");
-        lineItems.push(line);
-        prevMsg = group[group.length - 1].msg.kind === "sys" ? null : group[group.length - 1].msg;
-        msgIdx = group[group.length - 1].idx;
-        continue;
-      }
-    }
-
-	    const msgKey = messageSelectionKey(m);
-	    const selected = Boolean(selectionSet && msgKey && selectionSet.has(msgKey));
-	    const line = messageLine(state, m, friendLabels, { mobileUi, boardUi, msgIdx, selectionMode: selectionCount > 0, selected });
-	    if (m.kind !== "sys" && isMessageContinuation(prevMsg, m)) line.classList.add("msg-cont");
-	    if (!boardUi && m.kind !== "sys" && isGroupTail(msgIdx, m)) line.classList.add("msg-tail");
-	    line.setAttribute("data-msg-idx", String(msgIdx));
-	    const msgId = Number(m.id ?? NaN);
-	    if (Number.isFinite(msgId)) line.setAttribute("data-msg-id", String(msgId));
-	    if (msgKey) line.setAttribute("data-msg-key", msgKey);
-	    if (selected) line.classList.add("msg-selected");
-	    if (hitSet?.has(msgIdx)) line.classList.add("msg-hit");
-	    if (activeMsgIdx === msgIdx) line.classList.add("msg-hit-active");
-	    lineItems.push(line);
-	    prevMsg = m.kind === "sys" ? null : m;
-	  }
-
-  // Infinite scroll вверх: загрузка более ранних сообщений запускается автологикой (mountApp.ts).
-  // Здесь показываем только индикатор, когда уже идёт подгрузка.
-  if (key && hasMore && loadingMore) {
-    const loader = el("div", { class: "chat-history-loader", role: "status", "aria-live": "polite" }, ["Загрузка…"]);
-    lineItems.unshift(el("div", { class: "chat-history-more-wrap" }, [loader]));
-  }
-
-  if (key && !historyLoaded && !loadingInitial && lineItems.length) {
-    const retry = el(
-      "button",
-      {
-        class: "btn chat-history-more",
-        type: "button",
-        "data-action": "chat-history-retry",
-        "aria-label": "Повторить загрузку истории",
-      },
-      ["Повторить загрузку"]
-    );
-    lineItems.unshift(el("div", { class: "chat-history-more-wrap" }, [retry]));
-  }
-
-  let isEmptyState = false;
-  if (!lineItems.length) {
-    if (!historyLoaded) {
-      if (loadingInitial) {
-        for (let i = 0; i < 7; i += 1) {
-          lines.push(skeletonMsg(i % 2 === 0 ? "in" : "out", i));
-        }
-      } else {
-        lines.push(
-          el("div", { class: "chat-empty chat-empty-retry" }, [
-            el("div", { class: "chat-empty-title" }, ["История не загружена"]),
-            el("div", { class: "chat-empty-sub" }, ["Проверьте соединение и попробуйте снова"]),
-            el(
-              "button",
-              { class: "btn chat-history-more", type: "button", "data-action": "chat-history-retry", "aria-label": "Повторить загрузку истории" },
-              ["Повторить загрузку"]
-            ),
-          ])
-        );
-        isEmptyState = true;
-      }
-    } else {
-      lines.push(el("div", { class: "chat-empty" }, [el("div", { class: "chat-empty-title" }, ["Пока нет сообщений"])]));
-      isEmptyState = true;
-    }
-  } else {
-    if (virtualEnabled && topSpacerHeight > 0) {
-      const spacer = el("div", { class: "chat-virtual-spacer", "data-virtual-spacer": "top", "aria-hidden": "true" });
-      spacer.style.height = `${topSpacerHeight}px`;
-      lines.push(spacer);
-    }
-    lines.push(...lineItems);
-    if (virtualEnabled && bottomSpacerHeight > 0) {
-      const spacer = el("div", { class: "chat-virtual-spacer", "data-virtual-spacer": "bottom", "aria-hidden": "true" });
-      spacer.style.height = `${bottomSpacerHeight}px`;
-      lines.push(spacer);
-    }
-  }
+  const historySurface = buildHistoryRenderSurface({
+    state,
+    msgs,
+    key,
+    mobileUi,
+    boardUi,
+    friendLabels,
+    selectionCount,
+    selectionSet,
+    hitSet,
+    activeMsgIdx,
+    historyLoaded,
+    hasMore,
+    loadingMore,
+    loadingInitial,
+    virtualEnabled,
+    virtualStart,
+    virtualEnd,
+    topSpacerHeight,
+    bottomSpacerHeight,
+    unreadInsertIdx: unreadResolved.unreadInsertIdx,
+    unreadCount: unreadResolved.unreadCount,
+    albumLayout,
+  });
+  lines.push(...historySurface.lines);
+  const isEmptyState = historySurface.isEmptyState;
   const titleChildren: Array<string | HTMLElement> = [...chatTitleNodes(state)];
   const chatSearchEnabled = !mobileUi;
   const showChatSearchToggle = false;
@@ -686,364 +480,48 @@ export function renderChat(layout: Layout, state: AppState) {
     }
   }
 
-  let searchBar: HTMLElement | null = null;
-  if (state.selected && state.chatSearchOpen && chatSearchEnabled) {
-    const input = el("input", {
-      class: "modal-input chat-search-input",
-      id: "chat-search-input",
-      type: "search",
-      placeholder: "Найти в чате…",
-      "data-ios-assistant": "off",
-      autocomplete: "off",
-      autocorrect: "off",
-      autocapitalize: "off",
-      spellcheck: "false",
-      inputmode: "text",
-      enterkeyhint: "search",
-    }) as HTMLInputElement;
-    input.value = state.chatSearchQuery || "";
-    const row = el("div", { class: "chat-search-row" }, [input]);
-    const filters: HTMLElement[] = [];
-    const counts = state.chatSearchCounts || { all: 0, media: 0, files: 0, links: 0, audio: 0 };
-    const hasQuery = Boolean((state.chatSearchQuery || "").trim());
-    if (hasQuery) {
-      for (const item of CHAT_SEARCH_FILTERS) {
-        const count = item.id === "all" ? counts.all : counts[item.id] || 0;
-        const active = item.id === state.chatSearchFilter;
-        const disabled = item.id !== "all" && count === 0;
-        const btn = el(
-          "button",
-          {
-            class: `chat-search-filter${active ? " is-active" : ""}`,
-            type: "button",
-            role: "tab",
-            "aria-selected": active ? "true" : "false",
-            "data-action": "chat-search-filter",
-            "data-filter": item.id,
-            ...(disabled ? { disabled: "true" } : {}),
-          },
-          [item.label, el("span", { class: "chat-search-filter-count" }, [String(count)])]
-        );
-        filters.push(btn);
-      }
-    }
-    const filterRow = filters.length ? el("div", { class: "chat-search-filters", role: "tablist" }, filters) : null;
-    searchBar = el("div", { class: "chat-search" }, [row, ...(filterRow ? [filterRow] : [])]);
-  }
+  const searchBar = renderChatSearchBarSurface(state, chatSearchEnabled);
 
-  let searchFooter: HTMLElement | null = null;
-  if (state.selected && state.chatSearchOpen) {
-    const total = hits.length;
-    const hasQuery = Boolean((state.chatSearchQuery || "").trim());
-    const countLabel = total ? `${Math.min(activePos + 1, total)}/${total}` : hasQuery ? "0/0" : "";
-    const count = el(
-      "span",
-      { class: `chat-search-count${hasQuery ? "" : " is-empty"}`, "aria-live": "polite" },
-      [countLabel || ""]
-    );
-    const dateInput = el("input", {
-      class: "modal-input chat-search-date",
-      id: "chat-search-date",
-      type: "date",
-      "aria-label": "Перейти к дате",
-    }) as HTMLInputElement;
-    dateInput.value = state.chatSearchDate || "";
-    const dateClear = el(
-      "button",
-      {
-        class: "btn chat-search-date-clear",
-        type: "button",
-        title: "Сбросить дату",
-        "data-action": "chat-search-date-clear",
-        ...(dateInput.value ? {} : { disabled: "true" }),
-      },
-      ["×"]
-    );
-    const btnPrev = el(
-      "button",
-      {
-        class: "btn chat-search-nav",
-        type: "button",
-        "data-action": "chat-search-prev",
-        "aria-label": "Предыдущий результат",
-        ...(total ? {} : { disabled: "true" }),
-      },
-      ["↑"]
-    );
-    const btnNext = el(
-      "button",
-      {
-        class: "btn chat-search-nav",
-        type: "button",
-        "data-action": "chat-search-next",
-        "aria-label": "Следующий результат",
-        ...(total ? {} : { disabled: "true" }),
-      },
-      ["↓"]
-    );
-    const controls = el("div", { class: "chat-search-controls" }, [btnPrev, btnNext]);
-    const footerClass = `chat-search-footer-row${searchResultsOpen ? " is-open" : ""}`;
-    searchFooter = el(
-      "div",
-      { class: footerClass, "data-action": "chat-search-results-toggle", "aria-expanded": searchResultsOpen ? "true" : "false" },
-      [count, dateInput, dateClear, controls]
-    );
-  }
+  renderSearchAuxDeferred({
+    layout,
+    state,
+    msgs,
+    hits,
+    activePos,
+    searchResultsOpen,
+    friendLabels,
+  });
 
-  if (searchResultsOpen) {
-    const maxResults = 200;
-    const totalHits = hits.length;
-    let windowStart = 0;
-    let windowHits = hits;
-    if (totalHits > maxResults) {
-      const half = Math.floor(maxResults / 2);
-      const clampStart = Math.max(0, Math.min(totalHits - maxResults, activePos - half));
-      windowStart = clampStart;
-      windowHits = hits.slice(windowStart, windowStart + maxResults);
-    }
-    const rows: HTMLElement[] = [];
-    const showFrom = Boolean(state.selected && state.selected.kind !== "dm");
-    for (let i = 0; i < windowHits.length; i += 1) {
-      const msgIdx = windowHits[i];
-      const m = msgs[msgIdx];
-      if (!m) continue;
-      const hitPos = windowStart + i;
-      const preview = trimSearchPreview(searchResultPreview(m));
-      const textEl = el("div", { class: "chat-search-result-text" }, [preview]);
-      const metaItems: HTMLElement[] = [];
-      if (showFrom && m.kind !== "sys") {
-        metaItems.push(el("span", { class: "chat-search-result-from" }, [resolveUserLabel(state, m.from, friendLabels)]));
-      }
-      const time = typeof m.ts === "number" && Number.isFinite(m.ts) ? formatTime(m.ts) : "";
-      if (time) {
-        metaItems.push(el("span", { class: "chat-search-result-time" }, [time]));
-      }
-      const body = el("div", { class: "chat-search-result-body" }, [textEl, ...(metaItems.length ? [el("div", { class: "chat-search-result-meta" }, metaItems)] : [])]);
-      const active = hitPos === activePos;
-      rows.push(
-        el(
-          "button",
-          {
-            class: `chat-search-result${active ? " is-active" : ""}`,
-            type: "button",
-            "data-action": "chat-search-result",
-            "data-msg-idx": String(msgIdx),
-            "data-hit-pos": String(hitPos),
-            ...(active ? { "aria-current": "true" } : {}),
-          },
-          [body]
-        )
-      );
-    }
-    if (!rows.length) {
-      rows.push(el("div", { class: "chat-search-results-empty" }, ["Ничего не найдено"]));
-    }
-    const list = el("div", { class: "chat-search-results-list", role: "list" }, rows);
-    const header =
-      totalHits > maxResults
-        ? el("div", { class: "chat-search-results-hint" }, [
-            `Показаны ${windowStart + 1}–${windowStart + windowHits.length} из ${totalHits}`,
-          ])
-        : null;
-    layout.chatSearchResults.classList.remove("hidden");
-    layout.chatSearchResults.replaceChildren(...(header ? [header, list] : [list]));
-  } else {
-    layout.chatSearchResults.classList.add("hidden");
-    layout.chatSearchResults.replaceChildren();
-  }
-
-  let pinnedBar: HTMLElement | null = null;
   const pinnedSig = Array.isArray(pinnedIds) && pinnedIds.length ? pinnedIds.join(",") : "";
   const pinnedHiddenSig = key ? String(state.pinnedBarHidden?.[key] || "") : "";
   const pinnedHidden = Boolean(pinnedSig && pinnedHiddenSig && pinnedHiddenSig === pinnedSig);
-  if (!pinnedHidden && Array.isArray(pinnedIds) && pinnedIds.length) {
-    const activeId = typeof activeRaw === "number" && pinnedIds.includes(activeRaw) ? activeRaw : pinnedIds[0];
-    const activeIdx = Math.max(0, pinnedIds.indexOf(activeId));
-    const pinnedMsg = msgs.find((m) => typeof m.id === "number" && m.id === activeId) || null;
-    const previewRaw =
-      pinnedMsg?.attachment?.kind === "file"
-        ? `Файл: ${String(pinnedMsg.attachment.name || "файл")}`
-        : String(pinnedMsg?.text || "").trim() || `Сообщение #${activeId}`;
-    const preview = previewRaw.length > 140 ? `${previewRaw.slice(0, 137)}…` : previewRaw;
-    const titleNodes: Array<string | HTMLElement> = ["Закреплено"];
-    if (pinnedIds.length > 1) {
-      titleNodes.push(
-        el("span", { class: "chat-pinned-count", "aria-label": `Закреп ${activeIdx + 1} из ${pinnedIds.length}` }, [
-          `${activeIdx + 1}/${pinnedIds.length}`,
-        ])
-      );
-    }
-
-    const jumpBtn = el(
-      "button",
-      { class: "chat-pinned-body", type: "button", "data-action": "chat-pinned-jump", "aria-label": "Показать закреплённое сообщение" },
-      [
-        el("div", { class: "chat-pinned-main" }, [
-          el("span", { class: "chat-pinned-title" }, titleNodes),
-          el("span", { class: "chat-pinned-text" }, [preview]),
-        ]),
-        el("span", { class: "chat-pinned-jump", "aria-hidden": "true" }, ["→"]),
-      ]
-    );
-    const closeBtn = el("button", { class: "btn chat-pinned-close", type: "button", "data-action": "chat-pinned-hide", "aria-label": "Скрыть" }, [
-      "×",
-    ]);
-    const actions: HTMLElement[] = [];
-    if (pinnedIds.length > 1) {
-      actions.push(el("button", { class: "btn chat-pinned-nav", type: "button", "data-action": "chat-pinned-list", "aria-label": "Все закрепы" }, ["≡"]));
-    }
-    actions.push(closeBtn);
-    pinnedBar = el("div", { class: "chat-pinned", role: "note" }, [
-      jumpBtn,
-      el("div", { class: "chat-pinned-actions" }, actions),
-    ]);
+  const pinnedBar = renderPinnedDeferred({
+    msgs,
+    pinnedIds,
+    activeRaw: typeof activeRaw === "number" ? activeRaw : null,
+    pinnedHidden,
+  });
+  if (!pinnedBar) {
+    clearDeferredPinnedSurface();
   }
 
   const topChildren: HTMLElement[] = [el("div", { class: "chat-title" }, titleChildren)];
   if (pinnedBar) topChildren.push(pinnedBar);
   if (searchBar) topChildren.push(searchBar);
   layout.chatTop.replaceChildren(...topChildren);
-  if (searchFooter) {
-    layout.chatSearchFooter.classList.remove("hidden");
-    layout.chatSearchFooter.replaceChildren(searchFooter);
-  } else {
-    layout.chatSearchFooter.classList.add("hidden");
-    layout.chatSearchFooter.replaceChildren();
+  if (searchBar) {
+    const nextSearchFilterScrollKey = `${key}|${state.chatSearchOpen ? 1 : 0}|${state.chatSearchFilter}|${Boolean((state.chatSearchQuery || "").trim()) ? 1 : 0}`;
+    if (hostState.__chatSearchFilterScrollKey !== nextSearchFilterScrollKey) {
+      hostState.__chatSearchFilterScrollKey = nextSearchFilterScrollKey;
+      keepActiveControlVisible(searchBar, ".chat-search-filter.is-active");
+    }
+  } else if (hostState.__chatSearchFilterScrollKey) {
+    hostState.__chatSearchFilterScrollKey = "";
   }
   if (selectionCount > 0) {
-    const selectedMsgs =
-      selectionSet && selectionSet.size
-        ? msgs.filter((msg) => {
-            const selKey = messageSelectionKey(msg);
-            return Boolean(selKey && selectionSet.has(selKey));
-          })
-        : [];
-    const canCopy = selectedMsgs.some((msg) => {
-      if (!msg) return false;
-      const raw = String(msg.text || "").trim();
-      if (raw && !raw.startsWith("[file]")) return true;
-      const att = msg.attachment;
-      if (att?.kind === "file") return Boolean(String(att.name || "").trim());
-      return false;
-    });
-    const fileIds = (() => {
-      const out = new Set<string>();
-      for (const msg of selectedMsgs) {
-        const fid = msg?.attachment?.kind === "file" ? String(msg.attachment.fileId || "").trim() : "";
-        if (fid) out.add(fid);
-      }
-      return out;
-    })();
-    const scheduledCount = selectedMsgs.filter((msg) => {
-      const at = typeof msg?.scheduleAt === "number" && Number.isFinite(msg.scheduleAt) ? Math.trunc(msg.scheduleAt) : 0;
-      return at > Date.now() + 1200;
-    }).length;
-    const pinCandidates = selectedMsgs
-      .map((msg) => (typeof msg.id === "number" && Number.isFinite(msg.id) ? Math.trunc(msg.id) : 0))
-      .filter((id) => id > 0);
-    const canPin = pinCandidates.length === 1;
-    const allPinned = canPin && pinCandidates.every((id) => isPinnedMessage(state.pinnedMessages, key, id));
-    const pinLabel = allPinned ? "📍" : "📌";
-    const pinTitle = allPinned ? "Открепить" : "Закрепить";
-    const cancelBtn = el(
-      "button",
-      {
-        class: "btn chat-selection-cancel",
-        type: "button",
-        "data-action": "chat-selection-cancel",
-        "aria-label": "Отменить выбор",
-      },
-      ["×"]
-    );
-    const countNode = el("div", { class: "chat-selection-count" }, [formatSelectionCount(selectionCount)]);
-    const forwardBtn = el(
-      "button",
-      {
-        class: "btn chat-selection-action",
-        type: "button",
-        "data-action": "chat-selection-forward",
-        "aria-label": "Переслать выбранные сообщения",
-        title: "Переслать",
-      },
-      ["↪"]
-    );
-    const copyBtn = el(
-      "button",
-      {
-        class: "btn chat-selection-action",
-        type: "button",
-        "data-action": "chat-selection-copy",
-        "aria-label": "Скопировать выбранные сообщения",
-        title: "Скопировать",
-        ...(canCopy ? {} : { disabled: "true" }),
-      },
-      ["📋"]
-    );
-    const downloadBtn =
-      fileIds.size > 0
-        ? el(
-            "button",
-            {
-              class: "btn chat-selection-action",
-              type: "button",
-              "data-action": "chat-selection-download",
-              "aria-label": "Скачать выбранные файлы",
-              title: "Скачать",
-            },
-            ["⬇️"]
-          )
-        : null;
-    const sendNowBtn =
-      scheduledCount > 0
-        ? el(
-            "button",
-            {
-              class: "btn chat-selection-action",
-              type: "button",
-              "data-action": "chat-selection-send-now",
-              "aria-label": "Отправить сейчас выбранные сообщения из очереди",
-              title: "Отправить сейчас",
-            },
-            ["⚡"]
-          )
-        : null;
-    const deleteBtn = el(
-      "button",
-      {
-        class: "btn chat-selection-action chat-selection-danger",
-        type: "button",
-        "data-action": "chat-selection-delete",
-        "aria-label": "Удалить выбранные сообщения",
-        title: "Удалить",
-      },
-      ["🗑️"]
-    );
-    const pinBtn = canPin
-      ? el(
-          "button",
-          {
-            class: "btn chat-selection-action",
-            type: "button",
-            "data-action": "chat-selection-pin",
-            "aria-label": pinTitle,
-            title: pinTitle,
-          },
-          [pinLabel]
-        )
-      : null;
-    const actions = el("div", { class: "chat-selection-actions" }, [
-      forwardBtn,
-      copyBtn,
-      ...(downloadBtn ? [downloadBtn] : []),
-      ...(sendNowBtn ? [sendNowBtn] : []),
-      deleteBtn,
-      ...(pinBtn ? [pinBtn] : []),
-    ]);
-    const left = el("div", { class: "chat-selection-container-left" }, [cancelBtn, countNode]);
-    const right = el("div", { class: "chat-selection-container-right" }, [actions]);
-    const inner = el("div", { class: "chat-selection-inner" }, [left, right]);
+    const inner = renderChatSelectionBarSurface({ state, msgs, selectionSet, selectionCount, key });
     layout.chatSelectionBar.classList.remove("hidden");
-    layout.chatSelectionBar.replaceChildren(inner);
+    layout.chatSelectionBar.replaceChildren(...(inner ? [inner] : []));
   } else {
     layout.chatSelectionBar.classList.add("hidden");
     layout.chatSelectionBar.replaceChildren();
@@ -1092,49 +570,51 @@ export function renderChat(layout: Layout, state: AppState) {
   // Keep the chat pinned to bottom on content height changes, or preserve a visible anchor when not pinned.
   if (key && typeof ResizeObserver === "function") {
     try {
-      if (!hostState.__chatLinesObserver) {
-        hostState.__chatLinesObserverRaf = null;
-        hostState.__chatLinesObserver = new ResizeObserver(() => {
+      if (!viewportRuntime.linesObserver) {
+        viewportRuntime.linesObserverRaf = null;
+        viewportRuntime.linesObserver = new ResizeObserver(() => {
           const w = typeof window !== "undefined" ? window : null;
-          if (hostState.__chatLinesObserverRaf !== null) return;
+          if (viewportRuntime.linesObserverRaf !== null) return;
           const run = () => {
-            hostState.__chatLinesObserverRaf = null;
+            viewportRuntime.linesObserverRaf = null;
             const curKey = String(scrollHost.getAttribute("data-chat-key") || "");
             if (!curKey) return;
-            const st = hostState.__stickBottom;
-            if (st && st.active && st.key === curKey) {
+            const st = viewportRuntime.stickyBottom;
+            if (isChatStickyBottomActive(scrollHost, st, curKey)) {
               scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
+              viewportRuntime.stickyBottom = createChatStickyBottomState(scrollHost, curKey, true);
               return;
             }
-            const anchor = hostState.__chatShiftAnchor as ChatShiftAnchor | null;
+            const anchor = viewportRuntime.shiftAnchor as ChatShiftAnchor | null;
             if (!anchor || anchor.key !== curKey) return;
             if (Math.abs(scrollHost.scrollTop - anchor.scrollTop) > 2) {
-              hostState.__chatShiftAnchor = captureChatShiftAnchor(scrollHost, curKey);
+              viewportRuntime.shiftAnchor = captureChatShiftAnchor(scrollHost, curKey);
               return;
             }
             const anchorEl = findChatShiftAnchorElement(scrollHost, anchor);
             if (!anchorEl) return;
             const rect = anchorEl.getBoundingClientRect();
-            const delta = rect.bottom - anchor.rectBottom;
+            const delta = rect.top - anchor.rectTop;
             if (Math.abs(delta) >= 1) {
               scrollHost.scrollTop += delta;
+              markHistoryViewportCompensation(scrollHost);
             }
-            anchor.rectBottom = rect.bottom;
+            anchor.rectTop = rect.top;
             anchor.scrollTop = scrollHost.scrollTop;
           };
           if (w && typeof w.requestAnimationFrame === "function") {
-            hostState.__chatLinesObserverRaf = w.requestAnimationFrame(run);
+            viewportRuntime.linesObserverRaf = w.requestAnimationFrame(run);
           } else {
-            hostState.__chatLinesObserverRaf = 1;
+            viewportRuntime.linesObserverRaf = 1;
             run();
           }
         });
       }
       const linesEl = scrollHost.firstElementChild as HTMLElement | null;
-      if (linesEl && hostState.__chatLinesObserved !== linesEl) {
-        hostState.__chatLinesObserver.disconnect();
-        hostState.__chatLinesObserver.observe(linesEl);
-        hostState.__chatLinesObserved = linesEl;
+      if (linesEl && viewportRuntime.linesObserved !== linesEl && viewportRuntime.linesObserver) {
+        viewportRuntime.linesObserver.disconnect();
+        viewportRuntime.linesObserver.observe(linesEl);
+        viewportRuntime.linesObserved = linesEl;
       }
     } catch {
       // ignore
@@ -1152,10 +632,13 @@ export function renderChat(layout: Layout, state: AppState) {
         const anchorEl = findChatShiftAnchorElement(scrollHost, preShiftAnchor);
         if (anchorEl) {
           const rect = anchorEl.getBoundingClientRect();
-          const delta = rect.bottom - preShiftAnchor.rectBottom;
+          const delta = rect.top - preShiftAnchor.rectTop;
           if (Math.abs(delta) >= 1) {
             const corrected = Math.max(0, Math.min(maxTop, scrollHost.scrollTop + delta));
-            if (Math.abs(scrollHost.scrollTop - corrected) >= 1) scrollHost.scrollTop = corrected;
+            if (Math.abs(scrollHost.scrollTop - corrected) >= 1) {
+              scrollHost.scrollTop = corrected;
+              markHistoryViewportCompensation(scrollHost);
+            }
           }
         }
       }
@@ -1168,16 +651,17 @@ export function renderChat(layout: Layout, state: AppState) {
   if (shouldStick) {
     const stickNow = () => {
       const curKey = String(scrollHost.getAttribute("data-chat-key") || "");
-      const st = hostState.__stickBottom;
+      const st = viewportRuntime.stickyBottom;
       if (!curKey || curKey !== key) return;
-      if (!st || !st.active || st.key !== key) return;
+      if (!isChatStickyBottomActive(scrollHost, st, key)) return;
       scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
+      viewportRuntime.stickyBottom = createChatStickyBottomState(scrollHost, key, true);
     };
     queueMicrotask(stickNow);
   }
   if (key && !shouldStick) {
-    hostState.__chatShiftAnchor = captureChatShiftAnchor(scrollHost, key);
-  } else if (hostState.__chatShiftAnchor) {
-    hostState.__chatShiftAnchor = null;
+    captureAndStoreChatShiftAnchor(scrollHost, key);
+  } else if (viewportRuntime.shiftAnchor) {
+    viewportRuntime.shiftAnchor = null;
   }
 }

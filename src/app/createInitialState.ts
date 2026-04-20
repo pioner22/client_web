@@ -19,8 +19,8 @@ export function createInitialState(): AppState {
   const status = autoBlocked
     ? "Сессия активна в другом окне. Нажмите «Войти», чтобы продолжить здесь."
     : authMode === "auto"
-      ? "Автовход…"
-      : "Connecting…";
+      ? "Проверяем сохранённую сессию…"
+      : "Подключаемся к серверу…";
   const pushSupported = (() => {
     try {
       return Boolean(
@@ -110,7 +110,7 @@ export function createInitialState(): AppState {
     chatSearchFilter: "all",
     chatSearchHits: [],
     chatSearchPos: 0,
-    chatSearchCounts: { all: 0, media: 0, files: 0, links: 0, audio: 0 },
+    chatSearchCounts: { all: 0, media: 0, files: 0, links: 0, music: 0, voice: 0 },
     page: "main",
     rightPanel: null,
     userViewId: null,
@@ -125,6 +125,8 @@ export function createInitialState(): AppState {
     profileDraftHandle: "",
     profileDraftBio: "",
     profileDraftStatus: "",
+    sessionDevices: [],
+    sessionDevicesStatus: null,
     // “В тишине”: auth-модалку открываем только по явному действию пользователя («Войти»).
     toast: null,
     modal: { kind: "welcome" },

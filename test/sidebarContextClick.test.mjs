@@ -32,7 +32,7 @@ async function loadRenderSidebar() {
   }
 }
 
-function withDomStubs(run) {
+async function withDomStubs(run) {
   const prev = {
     document: globalThis.document,
     window: globalThis.window,
@@ -132,10 +132,15 @@ function withDomStubs(run) {
   };
   globalThis.window = {
     matchMedia: () => ({ matches: false }),
+    requestAnimationFrame: (cb) => {
+      cb();
+      return 1;
+    },
+    cancelAnimationFrame: () => {},
   };
 
   try {
-    return run();
+    return await run();
   } finally {
     if (prev.document === undefined) delete globalThis.document;
     else globalThis.document = prev.document;
@@ -154,6 +159,11 @@ function withDomStubs(run) {
   }
 }
 
+async function flushLazySidebarRender() {
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function findFirst(node, predicate) {
   if (!node) return null;
   if (predicate(node)) return node;
@@ -170,7 +180,7 @@ function findFirst(node, predicate) {
 test("sidebar: Ctrl+Click/ПКМ не активирует строку (не меняет выбранный чат)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const calls = [];
       const target = document.createElement("div");
       const state = {
@@ -207,6 +217,7 @@ test("sidebar: Ctrl+Click/ПКМ не активирует строку (не м
         () => {},
         () => {}
       );
+      await flushLazySidebarRender();
 
       const btn = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
       assert.ok(btn, "row button not found");
@@ -227,7 +238,7 @@ test("sidebar: Ctrl+Click/ПКМ не активирует строку (не м
 test("sidebar: avatarsRev инвалидирует рендер (локальные аватары обновляются без перезагрузки)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const prevLocalStorage = globalThis.localStorage;
       const store = new Map();
       globalThis.localStorage = {
@@ -258,6 +269,7 @@ test("sidebar: avatarsRev инвалидирует рендер (локальн�
         };
 
         helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
 
         const btn = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
         assert.ok(btn, "row button not found");
@@ -269,6 +281,7 @@ test("sidebar: avatarsRev инвалидирует рендер (локальн�
         state.avatarsRev += 1;
 
         helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
 
         const btn2 = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
         assert.ok(btn2, "row button not found after rerender");
@@ -288,7 +301,7 @@ test("sidebar: avatarsRev инвалидирует рендер (локальн�
 test("sidebar: показывает display_name вместо ID (если известен профиль)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const target = document.createElement("div");
       const state = {
         friends: [{ id: "123-456-789", online: true, unread: 0 }],
@@ -323,6 +336,7 @@ test("sidebar: показывает display_name вместо ID (если из�
         () => {},
         () => {}
       );
+      await flushLazySidebarRender();
 
       const btn = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
       assert.ok(btn, "row button not found");
@@ -340,7 +354,7 @@ test("sidebar: показывает display_name вместо ID (если из�
 test("sidebar: «Ожидают» убраны, а pending подсвечивает контакт (row-attn)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const target = document.createElement("div");
       const state = {
         friends: [],
@@ -374,6 +388,7 @@ test("sidebar: «Ожидают» убраны, а pending подсвечива�
         () => {},
         () => {}
       );
+      await flushLazySidebarRender();
 
       const hasPendingSection = findFirst(
         target,

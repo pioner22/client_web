@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -65,6 +66,16 @@ function withDomStubs(run) {
         }
       }
       this._syncTo();
+    }
+    toggle(name, force) {
+      const part = String(name || "").trim();
+      if (!part) return false;
+      const has = this._owner._classSet.has(part);
+      const shouldHave = force === undefined ? !has : Boolean(force);
+      if (shouldHave) this._owner._classSet.add(part);
+      else this._owner._classSet.delete(part);
+      this._syncTo();
+      return shouldHave;
     }
   }
 
@@ -172,6 +183,24 @@ function findFirst(node, predicate) {
   return null;
 }
 
+function findAll(node, predicate, out = []) {
+  if (!node) return out;
+  if (predicate(node)) out.push(node);
+  const kids = Array.isArray(node._children) ? node._children : [];
+  for (const k of kids) {
+    if (k && typeof k === "object") findAll(k, predicate, out);
+  }
+  return out;
+}
+
+function collectText(node) {
+  if (node == null) return "";
+  if (typeof node === "string") return node;
+  if (typeof node.textContent === "string") return node.textContent;
+  const kids = Array.isArray(node._children) ? node._children : [];
+  return kids.map((k) => collectText(k)).join("");
+}
+
 test("renderFileViewerModal: renders <video> for video files", async () => {
   const helper = await loadRenderFileViewerModal();
   try {
@@ -180,6 +209,8 @@ test("renderFileViewerModal: renders <video> for video files", async () => {
       const video = findFirst(node, (n) => n && n.tagName === "VIDEO");
       assert.ok(video, "video element missing");
       assert.ok(String(video.className || "").includes("viewer-video"));
+      assert.ok(String(node.className || "").includes("viewer-kind-video"));
+      assert.ok(!String(node.className || "").includes("viewer-video"), "modal root must not reuse the video element class");
     });
   } finally {
     await helper.cleanup();
@@ -208,8 +239,86 @@ test("renderFileViewerModal: renders <audio> for audio files", async () => {
       const audio = findFirst(node, (n) => n && n.tagName === "AUDIO");
       assert.ok(audio, "audio element missing");
       assert.ok(String(audio.className || "").includes("viewer-audio"));
+      assert.ok(String(node.className || "").includes("viewer-kind-audio"));
+      assert.ok(!String(node.className || "").includes("viewer-audio"), "modal root must not reuse the audio element class");
     });
   } finally {
     await helper.cleanup();
   }
+});
+
+test("renderFileViewerModal: visual viewer uses explicit footer shell with counter and rail", async () => {
+  const helper = await loadRenderFileViewerModal();
+  try {
+    withDomStubs(() => {
+      const node = helper.renderFileViewerModal(
+        "blob:image",
+        "photo.jpg",
+        321,
+        "image/jpeg",
+        "Подпись к фото",
+        {
+          rail: [
+            { msgIdx: 1, name: "one.jpg", kind: "image", thumbUrl: "blob:one" },
+            { msgIdx: 2, name: "two.jpg", kind: "image", thumbUrl: "blob:two", active: true },
+            { msgIdx: 3, name: "three.mp4", kind: "video", thumbUrl: "blob:three" },
+          ],
+        },
+        { onClose() {}, onOpenAt() {} }
+      );
+      const stage = findFirst(node, (n) => n && String(n.className || "").includes("viewer-stage"));
+      assert.ok(stage, "viewer stage missing");
+      const footer = findFirst(node, (n) => n && String(n.className || "").includes("viewer-footer-shell"));
+      assert.ok(footer, "viewer footer shell missing");
+      const footerInsideStage = findFirst(stage, (n) => n && String(n.className || "").includes("viewer-footer-shell"));
+      assert.equal(footerInsideStage, null, "viewer footer must be a sibling row, not an overlay child of the stage");
+      const counter = findFirst(node, (n) => n && String(n.className || "").includes("viewer-footer-counter"));
+      assert.ok(counter, "viewer footer counter missing");
+      assert.match(collectText(counter), /2 из 3/);
+      const railItems = findAll(node, (n) => n && String(n.className || "").includes("viewer-rail-item"));
+      assert.equal(railItems.length, 3, "viewer rail items mismatch");
+      const caption = findFirst(node, (n) => n && String(n.className || "").includes("viewer-caption-body"));
+      assert.ok(caption, "viewer caption body missing");
+      assert.match(collectText(caption), /Подпись к фото/);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderFileViewerModal: footer shell helper and CSS hooks are present", async () => {
+  const [source, helperSource, mediaKindSource, css] = await Promise.all([
+    readFile(path.resolve("src/components/modals/renderFileViewerModal.ts"), "utf8"),
+    readFile(path.resolve("src/components/modals/viewerFooterShell.ts"), "utf8"),
+    readFile(path.resolve("src/helpers/files/mediaKind.ts"), "utf8"),
+    readFile(path.resolve("src/scss/modal.part02.css"), "utf8"),
+  ]);
+  assert.match(source, /renderViewerFooterShell/);
+  assert.match(source, /isVideoLikeFile/);
+  assert.match(source, /isAudioLikeFile/);
+  assert.match(helperSource, /viewer-footer-shell/);
+  assert.match(helperSource, /viewer-footer-counter/);
+  assert.match(mediaKindSource, /resolveMediaKind/);
+  assert.doesNotMatch(source, /viewer-bottom-ui-h/);
+  assert.match(css, /\.viewer-footer-shell\s*\{/);
+  assert.match(css, /\.viewer-footer-counter\s*\{/);
+  assert.match(css, /video\.viewer-video\s*\{/);
+  assert.match(css, /audio\.viewer-audio\s*\{/);
+  assert.doesNotMatch(css, /viewer-bottom-ui-h/);
+});
+
+test("renderFileViewerModal: mobile overlay header keeps safe-area top padding and compact metadata", async () => {
+  const css = await readFile(path.resolve("src/scss/modal.part02.css"), "utf8");
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header\s*\{[\s\S]*?padding-top:\s*calc\(var\(--viewer-pad\)\s*\+\s*env\(safe-area-inset-top\)\s*\+\s*8px\)\s*;/
+  );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header-actions\s*\{[\s\S]*?align-self:\s*flex-start\s*;/
+  );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-title,\s*[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-sub,\s*[\s\S]*?text-overflow:\s*ellipsis\s*;/
+  );
 });

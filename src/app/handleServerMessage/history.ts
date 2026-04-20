@@ -1,7 +1,8 @@
 import type { GatewayTransport } from "../../lib/net/gatewayClient";
 import type { AppState, ChatMessage, OutboxEntry } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
-import { mergeMessages } from "../../helpers/chat/mergeMessages";
+import { shiftVirtualStartForPrepend } from "../../helpers/chat/historyViewportCoordinator";
+import { mergeMessages, prependedCount } from "../../helpers/chat/mergeMessages";
 import { removeOutboxEntry } from "../../helpers/chat/outbox";
 import { ingestHistoryResult } from "../../helpers/chat/historyIdb";
 import { nowTs } from "../../helpers/time";
@@ -192,6 +193,7 @@ export function handleHistoryServerMessage(
 
     const nextConv = mergeMessages(baseConv, incoming);
     const delta = nextConv.length - baseConv.length;
+    const actualPrependCount = hasBefore ? prependedCount(baseConv, nextConv) : null;
     const cursor = oldestLoadedId(nextConv);
     const prevCursor = (prev as any).historyCursor || {};
     const prevHasMoreMap = (prev as any).historyHasMore || {};
@@ -216,8 +218,10 @@ export function handleHistoryServerMessage(
       prevCursorValue > 0 &&
       cursor === prevCursorValue;
 
-    const shouldShiftVirtual = hasBefore && !isStaleBeforeResponse && typeof prevVirtualStart === "number" && Number.isFinite(prevVirtualStart) && delta > 0;
-    const nextVirtualStart = shouldShiftVirtual ? Math.max(0, prevVirtualStart + delta) : prevVirtualStart;
+    const prependShift =
+      hasBefore && actualPrependCount !== null && actualPrependCount >= 0 ? actualPrependCount : delta;
+    const nextVirtualStart = hasBefore && !isStaleBeforeResponse ? shiftVirtualStartForPrepend(prevVirtualStart, prependShift) : null;
+    const shouldShiftVirtual = nextVirtualStart !== null && nextVirtualStart !== prevVirtualStart;
 
     if (resultRoom && Number.isFinite(readUpToId) && readUpToId > 0) {
       const prevEntry = (nextLastRead || {})[key] || {};
@@ -236,6 +240,7 @@ export function handleHistoryServerMessage(
         before_id: hasBefore ? (Number.isFinite(beforeIdValue) ? beforeIdValue : String(beforeIdRaw)) : null,
         stale_before: isStaleBeforeResponse,
         delta,
+        prepend_shift: prependShift,
         cursor,
         prev_cursor: Number.isFinite(prevCursorValue) ? prevCursorValue : null,
         cursor_stalled: cursorStalled,

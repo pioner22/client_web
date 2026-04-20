@@ -38,8 +38,7 @@ function hasPendingEntries(outbox: OutboxMap): boolean {
 
 export async function syncOutboxToServiceWorker(
   userId: string,
-  outbox: OutboxMap,
-  sessionToken?: string | null
+  outbox: OutboxMap
 ): Promise<void> {
   const uid = String(userId || "").trim();
   if (!uid) return;
@@ -49,7 +48,6 @@ export async function syncOutboxToServiceWorker(
   controller.postMessage({
     type: "PWA_OUTBOX_SYNC",
     userId: uid,
-    session: sessionToken ?? null,
     outbox: payloadOutbox,
   });
 

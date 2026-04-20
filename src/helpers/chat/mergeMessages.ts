@@ -1,6 +1,6 @@
 import type { ChatMessage } from "../../stores/types";
 
-function stableKey(m: ChatMessage): string {
+export function messageStableKey(m: ChatMessage): string {
   if (m.id !== undefined && m.id !== null) return `id:${m.id}`;
   const localId = typeof m.localId === "string" ? m.localId.trim() : "";
   if (localId) return `local:${localId}`;
@@ -18,6 +18,12 @@ function sortId(m: ChatMessage): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function serverId(m: ChatMessage): number | null {
+  const raw = m?.id;
+  const n = typeof raw === "number" ? raw : raw == null ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
 function mergeLocalFields(prev: ChatMessage, next: ChatMessage): ChatMessage {
   const reply = next.reply !== undefined ? next.reply : prev.reply;
   const forward = next.forward !== undefined ? next.forward : prev.forward;
@@ -32,14 +38,17 @@ function mergeLocalFields(prev: ChatMessage, next: ChatMessage): ChatMessage {
 
 export function mergeMessages(prev: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const map = new Map<string, ChatMessage>();
-  for (const m of prev) map.set(stableKey(m), m);
+  for (const m of prev) map.set(messageStableKey(m), m);
   for (const m of incoming) {
-    const key = stableKey(m);
+    const key = messageStableKey(m);
     const existing = map.get(key);
     map.set(key, existing ? mergeLocalFields(existing, m) : m);
   }
   const merged = Array.from(map.values());
   merged.sort((a, b) => {
+    const as = serverId(a);
+    const bs = serverId(b);
+    if (as !== null && bs !== null) return as - bs;
     const at = sortTs(a);
     const bt = sortTs(b);
     if (at !== bt) return at - bt;
@@ -52,4 +61,14 @@ export function mergeMessages(prev: ChatMessage[], incoming: ChatMessage[]): Cha
     return 0;
   });
   return merged;
+}
+
+export function prependedCount(prev: ChatMessage[], next: ChatMessage[]): number | null {
+  if (!Array.isArray(prev) || prev.length === 0) return 0;
+  if (!Array.isArray(next) || next.length === 0) return null;
+  const anchorKey = messageStableKey(prev[0]);
+  for (let idx = 0; idx < next.length; idx += 1) {
+    if (messageStableKey(next[idx]) === anchorKey) return idx;
+  }
+  return null;
 }

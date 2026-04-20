@@ -5,8 +5,11 @@ import { focusElement } from "../../helpers/ui/focus";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { mapKeyboardLayout } from "../../helpers/search/keyboardLayout";
 import { deriveServerSearchQuery } from "../../helpers/search/serverSearchQuery";
+import { buildPivotSearchQuery, extractSearchQueryFilters, type SearchQueryFilters } from "../../helpers/search/searchQueryFilters";
 import { conversationKey } from "../../helpers/chat/conversationKey";
 import { fileBadge } from "../../helpers/files/fileBadge";
+import { classifyAudioAttachment } from "../../helpers/files/audioAttachmentKind";
+import { keepActiveControlVisible } from "../../helpers/ui/keepActiveControlVisible";
 import type { AppState, ChatMessage, SearchResultEntry, TargetRef } from "../../stores/types";
 
 export interface SearchPageActions {
@@ -55,8 +58,6 @@ function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement {
 }
 
 const SEARCH_NORMALIZE_RE = /[^a-z0-9а-яё_@]+/gi;
-const SEARCH_FILTER_FROM_RE = /^(from|от):(.+)$/i;
-const SEARCH_FILTER_TAG_RE = /^#([a-z0-9_а-яё-]{1,64})$/i;
 const CONTACTS_LIMIT = 60;
 const ROOMS_LIMIT = 40;
 const HISTORY_SCAN_LIMIT = 400;
@@ -143,65 +144,6 @@ function formatHandle(handle: string): string {
   const h = String(handle || "").trim();
   if (!h) return "";
   return h.startsWith("@") ? h : `@${h}`;
-}
-
-function extOf(name: string): string {
-  const n = String(name ?? "").trim();
-  const idx = n.lastIndexOf(".");
-  if (idx <= 0 || idx === n.length - 1) return "";
-  return n.slice(idx + 1).toLowerCase();
-}
-
-function classifyAudioAttachment(name: string, mime?: string | null): "voice" | "music" {
-  const mt = String(mime ?? "")
-    .trim()
-    .toLowerCase();
-  const ext = extOf(name);
-  if (mt.includes("opus") || mt.includes("ogg")) return "voice";
-  if (["opus", "ogg", "oga"].includes(ext)) return "voice";
-  if (["mp3", "m4a", "wav", "flac", "aac"].includes(ext)) return "music";
-  return "music";
-}
-
-type SearchQueryFilters = {
-  text: string;
-  from: string;
-  hashtags: string[];
-};
-
-function extractSearchFilters(raw: string): SearchQueryFilters {
-  const tokens = String(raw ?? "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  const rest: string[] = [];
-  const hashtags = new Set<string>();
-  let from = "";
-  for (const token of tokens) {
-    const fromMatch = token.match(SEARCH_FILTER_FROM_RE);
-    if (fromMatch) {
-      const value = String(fromMatch[2] || "").trim();
-      if (value && !from) {
-        from = value;
-        continue;
-      }
-    }
-    const tagMatch = token.match(SEARCH_FILTER_TAG_RE);
-    if (tagMatch) {
-      const tag = String(tagMatch[1] || "").trim().toLowerCase();
-      if (tag) hashtags.add(tag);
-      continue;
-    }
-    rest.push(token);
-  }
-  return { text: rest.join(" "), from, hashtags: Array.from(hashtags) };
-}
-
-function buildOpenQuery(filters: SearchQueryFilters): string {
-  const parts: string[] = [];
-  if (filters.text) parts.push(filters.text);
-  if (filters.hashtags.length) parts.push(...filters.hashtags.map((tag) => `#${tag}`));
-  return parts.join(" ").trim();
 }
 
 function matchesSenderFilter(state: AppState, msg: ChatMessage, rawFilter: string): boolean {
@@ -387,6 +329,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   let cachedDate = "";
   let lastQueryKey = "";
   let lastDateKey = "";
+  let lastTabsScrollKey = "";
+  let lastFilterScrollKey = "";
   let lastState: AppState | null = null;
 
   const resetHistoryPaging = () => {
@@ -810,8 +754,8 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
 
     const qRaw = String(state.searchQuery || "");
     const q = qRaw.trim();
-    const filters = extractSearchFilters(qRaw);
-    const openQuery = buildOpenQuery(filters);
+    const filters = extractSearchQueryFilters(qRaw);
+    const openQuery = buildPivotSearchQuery(filters);
     const canSearchNow = Boolean(deriveServerSearchQuery(qRaw));
 
     if (qRaw !== lastQueryKey) {
@@ -892,6 +836,11 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
         return btn;
       })
     );
+    const nextTabsScrollKey = `${activeTab}|${visibleTabs.map((tab) => tab.id).join(",")}`;
+    if (nextTabsScrollKey !== lastTabsScrollKey) {
+      lastTabsScrollKey = nextTabsScrollKey;
+      keepActiveControlVisible(tabsBar, ".search-tab.is-active");
+    }
 
     const showChatsTab = activeTab === "chats";
     const showChannelsTab = activeTab === "channels";
@@ -947,9 +896,15 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           return btn;
         })
       );
+      const nextFilterScrollKey = `shown|${activeFilter}`;
+      if (nextFilterScrollKey !== lastFilterScrollKey) {
+        lastFilterScrollKey = nextFilterScrollKey;
+        keepActiveControlVisible(filterBar, ".search-filter.is-active");
+      }
     } else {
       filterBar.classList.add("hidden");
       filterBar.replaceChildren();
+      lastFilterScrollKey = "hidden";
     }
     const showDateBar = showHistory && (local.historyCounts.all > 0 || Boolean(activeDate));
     if (showDateBar) {

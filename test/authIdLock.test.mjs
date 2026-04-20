@@ -199,6 +199,18 @@ function findFirst(node, predicate) {
   return null;
 }
 
+function collectText(node) {
+  if (!node) return "";
+  if (typeof node.textContent === "string") return node.textContent;
+  const kids = Array.isArray(node._children) ? node._children : [];
+  let out = "";
+  for (const kid of kids) {
+    if (kid && typeof kid === "object") out += collectText(kid);
+    else if (typeof kid === "string") out += kid;
+  }
+  return out;
+}
+
 test("renderAuthModal: rememberedId не блокирует поле ID и показывает кнопку «Сменить ID»", async () => {
   const helper = await loadRenderAuthModal();
   try {
@@ -216,6 +228,7 @@ test("renderAuthModal: rememberedId не блокирует поле ID и по�
           onLogin: () => {},
           onRegister: () => {},
           onModeChange: () => {},
+          onUseDifferentAccount: () => {},
           onSkinChange: () => {},
           onClose: () => {},
         }
@@ -257,6 +270,7 @@ test("renderAuthModal: без rememberedId поле ID остаётся реда
           onLogin: () => {},
           onRegister: () => {},
           onModeChange: () => {},
+          onUseDifferentAccount: () => {},
           onSkinChange: () => {},
           onClose: () => {},
         }
@@ -271,6 +285,94 @@ test("renderAuthModal: без rememberedId поле ID остаётся реда
         (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-id-edit")
       );
       assert.equal(lockWrap, null, "auth-id-edit wrapper must not be rendered without rememberedId");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderAuthModal: quick-login карточка для rememberedId даёт действие «Другой аккаунт»", async () => {
+  const helper = await loadRenderAuthModal();
+  try {
+    withDomStubs(() => {
+      let switched = 0;
+      const modal = helper.renderAuthModal(
+        "login",
+        "854-432-319",
+        undefined,
+        [{ id: "showcase", title: "Showcase" }],
+        "showcase",
+        {
+          onLogin: () => {},
+          onRegister: () => {},
+          onModeChange: () => {},
+          onUseDifferentAccount: () => {
+            switched += 1;
+          },
+          onSkinChange: () => {},
+          onClose: () => {},
+        }
+      );
+
+      const sessionCard = findFirst(
+        modal,
+        (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-session-card")
+      );
+      assert.ok(sessionCard, "auth-session-card not found");
+      assert.match(collectText(sessionCard), /854-432-319/);
+
+      const hiddenManual = findFirst(
+        modal,
+        (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-manual-id-hidden")
+      );
+      assert.ok(hiddenManual, "hidden manual ID block not found");
+
+      const switchBtn = findFirst(
+        sessionCard,
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Другой аккаунт/.test(collectText(n))
+      );
+      assert.ok(switchBtn, "switch account button not found");
+      const clicks = switchBtn._listeners.get("click") || [];
+      assert.equal(clicks.length, 1);
+      clicks[0]({ type: "click" });
+      assert.equal(switched, 1);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderAuthModal: quick-login сохраняет primary CTA и убирает theme picker из основного потока", async () => {
+  const helper = await loadRenderAuthModal();
+  try {
+    withDomStubs(() => {
+      const modal = helper.renderAuthModal(
+        "login",
+        "854-432-319",
+        undefined,
+        [{ id: "telegram-exact", title: "Telegram (точный)" }],
+        "telegram-exact",
+        {
+          onLogin: () => {},
+          onRegister: () => {},
+          onModeChange: () => {},
+          onUseDifferentAccount: () => {},
+          onSkinChange: () => {},
+          onClose: () => {},
+        }
+      );
+
+      const primaryBtn = findFirst(
+        modal,
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Войти/.test(collectText(n))
+      );
+      assert.ok(primaryBtn, "primary login button not found");
+
+      const skinLabel = findFirst(
+        modal,
+        (n) => typeof n?.tagName === "string" && n.tagName === "LABEL" && /Скин \(тема\)/.test(collectText(n))
+      );
+      assert.equal(skinLabel, null, "theme picker should not be rendered in quick-login mode");
     });
   } finally {
     await helper.cleanup();

@@ -1,5 +1,6 @@
 import { sanitizeArchived, saveArchivedForUser, toggleArchived } from "../../../helpers/chat/archives";
 import { conversationKey, dmKey, roomKey } from "../../../helpers/chat/conversationKey";
+import { resolveVirtualStartForIndex } from "../../../helpers/chat/historyViewportCoordinator";
 import { saveChatFoldersForUser, sanitizeChatFoldersSnapshot } from "../../../helpers/chat/folders";
 import { sanitizePins, savePinsForUser, togglePin } from "../../../helpers/chat/pins";
 import { isPinnedMessage, savePinnedMessagesForUser } from "../../../helpers/chat/pinnedMessages";
@@ -47,7 +48,6 @@ export interface ContextMenuActionsFeatureDeps {
 
   closeMobileSidebar: (opts?: { suppressStickBottomRestore?: boolean }) => void;
 
-  requestFreshHttpDownloadUrl: (fileId: string) => Promise<{ url: string }>;
   beginFileDownload: (fileId: string) => void;
 
   openChatSearch: () => void;
@@ -111,7 +111,6 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
     toggleChatSelection,
     setChatSelectionAnchorIdx,
     closeMobileSidebar,
-    requestFreshHttpDownloadUrl,
     beginFileDownload,
     openChatSearch,
     setChatSearchQuery,
@@ -165,9 +164,10 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
         const searchActive = Boolean(snap.chatSearchOpen && snap.chatSearchQuery.trim());
         ensureVirtualHistoryIndexVisible?.(key, list.length, index, searchActive);
         if (!ensureVirtualHistoryIndexVisible) {
+          const start = resolveVirtualStartForIndex(list.length, index, 160);
           store.set((prev) => ({
             ...prev,
-            historyVirtualStart: { ...(prev.historyVirtualStart || {}), [key]: Math.max(0, index - 80) },
+            historyVirtualStart: { ...(prev.historyVirtualStart || {}), [key]: start },
           }));
         }
         window.setTimeout(() => jumpToChatMsgIdx(index), 0);
@@ -922,27 +922,7 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
       }
 
       if (itemId === "msg_copy_link") {
-        const fileId = msg?.attachment?.kind === "file" ? String(msg.attachment.fileId || "").trim() : "";
-        if (!fileId) {
-          close();
-          return;
-        }
-        if (st.conn !== "connected") {
-          store.set({ status: "Нет соединения" });
-          close();
-          return;
-        }
-        if (!st.authed) {
-          store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
-          return;
-        }
-        try {
-          const { url } = await requestFreshHttpDownloadUrl(fileId);
-          const ok = await copyText(url);
-          showToast(ok ? "Ссылка скопирована" : "Не удалось скопировать", { kind: ok ? "success" : "error" });
-        } catch {
-          showToast("Не удалось получить ссылку", { kind: "error" });
-        }
+        showToast("Прямые ссылки на защищённые файлы отключены", { kind: "info" });
         close();
         return;
       }

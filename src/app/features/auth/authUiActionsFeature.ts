@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, ThemeMode } from "../../../stores/types";
+import { clearStoredAuthAll } from "../../../helpers/auth/session";
 
 export interface AuthUiActionsFeatureDeps {
   store: Store<AppState>;
@@ -19,6 +20,7 @@ export interface AuthUiActionsFeature {
   onAuthLogin: () => void;
   onAuthRegister: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
+  onAuthUseDifferentAccount: () => void;
   onCloseModal: () => void;
   onDismissUpdate: () => void;
   onReloadUpdate: () => void;
@@ -57,6 +59,17 @@ export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): Auth
     store.set({ authMode: mode, modal: { kind: "auth" } });
   };
 
+  const onAuthUseDifferentAccount = () => {
+    clearStoredAuthAll();
+    store.set((prev) => ({
+      ...prev,
+      authMode: "login",
+      authRememberedId: null,
+      modal: { kind: "auth" },
+      status: "Введите ID или @логин, чтобы войти в другой аккаунт.",
+    }));
+  };
+
   const onCloseModal = () => closeModal();
 
   const onDismissUpdate = () => {
@@ -79,6 +92,7 @@ export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): Auth
     onAuthLogin,
     onAuthRegister,
     onAuthModeChange,
+    onAuthUseDifferentAccount,
     onCloseModal,
     onDismissUpdate,
     onReloadUpdate,

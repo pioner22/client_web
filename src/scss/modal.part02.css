@@ -124,6 +124,42 @@ input.modal-input[type="file"]::file-selector-button:active {
   flex: 1;
 }
 
+.modal-confirm {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.modal-confirm .modal-title {
+  margin-bottom: 0;
+}
+
+.modal-copy {
+  line-height: 1.45;
+}
+
+.modal-actions.modal-actions-confirm {
+  justify-content: stretch;
+}
+
+.modal-actions.modal-actions-confirm .btn {
+  flex: 1 1 140px;
+}
+
+.modal-actions.modal-actions-compose {
+  justify-content: stretch;
+}
+
+.modal-actions.modal-actions-compose .btn {
+  flex: 1 1 140px;
+}
+
+.modal-confirm-danger {
+  border-color: color-mix(in srgb, var(--danger), transparent 70%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--danger), transparent 90%),
+    var(--modal-shadow);
+}
+
 .modal-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -768,16 +804,47 @@ input.modal-input[type="file"]::file-selector-button:active {
 }
 
 @media (max-width: 600px) {
+  .overlay.overlay-viewer .viewer-header {
+    padding-top: calc(var(--viewer-pad) + env(safe-area-inset-top) + 8px);
+    align-items: flex-start;
+    gap: calc(var(--viewer-gap) * 0.75);
+    min-height: auto;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.42) 54%, rgba(0, 0, 0, 0));
+  }
+
+  .overlay.overlay-viewer .viewer-header-info {
+    min-width: 0;
+    padding-top: 2px;
+    gap: 4px;
+  }
+
+  .overlay.overlay-viewer .viewer-header-actions {
+    flex: 0 0 auto;
+    align-self: flex-start;
+  }
+
   .overlay.overlay-viewer .viewer-author-avatar {
     display: none;
   }
+
   .overlay.overlay-viewer .viewer-author {
-    padding-left: 12px;
+    max-width: 100%;
+    padding-left: 4px;
   }
+
+  .overlay.overlay-viewer .viewer-title-wrap,
+  .overlay.overlay-viewer .viewer-author-text {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .overlay.overlay-viewer .viewer-author-title {
     flex-wrap: nowrap;
     overflow: hidden;
   }
+
+  .overlay.overlay-viewer .viewer-title,
+  .overlay.overlay-viewer .viewer-sub,
   .overlay.overlay-viewer .viewer-author-name,
   .overlay.overlay-viewer .viewer-author-handle,
   .overlay.overlay-viewer .viewer-author-date {
@@ -852,6 +919,9 @@ input.modal-input[type="file"]::file-selector-button:active {
 .modal.modal-viewer.viewer-visual .viewer-stage .viewer-media {
   width: 100%;
   height: 100%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
 }
 
 .viewer-title-wrap {
@@ -916,36 +986,7 @@ input.modal-input[type="file"]::file-selector-button:active {
 }
 
 .modal.modal-viewer.viewer-visual {
-  --viewer-bottom-ui-rail-h: 0px;
-  --viewer-bottom-ui-caption-h: 0px;
-  --viewer-bottom-ui-h-default: calc(var(--viewer-bottom-ui-rail-h) + var(--viewer-bottom-ui-caption-h));
-}
-
-.modal.modal-viewer.viewer-visual.viewer-has-caption {
-  /* Caption height varies, but the body is clamped (see .viewer-caption-body max-height). */
-  --viewer-bottom-ui-caption-h: calc(6rem + (var(--viewer-caption-pad-y) * 3) + var(--safe-bottom-pad));
-}
-
-.overlay.overlay-viewer .modal.modal-viewer.viewer-visual:not(.viewer-zoomed) .viewer-media {
-  box-sizing: border-box;
-  padding-bottom: var(--viewer-bottom-ui-h, var(--viewer-bottom-ui-h-default, 0px));
-}
-
-/* Mobile: keep media visually centered like before.
- * On small touch screens the viewer UI (caption/rail) typically fits into the
- * inherent ~10% bottom margin created by the 80vh clamp. Reserving the full UI
- * height again pushes portrait media too high.
- */
-@media (max-width: 600px) and (pointer: coarse) {
-  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual:not(.viewer-zoomed) .viewer-media {
-    padding-bottom: max(
-      0px,
-      calc(
-        var(--viewer-bottom-ui-h, var(--viewer-bottom-ui-h-default, 0px)) -
-          (var(--app-vh, 100vh) * 0.1)
-      )
-    );
-  }
+  overflow: hidden;
 }
 
 .modal.modal-viewer.viewer-visual.viewer-zoomed .viewer-img-scroll {
@@ -965,7 +1006,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   background: var(--panel2);
 }
 
-.viewer-video {
+video.viewer-video {
   display: block;
   width: auto;
   height: auto;
@@ -975,7 +1016,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   background: #000;
 }
 
-.viewer-audio {
+audio.viewer-audio {
   width: min(640px, 100%);
 }
 
@@ -992,6 +1033,37 @@ input.modal-input[type="file"]::file-selector-button:active {
   word-break: break-word;
 }
 
+.viewer-footer-shell {
+  display: grid;
+  gap: calc(var(--viewer-gap) * var(--phi-inv));
+}
+
+.viewer-footer-main {
+  display: grid;
+  gap: calc(var(--viewer-gap) * var(--phi-inv));
+}
+
+.viewer-footer-context {
+  display: flex;
+  justify-content: center;
+}
+
+.viewer-footer-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 .overlay.overlay-viewer .viewer-caption {
   margin: 0;
   padding: var(--viewer-caption-pad-y) var(--viewer-caption-pad-x) calc(var(--viewer-caption-pad-y) * var(--phi));
@@ -999,46 +1071,56 @@ input.modal-input[type="file"]::file-selector-button:active {
   padding-right: calc(var(--viewer-caption-pad-x) + env(safe-area-inset-right));
 }
 
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  display: grid;
+  gap: calc(var(--viewer-gap) * var(--phi-inv));
+  pointer-events: auto;
+  opacity: 0.45;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.58));
+  transition: opacity 160ms ease, background 160ms ease;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-main {
+  padding: calc(var(--viewer-caption-pad-y) * 1.05) var(--viewer-caption-pad-x) 0;
+  padding-left: calc(var(--viewer-caption-pad-x) + env(safe-area-inset-left));
+  padding-right: calc(var(--viewer-caption-pad-x) + env(safe-area-inset-right));
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell:not(.viewer-footer-shell-has-rail) .viewer-footer-main {
+  padding-bottom: calc((var(--viewer-caption-pad-y) * 1.25) + var(--safe-bottom-pad));
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell.viewer-footer-shell-has-rail .viewer-footer-main {
+  padding-bottom: calc(var(--viewer-caption-pad-y) * 0.5);
+}
+
 .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption {
   --link-color: #60a5e9;
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
   margin: 0;
-  padding: calc(var(--viewer-caption-pad-y) * 1.25) var(--viewer-caption-pad-x)
-    calc((var(--viewer-caption-pad-y) * 1.25) + var(--safe-bottom-pad));
+  padding: 0;
   color: #fff;
   text-align: center;
-  opacity: 0.45;
   line-height: var(--line-height);
-  z-index: 4;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.35));
-  transition: opacity 160ms ease, background 160ms ease;
-  pointer-events: auto;
 }
 
-.modal.modal-viewer.viewer-has-rail {
-  --viewer-rail-h: calc(72px + var(--safe-bottom-pad));
-  --viewer-bottom-ui-rail-h: var(--viewer-rail-h);
-}
-
-.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-caption {
-  bottom: var(--viewer-rail-h);
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-counter {
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .viewer-rail {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
   padding: calc(var(--viewer-pad) * var(--phi-inv)) var(--viewer-pad) calc((var(--viewer-pad) * var(--phi-inv)) + var(--safe-bottom-pad));
+  padding-left: calc(var(--viewer-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--viewer-pad) + env(safe-area-inset-right));
   display: flex;
   justify-content: center;
   gap: calc(var(--viewer-gap) * var(--phi-inv));
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
-  z-index: 5;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0));
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0));
 }
 
 .viewer-rail::-webkit-scrollbar {
@@ -1131,21 +1213,21 @@ input.modal-input[type="file"]::file-selector-button:active {
   }
 }
 
-.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-zoomed .viewer-caption {
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-zoomed .viewer-footer-shell {
   opacity: 0;
   pointer-events: none;
 }
 
 @media (hover: hover) {
-  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption:hover,
-  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption:focus-within {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell:hover,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell:focus-within {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.6);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.72));
   }
 }
 
 @media (hover: none) {
-  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell {
     opacity: 0.6;
   }
 
@@ -1269,8 +1351,10 @@ input.modal-input[type="file"]::file-selector-button:active {
     max-height: var(--viewer-media-max-h-mobile);
   }
 
-  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-context {
     text-align: left;
+    justify-content: flex-start;
   }
 
   .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption-body {

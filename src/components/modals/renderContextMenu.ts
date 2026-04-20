@@ -25,6 +25,17 @@ function focusFirstEnabled(root: HTMLElement) {
   }
 }
 
+function focusLastEnabled(root: HTMLElement) {
+  const items = Array.from(root.querySelectorAll<HTMLButtonElement>("button.ctx-item"));
+  const last = [...items].reverse().find((b) => !b.disabled);
+  if (!last) return;
+  try {
+    last.focus({ preventScroll: true });
+  } catch {
+    last.focus();
+  }
+}
+
 function moveFocus(root: HTMLElement, dir: 1 | -1) {
   const items = Array.from(root.querySelectorAll<HTMLButtonElement>("button.ctx-item")).filter((b) => !b.disabled);
   if (!items.length) return;
@@ -56,7 +67,13 @@ function clampIntoViewport(root: HTMLElement) {
 
 export function renderContextMenu(payload: ContextMenuPayload, actions: ContextMenuActions): HTMLElement {
   const sheet = shouldRenderAsSheet();
-  const root = el("div", { class: sheet ? "ctx-menu ctx-menu-sheet" : "ctx-menu", role: "menu", tabindex: "-1" });
+  const root = el("div", {
+    class: sheet ? "ctx-menu ctx-menu-sheet" : "ctx-menu",
+    role: sheet ? "dialog" : "menu",
+    tabindex: "-1",
+    "aria-label": payload.title || "Меню",
+    ...(sheet ? { "aria-modal": "true" } : {}),
+  });
   if (!sheet) {
     root.style.left = `${payload.x}px`;
     root.style.top = `${payload.y}px`;
@@ -65,6 +82,24 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
   if (sheet) root.append(el("div", { class: "ctx-handle", "aria-hidden": "true" }));
 
   const title = el("div", { class: "ctx-title" }, [payload.title]);
+  const closeBtn =
+    sheet
+      ? (() => {
+          const btn = el(
+            "button",
+            {
+              class: "btn btn-secondary ctx-close",
+              type: "button",
+              "aria-label": "Закрыть меню",
+              title: "Закрыть меню",
+            },
+            ["Закрыть"]
+          ) as HTMLButtonElement;
+          btn.addEventListener("click", () => actions.onClose());
+          return btn;
+        })()
+      : null;
+  const header = sheet ? el("div", { class: "ctx-header" }, [title, ...(closeBtn ? [closeBtn] : [])]) : title;
 
   const reactionBar =
     payload.reactionBar && Array.isArray(payload.reactionBar.emojis) && payload.reactionBar.emojis.length
@@ -115,7 +150,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     const meta = it.meta ? el("span", { class: "ctx-meta" }, [it.meta]) : null;
     const btn = el(
       "button",
-      { class: cls, type: "button", role: "menuitem", ...(it.disabled ? { disabled: "true" } : {}) },
+      { class: cls, type: "button", ...(sheet ? {} : { role: "menuitem" }), ...(it.disabled ? { disabled: "true" } : {}) },
       [...(icon ? [icon] : []), main, ...(meta ? [meta] : [])]
     ) as HTMLButtonElement;
     btn.addEventListener("click", () => {
@@ -125,12 +160,22 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     return btn;
   });
 
-  root.append(title, ...(reactionBar ? [reactionBar] : []), ...nodes);
+  root.append(header, ...(reactionBar ? [reactionBar] : []), el("div", { class: "ctx-list" }, nodes));
 
   root.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       e.preventDefault();
       actions.onClose();
+      return;
+    }
+    if (e.key === "Home") {
+      e.preventDefault();
+      focusFirstEnabled(root);
+      return;
+    }
+    if (e.key === "End") {
+      e.preventDefault();
+      focusLastEnabled(root);
       return;
     }
     if (e.key === "ArrowDown") {

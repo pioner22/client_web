@@ -660,6 +660,7 @@
   /* Composer: closer to Telegram pill + stable "bar" feel. */
   .input-wrap {
     /* Mobile: overlay the composer (tweb-like) so chat history can scroll "under" it. */
+    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--safe-bottom-layout-pad));
     position: absolute;
     left: 0;
     right: 0;
@@ -668,13 +669,17 @@
     background: color-mix(in srgb, var(--composer-bg), transparent 10%);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
-    padding-bottom: max(var(--composer-pad-y), var(--safe-bottom-layout-pad));
+    padding-bottom: var(--composer-bottom-edge-pad);
+  }
+
+  .chat-col {
+    --chat-history-bottom-gap: max(8px, var(--sp-2));
   }
 
   .chat-host {
     /* Ensure the last messages can scroll above the overlay composer (+ optional search footer). */
-    padding-bottom: var(--chat-bottom-inset, 0px);
-    scroll-padding-bottom: var(--chat-bottom-inset, 0px);
+    padding-bottom: calc(var(--chat-bottom-inset, 0px) + var(--chat-history-bottom-gap, 0px));
+    scroll-padding-bottom: calc(var(--chat-bottom-inset, 0px) + var(--chat-history-bottom-gap, 0px));
   }
 
   .chat-search-footer {
@@ -688,14 +693,20 @@
   }
 
   .chat-jump {
-    bottom: calc(var(--chat-bottom-inset, 0px) + 10px);
+    bottom: calc(var(--chat-bottom-inset, 0px) + var(--chat-history-bottom-gap, 0px) + 10px);
   }
 
   /* iOS: blur/transparency can create an extra "dark strip" near the bottom safe-area. Keep the bar solid. */
   html.is-ios .input-wrap {
+    --composer-bottom-edge-pad: max(calc(var(--composer-pad-y) * 0.5), calc(var(--safe-bottom-layout-pad) * 0.7));
+    padding-top: calc(var(--composer-pad-y) * 0.75);
     background: var(--composer-bg);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+  }
+
+  .kbd-open .chat-col {
+    --chat-history-bottom-gap: 6px;
   }
 
   .composer-row {

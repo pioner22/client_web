@@ -7,6 +7,7 @@ type AuthUiActions = Pick<
   | "onAuthLogin"
   | "onAuthRegister"
   | "onAuthModeChange"
+  | "onAuthUseDifferentAccount"
   | "onCloseModal"
   | "onDismissUpdate"
   | "onReloadUpdate"
@@ -21,6 +22,8 @@ type ProfileActions = Pick<
   | "onSearchServerForward"
   | "onProfileSave"
   | "onProfileRefresh"
+  | "onSessionsRefresh"
+  | "onSessionsLogoutOthers"
   | "onProfileAvatarSelect"
   | "onProfileAvatarClear"
 >;

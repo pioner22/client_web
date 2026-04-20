@@ -1,4 +1,4 @@
-import { insertTextAtSelection } from "../../../helpers/ui/emoji";
+import { insertTextAtSelection } from "../../../helpers/ui/textSelection";
 
 export interface BoardToolInputActionsFeatureDeps {
   input: HTMLTextAreaElement;

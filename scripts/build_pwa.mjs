@@ -282,7 +282,6 @@ const PREFS_URL = "./__prefs__/notify.json";
 let notifyPrefs = null;
 const OUTBOX_DB = "yagodka-pwa-outbox-v1";
 const OUTBOX_STORE = "outbox";
-const OUTBOX_META = "meta";
 const OUTBOX_SYNC_TAG = "yagodka-outbox-sync";
 const OUTBOX_SEND_LIMIT = 8;
 const OUTBOX_RETRY_MIN_MS = 900;
@@ -298,9 +297,6 @@ function openOutboxDb() {
         const db = req.result;
         if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
           db.createObjectStore(OUTBOX_STORE, { keyPath: "id" });
-        }
-        if (!db.objectStoreNames.contains(OUTBOX_META)) {
-          db.createObjectStore(OUTBOX_META, { keyPath: "key" });
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -372,41 +368,10 @@ async function updateOutboxItems(items) {
   await waitTx(tx);
 }
 
-async function saveSessionForUser(userId, session) {
-  const uid = String(userId || "").trim();
-  if (!uid) return;
-  const db = await openOutboxDb();
-  if (!db) return;
-  const tx = db.transaction(OUTBOX_META, "readwrite");
-  const store = tx.objectStore(OUTBOX_META);
-  const key = "session:" + uid;
-  if (session) {
-    store.put({ key, session, updatedAt: Date.now() });
-  } else {
-    store.delete(key);
-  }
-  await waitTx(tx);
-}
-
-async function loadSessionForUser(userId) {
-  const uid = String(userId || "").trim();
-  if (!uid) return null;
-  const db = await openOutboxDb();
-  if (!db) return null;
-  return await new Promise((resolve) => {
-    const tx = db.transaction(OUTBOX_META, "readonly");
-    const store = tx.objectStore(OUTBOX_META);
-    const req = store.get("session:" + uid);
-    req.onsuccess = () => resolve(req.result?.session || null);
-    req.onerror = () => resolve(null);
-  });
-}
-
 async function clearOutboxForUser(userId) {
   const uid = String(userId || "").trim();
   if (!uid) return;
   await replaceOutboxForUser(uid, []);
-  await saveSessionForUser(uid, null);
 }
 
 function normalizeOutboxSync(userId, outbox) {
@@ -499,68 +464,9 @@ async function hasActiveClients() {
   }
 }
 
-async function sendOutboxViaGateway(session, items) {
-  if (!session || !items || !items.length) return [];
-  if (typeof WebSocket === "undefined") return [];
-  const url = getGatewayUrl();
-  return await new Promise((resolve) => {
-    let done = false;
-    const sent = [];
-    const finish = () => {
-      if (done) return;
-      done = true;
-      try {
-        ws.close();
-      } catch {}
-      resolve(sent);
-    };
-    const ws = new WebSocket(url);
-    const timer = setTimeout(() => finish(), 8000);
-    ws.onopen = () => {
-      try {
-        ws.send(JSON.stringify({ type: "auth", session }));
-      } catch {
-        clearTimeout(timer);
-        finish();
-      }
-    };
-    ws.onmessage = (event) => {
-      let msg = null;
-      try {
-        msg = JSON.parse(String(event?.data || ""));
-      } catch {
-        msg = null;
-      }
-      if (!msg || typeof msg !== "object") return;
-      const type = msg.type;
-      if (type === "auth_fail") {
-        clearTimeout(timer);
-        finish();
-        return;
-      }
-      if (type !== "auth_ok" && type !== "register_ok") return;
-      for (const it of items) {
-        if (!it || (!it.to && !it.room)) continue;
-        const payload = it.to
-          ? { type: "send", to: it.to, text: it.text, ...(it.silent ? { silent: true } : {}) }
-          : { type: "send", room: it.room, text: it.text, ...(it.silent ? { silent: true } : {}) };
-        try {
-          ws.send(JSON.stringify(payload));
-          sent.push(it.id);
-        } catch {}
-      }
-      clearTimeout(timer);
-      finish();
-    };
-    ws.onerror = () => {
-      clearTimeout(timer);
-      finish();
-    };
-    ws.onclose = () => {
-      clearTimeout(timer);
-      finish();
-    };
-  });
+async function sendOutboxViaGateway(items) {
+  if (!items || !items.length) return [];
+  return [];
 }
 
 async function flushOutboxQueue() {
@@ -584,11 +490,9 @@ async function flushOutboxQueue() {
   }
   if (!byUser.size) return;
   for (const [uid, list] of byUser.entries()) {
-    const session = await loadSessionForUser(uid);
-    if (!session) continue;
     const batch = list.sort((a, b) => a.ts - b.ts).slice(0, OUTBOX_SEND_LIMIT);
     if (!batch.length) continue;
-    const sentIds = await sendOutboxViaGateway(session, batch);
+    const sentIds = await sendOutboxViaGateway(batch);
     if (!sentIds.length) continue;
     const sentSet = new Set(sentIds);
     const updated = [];
@@ -856,8 +760,6 @@ self.addEventListener("message", (event) => {
       (async () => {
         const uid = String(data.userId || "").trim();
         if (!uid) return;
-        const session = typeof data.session === "string" ? data.session.trim() : "";
-        if (session) await saveSessionForUser(uid, session);
         const items = normalizeOutboxSync(uid, data.outbox || {});
         await replaceOutboxForUser(uid, items);
         const hasPending = items.some((it) => it.status !== "sent");

@@ -1,10 +1,17 @@
 import { setCachedMediaAspectRatio } from "../../../helpers/chat/mediaAspectCache";
+import { sameFileViewerContext } from "../../../helpers/chat/fileViewerScope";
 import { base64ToBytes } from "../../../helpers/files/base64";
+import { liftFileHttpTokenToBearer, rememberFileHttpBearer } from "../../../helpers/files/fileHttpAuth";
 import { resumableHttpDownload } from "../../../helpers/files/fileHttpDownload";
 import { putCachedFileBlob } from "../../../helpers/files/fileBlobCache";
 import { guessMimeTypeByName } from "../../../helpers/files/mimeGuess";
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
+import {
+  createFileHttpDownloadRuntime,
+  type FileHttpDownloadPriority,
+  type FileHttpDownloadQueueMeta,
+} from "./fileHttpDownloadRuntime";
 import type { PendingFileViewer, FileViewerModalState } from "./fileViewerFeature";
 
 export interface DownloadState {
@@ -156,116 +163,37 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     abortUploadByFileId,
   } = deps;
 
-  type HttpDownloadPriority = "high" | "prefetch";
-
   const HTTP_MAX_CONCURRENCY = deviceCaps.slowNetwork ? 1 : deviceCaps.constrained ? 2 : 3;
   const HTTP_PREFETCH_CONCURRENCY = deviceCaps.slowNetwork ? 0 : 1;
 
-  const httpQueueHigh: string[] = [];
-  const httpQueuePrefetch: string[] = [];
-  const httpQueueMeta = new Map<
-    string,
-    { url: string; name: string; size: number; mime: string | null; silent: boolean; queuedAtMs: number }
-  >();
-  const httpInFlight = new Map<
-    string,
-    { controller: AbortController; priority: HttpDownloadPriority; silent: boolean; queuedAtMs: number; resetToken: number }
-  >();
-  const httpAbortQuiet = new Set<string>();
-  let httpResetToken = 0;
-
-  const httpQueueState = () => {
-    let inflightPrefetch = 0;
-    for (const v of httpInFlight.values()) {
-      if (v.priority === "prefetch") inflightPrefetch += 1;
-    }
-    return {
-      queued_high: httpQueueHigh.length,
-      queued_prefetch: httpQueuePrefetch.length,
-      inflight: httpInFlight.size,
-      inflight_prefetch: inflightPrefetch,
-    };
-  };
-
-  const isHttpQueuedOrActive = (fileId: string): boolean => {
-    const fid = String(fileId || "").trim();
-    return Boolean(fid && (httpQueueMeta.has(fid) || httpInFlight.has(fid)));
-  };
-
-  const dropHttpQueue = (fileId: string): void => {
-    const fid = String(fileId || "").trim();
-    if (!fid) return;
-    httpQueueMeta.delete(fid);
-    const hi = httpQueueHigh.indexOf(fid);
-    if (hi >= 0) httpQueueHigh.splice(hi, 1);
-    const pi = httpQueuePrefetch.indexOf(fid);
-    if (pi >= 0) httpQueuePrefetch.splice(pi, 1);
-  };
-
-  const abortHttpDownload = (fileId: string, reason = "abort", opts: { quiet?: boolean } = {}): void => {
-    const fid = String(fileId || "").trim();
-    if (!fid) return;
-    if (opts.quiet) httpAbortQuiet.add(fid);
-    dropHttpQueue(fid);
-    const cur = httpInFlight.get(fid);
-    if (cur) {
-      try {
-        cur.controller.abort();
-      } catch {
-        // ignore
-      }
-    }
-    debugHook("file.http.abort", { fileId: fid, reason, quiet: Boolean(opts.quiet), ...httpQueueState() });
-  };
-
-  let httpDrainTimer: number | null = null;
-  const scheduleHttpDrain = () => {
-    if (httpDrainTimer !== null) return;
-    httpDrainTimer = window.setTimeout(() => {
-      httpDrainTimer = null;
-      drainHttpQueue();
-    }, 0);
-  };
-
-  const canPrefetchHttp = () => {
-    const st = store.get();
-    if (!st.authed || st.conn !== "connected") return false;
-    if (!st.netLeader) return false;
-    if (!deviceCaps.prefetchAllowed) return false;
-    if (document.visibilityState === "hidden") return false;
-    return true;
-  };
-
-  const promoteUserRequestedPrefetchToHigh = () => {
-    for (let i = 0; i < httpQueuePrefetch.length; i += 1) {
-      const fid = httpQueuePrefetch[i];
-      if (!fid) continue;
-      if (!pendingFileDownloads.has(fid)) continue;
-      httpQueuePrefetch.splice(i, 1);
-      i -= 1;
-      if (!httpQueueHigh.includes(fid)) httpQueueHigh.push(fid);
-      const meta = httpQueueMeta.get(fid);
-      if (meta && meta.silent) httpQueueMeta.set(fid, { ...meta, silent: false });
-      debugHook("file.http.promote", { fileId: fid, reason: "user_request", ...httpQueueState() });
+  const debugHook = (kind: string, data?: any) => {
+    try {
+      const dbg = (globalThis as any).__yagodka_debug_monitor;
+      if (!dbg || typeof dbg.push !== "function") return;
+      dbg.push(String(kind || "file").trim() || "file", data);
+    } catch {
+      // ignore
     }
   };
 
-  const startHttpDownloadTask = (fileId: string, priority: HttpDownloadPriority) => {
-    const fid = String(fileId || "").trim();
-    if (!fid) return;
-    const meta = httpQueueMeta.get(fid);
-    dropHttpQueue(fid);
-    if (!meta) return;
-    const controller = new AbortController();
-    const token = httpResetToken;
-    httpInFlight.set(fid, { controller, priority, silent: meta.silent, queuedAtMs: meta.queuedAtMs, resetToken: token });
-    debugHook("file.http.start", {
-      fileId: fid,
-      priority,
-      silent: meta.silent,
-      queue_ms: Math.max(0, Date.now() - meta.queuedAtMs),
-      ...httpQueueState(),
-    });
+  const httpRuntime = createFileHttpDownloadRuntime({
+    getState: () => store.get(),
+    prefetchAllowed: deviceCaps.prefetchAllowed,
+    maxConcurrency: HTTP_MAX_CONCURRENCY,
+    prefetchConcurrency: HTTP_PREFETCH_CONCURRENCY,
+    isUserRequested: (fileId) => pendingFileDownloads.has(fileId),
+    debugHook,
+    onStart: startHttpDownloadTask,
+  });
+
+  function startHttpDownloadTask(params: {
+    fileId: string;
+    priority: FileHttpDownloadPriority;
+    meta: FileHttpDownloadQueueMeta;
+    controller: AbortController;
+    resetToken: number;
+  }) {
+    const { fileId: fid, priority, meta, controller, resetToken: token } = params;
     void (async () => {
       try {
         const baseDelayMs = deviceCaps.slowNetwork ? 900 : deviceCaps.constrained ? 650 : 400;
@@ -403,21 +331,24 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
           const viewerName = pv.name || meta.name || "файл";
           const viewerSize = pv.size || meta.size || blob.size || 0;
           const viewerMime = finalMime || pv.mime || null;
-          store.set({
-            modal: buildFileViewerModalState({
-              fileId: fid,
-              url: objectUrl,
-              name: viewerName,
-              size: viewerSize,
-              mime: viewerMime,
-              caption: pv.caption || null,
-              chatKey: pv.chatKey,
-              msgIdx: pv.msgIdx,
-            }),
-          });
+          const currentModal = store.get().modal;
+          if (!sameFileViewerContext(currentModal, { fileId: fid, chatKey: pv.chatKey, msgIdx: pv.msgIdx })) {
+            store.set({
+              modal: buildFileViewerModalState({
+                fileId: fid,
+                url: objectUrl,
+                name: viewerName,
+                size: viewerSize,
+                mime: viewerMime,
+                caption: pv.caption || null,
+                chatKey: pv.chatKey,
+                msgIdx: pv.msgIdx,
+              }),
+            });
+          }
         }
       } catch (err) {
-        if (token !== httpResetToken || httpAbortQuiet.has(fid)) {
+        if (token !== httpRuntime.getResetToken() || httpRuntime.hasQuietAbort(fid)) {
           debugHook("file.http.abort.done", { fileId: fid, reason: "reset_or_quiet" });
           return;
         }
@@ -426,13 +357,13 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         const silent = Boolean(meta.silent && !userRequested);
         const canFallback =
           !silent &&
-          !httpLegacyFallbackAttempted.has(fid) &&
+          !httpRuntime.hasLegacyFallbackAttempted(fid) &&
           (err instanceof TypeError ||
             /^http_\\d+$/.test(errMsg) ||
             errMsg === "incomplete_body" ||
             errMsg === "range_not_satisfiable");
         if (canFallback) {
-          httpLegacyFallbackAttempted.add(fid);
+          httpRuntime.markLegacyFallbackAttempted(fid);
           debugHook("file.http.fallback", { fileId: fid, reason: errMsg, mode: "file_get" });
           disableFileHttp(errMsg || "http_download_failed");
           const cur = downloadByFileId.get(fid);
@@ -470,49 +401,10 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         updateTransferByFileId(fid, (entry) => ({ ...entry, status: "error", error: "download_failed" }));
         if (!silent) store.set({ status: "Ошибка файла: download_failed" });
       } finally {
-        httpAbortQuiet.delete(fid);
-        httpInFlight.delete(fid);
-        scheduleHttpDrain();
+        httpRuntime.finish(fid);
       }
     })();
-  };
-
-  const drainHttpQueue = () => {
-    const st = store.get();
-    if (!st.authed || st.conn !== "connected") return;
-
-    promoteUserRequestedPrefetchToHigh();
-
-    while (httpQueueHigh.length && httpInFlight.size < HTTP_MAX_CONCURRENCY) {
-      const fid = httpQueueHigh.shift();
-      if (!fid) continue;
-      if (!httpQueueMeta.has(fid)) continue;
-      startHttpDownloadTask(fid, "high");
-    }
-
-    if (!canPrefetchHttp()) return;
-    while (
-      httpQueuePrefetch.length &&
-      httpInFlight.size < HTTP_MAX_CONCURRENCY &&
-      httpQueueState().inflight_prefetch < HTTP_PREFETCH_CONCURRENCY
-    ) {
-      const fid = httpQueuePrefetch.shift();
-      if (!fid) continue;
-      if (!httpQueueMeta.has(fid)) continue;
-      startHttpDownloadTask(fid, "prefetch");
-    }
-  };
-
-  const httpLegacyFallbackAttempted = new Set<string>();
-  const debugHook = (kind: string, data?: any) => {
-    try {
-      const dbg = (globalThis as any).__yagodka_debug_monitor;
-      if (!dbg || typeof dbg.push !== "function") return;
-      dbg.push(String(kind || "file").trim() || "file", data);
-    } catch {
-      // ignore
-    }
-  };
+  }
 
   let lastDrainConn = store.get().conn;
   let lastDrainAuthed = store.get().authed;
@@ -526,10 +418,10 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     lastDrainConn = conn;
     lastDrainAuthed = authed;
     lastDrainLeader = leader;
-    scheduleHttpDrain();
+    httpRuntime.scheduleDrain();
   });
   try {
-    document.addEventListener("visibilitychange", scheduleHttpDrain, { passive: true });
+    document.addEventListener("visibilitychange", () => httpRuntime.scheduleDrain(), { passive: true });
   } catch {
     // ignore
   }
@@ -613,6 +505,18 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const fileId = String(msg?.file_id ?? "").trim();
     const url = typeof msg?.url === "string" ? String(msg.url).trim() : "";
     const thumbUrl = typeof msg?.thumb_url === "string" ? String(msg.thumb_url).trim() : "";
+    const authToken = typeof msg?.auth_token === "string" ? String(msg.auth_token).trim() : "";
+    const thumbAuthToken = typeof msg?.thumb_auth_token === "string" ? String(msg.thumb_auth_token).trim() : "";
+    if (url && authToken) {
+      rememberFileHttpBearer(url, authToken, {
+        base: typeof window !== "undefined" && typeof window.location?.href === "string" ? window.location.href : null,
+      });
+    }
+    if (thumbUrl && thumbAuthToken) {
+      rememberFileHttpBearer(thumbUrl, thumbAuthToken, {
+        base: typeof window !== "undefined" && typeof window.location?.href === "string" ? window.location.href : null,
+      });
+    }
     if (!fileId) return true;
     clearFileGetNotFoundRetry(fileId);
     const mwRaw = Number(msg?.media_w ?? 0);
@@ -660,7 +564,12 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     if (silent && thumbUrl) {
       void (async () => {
         try {
-          const res = await fetch(thumbUrl, { method: "GET", cache: "no-store" });
+          const thumbAuth = liftFileHttpTokenToBearer(thumbUrl);
+          const res = await fetch(thumbAuth.url || thumbUrl, {
+            method: "GET",
+            cache: "no-store",
+            headers: thumbAuth.headers,
+          });
           if (!res.ok) throw new Error(`http_${res.status}`);
           const blob = await res.blob();
           const finalMime = thumbMime || blob.type || "image/jpeg";
@@ -742,7 +651,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       }
     }
 
-    if (isHttpQueuedOrActive(fileId)) return true;
+    if (httpRuntime.isQueuedOrActive(fileId)) return true;
 
     const existing = downloadByFileId.get(fileId);
     const streamId = existing?.streamId ? String(existing.streamId) : null;
@@ -765,7 +674,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     if (!silent) store.set({ status: `Скачивание: ${name || fileId}` });
 
     const userRequested = pendingFileDownloads.has(fileId);
-    const priority: HttpDownloadPriority = silent && !userRequested ? "prefetch" : "high";
+    const priority: FileHttpDownloadPriority = silent && !userRequested ? "prefetch" : "high";
     debugHook("file.http.enqueue", {
       fileId,
       name,
@@ -774,13 +683,17 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       silent,
       priority,
       expectedMime: mime || null,
-      ...httpQueueState(),
+      ...httpRuntime.queueState(),
     });
-    httpQueueMeta.set(fileId, { url, name, size, mime: mime ?? null, silent: Boolean(silent && !userRequested), queuedAtMs: Date.now() });
-    if (priority === "prefetch") httpQueuePrefetch.push(fileId);
-    else httpQueueHigh.push(fileId);
+    httpRuntime.enqueue(fileId, {
+      url,
+      name,
+      size,
+      mime: mime ?? null,
+      silent: Boolean(silent && !userRequested),
+      priority,
+    });
     finishFileGet(fileId);
-    scheduleHttpDrain();
     return true;
   }
 
@@ -885,18 +798,21 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         const viewerName = pv.name || download.name || "файл";
         const viewerSize = pv.size || download.size || blob.size || 0;
         const viewerMime = finalMime || pv.mime || null;
-        store.set({
-          modal: buildFileViewerModalState({
-            fileId,
-            url: objectUrl,
-            name: viewerName,
-            size: viewerSize,
-            mime: viewerMime,
-            caption: pv.caption || null,
-            chatKey: pv.chatKey,
-            msgIdx: pv.msgIdx,
-          }),
-        });
+        const currentModal = store.get().modal;
+        if (!sameFileViewerContext(currentModal, { fileId, chatKey: pv.chatKey, msgIdx: pv.msgIdx })) {
+          store.set({
+            modal: buildFileViewerModalState({
+              fileId,
+              url: objectUrl,
+              name: viewerName,
+              size: viewerSize,
+              mime: viewerMime,
+              caption: pv.caption || null,
+              chatKey: pv.chatKey,
+              msgIdx: pv.msgIdx,
+            }),
+          });
+        }
       }
     } else {
       clearSilentFileGet(fileId);
@@ -913,7 +829,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const silent = fileId ? isSilentFileGet(fileId) : false;
     debugHook("file.error", { fileId, reason: detail, silent, peer: peer || null });
     if (fileId) {
-      abortHttpDownload(fileId, `server:${detail}`);
+      httpRuntime.abort(fileId, `server:${detail}`);
       finishFileGet(fileId);
       dropFileGetQueue(fileId);
       const snap = store.get();
@@ -967,31 +883,11 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       if (t === "file_error") return handleFileError(msg);
       return false;
     },
-    abortHttpDownload,
+    abortHttpDownload: (fileId: string, reason?: string, opts?: { quiet?: boolean }) => {
+      httpRuntime.abort(fileId, reason, opts);
+    },
     reset: () => {
-      httpResetToken += 1;
-      httpQueueHigh.length = 0;
-      httpQueuePrefetch.length = 0;
-      httpQueueMeta.clear();
-      httpLegacyFallbackAttempted.clear();
-      httpAbortQuiet.clear();
-      if (httpDrainTimer !== null) {
-        try {
-          window.clearTimeout(httpDrainTimer);
-        } catch {
-          // ignore
-        }
-        httpDrainTimer = null;
-      }
-      for (const [fid, entry] of Array.from(httpInFlight.entries())) {
-        httpAbortQuiet.add(fid);
-        try {
-          entry.controller.abort();
-        } catch {
-          // ignore
-        }
-      }
-      httpInFlight.clear();
+      httpRuntime.reset();
       downloadByFileId.clear();
     },
   };

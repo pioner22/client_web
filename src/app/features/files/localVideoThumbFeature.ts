@@ -1,5 +1,5 @@
 import { clampMediaAspectRatio, setCachedMediaAspectRatio } from "../../../helpers/chat/mediaAspectCache";
-import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
+import { isVideoLikeFile } from "../../../helpers/files/mediaKind";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 

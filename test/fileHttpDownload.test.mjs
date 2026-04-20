@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -10,9 +10,18 @@ import { build } from "esbuild";
 async function loadHelper() {
   const tempDir = await mkdtemp(path.join(tmpdir(), "yagodka-web-test-"));
   const outfile = path.join(tempDir, "bundle.mjs");
+  const entry = path.join(tempDir, "entry.ts");
   try {
+    await writeFile(
+      entry,
+      [
+        `export { resumableHttpDownload } from ${JSON.stringify(path.resolve("src/helpers/files/fileHttpDownload.ts"))};`,
+        `export { rememberFileHttpBearer } from ${JSON.stringify(path.resolve("src/helpers/files/fileHttpAuth.ts"))};`,
+      ].join("\n"),
+      "utf8",
+    );
     await build({
-      entryPoints: [path.resolve("src/helpers/files/fileHttpDownload.ts")],
+      entryPoints: [entry],
       outfile,
       bundle: true,
       platform: "node",
@@ -23,7 +32,12 @@ async function loadHelper() {
     });
     const mod = await import(pathToFileURL(outfile).href);
     if (typeof mod.resumableHttpDownload !== "function") throw new Error("missing export: resumableHttpDownload");
-    return { resumableHttpDownload: mod.resumableHttpDownload, cleanup: () => rm(tempDir, { recursive: true, force: true }) };
+    if (typeof mod.rememberFileHttpBearer !== "function") throw new Error("missing export: rememberFileHttpBearer");
+    return {
+      resumableHttpDownload: mod.resumableHttpDownload,
+      rememberFileHttpBearer: mod.rememberFileHttpBearer,
+      cleanup: () => rm(tempDir, { recursive: true, force: true }),
+    };
   } catch (e) {
     await rm(tempDir, { recursive: true, force: true });
     throw e;
@@ -49,7 +63,7 @@ function streamFromChunks(chunks, { failAfter = null } = {}) {
 }
 
 test("fileHttpDownload: докачивает через Range после обрыва stream", async () => {
-  const { resumableHttpDownload, cleanup } = await loadHelper();
+  const { resumableHttpDownload, rememberFileHttpBearer, cleanup } = await loadHelper();
   try {
     const enc = new TextEncoder();
     const calls = [];
@@ -73,8 +87,9 @@ test("fileHttpDownload: докачивает через Range после обр�
       });
     };
 
+    rememberFileHttpBearer("http://x/files/f1", "1");
     const res = await resumableHttpDownload({
-      url: "http://x/files/f1?t=1",
+      url: "http://x/files/f1",
       fetchFn,
       sleep: async () => {},
       baseDelayMs: 1,
@@ -85,6 +100,10 @@ test("fileHttpDownload: докачивает через Range после обр�
     assert.equal(res.total, 6);
     assert.equal(parts.join(""), "abcdef");
     assert.equal(calls.length, 2);
+    assert.equal(calls[0].url, "http://x/files/f1");
+    assert.equal(calls[0].headers.Authorization, "Bearer 1");
+    assert.equal(calls[1].url, "http://x/files/f1");
+    assert.equal(calls[1].headers.Authorization, "Bearer 1");
   } finally {
     await cleanup();
   }
@@ -102,7 +121,7 @@ test("fileHttpDownload: onReset очищает буфер при игноре Ra
     };
 
     const res = await resumableHttpDownload({
-      url: "http://x/files/f1?t=2",
+      url: "http://x/files/f1",
       offset: 2,
       etag: '"6-1"',
       fetchFn,
@@ -125,30 +144,36 @@ test("fileHttpDownload: onReset очищает буфер при игноре Ra
 });
 
 test("fileHttpDownload: refreshUrl используется при 403", async () => {
-  const { resumableHttpDownload, cleanup } = await loadHelper();
+  const { resumableHttpDownload, rememberFileHttpBearer, cleanup } = await loadHelper();
   try {
     const calls = [];
-    const fetchFn = async (input) => {
-      calls.push(String(input));
+    const fetchFn = async (input, init) => {
+      calls.push({ url: String(input), headers: init?.headers || {} });
       if (calls.length === 1) return new Response(null, { status: 403 });
       return new Response(new TextEncoder().encode("ok"), { status: 200, headers: { "Content-Length": "2" } });
     };
     const parts = [];
+    rememberFileHttpBearer("http://x/files/f1", "bad");
     const res = await resumableHttpDownload({
-      url: "http://x/files/f1?t=bad",
+      url: "http://x/files/f1",
       fetchFn,
       sleep: async () => {},
       baseDelayMs: 1,
       maxDelayMs: 1,
       maxUrlRefresh: 1,
-      refreshUrl: async () => "http://x/files/f1?t=good",
+      refreshUrl: async () => {
+        rememberFileHttpBearer("http://x/files/f1", "good");
+        return "http://x/files/f1";
+      },
       onChunk: (chunk) => parts.push(Buffer.from(chunk).toString("utf8")),
     });
     assert.equal(res.received, 2);
     assert.equal(parts.join(""), "ok");
-    assert.deepEqual(calls, ["http://x/files/f1?t=bad", "http://x/files/f1?t=good"]);
+    assert.deepEqual(calls, [
+      { url: "http://x/files/f1", headers: { Authorization: "Bearer bad" } },
+      { url: "http://x/files/f1", headers: { Authorization: "Bearer good" } },
+    ]);
   } finally {
     await cleanup();
   }
 });
-

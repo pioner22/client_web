@@ -8,7 +8,7 @@ import type {
 } from "../../stores/types";
 import { getOrCreateInstanceId } from "../../helpers/device/clientTags";
 import { playNotificationSound } from "../../helpers/notify/notifySound";
-import { getTabNotifier } from "../../helpers/notify/tabNotifier";
+import { getTabNotifier } from "../../helpers/notify/tabNotifierLazy";
 import { nowTs } from "../../helpers/time";
 
 export const HISTORY_PAGE_SIZE = 200;
@@ -209,4 +209,3 @@ export function maybePlaySound(
   if (!tabNotifier.shouldPlaySound(notifKey)) return;
   void playNotificationSound(kind).catch(() => {});
 }
-

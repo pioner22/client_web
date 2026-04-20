@@ -99,7 +99,7 @@ function mkCookieDoc() {
   return { doc, jar, writes };
 }
 
-test("auth/session: storeSessionToken пишет cookie SameSite=Strict (+Secure для https) и localStorage", async () => {
+test("auth/session: storeSessionToken держит token только в памяти и очищает legacy persistence", async () => {
   const { mod, cleanup } = await loadSessionModule();
   try {
     const { storeSessionToken, getStoredSessionToken } = mod;
@@ -115,12 +115,17 @@ test("auth/session: storeSessionToken пишет cookie SameSite=Strict (+Secure
         window: { location: { protocol: "https:", hostname: "yagodka.org" } },
       },
       () => {
+        localStorage.setItem("yagodka_auth_session", "LEGACY");
+        sessionStorage.setItem("yagodka_auth_session", "LEGACYSESSION");
+        doc.cookie = "yagodka_auth_session=LEGACYCOOKIE";
         storeSessionToken("A".repeat(32));
         assert.equal(getStoredSessionToken(), "A".repeat(32));
-        assert.equal(localStorage.getItem("yagodka_auth_session"), "A".repeat(32));
+        assert.equal(sessionStorage.getItem("yagodka_auth_session"), null);
+        assert.equal(localStorage.getItem("yagodka_auth_session"), null);
         assert.ok(writes.length >= 1);
         assert.ok(writes.some((x) => x.includes("SameSite=Strict")));
         assert.ok(writes.some((x) => x.includes("Secure")));
+        assert.ok(writes.some((x) => x.includes("Max-Age=0")));
       }
     );
   } finally {
@@ -149,7 +154,8 @@ test("auth/session: normalizeToken отбрасывает мусор и не п�
         storeSessionToken("x".repeat(600));
         assert.equal(getStoredSessionToken(), null);
         assert.equal(localStorage.getItem("yagodka_auth_session"), null);
-        assert.equal(writes.length, 0);
+        assert.equal(sessionStorage.getItem("yagodka_auth_session"), null);
+        assert.ok(writes.every((x) => x.includes("Max-Age=0")));
       }
     );
   } finally {
@@ -157,10 +163,39 @@ test("auth/session: normalizeToken отбрасывает мусор и не п�
   }
 });
 
-test("auth/session: cookies шарятся между www.yagodka.org и yagodka.org", async () => {
+test("auth/session: legacy persistent token больше не мигрирует и сразу очищается", async () => {
   const { mod, cleanup } = await loadSessionModule();
   try {
-    const { storeAuthId } = mod;
+    const { getStoredSessionToken } = mod;
+    const localStorage = mkStorage();
+    const sessionStorage = mkStorage();
+    const { doc, writes } = mkCookieDoc();
+
+    withGlobals(
+      {
+        document: doc,
+        localStorage,
+        sessionStorage,
+        window: { location: { protocol: "https:", hostname: "www.yagodka.org" } },
+      },
+      () => {
+        localStorage.setItem("yagodka_auth_session", "B".repeat(32));
+        sessionStorage.setItem("yagodka_auth_session", "B".repeat(32));
+        assert.equal(getStoredSessionToken(), null);
+        assert.equal(sessionStorage.getItem("yagodka_auth_session"), null);
+        assert.equal(localStorage.getItem("yagodka_auth_session"), null);
+        assert.ok(writes.some((x) => x.includes("yagodka_auth_session=") && x.includes("Max-Age=0")));
+      }
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test("auth/session: storeAuthId хранит user id только в localStorage", async () => {
+  const { mod, cleanup } = await loadSessionModule();
+  try {
+    const { storeAuthId, getStoredAuthId } = mod;
     const localStorage = mkStorage();
     const sessionStorage = mkStorage();
     const { doc, writes } = mkCookieDoc();
@@ -174,7 +209,9 @@ test("auth/session: cookies шарятся между www.yagodka.org и yagodka
       },
       () => {
         storeAuthId("854-432-319");
-        assert.ok(writes.some((x) => x.includes("Domain=yagodka.org")));
+        assert.equal(getStoredAuthId(), "854-432-319");
+        assert.equal(localStorage.getItem("yagodka_user_id"), "854-432-319");
+        assert.equal(writes.length, 0);
       }
     );
   } finally {
@@ -182,3 +219,38 @@ test("auth/session: cookies шарятся между www.yagodka.org и yagodka
   }
 });
 
+test("auth/session: auto-auth block мигрирует на новый storage key без legacy хвоста", async () => {
+  const { mod, cleanup } = await loadSessionModule();
+  try {
+    const { isSessionAutoAuthBlocked, blockSessionAutoAuth, clearSessionAutoAuthBlock } = mod;
+    const localStorage = mkStorage();
+    const sessionStorage = mkStorage();
+    const { doc } = mkCookieDoc();
+
+    withGlobals(
+      {
+        document: doc,
+        localStorage,
+        sessionStorage,
+        window: { location: { protocol: "https:", hostname: "www.yagodka.org" } },
+      },
+      () => {
+        sessionStorage.setItem("yagodka_autoauth_block_v1", "1");
+        assert.equal(isSessionAutoAuthBlocked(), true);
+        assert.equal(sessionStorage.getItem("yagodka_autoauth_block_v1"), null);
+        assert.equal(sessionStorage.getItem("yagodka_resume_block_v1"), "1");
+
+        clearSessionAutoAuthBlock();
+        assert.equal(isSessionAutoAuthBlocked(), false);
+        assert.equal(sessionStorage.getItem("yagodka_resume_block_v1"), null);
+
+        blockSessionAutoAuth();
+        assert.equal(isSessionAutoAuthBlocked(), true);
+        assert.equal(sessionStorage.getItem("yagodka_resume_block_v1"), "1");
+        assert.equal(sessionStorage.getItem("yagodka_autoauth_block_v1"), null);
+      }
+    );
+  } finally {
+    await cleanup();
+  }
+});

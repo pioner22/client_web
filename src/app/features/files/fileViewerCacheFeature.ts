@@ -1,5 +1,5 @@
 import { getCachedFileBlob } from "../../../helpers/files/fileBlobCache";
-import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
+import { isVideoLikeFile } from "../../../helpers/files/mediaKind";
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
 import type { FileViewerModalParams, FileViewerModalState } from "./fileViewerFeature";

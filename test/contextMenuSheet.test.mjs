@@ -108,6 +108,7 @@ function withStubs(opts, run) {
       this.tagName = String(tagName).toUpperCase();
       this._attrs = new Map();
       this._children = [];
+      this._listeners = new Map();
       this._className = "";
       this._classSet = new Set();
       this.classList = new ClassListStub(this);
@@ -125,13 +126,22 @@ function withStubs(opts, run) {
     setAttribute(name, value) {
       this._attrs.set(String(name), String(value));
     }
+    getAttribute(name) {
+      const v = this._attrs.get(String(name));
+      return v === undefined ? null : v;
+    }
     hasAttribute(name) {
       return this._attrs.has(String(name));
     }
     append(...nodes) {
       for (const n of nodes) this._children.push(n);
     }
-    addEventListener() {}
+    addEventListener(type, handler) {
+      const key = String(type);
+      const arr = this._listeners.get(key) || [];
+      arr.push(handler);
+      this._listeners.set(key, arr);
+    }
     focus() {}
   }
 
@@ -204,17 +214,37 @@ function withStubs(opts, run) {
   }
 }
 
+function findFirst(node, predicate) {
+  if (!node || typeof node !== "object") return null;
+  if (predicate(node)) return node;
+  const kids = Array.isArray(node._children) ? node._children : [];
+  for (const child of kids) {
+    const hit = findFirst(child, predicate);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 test("renderContextMenu: на coarse pointer рендерится как bottom-sheet", async () => {
   const helper = await loadRenderContextMenu();
   try {
     withStubs({ coarse: true }, () => {
+      let closed = 0;
       const node = helper.renderContextMenu(
         { x: 10, y: 20, title: "Меню", target: { kind: "peer", id: "123-456-789" }, items: [{ id: "x", label: "Действие" }] },
-        { onSelect() {}, onClose() {} }
+        { onSelect() {}, onClose() { closed += 1; } }
       );
       assert.ok(node.className.includes("ctx-menu-sheet"));
+      assert.equal(node.getAttribute("role"), "dialog");
+      assert.equal(node.getAttribute("aria-modal"), "true");
       assert.equal(node.style.left, "");
       assert.equal(node.style.top, "");
+      const closeBtn = findFirst(node, (child) => typeof child.className === "string" && child.className.split(/\s+/).includes("ctx-close"));
+      assert.ok(closeBtn);
+      const clickListeners = closeBtn._listeners.get("click") || [];
+      assert.equal(clickListeners.length, 1);
+      clickListeners[0]({ preventDefault() {} });
+      assert.equal(closed, 1);
     });
   } finally {
     await helper.cleanup();
@@ -230,11 +260,13 @@ test("renderContextMenu: на fine pointer позиционируется по x
         { onSelect() {}, onClose() {} }
       );
       assert.ok(!node.className.includes("ctx-menu-sheet"));
+      assert.equal(node.getAttribute("role"), "menu");
       assert.equal(node.style.left, "123px");
       assert.equal(node.style.top, "456px");
+      const closeBtn = findFirst(node, (child) => typeof child.className === "string" && child.className.split(/\s+/).includes("ctx-close"));
+      assert.equal(closeBtn, null);
     });
   } finally {
     await helper.cleanup();
   }
 });
-

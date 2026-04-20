@@ -32,7 +32,7 @@ export function handleCoreAuthMessage(
     })();
     patch({
       serverVersion: sv,
-      status: "Handshake OK",
+      status: "Соединение установлено",
       pwaPushPermission: pushPermission,
       ...(pushKey ? { pwaPushPublicKey: pushKey } : {}),
     });
@@ -47,6 +47,8 @@ export function handleCoreAuthMessage(
       ...prev,
       authed: false,
       authMode: getStoredAuthId() ? "login" : "register",
+      sessionDevices: [],
+      sessionDevicesStatus: null,
       // “В тишине”: не открываем модалку автоматически.
       status: "Сессия активна в другом окне. Нажмите «Войти», чтобы продолжить здесь.",
     }));
@@ -59,7 +61,7 @@ export function handleCoreAuthMessage(
     if (selfId) storeAuthId(selfId);
     if (sess) storeSessionToken(sess);
     else {
-      // Refresh cookie/localStorage TTL for an existing token (server doesn't resend it on session auth).
+      // Keep the existing session-scoped token normalized and migrated out of legacy persistence.
       const existing = getStoredSessionToken();
       if (existing) storeSessionToken(existing);
     }
@@ -70,7 +72,7 @@ export function handleCoreAuthMessage(
       authRememberedId: selfId || state.authRememberedId,
       ...(sess ? { authMode: "auto" as const } : {}),
       modal: null,
-      status: "Connected",
+      status: "Вход выполнен",
       lastRead,
     });
     if (state.netLeader) {
@@ -107,6 +109,8 @@ export function handleCoreAuthMessage(
       clearStoredSessionToken();
       patch({
         authMode: getStoredAuthId() ? "login" : "register",
+        sessionDevices: [],
+        sessionDevicesStatus: null,
         // “В тишине”: не открываем модалку сами — только статус, дальше пользователь сам нажмёт «Войти».
         modal: null,
         status: "Сессия устарела или недействительна. Нажмите «Войти», чтобы войти снова.",
@@ -124,7 +128,7 @@ export function handleCoreAuthMessage(
           ? "Слишком много попыток. Попробуйте позже."
             : "Не удалось выполнить вход";
     if (state.modal?.kind === "auth") {
-      patch({ modal: { kind: "auth", message }, status: "Auth failed" });
+      patch({ modal: { kind: "auth", message }, status: message });
     } else {
       patch({ status: message });
     }
@@ -146,7 +150,7 @@ export function handleCoreAuthMessage(
       authRememberedId: selfId || state.authRememberedId,
       ...(sess ? { authMode: "auto" as const } : {}),
       modal: null,
-      status: "Registered",
+      status: "Регистрация завершена",
     });
     if (state.netLeader) {
       gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });
@@ -168,7 +172,7 @@ export function handleCoreAuthMessage(
             : reason === "rate_limited"
               ? "Слишком много попыток. Попробуйте позже."
               : "Регистрация не удалась";
-    patch({ modal: { kind: "auth", message }, status: "Register failed" });
+    patch({ modal: { kind: "auth", message }, status: message });
     return true;
   }
 

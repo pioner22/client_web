@@ -7,7 +7,7 @@ import type { AppState, PageKind, TargetRef } from "../../../stores/types";
 
 const RESTART_STATE_KEY = "yagodka_restart_state_v1";
 const PAGE_KINDS: ReadonlyArray<PageKind> = ["main", "search", "profile", "user", "group", "board", "files"];
-const CHAT_SEARCH_FILTERS: ReadonlyArray<ChatSearchFilter> = ["all", "media", "files", "links", "audio"];
+const CHAT_SEARCH_FILTERS: ReadonlyArray<ChatSearchFilter> = ["all", "media", "files", "links", "music", "voice"];
 
 export interface RestartStateSnapshot {
   page?: PageKind;

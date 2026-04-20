@@ -1,4 +1,6 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
+import { getChatHistoryViewportRuntime } from "../../../helpers/chat/historyViewportRuntime";
+import { isChatHostNearBottom, isChatStickyBottomActive } from "../../../helpers/chat/stickyBottom";
 import type { Store } from "../../../stores/store";
 import type { AppState, MobileSidebarTab } from "../../../stores/types";
 
@@ -80,16 +82,14 @@ export function createSidebarOverlayFeature(deps: SidebarOverlayFeatureDeps): Si
   let floatingSidebarChatWasAtBottom = false;
   let suppressFloatingSidebarCloseStickBottom = false;
 
-  const getMaxScrollTop = (host: HTMLElement) => Math.max(0, host.scrollHeight - host.clientHeight);
-
   function isChatAtBottom(key: string): boolean {
     const k = String(key || "").trim();
     if (!k) return true;
     const currentKey = String(chatHost.getAttribute("data-chat-key") || "").trim();
     if (!currentKey || currentKey !== k) return true;
-    const sticky = (chatHost as any).__stickBottom;
-    if (sticky && sticky.active && sticky.key === k) return true;
-    return chatHost.scrollTop >= getMaxScrollTop(chatHost) - 24;
+    const sticky = getChatHistoryViewportRuntime(chatHost).stickyBottom;
+    if (isChatStickyBottomActive(chatHost, sticky, k)) return true;
+    return isChatHostNearBottom(chatHost);
   }
 
   function shouldShowRightOverlay(st: AppState): boolean {
@@ -359,4 +359,3 @@ export function createSidebarOverlayFeature(deps: SidebarOverlayFeatureDeps): Si
     isFloatingSidebarOpen: () => floatingSidebarOpen,
   };
 }
-

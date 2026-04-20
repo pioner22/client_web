@@ -126,6 +126,48 @@ test("handleServerMessage: board_invite парсится из payload.board", as
   }
 });
 
+test("handleServerMessage: group_join_request создаёт pending request и системное action-сообщение", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const { getState, patch } = createPatchHarness({
+      pendingGroupInvites: [],
+      pendingBoardInvites: [],
+      pendingGroupJoinRequests: [],
+      conversations: {},
+      modal: null,
+      status: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "group_join_request",
+        group_id: "grp-0002",
+        from: "222-222-222",
+        name: "Команда",
+        handle: "@team",
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.pendingGroupJoinRequests.length, 1);
+    assert.equal(st.pendingGroupJoinRequests[0].groupId, "grp-0002");
+    assert.equal(st.pendingGroupJoinRequests[0].from, "222-222-222");
+    assert.equal(st.pendingGroupJoinRequests[0].name, "Команда");
+    assert.equal(st.pendingGroupJoinRequests[0].handle, "@team");
+    const conv = st.conversations?.["dm:222-222-222"] || [];
+    const msg = Array.isArray(conv) ? conv.find((m) => m && m.localId === "action:group_join_request:grp-0002:222-222-222") : null;
+    assert.ok(msg, "должно быть системное сообщение с action:group_join_request");
+    assert.equal(msg.kind, "sys");
+    assert.equal(msg.attachment?.kind, "action");
+    assert.equal(msg.attachment?.payload?.kind, "group_join_request");
+  } finally {
+    await cleanup();
+  }
+});
+
 test("handleServerMessage: update_required открывает экран обновления", async () => {
   const { handleServerMessage, cleanup } = await loadHandleServerMessage();
   try {

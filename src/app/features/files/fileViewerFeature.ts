@@ -1,6 +1,6 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
-import { isImageLikeFile } from "../../../helpers/files/fileBlobCache";
-import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
+import { resolveViewerSourceScope } from "../../../helpers/chat/fileViewerScope";
+import { isImageLikeFile, isVideoLikeFile } from "../../../helpers/files/mediaKind";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
 
@@ -49,7 +49,6 @@ export interface FileViewerFeatureDeps {
   store: Store<AppState>;
   closeModal: () => void;
   jumpToChatMsgIdx: (idx: number) => void;
-  requestFreshHttpDownloadUrl: (fileId: string) => Promise<HttpFileUrlInfo>;
   tryOpenFileViewerFromCache: (
     fileId: string,
     meta: {
@@ -91,22 +90,11 @@ function isVisualMediaMessage(st: AppState, msg: ChatMessage | null | undefined)
   return isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || hasThumb;
 }
 
-function findNeighborMediaIndex(st: AppState, msgs: ChatMessage[], startIdx: number, direction: -1 | 1): number | null {
-  if (!Number.isFinite(startIdx) || startIdx < 0 || startIdx >= msgs.length) return null;
-  for (let i = startIdx + direction; i >= 0 && i < msgs.length; i += direction) {
-    const msg = msgs[i];
-    if (!msg || msg.kind === "sys") continue;
-    if (isVisualMediaMessage(st, msg)) return i;
-  }
-  return null;
-}
-
 export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewerFeature {
   const {
     store,
     closeModal,
     jumpToChatMsgIdx,
-    requestFreshHttpDownloadUrl,
     tryOpenFileViewerFromCache,
     enqueueFileGet,
     setPendingFileViewer,
@@ -124,6 +112,39 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
 
   const VIEWER_PREFETCH_MAX_BYTES = 24 * 1024 * 1024;
 
+  const queueViewerDownload = (params: {
+    fileId: string;
+    name: string;
+    size: number;
+    mime: string | null;
+    caption: string | null;
+    chatKey: string | null;
+    msgIdx: number | null;
+    reason: string;
+  }) => {
+    const fileId = String(params.fileId || "").trim();
+    if (!fileId) return;
+    setPendingFileViewer({
+      fileId,
+      name: params.name,
+      size: params.size,
+      mime: params.mime,
+      caption: params.caption,
+      chatKey: params.chatKey,
+      msgIdx: params.msgIdx,
+    });
+    enqueueFileGet(fileId, { priority: "high" });
+    debugHook("file.viewer.file_get", {
+      fileId,
+      reason: params.reason,
+      chatKey: params.chatKey,
+      msgIdx: params.msgIdx,
+      size: params.size,
+      mime: params.mime ? String(params.mime).slice(0, 80) : null,
+    });
+    store.set({ status: `Скачивание: ${params.name || fileId}` });
+  };
+
   const maybePrefetchNeighbors = (chatKeyRaw: string, centerIdxRaw: number) => {
     const chatKey = String(chatKeyRaw || "").trim();
     const centerIdx = Number.isFinite(centerIdxRaw) ? Math.trunc(centerIdxRaw) : -1;
@@ -132,9 +153,9 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     if (st.conn !== "connected" || !st.authed) return;
     const msgs = st.conversations[chatKey] || [];
     if (!msgs.length) return;
-    const prevIdx = findNeighborMediaIndex(st, msgs, centerIdx, -1);
-    const nextIdx = findNeighborMediaIndex(st, msgs, centerIdx, 1);
-    for (const neighborIdx of [prevIdx, nextIdx]) {
+    const scope = resolveViewerSourceScope(msgs, centerIdx);
+    const neighborIndices = scope ? [scope.prevIdx, scope.nextIdx] : [];
+    for (const neighborIdx of neighborIndices) {
       if (neighborIdx === null) continue;
       const msg = msgs[neighborIdx];
       const att = msg?.attachment;
@@ -166,8 +187,9 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const chatKey = params.chatKey ? String(params.chatKey) : null;
     const msgIdx = Number.isFinite(params.msgIdx) ? Math.trunc(Number(params.msgIdx)) : null;
     const msgs = chatKey ? st.conversations[chatKey] || [] : [];
-    const prevIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(st, msgs, msgIdx, -1) : null;
-    const nextIdx = chatKey && msgIdx !== null ? findNeighborMediaIndex(st, msgs, msgIdx, 1) : null;
+    const scope = chatKey && msgIdx !== null ? resolveViewerSourceScope(msgs, msgIdx) : null;
+    const prevIdx = scope?.prevIdx ?? null;
+    const nextIdx = scope?.nextIdx ?? null;
     const fileId = params.fileId ? String(params.fileId).trim() : "";
     const openedAtMs = (() => {
       const cur = st.modal;
@@ -267,133 +289,16 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       debugHook("file.viewer.open.thumb", { chatKey, msgIdx, fileId, hasThumb: true });
       store.set({ modal: buildModalState({ fileId, url: thumbUrl as string, name, size, mime, caption, autoplay: false, chatKey, msgIdx }) });
       maybePrefetchNeighbors(chatKey, msgIdx);
-      void (async () => {
-        try {
-          const info = await requestFreshHttpDownloadUrl(fileId as string);
-          const fullUrl = String(info?.url || "").trim();
-          if (!fullUrl) {
-            debugHook("file.viewer.open.thumb_upgrade_fail", { chatKey, msgIdx, fileId, reason: "missing_url" });
-            return;
-          }
-          const latest = store.get();
-          const modal = latest.modal;
-          if (!modal || modal.kind !== "file_viewer") {
-            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "no_modal" });
-            return;
-          }
-          const modalFileId = typeof modal.fileId === "string" ? modal.fileId.trim() : "";
-          if (!modalFileId || modalFileId !== String(fileId)) {
-            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "different_file" });
-            return;
-          }
-          const modalUrl = String(modal.url || "").trim();
-          if (modalUrl && thumbUrl && modalUrl !== thumbUrl) {
-            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "already_upgraded" });
-            return;
-          }
-          debugHook("file.viewer.open.thumb_upgrade", { chatKey, msgIdx, fileId, phase: "prefetch_start" });
-          const prefetchStartedAt = Date.now();
-          const prefetchOk = await (async (): Promise<boolean> => {
-            try {
-              const img = new Image();
-              img.decoding = "async";
-              await new Promise<void>((resolve, reject) => {
-                let done = false;
-                const timer = window.setTimeout(() => {
-                  if (done) return;
-                  done = true;
-                  reject(new Error("timeout"));
-                }, 15_000);
-                const cleanup = () => {
-                  try {
-                    window.clearTimeout(timer);
-                  } catch {
-                    // ignore
-                  }
-                  try {
-                    img.onload = null;
-                    img.onerror = null;
-                  } catch {
-                    // ignore
-                  }
-                };
-                img.onload = () => {
-                  if (done) return;
-                  done = true;
-                  cleanup();
-                  resolve();
-                };
-                img.onerror = () => {
-                  if (done) return;
-                  done = true;
-                  cleanup();
-                  reject(new Error("error"));
-                };
-                img.src = fullUrl;
-                if (img.complete) {
-                  if (img.naturalWidth > 0) {
-                    if (done) return;
-                    done = true;
-                    cleanup();
-                    resolve();
-                  } else {
-                    if (done) return;
-                    done = true;
-                    cleanup();
-                    reject(new Error("error"));
-                  }
-                }
-              });
-              return true;
-            } catch {
-              return false;
-            }
-          })();
-          debugHook("file.viewer.open.thumb_upgrade", {
-            chatKey,
-            msgIdx,
-            fileId,
-            phase: prefetchOk ? "prefetch_ok" : "prefetch_fail",
-            elapsed_ms: Math.max(0, Date.now() - prefetchStartedAt),
-          });
-          if (!prefetchOk) return;
-
-          const latestAfterPrefetch = store.get();
-          const modalAfterPrefetch = latestAfterPrefetch.modal;
-          if (!modalAfterPrefetch || modalAfterPrefetch.kind !== "file_viewer") {
-            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "no_modal_after_prefetch" });
-            return;
-          }
-          const modalFileIdAfterPrefetch = typeof modalAfterPrefetch.fileId === "string" ? modalAfterPrefetch.fileId.trim() : "";
-          if (!modalFileIdAfterPrefetch || modalFileIdAfterPrefetch !== String(fileId)) {
-            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "different_file_after_prefetch" });
-            return;
-          }
-          const modalUrlAfterPrefetch = String(modalAfterPrefetch.url || "").trim();
-          if (modalUrlAfterPrefetch && thumbUrl && modalUrlAfterPrefetch !== thumbUrl) {
-            debugHook("file.viewer.open.thumb_upgrade_skip", { chatKey, msgIdx, fileId, reason: "already_upgraded_after_prefetch" });
-            return;
-          }
-          debugHook("file.viewer.open.thumb_upgrade", { chatKey, msgIdx, fileId, phase: "apply" });
-          const nextMime = mime || info.mime || null;
-          store.set({
-            modal: buildModalState({
-              fileId,
-              url: fullUrl,
-              name: name || info.name || "файл",
-              size: size || info.size || 0,
-              mime: nextMime,
-              caption,
-              autoplay: false,
-              chatKey,
-              msgIdx,
-            }),
-          });
-        } catch (err) {
-          const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
-          debugHook("file.viewer.open.thumb_upgrade_fail", { chatKey, msgIdx, fileId, reason: errMsg || "thumb_upgrade_failed" });
-        }
-      })();
+      queueViewerDownload({
+        fileId: fileId as string,
+        name,
+        size,
+        mime,
+        caption,
+        chatKey,
+        msgIdx,
+        reason: "thumb_prefetch_upgrade",
+      });
       return true;
     }
     if (!fileId) {
@@ -418,48 +323,20 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
       return true;
     }
-    try {
-      debugHook("file.viewer.open.http_url", { chatKey, msgIdx, fileId, phase: "start" });
-      const info = await requestFreshHttpDownloadUrl(fileId);
-      const nextMime = mime || info.mime || null;
-      const nextAutoplay = autoplay || isVideoLikeFile(name || info.name || "", nextMime);
-      debugHook("file.viewer.open.http_url", {
-        chatKey,
-        msgIdx,
-        fileId,
-        phase: "ok",
-        hasMime: Boolean(nextMime),
-        autoplay: Boolean(nextAutoplay),
-      });
-      store.set({
-        modal: buildModalState({
-          fileId,
-          url: info.url,
-          name: name || info.name || "файл",
-          size: size || info.size || 0,
-          mime: nextMime,
-          caption,
-          autoplay: nextAutoplay,
-          chatKey,
-          msgIdx,
-        }),
-      });
-      maybePrefetchNeighbors(chatKey, msgIdx);
-      return true;
-    } catch (err) {
-      const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
-      debugHook("file.viewer.open.http_url", { chatKey, msgIdx, fileId, phase: "fail", reason: errMsg || "http_url_failed" });
-      // Fallback: download into cache and open when ready (slow but offline-friendly).
-      setPendingFileViewer({ fileId, name, size, mime, caption, chatKey, msgIdx });
-      enqueueFileGet(fileId, { priority: "high" });
-      debugHook("file.viewer.open.fallback_file_get", { chatKey, msgIdx, fileId, priority: "high" });
-      store.set({ status: `Скачивание: ${name}` });
-      return true;
-    }
+    queueViewerDownload({
+      fileId,
+      name,
+      size,
+      mime,
+      caption,
+      chatKey,
+      msgIdx,
+      reason: autoplay ? "direct_open_video_download" : "direct_open_download",
+    });
+    return true;
   }
 
-  const viewerRecover = new Map<string, { lastReloadAt: number; lastDownloadAt: number }>();
-  const RECOVER_RELOAD_GAP_MS = 4200;
+  const viewerRecover = new Map<string, { lastDownloadAt: number }>();
   const RECOVER_DOWNLOAD_GAP_MS = 6500;
 
   async function recoverCurrent(): Promise<void> {
@@ -521,48 +398,23 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     if (opened) return;
 
     const now = Date.now();
-    const prev = viewerRecover.get(fileId) || { lastReloadAt: 0, lastDownloadAt: 0 };
-    const canReload = !prev.lastReloadAt || now - prev.lastReloadAt >= RECOVER_RELOAD_GAP_MS;
-    if (canReload) {
-      viewerRecover.set(fileId, { ...prev, lastReloadAt: now });
-      try {
-        debugHook("file.viewer.recover.http_url", { fileId, phase: "start" });
-        const info = await requestFreshHttpDownloadUrl(fileId);
-        const nextMime = mime || info.mime || null;
-        const nextAutoplay = isVideoLikeFile(name || info.name || "", nextMime);
-        const latest = store.get();
-        const latestModal = latest.modal;
-        if (!latestModal || latestModal.kind !== "file_viewer") return;
-        const latestFileId = typeof latestModal.fileId === "string" ? latestModal.fileId.trim() : "";
-        if (latestFileId && latestFileId !== fileId) return;
-        debugHook("file.viewer.recover.http_url", { fileId, phase: "ok", hasMime: Boolean(nextMime), autoplay: Boolean(nextAutoplay) });
-        store.set({
-          modal: buildModalState({
-            fileId,
-            url: info.url,
-            name: name || info.name || "файл",
-            size: size || info.size || 0,
-            mime: nextMime,
-            caption,
-            autoplay: nextAutoplay,
-            chatKey: chatKey || null,
-            msgIdx,
-          }),
-        });
-        return;
-      } catch (err) {
-        const errMsg = err instanceof Error ? String(err.message || "") : String(err || "");
-        debugHook("file.viewer.recover.http_url", { fileId, phase: "fail", reason: errMsg || "http_url_failed" });
-        // fall through to download
-      }
-    }
-
+    const prev = viewerRecover.get(fileId) || { lastDownloadAt: 0 };
     const canDownload = !prev.lastDownloadAt || now - prev.lastDownloadAt >= RECOVER_DOWNLOAD_GAP_MS;
-    if (canDownload) viewerRecover.set(fileId, { ...prev, lastDownloadAt: now });
-    setPendingFileViewer({ fileId, name, size, mime, caption, chatKey: chatKey || null, msgIdx });
-    enqueueFileGet(fileId, { priority: "high" });
-    debugHook("file.viewer.recover.file_get", { fileId, canReload, canDownload, priority: "high" });
-    store.set({ status: `Скачивание: ${name || fileId}` });
+    if (!canDownload) {
+      debugHook("file.viewer.recover.file_get_skip", { fileId, reason: "gap_guard" });
+      return;
+    }
+    viewerRecover.set(fileId, { lastDownloadAt: now });
+    queueViewerDownload({
+      fileId,
+      name,
+      size,
+      mime,
+      caption,
+      chatKey: chatKey || null,
+      msgIdx,
+      reason: "recover_download",
+    });
   }
 
   function navigate(dir: "prev" | "next") {

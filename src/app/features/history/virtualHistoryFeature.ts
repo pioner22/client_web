@@ -1,6 +1,9 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 import { conversationKey } from "../../../helpers/chat/conversationKey";
+import { resolveVirtualStartForIndex, resolveVirtualStartForScroll } from "../../../helpers/chat/historyViewportCoordinator";
+import { getChatHistoryViewportRuntime } from "../../../helpers/chat/historyViewportRuntime";
+import { isChatStickyBottomActive } from "../../../helpers/chat/stickyBottom";
 import {
   HISTORY_VIRTUAL_OVERSCAN,
   HISTORY_VIRTUAL_THRESHOLD,
@@ -47,17 +50,18 @@ export function createVirtualHistoryFeature(deps: VirtualHistoryFeatureDeps): Vi
     const msgs = st.conversations[key] || [];
     if (!shouldVirtualize(msgs.length, false, historyVirtualThreshold)) return;
 
-    const hostState = chatHost as any;
-    const avgMap: Map<string, number> | undefined = hostState.__chatVirtualAvgHeights;
-    const avg = clampVirtualAvg(avgMap?.get(key));
-    const maxStart = getVirtualMaxStart(msgs.length, historyVirtualWindow);
-    let targetStart = Math.floor(scrollTop / avg) - historyVirtualOverscan;
-    targetStart = Math.max(0, Math.min(maxStart, targetStart));
-    const stick = hostState.__stickBottom;
-    if (stick && stick.active && stick.key === key) {
-      targetStart = maxStart;
-    }
-    const currentStart = getVirtualStart(msgs.length, st.historyVirtualStart?.[key], historyVirtualWindow);
+    const runtime = getChatHistoryViewportRuntime(chatHost);
+    const avgMap = runtime.virtualAvgHeights;
+    const stick = runtime.stickyBottom;
+    const { currentStart, targetStart } = resolveVirtualStartForScroll({
+      msgsLength: msgs.length,
+      currentStart: st.historyVirtualStart?.[key],
+      scrollTop,
+      avgHint: clampVirtualAvg(avgMap?.get(key)),
+      overscan: historyVirtualOverscan,
+      windowSize: historyVirtualWindow,
+      stickToBottom: isChatStickyBottomActive(chatHost, stick, key),
+    });
     const delta = Math.abs(targetStart - currentStart);
     if (delta < Math.max(8, Math.floor(historyVirtualOverscan / 2))) return;
     const now = Date.now();
@@ -74,8 +78,7 @@ export function createVirtualHistoryFeature(deps: VirtualHistoryFeatureDeps): Vi
     const msgIdx = Number(idx);
     if (!Number.isFinite(msgIdx) || msgIdx < 0) return;
     if (!shouldVirtualize(msgsLength, searchActive, historyVirtualThreshold)) return;
-    const maxStart = getVirtualMaxStart(msgsLength, historyVirtualWindow);
-    const targetStart = Math.max(0, Math.min(maxStart, msgIdx - Math.floor(historyVirtualWindow / 2)));
+    const targetStart = resolveVirtualStartForIndex(msgsLength, msgIdx, historyVirtualWindow);
     store.set((prev) => ({
       ...prev,
       historyVirtualStart: { ...prev.historyVirtualStart, [key]: targetStart },
@@ -105,4 +108,3 @@ export function createVirtualHistoryFeature(deps: VirtualHistoryFeatureDeps): Vi
 
   return { maybeUpdateVirtualWindow, ensureIndexVisible, maybeClampStartAtTop };
 }
-

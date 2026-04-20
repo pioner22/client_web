@@ -49,6 +49,32 @@
   flex: 0 0 auto;
 }
 
+.hdr-auth {
+  min-height: var(--hdr-action-size);
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--focus), transparent 26%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--focus), #ffffff 18%), color-mix(in srgb, var(--focus), #000000 8%));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--focus), transparent 74%);
+}
+
+.hdr-auth:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.hdr-auth:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 .hdr-action {
   width: var(--hdr-action-size);
   height: var(--hdr-action-size);

@@ -4,7 +4,8 @@ import { conversationKey, dmKey, roomKey } from "../../../helpers/chat/conversat
 import { newestServerMessageId } from "../../../helpers/chat/historySync";
 import { loadHistoryCachePrefs } from "../../../helpers/chat/historyCachePrefs";
 import { countHistoryMessagesForConvo, getHistoryConvoMeta, getHistoryLatestMessages, getHistoryMessagesBefore } from "../../../helpers/chat/historyIdb";
-import { mergeMessages } from "../../../helpers/chat/mergeMessages";
+import { historyViewportRecentlyCompensated, shiftVirtualStartForPrepend } from "../../../helpers/chat/historyViewportCoordinator";
+import { mergeMessages, prependedCount } from "../../../helpers/chat/mergeMessages";
 
 type DeviceCapsLike = {
   constrained: boolean;
@@ -43,7 +44,6 @@ export interface HistoryFeature {
   onDisconnect: () => void;
   onLogout: () => void;
   markChatAutoScroll: (key: string, waitForHistory?: boolean) => void;
-  applyPrependAnchorAfterRender: (st: AppState) => void;
   applyPendingAutoScrollAfterRender: (st: AppState) => void;
   maybeBootstrapPrefetch: (st: AppState) => void;
   hasPendingActivityForUpdate: () => boolean;
@@ -58,15 +58,6 @@ function oldestServerMessageId(msgs: ChatMessage[]): number | null {
   }
   return min;
 }
-
-type HistoryPrependAnchor = {
-  key: string;
-  msgKey?: string;
-  msgId?: number;
-  rectBottom?: number;
-  scrollHeight: number;
-  scrollTop: number;
-};
 
 export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const { store, send, deviceCaps, chatHost, scrollToBottom } = deps;
@@ -135,7 +126,6 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   let lastHistoryFillKey = "";
   let pendingChatAutoScroll: { key: string; waitForHistory: boolean } | null = null;
 
-  let historyPrependAnchor: HistoryPrependAnchor | null = null;
   const debugHook = (kind: string, data?: any) => {
     try {
       const dbg = (globalThis as any).__yagodka_debug_monitor;
@@ -885,61 +875,6 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 120);
   };
 
-  const findHistoryAnchorElement = (): { element: HTMLElement; rect: DOMRect } | null => {
-    const lines = chatHost.firstElementChild as HTMLElement | null;
-    if (!lines) return null;
-    const hostRect = chatHost.getBoundingClientRect();
-    const children = Array.from(lines.children) as HTMLElement[];
-    let fallback: HTMLElement | null = null;
-    const visible: Array<{ element: HTMLElement; rect: DOMRect }> = [];
-    for (const child of children) {
-      if (!child.classList.contains("msg")) continue;
-      if (!fallback) fallback = child;
-      const rect = child.getBoundingClientRect();
-      if (rect.bottom >= hostRect.top && rect.top <= hostRect.bottom) {
-        visible.push({ element: child, rect });
-      } else if (visible.length && rect.top > hostRect.bottom) {
-        break;
-      }
-    }
-    if (visible.length) return visible[visible.length - 1];
-    if (fallback) return { element: fallback, rect: fallback.getBoundingClientRect() };
-    return null;
-  };
-
-  const makeHistoryPrependAnchor = (key: string): HistoryPrependAnchor => {
-    const base: HistoryPrependAnchor = { key, scrollHeight: chatHost.scrollHeight, scrollTop: chatHost.scrollTop };
-    const anchor = findHistoryAnchorElement();
-    if (!anchor) return base;
-    const msgKey = String(anchor.element.getAttribute("data-msg-key") || "").trim();
-    const rawMsgId = anchor.element.getAttribute("data-msg-id");
-    const msgId = rawMsgId ? Number(rawMsgId) : NaN;
-    const next: HistoryPrependAnchor = { ...base, rectBottom: anchor.rect.bottom };
-    if (msgKey) return { ...next, msgKey };
-    if (Number.isFinite(msgId)) return { ...next, msgId };
-    return base;
-  };
-
-  const findHistoryAnchorByKey = (anchor: HistoryPrependAnchor): HTMLElement | null => {
-    const lines = chatHost.firstElementChild as HTMLElement | null;
-    if (!lines) return null;
-    const children = Array.from(lines.children) as HTMLElement[];
-    for (const child of children) {
-      if (!child.classList.contains("msg")) continue;
-      if (anchor.msgKey) {
-        if (child.getAttribute("data-msg-key") === anchor.msgKey) return child;
-        continue;
-      }
-      if (anchor.msgId !== undefined) {
-        const raw = child.getAttribute("data-msg-id");
-        if (!raw) continue;
-        const msgId = Number(raw);
-        if (Number.isFinite(msgId) && msgId === anchor.msgId) return child;
-      }
-    }
-    return null;
-  };
-
   const requestMoreHistory: HistoryFeature["requestMoreHistory"] = () => {
     const st = store.get();
     if (!st.authed) return;
@@ -961,8 +896,6 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     const before = st.historyCursor[key];
     if (!before || !Number.isFinite(before) || before <= 0) return;
 
-    historyPrependAnchor = makeHistoryPrependAnchor(key);
-
     // Local-first: try to satisfy "load older" from IndexedDB cache to reduce server load (Telegram-like).
     if (st.selfId) {
       historyRequested.add(key);
@@ -979,11 +912,12 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
               const baseConv = prev.conversations?.[key] || [];
               const nextConv = mergeMessages(baseConv, cached);
               const delta = nextConv.length - baseConv.length;
+              const actualPrependCount = prependedCount(baseConv, nextConv);
               const cursor = oldestServerMessageId(nextConv);
               const prevVirtualStart = prev.historyVirtualStart?.[key];
-              const shouldShiftVirtual =
-                typeof prevVirtualStart === "number" && Number.isFinite(prevVirtualStart) && delta > 0;
-              const nextVirtualStart = shouldShiftVirtual ? Math.max(0, prevVirtualStart + delta) : prevVirtualStart;
+              const prependShift = actualPrependCount !== null && actualPrependCount >= 0 ? actualPrependCount : delta;
+              const nextVirtualStart = shiftVirtualStartForPrepend(prevVirtualStart, prependShift);
+              const shouldShiftVirtual = nextVirtualStart !== null && nextVirtualStart !== prevVirtualStart;
               return {
                 ...prev,
                 conversations: { ...prev.conversations, [key]: nextConv },
@@ -1058,40 +992,6 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     pendingChatAutoScroll = { key: k, waitForHistory };
   };
 
-  const applyPrependAnchorAfterRender: HistoryFeature["applyPrependAnchorAfterRender"] = (st) => {
-    if (!historyPrependAnchor) return;
-    const selectedKey = st.selected ? conversationKey(st.selected) : "";
-    const anchorKey = historyPrependAnchor.key;
-    if (st.page !== "main" || !selectedKey || selectedKey !== anchorKey) {
-      historyPrependAnchor = null;
-      return;
-    }
-    if (st.historyLoading[anchorKey]) return;
-    let applied = false;
-    if ((historyPrependAnchor.msgKey || historyPrependAnchor.msgId !== undefined) && historyPrependAnchor.rectBottom !== undefined) {
-      const anchor = findHistoryAnchorByKey(historyPrependAnchor);
-      if (anchor) {
-        const rect = anchor.getBoundingClientRect();
-        const delta = rect.bottom - historyPrependAnchor.rectBottom;
-        if (Number.isFinite(delta) && delta !== 0) {
-          // Не даём автозагрузчику истории сработать сразу после "компенсации" скролла.
-          historyAutoBlockUntil = Date.now() + 350;
-          chatHost.scrollTop += delta;
-        }
-        applied = true;
-      }
-    }
-    if (!applied) {
-      const delta = chatHost.scrollHeight - historyPrependAnchor.scrollHeight;
-      if (Number.isFinite(delta) && delta !== 0) {
-        // Не даём автозагрузчику истории сработать сразу после "компенсации" скролла.
-        historyAutoBlockUntil = Date.now() + 350;
-        chatHost.scrollTop = historyPrependAnchor.scrollTop + delta;
-      }
-    }
-    historyPrependAnchor = null;
-  };
-
   const applyPendingAutoScrollAfterRender: HistoryFeature["applyPendingAutoScrollAfterRender"] = (st) => {
     const autoScrollKey = st.selected ? conversationKey(st.selected) : "";
     if (pendingChatAutoScroll && pendingChatAutoScroll.key !== autoScrollKey) {
@@ -1110,6 +1010,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const maybeAutoLoadMoreOnScroll: HistoryFeature["maybeAutoLoadMoreOnScroll"] = ({ scrollTop, scrollingUp, lastUserScrollAt }) => {
     const now = Date.now();
     if (now < historyAutoBlockUntil) return;
+    if (historyViewportRecentlyCompensated(chatHost, 350, now)) return;
     const userScrollRecent = now - lastUserScrollAt < 2500;
     if (!userScrollRecent) return;
 
@@ -1158,6 +1059,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const maybeFillViewport: HistoryFeature["maybeFillViewport"] = () => {
     const now = Date.now();
     if (now < historyAutoBlockUntil) return;
+    if (historyViewportRecentlyCompensated(chatHost, 350, now)) return;
 
     const st = store.get();
     if (!st.authed || st.conn !== "connected") return;
@@ -1429,7 +1331,6 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     onDisconnect,
     onLogout,
     markChatAutoScroll,
-    applyPrependAnchorAfterRender,
     applyPendingAutoScrollAfterRender,
     maybeBootstrapPrefetch,
     hasPendingActivityForUpdate,

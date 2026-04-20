@@ -1,3 +1,4 @@
+import { liftFileHttpTokenToBearer } from "../../../helpers/files/fileHttpAuth";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 
@@ -23,10 +24,20 @@ export function createFileViewerActionsFeature(deps: FileViewerActionsFeatureDep
     const url = String(modal.url || "").trim();
     const name = String(modal.name || "файл").trim() || "файл";
     if (!url) return;
+    const auth = liftFileHttpTokenToBearer(url, {
+      base: typeof window !== "undefined" && typeof window.location?.href === "string" ? window.location.href : null,
+    });
+    const shareUrlRaw = String(auth.url || url).trim() || url;
+    const hasProtectedRemoteUrl = Boolean(auth.headers.Authorization);
+    const copyableUrl = Boolean(shareUrlRaw) && !url.startsWith("blob:") && !hasProtectedRemoteUrl;
 
     const copyLink = async () => {
+      if (!copyableUrl) {
+        showToast("Прямая ссылка на защищённый файл отключена", { kind: "info" });
+        return;
+      }
       try {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(shareUrlRaw);
         showToast("Ссылка скопирована", { kind: "success" });
       } catch {
         showToast("Не удалось скопировать ссылку", { kind: "warn" });
@@ -34,8 +45,9 @@ export function createFileViewerActionsFeature(deps: FileViewerActionsFeatureDep
     };
 
     const shareUrl = async () => {
+      if (!copyableUrl) return false;
       try {
-        await navigator.share({ title: name, url });
+        await navigator.share({ title: name, url: shareUrlRaw });
         return true;
       } catch {
         return false;
@@ -44,7 +56,10 @@ export function createFileViewerActionsFeature(deps: FileViewerActionsFeatureDep
 
     const shareFile = async () => {
       try {
-        const res = await fetch(url);
+        const res = await fetch(shareUrlRaw, {
+          cache: "no-store",
+          headers: auth.headers,
+        });
         if (!res.ok) return false;
         const blob = await res.blob();
         const mime = String(modal.mime || blob.type || "").trim() || "application/octet-stream";
@@ -63,7 +78,7 @@ export function createFileViewerActionsFeature(deps: FileViewerActionsFeatureDep
       return;
     }
 
-    const shared = url.startsWith("blob:") ? await shareFile() : (await shareUrl()) || (await shareFile());
+    const shared = copyableUrl ? (await shareUrl()) || (await shareFile()) : await shareFile();
     if (!shared) await copyLink();
   };
 

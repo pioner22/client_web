@@ -144,9 +144,16 @@ export function renderForwardModal(
   message: string | undefined,
   actions: ForwardModalActions
 ): HTMLElement {
-  const box = el("div", { class: "modal modal-forward" });
+  const titleText = draftCountLabel(drafts);
+  const box = el("div", {
+    class: "modal modal-forward",
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-label": titleText,
+    tabindex: "-1",
+  });
   const btnSend = el("button", { class: "btn btn-primary", type: "button", disabled: "disabled" }, ["Отправить"]);
-  const btnCancel = el("button", { class: "btn", type: "button" }, ["Отмена"]);
+  const btnCancel = el("button", { class: "btn btn-secondary", type: "button" }, ["Отмена"]);
   const queryInput = el("input", {
     class: "modal-input",
     type: "search",
@@ -706,7 +713,7 @@ export function renderForwardModal(
   });
 
   box.append(
-    el("div", { class: "modal-title" }, [draftCount > 1 ? "Переслать сообщения" : "Переслать сообщение"]),
+    el("div", { class: "modal-title" }, [titleText]),
     el("div", { class: "modal-body" }, [
       previewLine,
       commentInput,
@@ -717,7 +724,7 @@ export function renderForwardModal(
       listWrap,
     ]),
     warnLine,
-    el("div", { class: "modal-actions" }, [btnSend, btnCancel])
+    el("div", { class: "modal-actions modal-actions-compose" }, [btnCancel, btnSend])
   );
 
   updateCount();
@@ -737,4 +744,8 @@ export function renderForwardModal(
     }
   };
   return box;
+}
+
+function draftCountLabel(drafts: MessageHelperDraft[]): string {
+  return drafts.length > 1 ? "Переслать сообщения" : "Переслать сообщение";
 }

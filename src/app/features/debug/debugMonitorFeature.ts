@@ -112,22 +112,12 @@ function readDebugReportConfig(): DebugReportConfig {
     const sp = new URLSearchParams(window.location.search);
     const queryEndpoint = sp.get("debug_report_url") || sp.get("dbg_report_url");
     const queryEventEndpoint = sp.get("debug_event_url") || sp.get("dbg_event_url");
-    const queryToken = sp.get("debug_report_token") || sp.get("dbg_report_token");
-    const queryEventToken = sp.get("debug_event_token") || sp.get("dbg_event_token");
-    const querySharedToken = sp.get("debug_token") || sp.get("dbg_token");
     queryEnabled = sp.get("debug_report_upload");
     const queryEventUpload = sp.get("debug_event_upload");
     const queryInterval = sp.get("debug_report_interval");
     persist = parseBoolish(sp.get("debug_persist") || sp.get("dbg_persist") || sp.get("debug_report_persist") || sp.get("dbg_report_persist"));
     if (queryEndpoint) endpoint = queryEndpoint.trim();
     if (queryEventEndpoint) eventEndpoint = queryEventEndpoint.trim();
-    if (queryToken) token = queryToken.trim();
-    if (queryEventToken) eventToken = queryEventToken.trim();
-    if (querySharedToken) {
-      const shared = querySharedToken.trim();
-      if (!token) token = shared;
-      if (!eventToken) eventToken = shared;
-    }
     if (queryEnabled !== null) autoUpload = parseBoolish(queryEnabled);
     if (queryEventUpload !== null) autoUpload = parseBoolish(queryEventUpload);
     intervalMs = parseReportInterval(queryInterval);
@@ -136,14 +126,18 @@ function readDebugReportConfig(): DebugReportConfig {
     // ignore
   }
   try {
+    const globalToken = String((window as any).__YAGODKA_DEBUG_TOKEN__ || "").trim();
+    const globalEventToken = String((window as any).__YAGODKA_DEBUG_EVENT_TOKEN__ || "").trim();
+    if (!token && globalToken) token = globalToken;
+    if (!eventToken && globalEventToken) eventToken = globalEventToken;
+  } catch {
+    // ignore
+  }
+  try {
     const lsEndpoint = window.localStorage?.getItem("yagodka_debug_report_url");
     if (!endpoint && lsEndpoint) endpoint = String(lsEndpoint).trim();
     const lsEventEndpoint = window.localStorage?.getItem("yagodka_debug_event_url");
     if (!eventEndpoint && lsEventEndpoint) eventEndpoint = String(lsEventEndpoint).trim();
-    const lsToken = window.localStorage?.getItem("yagodka_debug_report_token");
-    if (!token && lsToken) token = String(lsToken).trim();
-    const lsEventToken = window.localStorage?.getItem("yagodka_debug_event_token");
-    if (!eventToken && lsEventToken) eventToken = String(lsEventToken).trim();
     if (!enabled) {
       const lsEnabled = window.localStorage?.getItem("yagodka_debug_report");
       if (lsEnabled != null) enabled = parseBoolish(lsEnabled);
@@ -175,8 +169,6 @@ function readDebugReportConfig(): DebugReportConfig {
     try {
       if (endpoint) window.localStorage?.setItem("yagodka_debug_report_url", endpoint);
       if (eventEndpoint) window.localStorage?.setItem("yagodka_debug_event_url", eventEndpoint);
-      if (token) window.localStorage?.setItem("yagodka_debug_report_token", token);
-      if (eventToken) window.localStorage?.setItem("yagodka_debug_event_token", eventToken);
       window.localStorage?.setItem("yagodka_debug_report", enabled ? "1" : "0");
       window.localStorage?.setItem("yagodka_debug_report_interval", String(intervalMs));
     } catch {

@@ -1,3 +1,5 @@
+import { liftFileHttpTokenToBearer } from "./fileHttpAuth";
+
 export type ResumableHttpDownloadSleep = (ms: number) => Promise<void>;
 
 export type ResumableHttpDownloadFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -115,6 +117,7 @@ export async function resumableHttpDownload(opts: ResumableHttpDownloadOptions):
   const initialUrl = String(opts.url || "").trim();
   if (!initialUrl) throw new Error("missing_url");
   let url = initialUrl;
+  let effectiveUrl = initialUrl;
   let offset = Math.max(0, Math.trunc(Number(opts.offset ?? 0) || 0));
   let etag = normalizeEtag(opts.etag ?? null);
   let total = Number(opts.expectedSize ?? 0) || 0;
@@ -144,13 +147,15 @@ export async function resumableHttpDownload(opts: ResumableHttpDownloadOptions):
   while (true) {
     if (opts.signal?.aborted) throw new Error("aborted");
 
-    const headers: Record<string, string> = { ...(opts.headers || {}) };
+    const auth = liftFileHttpTokenToBearer(url);
+    effectiveUrl = String(auth.url || url).trim() || url;
+    const headers: Record<string, string> = { ...(opts.headers || {}), ...(auth.headers || {}) };
     if (offset > 0) headers["Range"] = `bytes=${offset}-`;
     if (offset > 0 && etag) headers["If-Range"] = etag;
 
     let res: Response;
     try {
-      res = await fetchFn(url, { method: "GET", headers, cache: "no-store", signal: opts.signal });
+      res = await fetchFn(effectiveUrl, { method: "GET", headers, cache: "no-store", signal: opts.signal });
     } catch (err) {
       if (opts.signal?.aborted) throw new Error("aborted");
       if (retryAttempt >= maxRetries) throw err;
@@ -161,7 +166,7 @@ export async function resumableHttpDownload(opts: ResumableHttpDownloadOptions):
     if (res.status === 401 || res.status === 403) {
       if (!opts.refreshUrl || refreshes >= maxUrlRefresh) throw new Error(`http_${res.status}`);
       refreshes += 1;
-      url = String(await opts.refreshUrl({ status: res.status, url, offset, etag })) || "";
+      url = String(await opts.refreshUrl({ status: res.status, url: effectiveUrl, offset, etag })) || "";
       url = url.trim();
       if (!url) throw new Error("missing_url");
       retryAttempt = 0;
@@ -178,7 +183,7 @@ export async function resumableHttpDownload(opts: ResumableHttpDownloadOptions):
       const cr = parseContentRange(res.headers.get("Content-Range"));
       const known = cr?.size ?? totalOrNull;
       if (typeof known === "number" && Number.isFinite(known) && known >= 0 && offset >= known) {
-        return { url, received: Math.trunc(known), total: Math.trunc(known), etag, mime };
+        return { url: effectiveUrl, received: Math.trunc(known), total: Math.trunc(known), etag, mime };
       }
       reset("range_not_satisfiable");
       if (offset <= 0) throw new Error("range_not_satisfiable");
@@ -265,6 +270,6 @@ export async function resumableHttpDownload(opts: ResumableHttpDownloadOptions):
       continue;
     }
 
-    return { url, received: offset, total: totalOrNull, etag, mime };
+    return { url: effectiveUrl, received: offset, total: totalOrNull, etag, mime };
   }
 }

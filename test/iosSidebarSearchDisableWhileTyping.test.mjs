@@ -32,7 +32,7 @@ async function loadRenderSidebar() {
   }
 }
 
-function withDomStubs(run) {
+async function withDomStubs(run) {
   const prev = {
     document: globalThis.document,
     window: globalThis.window,
@@ -155,7 +155,7 @@ function withDomStubs(run) {
   };
 
   try {
-    return run();
+    return await run();
   } finally {
     if (prev.document === undefined) delete globalThis.document;
     else globalThis.document = prev.document;
@@ -170,6 +170,11 @@ function withDomStubs(run) {
     if (prev.HTMLTextAreaElement === undefined) delete globalThis.HTMLTextAreaElement;
     else globalThis.HTMLTextAreaElement = prev.HTMLTextAreaElement;
   }
+}
+
+async function flushLazySidebarRender() {
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function findFirst(node, predicate) {
@@ -188,7 +193,7 @@ function findFirst(node, predicate) {
 test("iOS: sidebar search input disables while composer is focused (avoid prev/next bar)", async () => {
   const helper = await loadRenderSidebar();
   try {
-    withDomStubs(() => {
+    await withDomStubs(async () => {
       const target = document.createElement("div");
       const composer = document.createElement("textarea");
       composer.setAttribute("data-ios-assistant", "composer");
@@ -217,6 +222,7 @@ test("iOS: sidebar search input disables while composer is focused (avoid prev/n
       };
 
       helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+      await flushLazySidebarRender();
 
       const input = findFirst(
         target,

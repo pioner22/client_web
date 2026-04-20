@@ -1,145 +1,201 @@
 import type { AppState, TargetRef } from "../../stores/types";
+import { el } from "../../helpers/dom/el";
 import { renderAuthModal } from "./renderAuthModal";
 import { renderUpdateModal } from "./renderUpdateModal";
 import { renderPwaUpdateModal } from "./renderPwaUpdateModal";
 import { renderWelcomeModal } from "./renderWelcomeModal";
 import { renderLogoutModal } from "./renderLogoutModal";
-import { renderMembersAddModal } from "./renderMembersAddModal";
-import { renderMembersRemoveModal } from "./renderMembersRemoveModal";
-import { renderRenameModal } from "./renderRenameModal";
 import { renderConfirmModal } from "./renderConfirmModal";
-import { renderFileSendModal } from "./renderFileSendModal";
-import { renderFileViewerModal } from "./renderFileViewerModal";
-import type { FileViewerMeta } from "./renderFileViewerModal";
-import { safeUrl } from "../../helpers/security/safeUrl";
-import { renderInviteUserModal } from "./renderInviteUserModal";
-import { renderActionModal } from "./renderActionModal";
 import { renderContextMenu } from "./renderContextMenu";
-import { renderBoardPostModal } from "./renderBoardPostModal";
-import { renderSendScheduleModal } from "./renderSendScheduleModal";
-import { renderForwardModal } from "./renderForwardModal";
-import { renderReactionsModal } from "./renderReactionsModal";
-import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
-import { renderCallModal } from "./renderCallModal";
+type HeavyModalModule = typeof import("./renderHeavyModal");
+type SecondaryModalModule = typeof import("./renderSecondaryModal");
+type ForwardSelectModal = Extract<NonNullable<AppState["modal"]>, { kind: "forward_select" }>;
+type FileViewerModal = Extract<NonNullable<AppState["modal"]>, { kind: "file_viewer" }>;
+type SecondaryModalKind =
+  | "reactions"
+  | "send_schedule"
+  | "board_post"
+  | "members_add"
+  | "members_remove"
+  | "rename"
+  | "file_send"
+  | "invite_user"
+  | "action";
 
-function formatUserLabel(displayName: string, handle: string, fallback: string): string {
-  const dn = String(displayName || "").trim();
-  if (dn) return dn;
-  const h = String(handle || "").trim();
-  if (h) return h.startsWith("@") ? h : `@${h}`;
-  return fallback || "—";
+let heavyModalModule: HeavyModalModule | null = null;
+let heavyModalPromise: Promise<HeavyModalModule | null> | null = null;
+let heavyModalLoadFailed = false;
+let secondaryModalModule: SecondaryModalModule | null = null;
+let secondaryModalPromise: Promise<SecondaryModalModule | null> | null = null;
+let secondaryModalLoadFailed = false;
+let forwardHost: HTMLElement | null = null;
+let latestForwardState: AppState | null = null;
+let latestForwardModal: ForwardSelectModal | null = null;
+let latestForwardActions: ModalActions | null = null;
+let fileViewerHost: HTMLElement | null = null;
+let latestFileViewerState: AppState | null = null;
+let latestFileViewerModal: FileViewerModal | null = null;
+let latestFileViewerActions: ModalActions | null = null;
+let secondaryHost: HTMLElement | null = null;
+let latestSecondaryState: AppState | null = null;
+let latestSecondaryActions: ModalActions | null = null;
+
+function createDeferredModalShell(className: string, title: string, message: string): HTMLElement {
+  return el("div", { class: `modal ${className} modal-deferred`, role: "status", "aria-live": "polite", "aria-busy": "true" }, [
+    el("div", { class: "modal-title" }, [title]),
+    el("div", { class: "modal-line modal-copy" }, [message]),
+  ]);
 }
 
-function normalizeHandle(value: string): string {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  return raw.startsWith("@") ? raw : `@${raw}`;
+function secondaryModalTitle(kind: SecondaryModalKind | null | undefined): string {
+  if (kind === "reactions") return "Реакции";
+  if (kind === "send_schedule") return "Отложенная отправка";
+  if (kind === "board_post") return "Публикация";
+  if (kind === "members_add") return "Добавить участников";
+  if (kind === "members_remove") return "Удалить участников";
+  if (kind === "rename") return "Переименовать";
+  if (kind === "file_send") return "Отправка файлов";
+  if (kind === "invite_user") return "Приглашение";
+  if (kind === "action") return "Действие";
+  return "Окно";
 }
 
-function resolveUserLabel(state: AppState, id: string): { label: string; handle: string } {
-  const pid = String(id || "").trim();
-  if (!pid) return { label: "—", handle: "" };
-  const p = state.profiles?.[pid];
-  if (p) {
-    return {
-      label: formatUserLabel(p.display_name || "", p.handle || "", pid),
-      handle: normalizeHandle(String(p.handle || "")),
-    };
-  }
-  const friend = (state.friends || []).find((f) => f.id === pid);
-  if (friend) {
-    return {
-      label: formatUserLabel(friend.display_name || "", friend.handle || "", pid),
-      handle: normalizeHandle(String(friend.handle || "")),
-    };
-  }
-  return { label: pid, handle: "" };
+function setForwardPlaceholder(message: string) {
+  if (!forwardHost) return;
+  forwardHost.replaceChildren(createDeferredModalShell("modal-forward", "Переслать", message));
 }
 
-function forwardRecentTargets(state: AppState, limit = 10): TargetRef[] {
-  const max = Math.max(0, Math.min(24, Math.trunc(Number(limit) || 0)));
-  if (!max) return [];
+function setFileViewerPlaceholder(message: string) {
+  if (!fileViewerHost) return;
+  fileViewerHost.replaceChildren(createDeferredModalShell("modal-viewer", "Файл", message));
+}
 
-  const topPeerTs = new Map<string, number>();
-  for (const entry of state.topPeers || []) {
-    const id = String((entry as any)?.id || "").trim();
-    const ts = Number((entry as any)?.last_ts ?? 0);
-    if (!id || !Number.isFinite(ts) || ts <= 0) continue;
-    const prev = topPeerTs.get(id) ?? 0;
-    if (ts > prev) topPeerTs.set(id, ts);
+function setSecondaryPlaceholder(message: string) {
+  if (!secondaryHost) return;
+  const kind =
+    latestSecondaryState?.modal && latestSecondaryState.modal.kind !== "forward_select" && latestSecondaryState.modal.kind !== "file_viewer"
+      ? (latestSecondaryState.modal.kind as SecondaryModalKind)
+      : null;
+  secondaryHost.replaceChildren(createDeferredModalShell("modal-secondary", secondaryModalTitle(kind), message));
+}
+
+function refreshDeferredHeavyModals() {
+  if (forwardHost) {
+    if (heavyModalModule && latestForwardState && latestForwardModal && latestForwardActions) {
+      const node = heavyModalModule.renderForwardSelectModal(latestForwardState, latestForwardModal, {
+        onClose: latestForwardActions.onClose,
+        onForwardSend: latestForwardActions.onForwardSend,
+      });
+      if (node) forwardHost.replaceChildren(node);
+      else setForwardPlaceholder("Нет сообщений для пересылки");
+    } else {
+      setForwardPlaceholder(heavyModalLoadFailed ? "Не удалось загрузить окно пересылки" : "Загрузка окна пересылки…");
+    }
   }
 
-  const lastTs = (key: string): number => {
-    const conv = state.conversations?.[key] || [];
-    const last = conv.length ? conv[conv.length - 1] : null;
-    const ts = Number((last as any)?.ts ?? 0);
-    return Number.isFinite(ts) && ts > 0 ? ts : 0;
+  if (fileViewerHost) {
+    if (heavyModalModule && latestFileViewerState && latestFileViewerModal && latestFileViewerActions) {
+      fileViewerHost.replaceChildren(
+        heavyModalModule.renderFileViewerHeavyModal(latestFileViewerState, latestFileViewerModal, {
+          onClose: latestFileViewerActions.onClose,
+          onFileViewerNavigate: latestFileViewerActions.onFileViewerNavigate,
+          onFileViewerJump: latestFileViewerActions.onFileViewerJump,
+          ...(latestFileViewerActions.onFileViewerRecover ? { onFileViewerRecover: latestFileViewerActions.onFileViewerRecover } : {}),
+          onFileViewerShare: latestFileViewerActions.onFileViewerShare,
+          onFileViewerForward: latestFileViewerActions.onFileViewerForward,
+          onFileViewerDelete: latestFileViewerActions.onFileViewerDelete,
+          onFileViewerOpenAt: latestFileViewerActions.onFileViewerOpenAt,
+        })
+      );
+    } else {
+      setFileViewerPlaceholder(heavyModalLoadFailed ? "Не удалось загрузить просмотр файла" : "Загрузка файла…");
+    }
+  }
+}
+
+function refreshDeferredSecondaryModal() {
+  if (!secondaryHost) return;
+  if (secondaryModalModule && latestSecondaryState && latestSecondaryActions) {
+    const node = secondaryModalModule.renderSecondaryModal(latestSecondaryState, latestSecondaryActions);
+    if (node) {
+      secondaryHost.replaceChildren(node);
+      return;
+    }
+  }
+  setSecondaryPlaceholder(secondaryModalLoadFailed ? "Не удалось загрузить окно" : "Загрузка окна…");
+}
+
+function ensureHeavyModalModule() {
+  if (heavyModalModule || heavyModalPromise) return;
+  heavyModalPromise = import("./renderHeavyModal")
+    .then((mod) => {
+      heavyModalModule = mod;
+      heavyModalLoadFailed = false;
+      refreshDeferredHeavyModals();
+      return mod;
+    })
+    .catch(() => {
+      heavyModalLoadFailed = true;
+      refreshDeferredHeavyModals();
+      return null;
+    })
+    .finally(() => {
+      heavyModalPromise = null;
+    });
+}
+
+function ensureSecondaryModalModule() {
+  if (secondaryModalModule || secondaryModalPromise) return;
+  secondaryModalPromise = import("./renderSecondaryModal")
+    .then((mod) => {
+      secondaryModalModule = mod;
+      secondaryModalLoadFailed = false;
+      refreshDeferredSecondaryModal();
+      return mod;
+    })
+    .catch(() => {
+      secondaryModalLoadFailed = true;
+      refreshDeferredSecondaryModal();
+      return null;
+    })
+    .finally(() => {
+      secondaryModalPromise = null;
+    });
+}
+
+function ensureForwardHost(): HTMLElement {
+  if (forwardHost) return forwardHost;
+  forwardHost = el("div", { class: "deferred-modal-host deferred-forward-host" }, []);
+  (forwardHost as any).__disposeForwardModal = () => {
+    latestForwardState = null;
+    latestForwardModal = null;
+    latestForwardActions = null;
+    setForwardPlaceholder("Загрузка окна пересылки…");
   };
-
-  const items: Array<{ t: TargetRef; ts: number }> = [];
-
-  for (const f of state.friends || []) {
-    const id = String(f?.id || "").trim();
-    if (!id) continue;
-    const ts = Math.max(lastTs(`dm:${id}`), topPeerTs.get(id) ?? 0);
-    if (ts <= 0) continue;
-    items.push({ t: { kind: "dm", id }, ts });
-  }
-
-  for (const g of state.groups || []) {
-    const id = String(g?.id || "").trim();
-    if (!id) continue;
-    const ts = lastTs(`room:${id}`);
-    if (ts <= 0) continue;
-    items.push({ t: { kind: "group", id }, ts });
-  }
-
-  for (const b of state.boards || []) {
-    const id = String(b?.id || "").trim();
-    if (!id) continue;
-    const ts = lastTs(`room:${id}`);
-    if (ts <= 0) continue;
-    items.push({ t: { kind: "board", id }, ts });
-  }
-
-  items.sort((a, b) => b.ts - a.ts);
-  const seen = new Set<string>();
-  const out: TargetRef[] = [];
-  for (const item of items) {
-    const key = `${item.t.kind}:${item.t.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(item.t);
-    if (out.length >= max) break;
-  }
-  return out;
+  setForwardPlaceholder("Загрузка окна пересылки…");
+  return forwardHost;
 }
 
-function buildFileViewerMeta(state: AppState, modal: Extract<AppState["modal"], { kind: "file_viewer" }>): FileViewerMeta | null {
-  const chatKey = modal.chatKey ? String(modal.chatKey) : "";
-  const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
-  if (!chatKey || msgIdx === null) return null;
-  const conv = state.conversations[chatKey] || [];
-  if (msgIdx < 0 || msgIdx >= conv.length) return null;
-  const msg = conv[msgIdx];
-  if (!msg || msg.kind === "sys") return null;
-  const authorId = String((msg.kind === "out" ? state.selfId || msg.from : msg.from) || "").trim();
-  if (!authorId) return null;
-  const identity = resolveUserLabel(state, authorId);
-  const ts = Number(msg.ts);
-  return {
-    authorId,
-    authorLabel: identity.label,
-    authorHandle: identity.handle,
-    authorKind: "dm",
-    timestamp: Number.isFinite(ts) ? ts : null,
-  };
+function ensureFileViewerHost(): HTMLElement {
+  if (fileViewerHost) return fileViewerHost;
+  fileViewerHost = el("div", { class: "deferred-modal-host deferred-file-viewer-host" }, []);
+  setFileViewerPlaceholder("Загрузка файла…");
+  return fileViewerHost;
+}
+
+function ensureSecondaryHost(): HTMLElement {
+  if (secondaryHost) return secondaryHost;
+  secondaryHost = el("div", { class: "deferred-modal-host deferred-secondary-host" }, []);
+  setSecondaryPlaceholder("Загрузка окна…");
+  return secondaryHost;
 }
 
 export interface ModalActions {
   onAuthLogin: () => void;
   onAuthRegister: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
+  onAuthOpen: () => void;
+  onAuthUseDifferentAccount: () => void;
   onClose: () => void;
   onConfirm: () => void;
   onBoardPostPublish: (text: string) => void;
@@ -180,23 +236,12 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
   const modal = state.modal;
   if (!modal) return null;
   const kind = modal.kind;
-  if (kind === "call") {
-    return renderCallModal(state, modal, {
-      onHangup: actions.onClose,
-      onOpenExternal: (url) => {
-        try {
-          window.open(url, "_blank", "noopener,noreferrer");
-        } catch {
-          // ignore
-        }
-      },
-    });
-  }
   if (kind === "auth") {
     return renderAuthModal(state.authMode, state.authRememberedId, modal.message, state.skins, state.skin, {
       onLogin: actions.onAuthLogin,
       onRegister: actions.onAuthRegister,
       onModeChange: actions.onAuthModeChange,
+      onUseDifferentAccount: actions.onAuthUseDifferentAccount,
       onSkinChange: actions.onSkinChange,
       onClose: actions.onClose,
     });
@@ -205,7 +250,11 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     return renderWelcomeModal(state.status);
   }
   if (kind === "logout") {
-    return renderLogoutModal(state.status, { onClose: actions.onClose });
+    return renderLogoutModal(state.status, state.authRememberedId, {
+      onClose: actions.onClose,
+      onRelogin: actions.onAuthOpen,
+      onUseDifferentAccount: actions.onAuthUseDifferentAccount,
+    });
   }
   if (kind === "update") {
     return renderUpdateModal(state.clientVersion, state.updateLatest ?? "", {
@@ -219,80 +268,14 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       onApply: actions.onApplyPwaUpdate,
     });
   }
-  if (kind === "reactions") {
-    return renderReactionsModal(state, modal, { onClose: actions.onClose });
-  }
-  if (kind === "send_schedule") {
-    const canWhenOnline = (() => {
-      const t = modal.target;
-      if (modal.edit) return false;
-      if (!t || t.kind !== "dm") return false;
-      const peerId = String(t.id || "").trim();
-      if (!peerId) return false;
-      const friend = (state.friends || []).find((f) => String(f.id || "").trim() === peerId);
-      return Boolean(friend && !friend.online);
-    })();
-    return renderSendScheduleModal(modal.text, modal.suggestedAt, modal.message, modal.title, modal.confirmLabel, {
-      onSchedule: actions.onSendSchedule,
-      ...(canWhenOnline ? { onWhenOnline: actions.onSendScheduleWhenOnline } : {}),
-      onCancel: actions.onClose,
-    });
-  }
   if (kind === "forward_select") {
-    const drafts =
-      Array.isArray(modal.forwardDrafts) && modal.forwardDrafts.length
-        ? modal.forwardDrafts
-        : modal.forwardDraft
-          ? [modal.forwardDraft]
-          : [];
-    if (!drafts.length) return null;
-    const recents = forwardRecentTargets(state, 10);
-    return renderForwardModal(
-      drafts,
-      state.friends || [],
-      state.groups || [],
-      state.boards || [],
-      state.profiles || {},
-      {
-        pinnedKeys: state.pinned || [],
-        archivedKeys: state.archived || [],
-        conversations: state.conversations || {},
-        topPeers: state.topPeers || [],
-      },
-      recents,
-      modal.message,
-      {
-        onSend: actions.onForwardSend,
-        onCancel: actions.onClose,
-      }
-    );
-  }
-  if (kind === "board_post") {
-    const bid = String(modal.boardId || "").trim();
-    const b = bid ? (state.boards || []).find((x) => x.id === bid) : null;
-    const label = String(b?.name || bid || "—");
-    return renderBoardPostModal(label, {
-      onPublish: actions.onBoardPostPublish,
-      onCancel: actions.onClose,
-    });
-  }
-  if (kind === "members_add") {
-    return renderMembersAddModal(modal.title, modal.targetKind, modal.message, {
-      onAdd: actions.onMembersAdd,
-      onCancel: actions.onClose,
-    });
-  }
-  if (kind === "members_remove") {
-    return renderMembersRemoveModal(modal.title, modal.targetKind, modal.message, {
-      onRemove: actions.onMembersRemove,
-      onCancel: actions.onClose,
-    });
-  }
-  if (kind === "rename") {
-    return renderRenameModal(modal.title, modal.targetKind, modal.currentName, modal.message, {
-      onRename: actions.onRename,
-      onCancel: actions.onClose,
-    });
+    latestForwardState = state;
+    latestForwardModal = modal;
+    latestForwardActions = actions;
+    const host = ensureForwardHost();
+    if (heavyModalModule) refreshDeferredHeavyModals();
+    else ensureHeavyModalModule();
+    return host;
   }
   if (kind === "confirm") {
     return renderConfirmModal(modal.title, modal.message, modal.confirmLabel, modal.cancelLabel, modal.danger, {
@@ -300,179 +283,41 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
       onCancel: actions.onClose,
     });
   }
-  if (kind === "file_send") {
-    return renderFileSendModal(modal.files, modal.caption ?? "", { previewUrls: modal.previewUrls, captionDisabled: modal.captionDisabled, captionHint: modal.captionHint }, {
-      onSend: actions.onFileSendConfirm,
-      onCancel: actions.onClose,
-    });
-  }
   if (kind === "file_viewer") {
-    const canPrev = typeof modal.prevIdx === "number" && Number.isFinite(modal.prevIdx);
-    const canNext = typeof modal.nextIdx === "number" && Number.isFinite(modal.nextIdx);
-    const canJump = Boolean(modal.chatKey && typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx));
-    const metaBase = buildFileViewerMeta(state, modal);
-    const base = typeof location !== "undefined" ? location.href : "http://localhost/";
-    const viewerMessage = (() => {
-      const chatKey = modal.chatKey ? String(modal.chatKey) : "";
-      const msgIdx = typeof modal.msgIdx === "number" && Number.isFinite(modal.msgIdx) ? Math.trunc(modal.msgIdx) : null;
-      if (!chatKey || msgIdx === null) return null;
-      const conv = state.conversations[chatKey] || [];
-      if (msgIdx < 0 || msgIdx >= conv.length) return null;
-      const msg = conv[msgIdx];
-      if (!msg || msg.kind === "sys") return null;
-      return { chatKey, msgIdx, msg };
-    })();
-    const posterUrl = (() => {
-      if (!viewerMessage) return null;
-      const att = viewerMessage.msg?.attachment;
-      if (!att || att.kind !== "file") return null;
-      const fileId = String(att.fileId || "").trim();
-      if (!fileId) return null;
-      const raw = state.fileThumbs?.[fileId]?.url ? state.fileThumbs[fileId].url : null;
-      if (!raw) return null;
-      return safeUrl(raw, { base, allowedProtocols: ["http:", "https:", "blob:"] });
-    })();
-    const rail = (() => {
-      if (!viewerMessage) return [];
-      const conv = state.conversations[viewerMessage.chatKey] || [];
-      const isMedia = (msg: any): "image" | "video" | null => {
-        const att = msg?.attachment;
-        if (!att || att.kind !== "file") return null;
-        const mt = String(att.mime || "").toLowerCase();
-        if (mt.startsWith("image/")) return "image";
-        if (mt.startsWith("video/")) return "video";
-        const n = String(att.name || "").toLowerCase();
-        if (/\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/.test(n)) return "image";
-        if (/\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/.test(n)) return "video";
-        return null;
-      };
-      const isAlbumCandidate = (idx: number): boolean => {
-        const msg = conv[idx];
-        const kind = isMedia(msg);
-        if (!msg || !kind) return false;
-        const text = String(msg.text || "").trim();
-        if (text && !text.startsWith("[file]")) return false;
-        return true;
-      };
-      const buildItem = (idx: number) => {
-        const msg = conv[idx];
-        const kind = isMedia(msg);
-        if (!msg || !kind) return null;
-        const att = msg.attachment;
-        if (!att || att.kind !== "file") return null;
-        const name = String(att.name || "файл");
-        const fileId = att.fileId ? String(att.fileId) : "";
-        const thumbRaw = fileId && state.fileThumbs?.[fileId]?.url ? state.fileThumbs[fileId].url : null;
-        const transferUrl =
-          fileId && state.fileTransfers?.length
-            ? state.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean(t.url))?.url || null
-            : null;
-        const thumbUrl = thumbRaw
-          ? safeUrl(thumbRaw, { base, allowedProtocols: ["http:", "https:", "blob:"] })
-          : kind === "image" && transferUrl
-            ? safeUrl(transferUrl, { base, allowedProtocols: ["http:", "https:", "blob:"] })
-            : null;
-        return { msgIdx: idx, name, kind, thumbUrl, active: idx === viewerMessage.msgIdx };
-      };
-
-      const albumIndices = (() => {
-        const ALBUM_MAX = 12;
-        const ALBUM_GAP_SECONDS = 121;
-        const idx = viewerMessage.msgIdx;
-        if (!isAlbumCandidate(idx)) return null;
-        const out: number[] = [idx];
-        for (let i = idx - 1; i >= 0 && out.length < ALBUM_MAX; i -= 1) {
-          if (!isAlbumCandidate(i)) break;
-          if (!isMessageContinuation(conv[i], conv[i + 1], { maxGapSeconds: ALBUM_GAP_SECONDS })) break;
-          out.unshift(i);
-        }
-        for (let i = idx + 1; i < conv.length && out.length < ALBUM_MAX; i += 1) {
-          if (!isAlbumCandidate(i)) break;
-          if (!isMessageContinuation(conv[i - 1], conv[i], { maxGapSeconds: ALBUM_GAP_SECONDS })) break;
-          out.push(i);
-        }
-        return out.length >= 2 ? out : null;
-      })();
-
-      if (albumIndices) {
-        return albumIndices.map((idx) => buildItem(idx)).filter((x): x is NonNullable<ReturnType<typeof buildItem>> => Boolean(x));
-      }
-      const before: Array<NonNullable<ReturnType<typeof buildItem>>> = [];
-      const after: Array<NonNullable<ReturnType<typeof buildItem>>> = [];
-      for (let i = viewerMessage.msgIdx - 1; i >= 0 && before.length < 4; i -= 1) {
-        const item = buildItem(i);
-        if (item) before.unshift(item);
-      }
-      for (let i = viewerMessage.msgIdx + 1; i < conv.length && after.length < 4; i += 1) {
-        const item = buildItem(i);
-        if (item) after.push(item);
-      }
-      const cur = buildItem(viewerMessage.msgIdx);
-      if (!cur) return [];
-      return [...before, cur, ...after];
-    })();
-    const meta: FileViewerMeta | null = (() => {
-      if (!rail.length) return metaBase;
-      const base = metaBase ? metaBase : {};
-      return { ...base, rail };
-    })();
-    const canForward = Boolean(viewerMessage && !state.editing);
-    const canDelete = (() => {
-      if (!viewerMessage) return false;
-      const msg = viewerMessage.msg;
-      const msgId = typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : 0;
-      const canAct = state.conn === "connected" && state.authed;
-      const canOwner = Boolean(msg.kind === "out" && state.selfId && String(msg.from) === String(state.selfId));
-      return Boolean(canAct && canOwner && msgId > 0);
-    })();
-    return renderFileViewerModal(
-      modal.url,
-      modal.name,
-      modal.size,
-      modal.mime,
-      modal.caption ?? null,
-      meta,
-      {
-        ...(actions.onFileViewerRecover ? { onRecover: actions.onFileViewerRecover } : {}),
-        onClose: actions.onClose,
-        ...(canPrev ? { onPrev: () => actions.onFileViewerNavigate("prev") } : {}),
-        ...(canNext ? { onNext: () => actions.onFileViewerNavigate("next") } : {}),
-        ...(canJump ? { onJump: () => actions.onFileViewerJump() } : {}),
-        ...(actions.onFileViewerShare ? { onShare: () => actions.onFileViewerShare() } : {}),
-        ...(viewerMessage ? { onForward: () => actions.onFileViewerForward(), canForward } : {}),
-        ...(canDelete ? { onDelete: () => actions.onFileViewerDelete(), canDelete } : {}),
-        ...(viewerMessage ? { onOpenAt: (msgIdx: number) => actions.onFileViewerOpenAt(msgIdx) } : {}),
-      },
-      { autoplay: Boolean(modal.autoplay), posterUrl }
-    );
-  }
-  if (kind === "invite_user") {
-    return renderInviteUserModal(modal.peer, state.selfId ?? null, state.groups || [], state.boards || [], modal.message, {
-      onInvite: actions.onInviteUser,
-      onCancel: actions.onClose,
-    });
-  }
-  if (kind === "action") {
-    return renderActionModal(modal.payload, modal.message, {
-      onClose: actions.onClose,
-      onAuthAccept: actions.onAuthAccept,
-      onAuthDecline: actions.onAuthDecline,
-      onAuthCancel: actions.onAuthCancel,
-      onGroupInviteAccept: actions.onGroupInviteAccept,
-      onGroupInviteDecline: actions.onGroupInviteDecline,
-      onGroupJoinAccept: actions.onGroupJoinAccept,
-      onGroupJoinDecline: actions.onGroupJoinDecline,
-      onBoardInviteJoin: actions.onBoardInviteJoin,
-      onBoardInviteDecline: actions.onBoardInviteDecline,
-      onFileOfferAccept: actions.onFileOfferAccept,
-      onFileOfferReject: actions.onFileOfferReject,
-    });
+    const viewerChanged = latestFileViewerModal !== modal;
+    latestFileViewerState = state;
+    latestFileViewerModal = modal;
+    latestFileViewerActions = actions;
+    const host = ensureFileViewerHost();
+    if (heavyModalModule) {
+      if (viewerChanged || !host.firstElementChild) refreshDeferredHeavyModals();
+    }
+    else ensureHeavyModalModule();
+    return host;
   }
   if (kind === "context_menu") {
     return renderContextMenu(modal.payload, {
       onClose: actions.onClose,
       onSelect: actions.onContextMenuAction,
     });
+  }
+  if (
+    kind === "reactions" ||
+    kind === "send_schedule" ||
+    kind === "board_post" ||
+    kind === "members_add" ||
+    kind === "members_remove" ||
+    kind === "rename" ||
+    kind === "file_send" ||
+    kind === "invite_user" ||
+    kind === "action"
+  ) {
+    latestSecondaryState = state;
+    latestSecondaryActions = actions;
+    const host = ensureSecondaryHost();
+    if (secondaryModalModule) refreshDeferredSecondaryModal();
+    else ensureSecondaryModalModule();
+    return host;
   }
   return null;
 }

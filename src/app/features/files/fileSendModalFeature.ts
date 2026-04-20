@@ -1,21 +1,9 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { updateDraftMap } from "../../../helpers/chat/drafts";
-import { isImageLikeFile } from "../../../helpers/files/fileBlobCache";
-import { isVideoLikeFile } from "../../../helpers/files/isVideoLikeFile";
+import { isAudioLikeFile, isImageLikeFile, isVideoLikeFile } from "../../../helpers/files/mediaKind";
 import type { Store } from "../../../stores/store";
 import type { AppState, TargetRef } from "../../../stores/types";
 import { scheduleSaveDrafts } from "../persistence/localPersistenceTimers";
-
-function isAudioLikeFile(name: string, mime?: string | null): boolean {
-  const mt = String(mime || "")
-    .trim()
-    .toLowerCase();
-  if (mt.startsWith("audio/")) return true;
-  if (mt.startsWith("image/") || mt.startsWith("video/")) return false;
-  const n = String(name || "").trim().toLowerCase();
-  if (!n) return false;
-  return n.endsWith(".mp3") || n.endsWith(".m4a") || n.endsWith(".aac") || n.endsWith(".wav") || n.endsWith(".ogg") || n.endsWith(".opus") || n.endsWith(".flac");
-}
 
 export interface FileSendModalFeatureDeps {
   store: Store<AppState>;
