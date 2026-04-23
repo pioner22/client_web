@@ -412,11 +412,25 @@ export function renderAuthModal(
   btnClose.addEventListener("click", () => actions.onClose());
 
   if (mode !== "auto") {
-    (body as HTMLFormElement).addEventListener("submit", (e) => {
-      e.preventDefault();
+    const submitCurrentMode = () => {
       if (mode === "register") actions.onRegister();
       else actions.onLogin();
+    };
+
+    (body as HTMLFormElement).addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitCurrentMode();
     });
+
+    if (btnOk) {
+      // iOS Safari/PWA can ignore submit buttons linked via `form=...` when the button sits
+      // outside the form container. Keep Enter-submit on the form, but also wire the primary
+      // CTA directly so tap-to-login/register still dispatches reliably.
+      btnOk.addEventListener("click", (e) => {
+        e.preventDefault();
+        submitCurrentMode();
+      });
+    }
   }
   return root;
 }

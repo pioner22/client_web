@@ -378,3 +378,93 @@ test("renderAuthModal: quick-login сохраняет primary CTA и убира�
     await helper.cleanup();
   }
 });
+
+test("renderAuthModal: primary CTA sends login via direct click fallback", async () => {
+  const helper = await loadRenderAuthModal();
+  try {
+    withDomStubs(() => {
+      let loginCalls = 0;
+      const modal = helper.renderAuthModal(
+        "login",
+        "854-432-319",
+        undefined,
+        [{ id: "telegram-exact", title: "Telegram (точный)" }],
+        "telegram-exact",
+        {
+          onLogin: () => {
+            loginCalls += 1;
+          },
+          onRegister: () => {},
+          onModeChange: () => {},
+          onUseDifferentAccount: () => {},
+          onSkinChange: () => {},
+          onClose: () => {},
+        }
+      );
+
+      const primaryBtn = findFirst(
+        modal,
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Войти/.test(collectText(n))
+      );
+      assert.ok(primaryBtn, "primary login button not found");
+      const clicks = primaryBtn._listeners.get("click") || [];
+      assert.equal(clicks.length, 1, "primary login button must have a click fallback");
+      let prevented = false;
+      clicks[0]({
+        type: "click",
+        preventDefault() {
+          prevented = true;
+        },
+      });
+      assert.equal(prevented, true);
+      assert.equal(loginCalls, 1);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderAuthModal: primary CTA sends register via direct click fallback", async () => {
+  const helper = await loadRenderAuthModal();
+  try {
+    withDomStubs(() => {
+      let registerCalls = 0;
+      const modal = helper.renderAuthModal(
+        "register",
+        null,
+        undefined,
+        [{ id: "telegram-exact", title: "Telegram (точный)" }],
+        "telegram-exact",
+        {
+          onLogin: () => {},
+          onRegister: () => {
+            registerCalls += 1;
+          },
+          onModeChange: () => {},
+          onUseDifferentAccount: () => {},
+          onSkinChange: () => {},
+          onClose: () => {},
+        }
+      );
+
+      const primaryBtn = findFirst(
+        modal,
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Зарегистрироваться/.test(collectText(n))
+      );
+      assert.ok(primaryBtn, "primary register button not found");
+      const clicks = primaryBtn._listeners.get("click") || [];
+      assert.equal(clicks.length, 1, "primary register button must have a click fallback");
+      let prevented = false;
+      clicks[0]({
+        type: "click",
+        preventDefault() {
+          prevented = true;
+        },
+      });
+      assert.equal(prevented, true);
+      assert.equal(registerCalls, 1);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
