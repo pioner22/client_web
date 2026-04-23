@@ -32,7 +32,7 @@ export function handleCoreAuthMessage(
     })();
     patch({
       serverVersion: sv,
-      status: "Соединение установлено",
+      status: "Связь с сервером установлена",
       pwaPushPermission: pushPermission,
       ...(pushKey ? { pwaPushPublicKey: pushKey } : {}),
     });
@@ -50,7 +50,7 @@ export function handleCoreAuthMessage(
       sessionDevices: [],
       sessionDevicesStatus: null,
       // “В тишине”: не открываем модалку автоматически.
-      status: "Сессия активна в другом окне. Нажмите «Войти», чтобы продолжить здесь.",
+      status: "Эта сессия уже активна в другом окне. Чтобы продолжить здесь, войдите ещё раз.",
     }));
     return true;
   }
@@ -72,7 +72,7 @@ export function handleCoreAuthMessage(
       authRememberedId: selfId || state.authRememberedId,
       ...(sess ? { authMode: "auto" as const } : {}),
       modal: null,
-      status: "Вход выполнен",
+      status: "Вы снова в Ягодке.",
       lastRead,
     });
     if (state.netLeader) {
@@ -113,7 +113,7 @@ export function handleCoreAuthMessage(
         sessionDevicesStatus: null,
         // “В тишине”: не открываем модалку сами — только статус, дальше пользователь сам нажмёт «Войти».
         modal: null,
-        status: "Сессия устарела или недействительна. Нажмите «Войти», чтобы войти снова.",
+        status: "Сохранённая сессия больше не действует. Войдите снова, чтобы продолжить.",
       });
       return true;
     }
@@ -150,7 +150,7 @@ export function handleCoreAuthMessage(
       authRememberedId: selfId || state.authRememberedId,
       ...(sess ? { authMode: "auto" as const } : {}),
       modal: null,
-      status: "Регистрация завершена",
+      status: "Аккаунт создан. Добро пожаловать.",
     });
     if (state.netLeader) {
       gateway.send({ type: "client_info", client: "web", version: state.clientVersion, ...buildClientInfoTags() });

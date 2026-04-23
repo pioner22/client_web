@@ -124,6 +124,39 @@
   color: var(--modal-line-color);
 }
 
+.modal-screen .screen-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.modal-screen .screen-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 45%);
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
+  color: var(--modal-line-color);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.modal-screen .screen-step.is-active {
+  border-color: color-mix(in srgb, var(--focus), transparent 50%);
+  background: color-mix(in srgb, var(--focus), transparent 88%);
+  color: var(--text);
+}
+
+.modal-screen .screen-step.is-done {
+  border-color: color-mix(in srgb, var(--ok), transparent 55%);
+  background: color-mix(in srgb, var(--ok), transparent 88%);
+  color: var(--text);
+}
+
 .modal-screen .screen-chip {
   display: inline-flex;
   align-items: center;
@@ -152,6 +185,11 @@
   border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 45%);
   background: color-mix(in srgb, var(--panel2), transparent 10%);
   color: var(--text);
+}
+
+.modal-screen .screen-note.screen-note-soft {
+  border-color: color-mix(in srgb, var(--modal-border-color), transparent 55%);
+  background: color-mix(in srgb, var(--panel2), transparent 16%);
 }
 
 .modal-screen .screen-note-label {
@@ -1114,6 +1152,8 @@
 .auth-chip-row {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .auth-status-chip {
@@ -1130,6 +1170,37 @@
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.auth-conn-chip,
+.auth-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 45%);
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.auth-conn-chip-connecting {
+  border-color: color-mix(in srgb, var(--focus), transparent 60%);
+  background: color-mix(in srgb, var(--focus), transparent 90%);
+}
+
+.auth-conn-chip-connected {
+  border-color: color-mix(in srgb, var(--ok), transparent 55%);
+  background: color-mix(in srgb, var(--ok), transparent 88%);
+}
+
+.auth-conn-chip-disconnected {
+  border-color: color-mix(in srgb, var(--bad), transparent 55%);
+  background: color-mix(in srgb, var(--bad), transparent 90%);
 }
 
 .auth-header-top {
@@ -1275,6 +1346,81 @@
 
 .auth-inline-actions {
   margin-top: var(--sp-1);
+}
+
+.auth-entry-notice {
+  width: var(--auth-form-width);
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--focus), transparent 72%);
+  background:
+    radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--focus), transparent 92%), transparent 52%),
+    color-mix(in srgb, var(--panel2), transparent 12%);
+  color: color-mix(in srgb, var(--text), var(--modal-line-color) 30%);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.auth-progress-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 48%);
+  background: color-mix(in srgb, var(--panel), transparent 8%);
+}
+
+.auth-progress-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.auth-progress-list {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-progress-step {
+  display: grid;
+  gap: 2px;
+  padding-left: 14px;
+  position: relative;
+}
+
+.auth-progress-step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--modal-border-color), transparent 18%);
+}
+
+.auth-progress-step.is-active::before {
+  background: var(--focus);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus), transparent 84%);
+}
+
+.auth-progress-step.is-done::before {
+  background: var(--ok);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok), transparent 84%);
+}
+
+.auth-progress-step-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.auth-progress-step-copy {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--modal-line-color);
 }
 
 .modal-title {

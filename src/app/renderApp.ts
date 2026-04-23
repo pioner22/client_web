@@ -717,7 +717,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   };
   const authMessage = state.modal?.kind === "auth" ? state.modal.message : undefined;
   const authModalNode = authModalVisible
-      ? renderAuthModal(state.authMode, state.authRememberedId, authMessage, state.skins, state.skin, {
+      ? renderAuthModal(state.authMode, state.authRememberedId, authMessage, state.status, state.conn, state.skins, state.skin, {
           onLogin: actions.onAuthLogin,
           onRegister: actions.onAuthRegister,
           onModeChange: actions.onAuthModeChange,

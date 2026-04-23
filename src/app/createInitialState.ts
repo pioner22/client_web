@@ -17,10 +17,10 @@ export function createInitialState(): AppState {
   const autoBlocked = isSessionAutoAuthBlocked();
   const authMode = sessionToken && !autoBlocked ? "auto" : rememberedId ? "login" : "register";
   const status = autoBlocked
-    ? "Сессия активна в другом окне. Нажмите «Войти», чтобы продолжить здесь."
+    ? "Сессия уже активна в другом окне. Чтобы продолжить здесь, подтвердите вход ещё раз."
     : authMode === "auto"
-      ? "Проверяем сохранённую сессию…"
-      : "Подключаемся к серверу…";
+      ? "Пробуем восстановить сохранённую сессию…"
+      : "Подключаем устройство к серверу…";
   const pushSupported = (() => {
     try {
       return Boolean(

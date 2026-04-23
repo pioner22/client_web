@@ -237,7 +237,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
   if (!modal) return null;
   const kind = modal.kind;
   if (kind === "auth") {
-    return renderAuthModal(state.authMode, state.authRememberedId, modal.message, state.skins, state.skin, {
+    return renderAuthModal(state.authMode, state.authRememberedId, modal.message, state.status, state.conn, state.skins, state.skin, {
       onLogin: actions.onAuthLogin,
       onRegister: actions.onAuthRegister,
       onModeChange: actions.onAuthModeChange,
@@ -247,7 +247,11 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     });
   }
   if (kind === "welcome") {
-    return renderWelcomeModal(state.status);
+    return renderWelcomeModal(state.status, {
+      authMode: state.authMode,
+      rememberedId: state.authRememberedId,
+      conn: state.conn,
+    });
   }
   if (kind === "logout") {
     return renderLogoutModal(state.status, state.authRememberedId, {

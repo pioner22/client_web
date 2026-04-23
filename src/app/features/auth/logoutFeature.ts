@@ -158,7 +158,7 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
       modal: { kind: "logout" },
       authMode: rememberedId ? "login" : "register",
       authRememberedId: rememberedId,
-      status: "Вы вышли из мессенджера. Можно быстро войти снова или выбрать другой аккаунт.",
+      status: "Вы вышли из аккаунта. Можно быстро вернуться или выбрать другой аккаунт.",
     }));
 
     resetLoadedForUser();

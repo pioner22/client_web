@@ -32,13 +32,13 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
       store.set((prev) => ({
         ...prev,
         authMode: prev.authRememberedId ? "login" : "register",
-        status: "Сессия активна в другом окне. Нажмите «Войти», чтобы продолжить здесь.",
+        status: "Сессия уже используется в другом окне. Чтобы продолжить здесь, подтвердите вход ещё раз.",
       }));
       return;
     }
     if (token && !autoAuthAttemptedForConn) {
       autoAuthAttemptedForConn = true;
-      store.set({ status: "Проверяем сохранённую сессию…" });
+      store.set({ status: "Пробуем восстановить сохранённую сессию…" });
       send({ type: "auth", session: token });
       return;
     }
@@ -49,8 +49,8 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
       ...prev,
       authMode: prev.authRememberedId ? "login" : "register",
       status: prev.authRememberedId
-        ? "Соединение установлено. Введите пароль, чтобы продолжить."
-        : "Соединение установлено. Введите ID и пароль или создайте новый аккаунт.",
+        ? "Соединение установлено. Введите пароль, чтобы продолжить вход."
+        : "Соединение установлено. Можно войти в существующий аккаунт или создать новый.",
     }));
   }
 
