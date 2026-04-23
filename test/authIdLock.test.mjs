@@ -256,6 +256,94 @@ test("renderAuthModal: rememberedId не блокирует поле ID и по�
   }
 });
 
+test("renderAuthModal: modern entry shell keeps hero and focused auth panel", async () => {
+  const helper = await loadRenderAuthModal();
+  try {
+    withDomStubs(() => {
+      const modal = helper.renderAuthModal(
+        "register",
+        null,
+        undefined,
+        [{ id: "telegram-exact", title: "Telegram (точный)" }],
+        "telegram-exact",
+        {
+          onLogin: () => {},
+          onRegister: () => {},
+          onModeChange: () => {},
+          onUseDifferentAccount: () => {},
+          onSkinChange: () => {},
+          onClose: () => {},
+        }
+      );
+
+      assert.ok(
+        findFirst(modal, (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-entry-layout")),
+        "auth-entry-layout not found"
+      );
+      assert.ok(
+        findFirst(modal, (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-entry-hero")),
+        "auth-entry-hero not found"
+      );
+      assert.ok(
+        findFirst(modal, (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-entry-panel")),
+        "auth-entry-panel not found"
+      );
+      assert.match(collectText(modal), /Создайте аккаунт за один шаг/);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderAuthModal: auto-resume screen keeps manual and different-account actions", async () => {
+  const helper = await loadRenderAuthModal();
+  try {
+    withDomStubs(() => {
+      let manual = 0;
+      let switched = 0;
+      const modal = helper.renderAuthModal(
+        "auto",
+        "854-432-319",
+        undefined,
+        "Пробуем восстановить сохранённую сессию…",
+        "connected",
+        [{ id: "telegram-exact", title: "Telegram (точный)" }],
+        "telegram-exact",
+        {
+          onLogin: () => {},
+          onRegister: () => {},
+          onModeChange: () => {
+            manual += 1;
+          },
+          onUseDifferentAccount: () => {
+            switched += 1;
+          },
+          onSkinChange: () => {},
+          onClose: () => {},
+        }
+      );
+
+      assert.match(collectText(modal), /Возвращаем вас в Ягодку/);
+      const manualBtn = findFirst(
+        modal,
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Войти вручную/.test(collectText(n))
+      );
+      const switchBtn = findFirst(
+        modal,
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Другой аккаунт/.test(collectText(n))
+      );
+      assert.ok(manualBtn, "manual login button not found");
+      assert.ok(switchBtn, "different-account button not found");
+      (manualBtn._listeners.get("click") || [])[0]({ type: "click" });
+      (switchBtn._listeners.get("click") || [])[0]({ type: "click" });
+      assert.equal(manual, 1);
+      assert.equal(switched, 1);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("renderAuthModal: без rememberedId поле ID остаётся редактируемым", async () => {
   const helper = await loadRenderAuthModal();
   try {

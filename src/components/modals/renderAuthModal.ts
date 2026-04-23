@@ -26,6 +26,91 @@ type RenderAuthModalExtendedArgs = [
   actions: AuthModalActions,
 ];
 
+interface EntryCopy {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  heroTitle: string;
+  heroCopy: string;
+  primaryLabel: string;
+  helper: string;
+}
+
+function connLabel(conn: ConnStatus): string {
+  if (conn === "connected") return "Сервер готов";
+  if (conn === "connecting") return "Подключаемся";
+  return "Нет связи";
+}
+
+function modeLabel(mode: AuthMode, hasRememberedId: boolean): string {
+  if (mode === "auto") return "Автовход";
+  if (mode === "register") return "Новый аккаунт";
+  return hasRememberedId ? "Быстрый вход" : "Вход";
+}
+
+function isQuietStatus(status: string, connected: boolean, mode: AuthMode): boolean {
+  if (!status) return true;
+  if (status === "Связь с сервером установлена" || status === "Вы снова в Ягодке." || status === "Вход выполнен") return true;
+  if (connected && status.startsWith("Соединение установлено")) return true;
+  if (status.startsWith("Подключение") || status.startsWith("Подключаем")) return mode !== "auto";
+  return false;
+}
+
+function resolveNotice(message: string, status: string, connected: boolean, mode: AuthMode): string {
+  if (message) return message;
+  if (isQuietStatus(status, connected, mode)) return "";
+  return status;
+}
+
+function resolveCopy(mode: AuthMode, hasRememberedId: boolean): EntryCopy {
+  if (mode === "auto") {
+    return {
+      eyebrow: "Сохранённая сессия",
+      title: "Возвращаем вас в Ягодку",
+      subtitle: "Проверяем сессию и готовим чаты без лишних действий.",
+      heroTitle: "Вход должен ощущаться как продолжение, а не как препятствие.",
+      heroCopy: "Если сохранённая сессия действует, приложение откроется само. Если нет — рядом есть ручной вход и смена аккаунта.",
+      primaryLabel: "Войти вручную",
+      helper: "Можно не ждать автовход и сразу подтвердить доступ вручную.",
+    };
+  }
+  if (mode === "register") {
+    return {
+      eyebrow: "Первый вход",
+      title: "Создайте аккаунт за один шаг",
+      subtitle: "Придумайте пароль, а ID мы создадим автоматически после регистрации.",
+      heroTitle: "Новый аккаунт без перегруженной анкеты.",
+      heroCopy: "На старте нужен только пароль. ID появится после регистрации — сохраните его для входа на других устройствах.",
+      primaryLabel: "Зарегистрироваться",
+      helper: "После регистрации сразу откроются чаты и профиль.",
+    };
+  }
+  if (hasRememberedId) {
+    return {
+      eyebrow: "Сохранённый аккаунт",
+      title: "Продолжить вход",
+      subtitle: "ID уже сохранён на этом устройстве. Введите пароль, чтобы продолжить.",
+      heroTitle: "Быстрый вход для знакомого устройства.",
+      heroCopy: "Мы оставили главный путь коротким: сохранённый ID, пароль и один понятный следующий шаг.",
+      primaryLabel: "Войти",
+      helper: "Нужен другой профиль? Переключитесь на другой аккаунт.",
+    };
+  }
+  return {
+    eyebrow: "Вход по ID",
+    title: "Войдите в аккаунт",
+    subtitle: "Введите ID или @логин и пароль, чтобы открыть свои чаты.",
+    heroTitle: "Понятный вход без технических экранов.",
+    heroCopy: "Если аккаунт уже есть, используйте ID или @логин. Если нет — переключитесь на регистрацию рядом.",
+    primaryLabel: "Войти",
+    helper: "ID можно вводить в формате 123-456-789 или как @логин.",
+  };
+}
+
+function createPill(className: string, text: string): HTMLElement {
+  return el("div", { class: `auth-pill ${className}` }, [text]);
+}
+
 export function renderAuthModal(
   mode: AuthMode,
   rememberedId: string | null,
@@ -51,66 +136,13 @@ export function renderAuthModal(
   }
 
   const rememberedIdValue = String(rememberedId ?? "").trim();
-  const hasRememberedId = mode === "login" && Boolean(rememberedIdValue);
-  const showSkinPicker = mode !== "auto" && (mode === "register" || !hasRememberedId);
   const connected = conn === "connected";
-  const connLabel = connected ? "Связь готова" : conn === "connecting" ? "Подключаемся" : "Нет связи";
-  const secondaryModeChip =
-    mode === "auto" ? "Автовход" : mode === "register" ? "Новый аккаунт" : hasRememberedId ? "Быстрый вход" : "Вход";
-  const rawStatus = String(status ?? "").trim();
+  const hasRememberedId = mode === "login" && Boolean(rememberedIdValue);
+  const copy = resolveCopy(mode, hasRememberedId);
   const rawMessage = String(message ?? "").trim();
-  const visibleNotice = (() => {
-    if (rawMessage) return rawMessage;
-    if (!rawStatus) return "";
-    if (rawStatus === "Связь с сервером установлена" || rawStatus === "Вы снова в Ягодке." || rawStatus === "Вход выполнен") return "";
-    if (
-      rawStatus.startsWith("Подключение") ||
-      rawStatus.startsWith("Пробуем восстановить") ||
-      rawStatus.startsWith("Проверяем сохранённую сессию")
-    ) {
-      return mode === "auto" ? rawStatus : "";
-    }
-    if (connected && rawStatus.startsWith("Соединение установлено")) return "";
-    return rawStatus;
-  })();
-
-  const headerCopy = (() => {
-    if (mode === "auto") {
-      return {
-        chip: "Сохранённая сессия",
-        subtitle: "Восстанавливаем вход на этом устройстве",
-        noteLines: [
-          "Если сессия ещё действует, откроем ваши чаты без повторного ввода ID и пароля.",
-          "Если хотите войти иначе, можно сразу переключиться на ручной вход или другой аккаунт.",
-        ],
-      };
-    }
-    if (mode === "register") {
-      return {
-        chip: "Новый аккаунт",
-        subtitle: "Создать аккаунт без лишних шагов",
-        noteLines: [
-          "Пароль задаёте вы, а ID создадим автоматически и покажем сразу после регистрации.",
-        ],
-      };
-    }
-    if (hasRememberedId) {
-      return {
-        chip: "Быстрый вход",
-        subtitle: "Продолжить как сохранённый аккаунт",
-        noteLines: [
-          "Сохранённый ID уже подставлен. Обычно достаточно ввести пароль, чтобы продолжить.",
-        ],
-      };
-    }
-    return {
-      chip: "Вход по ID",
-      subtitle: "Войти по ID или @логину",
-      noteLines: [
-        "Если аккаунт уже есть, введите ID или @логин и пароль. Если нет — переключитесь на регистрацию.",
-      ],
-    };
-  })();
+  const rawStatus = String(status ?? "").trim();
+  const visibleNotice = resolveNotice(rawMessage, rawStatus, connected, mode);
+  const showSkinPicker = mode !== "auto" && (mode === "register" || !hasRememberedId);
 
   function wrapWithIdEditAction(input: HTMLInputElement, hasRemembered: boolean): HTMLElement {
     if (!hasRemembered) return input;
@@ -163,54 +195,67 @@ export function renderAuthModal(
       focusElement(input);
     });
 
-    const wrap = el("div", { class: "field-with-action" }, [input, toggle]);
-    return wrap;
+    return el("div", { class: "field-with-action" }, [input, toggle]);
   }
 
-  const root = el("div", { id: "auth-pages" });
-  const scrollable = el("div", { class: "scrollable" });
-  const placeholderTop = el("div", { class: "auth-placeholder" }, [""]);
-  const placeholderBottom = el("div", { class: "auth-placeholder" }, [""]);
-  const tabsContainer = el("div", { class: "tabs-container" });
-  const tabsTab = el("div", { class: "tabs-tab active" });
-  const pageClass = mode === "register" ? "page-signUp" : "page-sign";
-  const container = el("div", { class: `container modal-auth ${pageClass}` });
-  const tabRegister = el("button", { class: "btn auth-tab", type: "button" }, ["Регистрация"]);
-  const tabLogin = el("button", { class: "btn auth-tab", type: "button" }, ["Вход"]);
+  const root = el("div", { id: "auth-pages", class: `auth-entry-page auth-entry-${mode}` });
+  const scrollable = el("div", { class: "scrollable auth-entry-scroll" });
+  const layout = el("div", { class: `container modal-auth auth-entry-layout ${mode === "register" ? "page-signUp" : "page-sign"}` });
   const btnClose = el("button", { class: "btn auth-close", type: "button", title: "Закрыть", "aria-label": "Закрыть" }, [
     "×",
+  ]) as HTMLButtonElement;
+
+  const hero = el("section", { class: "auth-entry-hero", "aria-label": "Ягодка" }, [
+    el("div", { class: "auth-hero-orb", "aria-hidden": "true" }, [
+      el("img", { class: "auth-logo", src: "./icons/icon.svg", alt: "" }, []),
+    ]),
+    el("div", { class: "auth-hero-kicker" }, ["Ягодка"]),
+    el("div", { class: "auth-hero-title" }, [copy.heroTitle]),
+    el("div", { class: "auth-hero-copy" }, [copy.heroCopy]),
+    el("div", { class: "auth-hero-stack" }, [
+      el("div", { class: `auth-hero-step${conn === "connected" ? " is-done" : " is-active"}` }, [
+        el("span", { class: "auth-hero-step-mark" }, ["1"]),
+        el("span", { class: "auth-hero-step-text" }, [conn === "connected" ? "Связь с сервером готова" : "Устанавливаем связь"]),
+      ]),
+      el("div", { class: `auth-hero-step${mode === "auto" ? " is-active" : ""}` }, [
+        el("span", { class: "auth-hero-step-mark" }, ["2"]),
+        el("span", { class: "auth-hero-step-text" }, [mode === "auto" ? "Проверяем сохранённую сессию" : "Вы выбираете вход или регистрацию"]),
+      ]),
+      el("div", { class: "auth-hero-step" }, [
+        el("span", { class: "auth-hero-step-mark" }, ["3"]),
+        el("span", { class: "auth-hero-step-text" }, ["Открываем чаты и доски"]),
+      ]),
+    ]),
   ]);
-  const formId = "auth-form";
-  const btnOkLabel = mode === "register" ? "Зарегистрироваться" : "Войти";
-  const btnOk =
-    mode === "auto"
-      ? null
-      : el(
-          "button",
-          { class: "btn btn-primary", type: "submit", form: formId, ...(connected ? {} : { disabled: "true" }) },
-          [connected ? btnOkLabel : "Ждём соединение"]
-        );
-  const authImage = el("div", { class: "auth-image", "aria-hidden": "true" }, [
-    el("img", { class: "auth-logo", src: "./icons/icon.svg", alt: "" }, []),
-  ]);
+
   const brand = el("div", { class: "auth-brand" }, [
     el("img", { class: "auth-brand-icon", src: "./icons/icon.svg", alt: "" }, []),
     el("div", { class: "auth-brand-text" }, ["Ягодка"]),
   ]);
-  const header = el("div", { class: "auth-header" }, [
-    el("div", { class: "auth-header-top" }, [brand, btnClose]),
+  const tabRegister = el("button", { class: "btn auth-tab", type: "button" }, ["Создать"]);
+  const tabLogin = el("button", { class: "btn auth-tab", type: "button" }, ["Вход"]);
+  const tabs = el("div", { class: "modal-tabs auth-segmented-tabs" }, [tabRegister, tabLogin]);
+  tabRegister.classList.toggle("btn-active", mode === "register");
+  tabLogin.classList.toggle("btn-active", mode === "login");
+  if (mode === "register") tabRegister.setAttribute("aria-pressed", "true");
+  if (mode === "login") tabLogin.setAttribute("aria-pressed", "true");
+
+  const panel = el("section", { class: "auth-entry-panel" }, [
+    el("div", { class: "auth-panel-top" }, [brand, btnClose]),
     el("div", { class: "auth-chip-row" }, [
-      el("div", { class: "auth-status-chip" }, [headerCopy.chip]),
-      el("div", { class: `auth-conn-chip auth-conn-chip-${conn}` }, [connLabel]),
-      el("div", { class: "auth-mode-chip" }, [secondaryModeChip]),
+      createPill("auth-status-chip", copy.eyebrow),
+      createPill(`auth-conn-chip auth-conn-chip-${conn}`, connLabel(conn)),
+      createPill("auth-mode-chip", modeLabel(mode, hasRememberedId)),
     ]),
-    el("div", { class: "subtitle auth-subtitle" }, [headerCopy.subtitle]),
-    el("div", { class: "auth-note" }, [
-      ...headerCopy.noteLines.map((line) => el("span", { class: "auth-note-line" }, [line])),
+    el("div", { class: "auth-panel-heading" }, [
+      el("div", { class: "auth-subtitle" }, [copy.title]),
+      el("div", { class: "auth-note" }, [copy.subtitle]),
     ]),
+    ...(mode === "auto" ? [] : [tabs]),
+    ...(visibleNotice ? [el("div", { class: "auth-entry-notice" }, [visibleNotice])] : []),
   ]);
 
-  const skinLabel = el("label", { class: "modal-label", for: "auth-skin" }, ["Скин (тема):"]);
+  const skinLabel = el("label", { class: "modal-label", for: "auth-skin" }, ["Оформление"]);
   const skinSelect = el("select", { class: "modal-input", id: "auth-skin" }, []) as HTMLSelectElement;
   skinSelect.replaceChildren(
     ...(skins || []).map((s) => {
@@ -220,45 +265,45 @@ export function renderAuthModal(
     })
   );
 
-  const tabs = el("div", { class: "modal-tabs" }, [tabRegister, tabLogin]);
-  tabRegister.classList.toggle("btn-active", mode === "register");
-  tabLogin.classList.toggle("btn-active", mode === "login");
-  if (mode === "register" && typeof (tabRegister as HTMLElement).setAttribute === "function") {
-    tabRegister.setAttribute("aria-pressed", "true");
-  }
-  if (mode === "login" && typeof (tabLogin as HTMLElement).setAttribute === "function") {
-    tabLogin.setAttribute("aria-pressed", "true");
-  }
+  const formId = "auth-form";
+  const primaryButton =
+    mode === "auto"
+      ? null
+      : (el(
+          "button",
+          { class: "btn btn-primary auth-primary-cta", type: "submit", form: formId, ...(connected ? {} : { disabled: "true" }) },
+          [connected ? copy.primaryLabel : "Ждём соединение"]
+        ) as HTMLButtonElement);
 
   const body =
     mode === "auto"
-      ? el("div", { class: "modal-body input-wrapper" })
-      : (el("form", { class: "modal-body input-wrapper", id: formId, autocomplete: "off", method: "post" }) as HTMLFormElement);
+      ? el("div", { class: "modal-body input-wrapper auth-entry-form auth-entry-form-auto" })
+      : (el("form", { class: "modal-body input-wrapper auth-entry-form", id: formId, autocomplete: "off", method: "post" }) as HTMLFormElement);
+
   if (mode === "auto") {
-    const useManualLogin = el("button", { class: "btn btn-primary", type: "button" }, ["Войти вручную"]) as HTMLButtonElement;
+    const useManualLogin = el("button", { class: "btn btn-primary auth-primary-cta", type: "button" }, [copy.primaryLabel]) as HTMLButtonElement;
     const useOtherAccount = el("button", { class: "btn btn-secondary", type: "button" }, ["Другой аккаунт"]) as HTMLButtonElement;
     useManualLogin.addEventListener("click", () => actions.onModeChange(rememberedIdValue ? "login" : "register"));
     useOtherAccount.addEventListener("click", () => actions.onUseDifferentAccount());
     body.append(
-      el("div", { class: "modal-title" }, ["Почти готово"]),
       el("div", { class: "auth-progress-card" }, [
-        el("div", { class: "auth-progress-title" }, ["Что происходит сейчас"]),
+        el("div", { class: "auth-progress-title" }, ["Автовход"]),
         el("div", { class: "auth-progress-list" }, [
           el("div", { class: `auth-progress-step${connected ? " is-done" : " is-active"}` }, [
-            el("span", { class: "auth-progress-step-title" }, ["Подключаем устройство"]),
-            el("span", { class: "auth-progress-step-copy" }, [connected ? "Связь с сервером готова." : "Устанавливаем безопасное соединение."]),
+            el("span", { class: "auth-progress-step-title" }, ["Подключение"]),
+            el("span", { class: "auth-progress-step-copy" }, [connected ? "Связь с сервером установлена." : "Готовим защищённый канал."]),
           ]),
           el("div", { class: `auth-progress-step${connected ? " is-active" : ""}` }, [
-            el("span", { class: "auth-progress-step-title" }, ["Проверяем сохранённую сессию"]),
-            el("span", { class: "auth-progress-step-copy" }, ["Если она ещё действует, войдём без повторного ввода данных."]),
+            el("span", { class: "auth-progress-step-title" }, ["Сессия"]),
+            el("span", { class: "auth-progress-step-copy" }, ["Проверяем, можно ли открыть чаты без пароля."]),
           ]),
           el("div", { class: "auth-progress-step" }, [
-            el("span", { class: "auth-progress-step-title" }, ["Откроем ваши чаты"]),
-            el("span", { class: "auth-progress-step-copy" }, ["Сразу после успешной проверки."]),
+            el("span", { class: "auth-progress-step-title" }, ["Готово"]),
+            el("span", { class: "auth-progress-step-copy" }, ["После подтверждения сразу покажем рабочее пространство."]),
           ]),
         ]),
       ]),
-      el("div", { class: "modal-help" }, ["Если нужно, можно сразу перейти на ручной вход или выбрать другой аккаунт."]),
+      el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
       el("div", { class: "modal-actions modal-actions-compose auth-inline-actions" }, [useManualLogin, useOtherAccount])
     );
   } else if (mode === "register") {
@@ -267,7 +312,7 @@ export function renderAuthModal(
       id: "auth-pw1",
       name: "new-password",
       type: "password",
-      placeholder: "••••••",
+      placeholder: "Пароль",
       autocomplete: "new-password",
       autocorrect: "off",
       autocapitalize: "off",
@@ -281,7 +326,7 @@ export function renderAuthModal(
       id: "auth-pw2",
       name: "new-password-confirm",
       type: "password",
-      placeholder: "••••••",
+      placeholder: "Повторите пароль",
       autocomplete: "new-password",
       autocorrect: "off",
       autocapitalize: "off",
@@ -291,13 +336,16 @@ export function renderAuthModal(
       enterkeyhint: "done",
     }) as HTMLInputElement;
     body.append(
-      el("div", { class: "modal-title" }, ["Регистрация"]),
-      el("div", { class: "modal-help auth-section-lead" }, ["Создадим новый аккаунт и сразу покажем ваш ID, чтобы вы могли его сохранить."]),
-      el("label", { class: "modal-label", for: "auth-pw1" }, ["Пароль:"]),
-      wrapWithPasswordToggle(pw1Input),
-      el("label", { class: "modal-label", for: "auth-pw2" }, ["Подтверждение пароля:"]),
-      wrapWithPasswordToggle(pw2Input),
-      el("div", { class: "modal-help" }, ["Используйте пароль, который сможете безопасно сохранить или восстановить."])
+      el("div", { class: "auth-field-stack" }, [
+        el("label", { class: "modal-label", for: "auth-pw1" }, ["Пароль"]),
+        wrapWithPasswordToggle(pw1Input),
+      ]),
+      el("div", { class: "auth-field-stack" }, [
+        el("label", { class: "modal-label", for: "auth-pw2" }, ["Подтверждение"]),
+        wrapWithPasswordToggle(pw2Input),
+      ]),
+      el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
+      el("div", { class: "modal-actions" }, primaryButton ? [primaryButton] : [])
     );
   } else {
     const idInput = el("input", {
@@ -335,7 +383,7 @@ export function renderAuthModal(
       id: "auth-pw",
       name: "password",
       type: "password",
-      placeholder: "••••••",
+      placeholder: "Пароль",
       "data-ios-assistant": "off",
       "data-fancy-caret": "off",
       autocomplete: "current-password",
@@ -344,8 +392,8 @@ export function renderAuthModal(
       spellcheck: "false",
       enterkeyhint: "done",
     }) as HTMLInputElement;
-    const manualIdBlock = el("div", { class: `auth-manual-id${hasRememberedId ? " auth-manual-id-hidden" : ""}` }, [
-      el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин:"]),
+    const manualIdBlock = el("div", { class: `auth-field-stack auth-manual-id${hasRememberedId ? " auth-manual-id-hidden" : ""}` }, [
+      el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин"]),
       wrapWithIdEditAction(idInput, hasRememberedId),
     ]);
     const sessionCard =
@@ -354,56 +402,41 @@ export function renderAuthModal(
             const switchBtn = el("button", { class: "btn btn-secondary", type: "button" }, ["Другой аккаунт"]) as HTMLButtonElement;
             switchBtn.addEventListener("click", () => actions.onUseDifferentAccount());
             return el("div", { class: "auth-session-card" }, [
-              el("div", { class: "auth-session-label" }, ["Сохранённый аккаунт"]),
+              el("div", { class: "auth-session-label" }, ["Продолжить как"]),
               el("div", { class: "auth-session-id" }, [rememberedIdValue]),
-              el("div", { class: "auth-session-copy" }, [
-                "Введите пароль, чтобы продолжить в этом аккаунте, или переключитесь на другой ID.",
-              ]),
+              el("div", { class: "auth-session-copy" }, ["Введите пароль для этого аккаунта или выберите другой ID."]),
               el("div", { class: "auth-session-actions" }, [switchBtn]),
             ]);
           })()
         : null;
 
     body.append(
-      el("div", { class: "modal-title" }, ["Вход"]),
-      el("div", { class: "modal-help auth-section-lead" }, [
-        hasRememberedId
-          ? "ID уже сохранён на этом устройстве. Обычно достаточно ввести пароль."
-          : "Введите ID или @логин и пароль, чтобы войти в мессенджер.",
-      ]),
       ...(sessionCard ? [sessionCard] : []),
       manualIdBlock,
-      el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль:"]),
-      wrapWithPasswordToggle(pwInput),
-      el("div", { class: "modal-help" }, [
-        hasRememberedId
-          ? "Пароль нигде не показывается и нужен только для подтверждения входа."
-          : "Можно использовать числовой ID вида 123-456-789 или @логин.",
-      ])
+      el("div", { class: "auth-field-stack" }, [
+        el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль"]),
+        wrapWithPasswordToggle(pwInput),
+      ]),
+      el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
+      el("div", { class: "modal-actions" }, primaryButton ? [primaryButton] : [])
     );
   }
 
-  container.append(
-    authImage,
-    header,
-    tabs,
-    ...(visibleNotice ? [el("div", { class: "auth-entry-notice" }, [visibleNotice])] : []),
+  panel.append(
     body,
     ...(showSkinPicker
       ? [
           el("div", { class: "auth-extra" }, [
             skinLabel,
             skinSelect,
-            el("div", { class: "modal-help auth-extra-help" }, ["Оформление можно поменять и позже, уже после входа."]),
+            el("div", { class: "modal-help auth-extra-help" }, ["Можно поменять и после входа."]),
           ]),
         ]
       : []),
-    message ? el("div", { class: "modal-warn" }, [message]) : el("div", { class: "modal-warn" }),
-    mode === "auto" ? el("div", { class: "modal-actions" }) : el("div", { class: "modal-actions" }, btnOk ? [btnOk] : [])
+    rawMessage ? el("div", { class: "modal-warn" }, [rawMessage]) : el("div", { class: "modal-warn" })
   );
-  tabsTab.append(container);
-  tabsContainer.append(tabsTab);
-  scrollable.append(placeholderTop, tabsContainer, placeholderBottom);
+  layout.append(hero, panel);
+  scrollable.append(layout);
   root.append(scrollable);
 
   tabRegister.addEventListener("click", () => actions.onModeChange("register"));
@@ -422,11 +455,9 @@ export function renderAuthModal(
       submitCurrentMode();
     });
 
-    if (btnOk) {
-      // iOS Safari/PWA can ignore submit buttons linked via `form=...` when the button sits
-      // outside the form container. Keep Enter-submit on the form, but also wire the primary
-      // CTA directly so tap-to-login/register still dispatches reliably.
-      btnOk.addEventListener("click", (e) => {
+    if (primaryButton) {
+      // iOS Safari/PWA can miss linked-form submits. Keep a direct tap path.
+      primaryButton.addEventListener("click", (e) => {
         e.preventDefault();
         submitCurrentMode();
       });

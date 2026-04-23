@@ -279,6 +279,9 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.modal-actions\.modal-actions-compose\b/);
   assert.match(css, /\.modal-screen-status\s+\.screen-sub\b/);
   assert.match(css, /\.auth-session-card\b/);
+  assert.match(css, /\.auth-entry-layout\b/);
+  assert.match(css, /\.auth-entry-hero\b/);
+  assert.match(css, /\.auth-entry-panel\b/);
   assert.match(css, /\.modal-screen\s+\.screen-chip\b/);
   assert.match(css, /#auth-pages > \.scrollable\s*{[^}]*padding:/s);
   assert.match(css, /#auth-pages \.tabs-tab \.container\s*{[^}]*min-height:\s*0;[^}]*flex:\s*0 0 auto;/s);
