@@ -193,6 +193,7 @@ function ensureSecondaryHost(): HTMLElement {
 export interface ModalActions {
   onAuthLogin: () => void;
   onAuthRegister: () => void;
+  onAuthTouchId: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
   onAuthOpen: () => void;
   onAuthUseDifferentAccount: () => void;
@@ -240,6 +241,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     return renderAuthModal(state.authMode, state.authRememberedId, modal.message, state.status, state.conn, state.skins, state.skin, {
       onLogin: actions.onAuthLogin,
       onRegister: actions.onAuthRegister,
+      onTouchId: actions.onAuthTouchId,
       onModeChange: actions.onAuthModeChange,
       onUseDifferentAccount: actions.onAuthUseDifferentAccount,
       onSkinChange: actions.onSkinChange,

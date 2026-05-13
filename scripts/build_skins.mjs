@@ -10,6 +10,7 @@ const skinsDir = path.join(distDir, "skins");
 const SKIN_ID_RE = /^[a-z0-9_-]{1,32}$/;
 const TITLE_MAP = {
   default: "По умолчанию",
+  "yagodka-modern": "Yagodka Modern",
   "telegram-web": "Ягодка (светлая)",
   "telegram-exact": "Telegram (точный)",
   "dark-premium": "Тёмная премиум",

@@ -1,4 +1,9 @@
 import { sanitizeChatFoldersSnapshot } from "../../../helpers/chat/folders";
+import {
+  setSidebarArchiveOpenValue,
+  setSidebarFolderId,
+  setSidebarQueryValue,
+} from "../../../helpers/sidebar/sidebarState";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 
@@ -25,7 +30,7 @@ export function createSidebarPreferencesActionsFeature(
     const active = String(folderId || "").trim().toLowerCase() || "all";
     const snap = sanitizeChatFoldersSnapshot({ v: 1, active, folders: st.chatFolders });
     if (st.sidebarFolderId === snap.active) return;
-    store.set({ sidebarFolderId: snap.active });
+    store.set((prev) => setSidebarFolderId(prev, snap.active));
     if (st.selfId) saveChatFoldersForUser(st.selfId, snap);
     if (st.conn === "connected" && st.authed) {
       send({ type: "prefs_set", values: { chat_folders: snap } });
@@ -35,7 +40,7 @@ export function createSidebarPreferencesActionsFeature(
   const onSetSidebarQuery = (query: string) => {
     const q = String(query ?? "");
     if (store.get().sidebarQuery === q) return;
-    store.set({ sidebarQuery: q });
+    store.set((prev) => setSidebarQueryValue(prev, q));
   };
 
   const onToggleSidebarArchive = () => {
@@ -47,7 +52,7 @@ export function createSidebarPreferencesActionsFeature(
         // ignore
       }
     }
-    store.set((prev) => ({ ...prev, sidebarArchiveOpen: !prev.sidebarArchiveOpen }));
+    store.set((prev) => setSidebarArchiveOpenValue(prev, !prev.sidebarArchiveOpen));
   };
 
   return {

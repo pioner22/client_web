@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { hasActiveConversationSelection } from "../../../helpers/navigation/mainConversationState";
 import { resolveHeaderChatBackAction, resolveHeaderNavBackAction, resolveOverlayInteractionAction } from "./interactionPolicy";
 
 export interface TopbarActionsFeatureDeps {
@@ -118,7 +119,7 @@ export function createTopbarActionsFeature(deps: TopbarActionsFeatureDeps): Topb
     e.preventDefault();
     const st = store.get();
     if (st.modal) return;
-    if (!st.selected || st.page !== "main") return;
+    if (!hasActiveConversationSelection(st)) return;
     onOpenChatTopbarMenu(btn);
   };
 

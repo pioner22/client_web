@@ -1,4 +1,5 @@
 import { el } from "../../helpers/dom/el";
+import { dmKey } from "../../helpers/chat/conversationKey";
 import { focusElement } from "../../helpers/ui/focus";
 import type { AppState, FriendEntry, MobileSidebarTab, TargetRef } from "../../stores/types";
 import {
@@ -11,7 +12,7 @@ import {
   type SidebarRowMeta,
 } from "./renderSidebarHelpers";
 
-type HeaderToolbarTab = "contacts" | "boards" | "chats" | "menu";
+type HeaderToolbarTab = "contacts" | "boards" | "groups" | "menu";
 
 export interface SidebarRenderToolsDeps {
   body: HTMLElement;
@@ -169,7 +170,7 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
     });
 
     const isBoardTab = activeTab === "boards";
-    const createLabel = isBoardTab ? "Создать доску" : "Создать чат";
+    const createLabel = isBoardTab ? "Создать канал" : "Создать группу";
     const createBtn = el(
       "button",
       {
@@ -237,16 +238,26 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
     if (opts?.sort !== false) ordered.sort(compareContactsByPresence);
     return markCompactAvatarRows(
       ordered.map((friend) => {
+        const id = String(friend.id || "").trim();
+        const key = id ? dmKey(id) : "";
+        const dialogMeta = key ? previewForConversation(state, key, "dm", drafts[key]) : null;
+        const hasDialogState = Boolean(
+          dialogMeta?.sub ||
+            dialogMeta?.time ||
+            dialogMeta?.hasDraft ||
+            dialogMeta?.reactionEmoji ||
+            Math.max(0, Number(friend.unread || 0) || 0) > 0 ||
+            attnSet.has(friend.id)
+        );
         const meta: SidebarRowMeta = {
-          sub: contactStatusLabel(friend),
-          time: null,
-          hasDraft: false,
-          reactionEmoji: null,
+          sub: hasDialogState ? dialogMeta?.sub || contactStatusLabel(friend) : contactStatusLabel(friend),
+          time: hasDialogState ? dialogMeta?.time || null : null,
+          hasDraft: hasDialogState ? Boolean(dialogMeta?.hasDraft) : false,
+          reactionEmoji: hasDialogState ? dialogMeta?.reactionEmoji || null : null,
         };
-        const rowFriend = friend.unread ? { ...friend, unread: 0 } : friend;
         return friendRow(
           state,
-          rowFriend,
+          friend,
           Boolean(selected && selected.kind === "dm" && selected.id === friend.id),
           meta,
           onSelect,
@@ -403,7 +414,7 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
   };
 
   const buildSidebarArchiveHint = (): HTMLElement =>
-    el("div", { class: "sidebar-archive-hint" }, ["Чтобы вернуть из архива: ПКМ/долгое нажатие по чату → «Убрать из архива»."]);
+    el("div", { class: "sidebar-archive-hint" }, ["Чтобы вернуть из архива: ПКМ/долгое нажатие по строке → «Убрать из архива»."]);
 
   const buildSidebarArchiveEmpty = (label: string): HTMLElement => el("div", { class: "sidebar-archive-empty" }, [label]);
 

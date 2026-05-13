@@ -5,15 +5,21 @@ import type {
   ChatMessage,
   GroupEntry,
   SearchResultEntry,
-  UserProfile,
 } from "../stores/types";
 import { dmKey, roomKey } from "../helpers/chat/conversationKey";
+import { dropConversationHistorySyncState } from "../helpers/chat/historySync";
 import { deleteHistoryMessageById, ingestHistoryResult, patchHistoryMessageById } from "../helpers/chat/historyIdb";
+import { removeCachedFileBlob } from "../helpers/files/fileBlobCache";
+import {
+  getActiveConversationTarget,
+  hasActiveConversationSelection,
+  isViewingDmPeer,
+  isViewingRoomId,
+} from "../helpers/navigation/mainConversationState";
 import { nowTs } from "../helpers/time";
 import { upsertConversation } from "../helpers/chat/upsertConversation";
-import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatar, storeAvatarRev } from "../helpers/avatar/avatarStore";
 import { removeOutboxEntry } from "../helpers/chat/outbox";
-import { isMobileLikeUi } from "../helpers/ui/mobileLike";
+import { applyFileTransferSnapshot, applyOutboxSnapshot } from "../helpers/runtime/deliverySync";
 import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
 import {
@@ -31,6 +37,8 @@ import { handleCoreAuthMessage } from "./handleServerMessage/coreAuth";
 import { handleHistoryServerMessage } from "./handleServerMessage/history";
 import { handleRosterPrefsMessage } from "./handleServerMessage/rosterPrefs";
 import { handleSessionDevicesMessage } from "./handleServerMessage/sessions";
+import { handleUpdateRequiredMessage } from "./handleServerMessage/updateRequired";
+import { handleProfileAvatarMessage } from "./handleServerMessage/profileAvatar";
 
 export function handleServerMessage(
   msg: any,
@@ -45,6 +53,8 @@ export function handleServerMessage(
   if (handleHistoryServerMessage(t, msg, state, gateway, patch)) return;
   if (handleSessionDevicesMessage(t, msg, state, gateway, patch)) return;
   if (handleActionConversationMessage(t, msg, state, patch)) return;
+  if (handleUpdateRequiredMessage(t, msg, state, patch)) return;
+  if (handleProfileAvatarMessage(t, msg, state, gateway, patch)) return;
   if (t === "groups") {
     const raw = Array.isArray(msg?.groups) ? msg.groups : [];
     patch((prev) => {
@@ -203,14 +213,19 @@ export function handleServerMessage(
     patch((prev) => {
       const sel = prev.selected;
       const selectedRemoved = Boolean(sel && sel.kind === "group" && sel.id === id);
-      const { [key]: _dropConv, ...restConv } = prev.conversations;
-      const { [key]: _dropLoaded, ...restLoaded } = prev.historyLoaded;
+      const next = selectedRemoved
+        ? dropConversationHistorySyncState(
+            {
+              ...prev,
+              conversations: Object.fromEntries(Object.entries(prev.conversations).filter(([entryKey]) => entryKey !== key)),
+            },
+            key
+          )
+        : prev;
       return {
-        ...prev,
+        ...next,
         groups: prev.groups.filter((g) => g.id !== id),
         selected: selectedRemoved ? null : prev.selected,
-        conversations: selectedRemoved ? restConv : prev.conversations,
-        historyLoaded: selectedRemoved ? restLoaded : prev.historyLoaded,
         status: by ? `Удалены из чата: ${label} (by ${by})` : `Удалены из чата: ${label}`,
       };
     });
@@ -307,14 +322,19 @@ export function handleServerMessage(
     patch((prev) => {
       const sel = prev.selected;
       const selectedRemoved = Boolean(sel && sel.kind === "board" && sel.id === id);
-      const { [key]: _dropConv, ...restConv } = prev.conversations;
-      const { [key]: _dropLoaded, ...restLoaded } = prev.historyLoaded;
+      const next = selectedRemoved
+        ? dropConversationHistorySyncState(
+            {
+              ...prev,
+              conversations: Object.fromEntries(Object.entries(prev.conversations).filter(([entryKey]) => entryKey !== key)),
+            },
+            key
+          )
+        : prev;
       return {
-        ...prev,
+        ...next,
         boards: prev.boards.filter((b) => b.id !== id),
         selected: selectedRemoved ? null : prev.selected,
-        conversations: selectedRemoved ? restConv : prev.conversations,
-        historyLoaded: selectedRemoved ? restLoaded : prev.historyLoaded,
         status: by ? `Удалены из доски: ${label} (by ${by})` : `Удалены из доски: ${label}`,
       };
     });
@@ -767,201 +787,6 @@ export function handleServerMessage(
     patch({ searchResults: results, status: results.length ? `Найдено: ${results.length}` : "Ничего не найдено" });
     return;
   }
-  if (t === "profile") {
-    const id = String(msg?.id ?? "");
-    if (!id) return;
-    const avatarRev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
-    const avatarMimeRaw = msg?.avatar_mime;
-    const avatarMime = typeof avatarMimeRaw === "string" && avatarMimeRaw.trim() ? String(avatarMimeRaw).trim() : null;
-    const prof: UserProfile = {
-      id,
-      display_name: (msg?.display_name ?? null) as any,
-      handle: (msg?.handle ?? null) as any,
-      bio: (msg?.bio ?? null) as any,
-      status: (msg?.status ?? null) as any,
-      avatar_rev: avatarRev,
-      avatar_mime: (avatarMime ?? null) as any,
-      client_version: (msg?.client_version ?? null) as any,
-      client_web_version: (msg?.client_web_version ?? null) as any,
-    };
-    const isFriend = Boolean(state.selfId && id === state.selfId) || state.friends.some((f) => f.id === id);
-    if (isFriend) {
-      const hasAvatar = Boolean(avatarMime);
-      if (!hasAvatar) {
-        const storedUrl = getStoredAvatar("dm", id);
-        const storedRev = getStoredAvatarRev("dm", id);
-        if (storedUrl) {
-          clearStoredAvatar("dm", id);
-          storeAvatarRev("dm", id, avatarRev);
-          patch((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1 }));
-        } else if (storedRev !== avatarRev) {
-          storeAvatarRev("dm", id, avatarRev);
-        }
-      } else {
-        const storedRev = getStoredAvatarRev("dm", id);
-        const storedUrl = getStoredAvatar("dm", id);
-        if (storedRev !== avatarRev || !storedUrl) gateway.send({ type: "avatar_get", id });
-      }
-    }
-    patch((prev) => {
-      const next: AppState = { ...prev, profiles: { ...prev.profiles, [id]: prof } };
-      if (id === prev.selfId) {
-        // Keep drafts in sync unless user is actively editing on the Profile page.
-        const draftsEmpty = !prev.profileDraftDisplayName && !prev.profileDraftHandle && !prev.profileDraftBio && !prev.profileDraftStatus;
-        if (prev.page !== "profile" || draftsEmpty) {
-          next.profileDraftDisplayName = String(prof.display_name ?? "");
-          next.profileDraftHandle = String(prof.handle ?? "");
-          next.profileDraftBio = String(prof.bio ?? "");
-          next.profileDraftStatus = String(prof.status ?? "");
-        }
-      }
-      return next;
-    });
-    return;
-  }
-  if (t === "profile_updated") {
-    const id = String(msg?.id ?? "");
-    if (!id) return;
-    const hasAvatarRev = msg?.avatar_rev !== undefined;
-    const avatarRev = hasAvatarRev ? Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0)) : null;
-    const hasAvatarMime = msg?.avatar_mime !== undefined;
-    const avatarMimeRaw = msg?.avatar_mime;
-    const avatarMime = typeof avatarMimeRaw === "string" && avatarMimeRaw.trim() ? String(avatarMimeRaw).trim() : null;
-    const isFriend = Boolean(state.selfId && id === state.selfId) || state.friends.some((f) => f.id === id);
-    if (isFriend && hasAvatarRev) {
-      const hasAvatar = Boolean(avatarMime);
-      if (hasAvatarMime && !hasAvatar) {
-        const storedUrl = getStoredAvatar("dm", id);
-        const storedRev = getStoredAvatarRev("dm", id);
-        if (storedUrl) {
-          clearStoredAvatar("dm", id);
-          storeAvatarRev("dm", id, avatarRev || 0);
-          patch((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1 }));
-        } else if (storedRev !== (avatarRev || 0)) {
-          storeAvatarRev("dm", id, avatarRev || 0);
-        }
-      } else if (hasAvatar) {
-        const storedRev = getStoredAvatarRev("dm", id);
-        const storedUrl = getStoredAvatar("dm", id);
-        if (storedRev !== avatarRev || !storedUrl) gateway.send({ type: "avatar_get", id });
-      }
-    }
-    patch((prev) => {
-      const cur = prev.profiles[id] ?? { id };
-      const nextProfile: UserProfile = {
-        ...cur,
-        id,
-        ...(msg?.display_name === undefined ? {} : { display_name: (msg?.display_name ?? null) as any }),
-        ...(msg?.handle === undefined ? {} : { handle: (msg?.handle ?? null) as any }),
-        ...(msg?.bio === undefined ? {} : { bio: (msg?.bio ?? null) as any }),
-        ...(msg?.status === undefined ? {} : { status: (msg?.status ?? null) as any }),
-        ...(msg?.avatar_rev === undefined ? {} : { avatar_rev: (avatarRev ?? 0) as any }),
-        ...(msg?.avatar_mime === undefined ? {} : { avatar_mime: (avatarMime ?? null) as any }),
-      };
-      return { ...prev, profiles: { ...prev.profiles, [id]: nextProfile } };
-    });
-    return;
-  }
-  if (t === "profile_set_result") {
-    const ok = Boolean(msg?.ok);
-    if (!ok) {
-      const reason = String(msg?.reason ?? "ошибка");
-      const message =
-        reason === "handle_taken"
-          ? "Этот @handle уже занят"
-            : reason === "handle_invalid"
-              ? "Некорректный @handle (только a-z, 0-9, _; длина 3–16)"
-            : reason === "too_long"
-              ? "Слишком длинное значение"
-            : reason === "empty"
-                ? "Поле не должно быть пустым"
-              : reason === "no_such_user"
-                ? "Пользователь не найден"
-                : reason === "server_error"
-                  ? "Ошибка сервера"
-                    : reason;
-      patch({ status: `Не удалось сохранить профиль: ${message}` });
-      return;
-    }
-    patch((prev) => {
-      if (!prev.selfId) return { ...prev, status: "Профиль сохранён" };
-      const cur = prev.profiles[prev.selfId] ?? { id: prev.selfId };
-      const displayName = (msg?.display_name ?? null) as any;
-      const handle = (msg?.handle ?? null) as any;
-      const bio = (msg?.bio ?? null) as any;
-      const statusText = (msg?.status ?? null) as any;
-      const nextProfile: UserProfile = { ...cur, display_name: displayName, handle, bio, status: statusText };
-      return {
-        ...prev,
-        profiles: { ...prev.profiles, [prev.selfId]: nextProfile },
-        profileDraftDisplayName: String(displayName ?? ""),
-        profileDraftHandle: String(handle ?? ""),
-        profileDraftBio: String(bio ?? ""),
-        profileDraftStatus: String(statusText ?? ""),
-        status: "Профиль сохранён",
-      };
-    });
-    return;
-  }
-  if (t === "avatar") {
-    const id = String(msg?.id ?? "").trim();
-    if (!id) return;
-    const rev = Math.max(0, Math.trunc(Number(msg?.rev ?? 0) || 0));
-    const mime = typeof msg?.mime === "string" && msg.mime.trim() ? String(msg.mime).trim() : null;
-    const data = typeof msg?.data === "string" && msg.data.trim() ? String(msg.data).trim() : null;
-
-    if (mime && data) {
-      const dataUrl = `data:${mime};base64,${data}`;
-      try {
-        storeAvatar("dm", id, dataUrl);
-      } catch {
-        clearStoredAvatar("dm", id);
-      }
-    } else {
-      clearStoredAvatar("dm", id);
-    }
-    storeAvatarRev("dm", id, rev);
-
-    patch((prev) => {
-      const cur = prev.profiles[id] ?? { id };
-      const nextProfile: UserProfile = { ...cur, id, avatar_rev: rev, avatar_mime: mime };
-      return { ...prev, profiles: { ...prev.profiles, [id]: nextProfile }, avatarsRev: (prev.avatarsRev || 0) + 1 };
-    });
-    return;
-  }
-  if (t === "avatar_set_result") {
-    const ok = Boolean(msg?.ok);
-    if (!ok) {
-      patch({ status: `Не удалось обновить аватар: ${String(msg?.reason ?? "ошибка")}` });
-      return;
-    }
-    const rev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
-    patch((prev) => {
-      if (!prev.selfId) return prev;
-      storeAvatarRev("dm", prev.selfId, rev);
-      const cur = prev.profiles[prev.selfId] ?? { id: prev.selfId };
-      const nextProfile: UserProfile = { ...cur, id: prev.selfId, avatar_rev: rev };
-      return { ...prev, profiles: { ...prev.profiles, [prev.selfId]: nextProfile }, avatarsRev: (prev.avatarsRev || 0) + 1, status: "Аватар обновлён" };
-    });
-    return;
-  }
-  if (t === "avatar_clear_result") {
-    const ok = Boolean(msg?.ok);
-    if (!ok) {
-      patch({ status: `Не удалось удалить аватар: ${String(msg?.reason ?? "ошибка")}` });
-      return;
-    }
-    const rev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
-    patch((prev) => {
-      if (!prev.selfId) return prev;
-      clearStoredAvatar("dm", prev.selfId);
-      storeAvatarRev("dm", prev.selfId, rev);
-      const cur = prev.profiles[prev.selfId] ?? { id: prev.selfId };
-      const nextProfile: UserProfile = { ...cur, id: prev.selfId, avatar_rev: rev, avatar_mime: null };
-      return { ...prev, profiles: { ...prev.profiles, [prev.selfId]: nextProfile }, avatarsRev: (prev.avatarsRev || 0) + 1, status: "Аватар удалён" };
-    });
-    return;
-  }
   if (t === "message") {
     const from = String(msg?.from ?? "");
     const to = msg?.to ? String(msg.to) : undefined;
@@ -980,9 +805,7 @@ export function handleServerMessage(
     const forward = parseMessageRef((msg as any)?.forward);
     if (kind === "in") {
       const hidden = isDocHidden();
-      const viewingSame =
-        Boolean(state.page === "main" && !state.modal && room && state.selected && state.selected.id === room) ||
-        Boolean(state.page === "main" && !state.modal && !room && state.selected?.kind === "dm" && state.selected.id === from);
+      const viewingSame = Boolean((room && isViewingRoomId(state, room)) || (!room && isViewingDmPeer(state, from)));
       const profile = state.profiles?.[from];
       let fromLabel = String(profile?.display_name || "").trim();
       if (!fromLabel) {
@@ -1039,41 +862,41 @@ export function handleServerMessage(
       gateway.send({ type: "message_delivered_to_device", peer: from, id: deliveredId });
     }
 
-	    // If we're actively viewing this DM, mark as read immediately to keep unread counters consistent.
-	    if (!room && kind === "in" && state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === from) {
-	      const upToId = typeof msg?.id === "number" ? msg.id : undefined;
-	      gateway.send({ type: "message_read", peer: from, ...(upToId === undefined ? {} : { up_to_id: upToId }) });
-	      const key = dmKey(from);
-	      const now = Date.now();
-	      const lastSave = lastReadSavedAt.get(key) ?? 0;
-	      if (now - lastSave >= 1200) {
-	        lastReadSavedAt.set(key, now);
-	        patch((prev) => {
-	          if (!prev.selfId) return prev;
-	          const marker = prev.lastRead?.[key] || {};
-	          const nextEntry = { ...marker };
-	          let changed = false;
-	          if (upToId !== undefined) {
-	            const id = Number(upToId);
-	            if (Number.isFinite(id) && id > 0 && (!marker.id || id > marker.id)) {
-	              nextEntry.id = id;
-	              changed = true;
-	            }
-	          }
-	          const tsNum = Number(ts ?? 0);
-	          if (Number.isFinite(tsNum) && tsNum > 0 && (!marker.ts || tsNum > marker.ts)) {
-	            nextEntry.ts = tsNum;
-	            changed = true;
-	          }
-	          if (!changed) return prev;
-	          const merged = { ...(prev.lastRead || {}), [key]: nextEntry };
-	          saveLastReadMarkers(prev.selfId, merged);
-	          return { ...prev, lastRead: merged };
-	        });
-	      }
-	    }
-	    return;
-	  }
+    // If we're actively viewing this DM, mark as read immediately to keep unread counters consistent.
+    if (!room && kind === "in" && isViewingDmPeer(state, from)) {
+      const upToId = typeof msg?.id === "number" ? msg.id : undefined;
+      gateway.send({ type: "message_read", peer: from, ...(upToId === undefined ? {} : { up_to_id: upToId }) });
+      const key = dmKey(from);
+      const now = Date.now();
+      const lastSave = lastReadSavedAt.get(key) ?? 0;
+      if (now - lastSave >= 1200) {
+        lastReadSavedAt.set(key, now);
+        patch((prev) => {
+          if (!prev.selfId) return prev;
+          const marker = prev.lastRead?.[key] || {};
+          const nextEntry = { ...marker };
+          let changed = false;
+          if (upToId !== undefined) {
+            const id = Number(upToId);
+            if (Number.isFinite(id) && id > 0 && (!marker.id || id > marker.id)) {
+              nextEntry.id = id;
+              changed = true;
+            }
+          }
+          const tsNum = Number(ts ?? 0);
+          if (Number.isFinite(tsNum) && tsNum > 0 && (!marker.ts || tsNum > marker.ts)) {
+            nextEntry.ts = tsNum;
+            changed = true;
+          }
+          if (!changed) return prev;
+          const merged = { ...(prev.lastRead || {}), [key]: nextEntry };
+          saveLastReadMarkers(prev.selfId, merged);
+          return { ...prev, lastRead: merged };
+        });
+      }
+    }
+    return;
+  }
   if (t === "message_delivered") {
     const to = msg?.to ? String(msg.to) : undefined;
     const room = msg?.room ? String(msg.room) : undefined;
@@ -1095,13 +918,17 @@ export function handleServerMessage(
           next[idx] = { ...cur, status };
           const lid = typeof cur.localId === "string" && cur.localId.trim() ? cur.localId.trim() : null;
           const outbox = lid ? removeOutboxEntry(curOutbox, key, lid) : curOutbox;
-          return { ...prev, conversations: { ...prev.conversations, [key]: next }, outbox };
+          return applyOutboxSnapshot(
+            { ...prev, conversations: { ...prev.conversations, [key]: next } },
+            outbox,
+            { source: "server", reconcilePending: false }
+          );
         }
       }
       const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, id, status: room ? "delivered" : "sent" }));
       const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
       const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
-      return { ...updated.state, outbox };
+      return applyOutboxSnapshot(updated.state, outbox, { source: "server", reconcilePending: false });
     });
     return;
   }
@@ -1142,9 +969,11 @@ export function handleServerMessage(
     if (id === null) return;
     const key = room ? roomKey(room) : dmKey(from === state.selfId ? String(to ?? "") : from);
     if (!key) return;
+    let detachedFileId: string | null = null;
     patch((prev) => {
       const conv = prev.conversations[key];
       if (!Array.isArray(conv) || !conv.length) return prev;
+      const deletedMsg = conv.find((m) => m.id === id) || null;
       const nextConv = conv.filter((m) => m.id !== id);
       if (nextConv.length === conv.length) return prev;
       const pinnedIds = prev.pinnedMessages[key];
@@ -1161,12 +990,65 @@ export function handleServerMessage(
           delete nextActive[key];
         }
       }
-      const next = {
-        ...prev,
-        conversations: { ...prev.conversations, [key]: nextConv },
-        pinnedMessages: nextPinned,
-        pinnedMessageActive: nextActive,
-      };
+      let nextTransfers = prev.fileTransfers;
+      let nextThumbs = prev.fileThumbs;
+      const removedFileId =
+        deletedMsg?.attachment?.kind === "file" && typeof deletedMsg.attachment.fileId === "string"
+          ? deletedMsg.attachment.fileId.trim()
+          : "";
+      if (removedFileId) {
+        let stillReferenced = false;
+        for (const [convKey, messages] of Object.entries(prev.conversations)) {
+          const list = convKey === key ? nextConv : messages;
+          if (!Array.isArray(list) || !list.length) continue;
+          if (
+            list.some(
+              (m) => m?.attachment?.kind === "file" && String(m.attachment?.fileId || "").trim() === removedFileId
+            )
+          ) {
+            stillReferenced = true;
+            break;
+          }
+        }
+        if (!stillReferenced) {
+          detachedFileId = removedFileId;
+          nextTransfers = prev.fileTransfers.filter((entry) => {
+            const match = String(entry.id || "").trim() === removedFileId;
+            if (!match) return true;
+            if (entry.url && entry.url.startsWith("blob:")) {
+              try {
+                URL.revokeObjectURL(entry.url);
+              } catch {
+                // ignore
+              }
+            }
+            return false;
+          });
+          const existingThumb = prev.fileThumbs?.[removedFileId] || null;
+          if (existingThumb) {
+            if (existingThumb.url) {
+              try {
+                URL.revokeObjectURL(existingThumb.url);
+              } catch {
+                // ignore
+              }
+            }
+            nextThumbs = { ...(prev.fileThumbs || {}) };
+            delete nextThumbs[removedFileId];
+          }
+        }
+      }
+      const next = applyFileTransferSnapshot(
+        {
+          ...prev,
+          conversations: { ...prev.conversations, [key]: nextConv },
+          fileThumbs: nextThumbs,
+          pinnedMessages: nextPinned,
+          pinnedMessageActive: nextActive,
+        },
+        nextTransfers,
+        { source: "server", reconcilePending: false }
+      );
       if (prev.editing && prev.editing.key === key && prev.editing.id === id) {
         return { ...next, editing: null, input: prev.editing.prevDraft || "" };
       }
@@ -1175,6 +1057,16 @@ export function handleServerMessage(
     patch({ status: "Сообщение удалено" });
     try {
       void deleteHistoryMessageById(state.selfId, id);
+    } catch {
+      // ignore
+    }
+    try {
+      const uid = String(state.selfId || "").trim();
+      const fid = String(detachedFileId || "").trim();
+      if (uid && fid) {
+        void removeCachedFileBlob(uid, fid);
+        void removeCachedFileBlob(uid, `thumb:${fid}`);
+      }
     } catch {
       // ignore
     }
@@ -1268,7 +1160,7 @@ export function handleServerMessage(
       const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, id, status: "queued" }));
       const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
       const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
-      return { ...updated.state, outbox };
+      return applyOutboxSnapshot(updated.state, outbox, { source: "server", reconcilePending: false });
     });
     return;
   }
@@ -1283,7 +1175,7 @@ export function handleServerMessage(
       const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, status: "error" }));
       const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
       const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
-      return { ...updated.state, outbox };
+      return applyOutboxSnapshot(updated.state, outbox, { source: "server", reconcilePending: false });
     });
     patch((prev) =>
       upsertConversation(prev, dmKey(to), { kind: "sys", from: "", to, text: `[blocked] ${reason}`, ts: nowTs(), id: null })
@@ -1399,64 +1291,13 @@ export function handleServerMessage(
   if (t === "history_result") {
     return;
   }
-  if (t === "update_required") {
-    const latest = String(msg?.latest ?? "").trim();
-    if (!latest) return;
-    const hasSw = (() => {
-      try {
-        return typeof navigator !== "undefined" && "serviceWorker" in navigator;
-      } catch {
-        return false;
-      }
-    })();
-    if (hasSw) {
-      if (state.updateLatest !== latest) {
-        patch({ updateLatest: latest, status: "Доступно обновление веб-клиента (применится автоматически)" });
-      }
-      try {
-        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent !== "undefined") {
-          window.dispatchEvent(new CustomEvent("yagodka:pwa-build", { detail: { buildId: latest } }));
-        }
-      } catch {
-        // ignore
-      }
-      try {
-        void navigator.serviceWorker
-          .getRegistration()
-          .then(async (reg) => {
-            let nextReg = reg ?? null;
-            if (!nextReg) {
-              try {
-                nextReg = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
-              } catch {
-                patch({ status: "Service Worker не зарегистрирован. Перезапустите приложение.", modal: { kind: "update" } });
-                return;
-              }
-            }
-            try {
-              await nextReg.update();
-            } catch {
-              // ignore
-            }
-          })
-          .catch(() => {});
-      } catch {
-        // ignore
-      }
-      return;
-    }
-    if (state.updateDismissedLatest && state.updateDismissedLatest === latest) return;
-    const hint = isMobileLikeUi() ? "" : " (Ctrl+U — применить)";
-    patch({ updateLatest: latest, status: `Доступно обновление до v${latest}${hint}`, modal: { kind: "update" } });
-    return;
-  }
   if (t === "error") {
     const raw = String(msg?.message ?? "error");
     const friendly = humanizeError(raw);
     patch({ status: `Ошибка: ${friendly}` });
 
-    const sel = state.selected;
-    if (state.page === "main" && !state.modal && sel) {
+    const sel = getActiveConversationTarget(state);
+    if (sel && hasActiveConversationSelection(state)) {
       const sendRelated = new Set([
         "not_in_group",
         "board_post_forbidden",
@@ -1475,7 +1316,7 @@ export function handleServerMessage(
           const updated = updateFirstPendingOutgoing(prev, key, (msg) => ({ ...msg, status: "error" }));
           const nextOutbox = ((updated.state as any).outbox || curOutbox) as any;
           const outbox = updated.localId ? removeOutboxEntry(nextOutbox, key, updated.localId) : nextOutbox;
-          return { ...updated.state, outbox };
+          return applyOutboxSnapshot(updated.state, outbox, { source: "server", reconcilePending: false });
         });
         patch((prev) =>
           upsertConversation(prev, key, {

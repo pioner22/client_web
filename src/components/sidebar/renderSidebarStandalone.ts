@@ -1,9 +1,9 @@
 import { el } from "../../helpers/dom/el";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
+import { buildAppShellProjection } from "../../helpers/navigation/appShellProjection";
 import type { AppState, BoardEntry, FriendEntry, GroupEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 import {
   attentionHintForPeer,
-  displayNameForFriend,
   friendRow,
   isRowMenuOpen,
   previewForConversation,
@@ -14,17 +14,18 @@ export type RenderSidebarStandaloneCtx = {
   target: HTMLElement;
   body: HTMLElement;
   state: AppState;
+  mobileTab: MobileSidebarTab;
   isMobile: boolean;
   mobileUi: boolean;
   forceResetScroll: boolean;
   hasSidebarQuery: boolean;
   archiveToggle: HTMLElement | null;
-  chatArchiveToggle: HTMLElement | null;
+  groupArchiveToggle: HTMLElement | null;
   boardArchiveToggle: HTMLElement | null;
-  chatArchiveOpen: boolean;
+  groupArchiveOpen: boolean;
   boardArchiveOpen: boolean;
   archiveOpen: boolean;
-  chatArchiveCount: number;
+  groupArchiveCount: number;
   boardArchiveCount: number;
   pinnedKeys: string[];
   pinnedSet: Set<string>;
@@ -43,10 +44,9 @@ export type RenderSidebarStandaloneCtx = {
   computeRoomUnread: (key: string) => number;
   buildSidebarArchiveHint: () => HTMLElement;
   buildSidebarArchiveEmpty: (label: string) => HTMLElement;
-  buildSidebarHeaderToolbar: (activeTab: "contacts" | "boards" | "chats" | "menu") => HTMLElement;
+  buildSidebarHeaderToolbar: (activeTab: "contacts" | "groups" | "boards" | "menu") => HTMLElement;
   buildSidebarTabButton: (tab: MobileSidebarTab, activeTab: MobileSidebarTab, label: string) => HTMLButtonElement;
   buildSidebarSearchBar: (placeholder: string, opts?: { action?: HTMLElement }) => HTMLElement;
-  buildFolderTabs: (activeId: string, folders: any[]) => HTMLElement | null;
   buildChatlist: (
     fixedRows: HTMLElement[],
     rows: HTMLElement[],
@@ -58,7 +58,6 @@ export type RenderSidebarStandaloneCtx = {
   toggleClass: (node: HTMLElement | null | undefined, cls: string, enabled: boolean) => void;
   markCompactAvatarRows: (rows: Array<HTMLElement | null | undefined>) => HTMLElement[];
   dialogPriority: (opts: { hasDraft: boolean; unread?: number; attention?: boolean; mention?: boolean }) => number;
-  hasActiveDialogForFriend: (f: FriendEntry) => boolean;
   unknownAttnPeers: string[];
   contactCandidates: FriendEntry[];
   activeContacts: FriendEntry[];
@@ -79,17 +78,18 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     target,
     state,
     body,
+    mobileTab,
     isMobile,
     mobileUi,
     forceResetScroll,
     hasSidebarQuery,
     archiveToggle,
-    chatArchiveToggle,
+    groupArchiveToggle,
     boardArchiveToggle,
-    chatArchiveOpen,
+    groupArchiveOpen,
     boardArchiveOpen,
     archiveOpen,
-    chatArchiveCount,
+    groupArchiveCount,
     boardArchiveCount,
     pinnedKeys,
     pinnedSet,
@@ -111,14 +111,12 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     buildSidebarHeaderToolbar,
     buildSidebarTabButton,
     buildSidebarSearchBar,
-    buildFolderTabs,
     buildChatlist,
     setBodyChatlistClass,
     bindHeaderScroll,
     toggleClass,
     markCompactAvatarRows,
     dialogPriority,
-    hasActiveDialogForFriend,
     unknownAttnPeers,
     contactCandidates,
     activeContacts,
@@ -133,12 +131,14 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     onAuthOpen,
     onAuthLogout,
   } = ctx;
+  const shell = buildAppShellProjection(state);
 
-  const rawTab = state.mobileSidebarTab;
   const showMenuTab = isMobile;
-  const defaultTab: MobileSidebarTab = unknownAttnPeers.length ? "contacts" : "chats";
+  const defaultTab: MobileSidebarTab = "contacts";
   let activeTab: MobileSidebarTab =
-    rawTab === "contacts" || rawTab === "boards" || (showMenuTab && rawTab === "menu") ? rawTab : defaultTab;
+    mobileTab === "contacts" || mobileTab === "groups" || mobileTab === "boards" || (showMenuTab && mobileTab === "menu")
+      ? mobileTab
+      : defaultTab;
   if (!showMenuTab && activeTab === "menu") activeTab = defaultTab;
   if ("dataset" in target) (target as HTMLElement).dataset.sidebarTab = activeTab;
   const prevTab = String((target as any)._pwaSidebarPrevTab || "").trim();
@@ -154,8 +154,8 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
   }
 
   const tabContacts = buildSidebarTabButton("contacts", activeTab, "Контакты");
-  const tabBoards = buildSidebarTabButton("boards", activeTab, "Доски");
-  const tabChats = buildSidebarTabButton("chats", activeTab, "Чаты");
+  const tabGroups = buildSidebarTabButton("groups", activeTab, "Группы");
+  const tabBoards = buildSidebarTabButton("boards", activeTab, "Каналы");
   const tabMenu = showMenuTab ? buildSidebarTabButton("menu", activeTab, "Меню") : null;
 
   const tabs = el(
@@ -167,9 +167,9 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
       role: "tablist",
       "aria-label": "Раздел",
     },
-    [tabContacts, tabBoards, tabChats, ...(tabMenu ? [tabMenu] : [])]
+    [tabContacts, tabGroups, tabBoards, ...(tabMenu ? [tabMenu] : [])]
   );
-  const tabsList = [tabContacts, tabBoards, tabChats, ...(tabMenu ? [tabMenu] : [])];
+  const tabsList = [tabContacts, tabGroups, tabBoards, ...(tabMenu ? [tabMenu] : [])];
   tabs.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     const dir = e.key === "ArrowRight" ? 1 : -1;
@@ -182,8 +182,8 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
   const searchBarAction =
     activeTab === "contacts"
       ? archiveToggle
-      : activeTab === "chats"
-        ? chatArchiveToggle
+      : activeTab === "groups"
+        ? groupArchiveToggle
         : activeTab === "boards"
           ? boardArchiveToggle
           : null;
@@ -191,7 +191,13 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     showMenuTab && activeTab === "menu"
       ? null
       : buildSidebarSearchBar(
-          activeTab === "contacts" ? "Поиск контакта" : activeTab === "boards" ? "Поиск доски" : "Поиск",
+          activeTab === "contacts"
+            ? "Поиск контакта"
+            : activeTab === "groups"
+              ? "Поиск группы"
+              : activeTab === "boards"
+                ? "Поиск канала"
+                : "Поиск",
           searchBarAction ? { action: searchBarAction } : undefined
         );
   const headerToolbar = buildSidebarHeaderToolbar(activeTab);
@@ -202,31 +208,7 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
       : [...(searchBar ? [searchBar] : [])]),
   ]);
   const header = el("div", { class: "sidebar-header" }, [headerStack]);
-  const chatFiltersRow: HTMLElement | null = null;
   const passesChatFilter = (_opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean => true;
-
-  const chatFolders = Array.isArray((state as any).chatFolders) ? (state as any).chatFolders : [];
-  const rawFolderId = activeTab === "chats" ? String((state as any).sidebarFolderId || "all").trim().toLowerCase() : "all";
-  const matchedFolder =
-    rawFolderId !== "all"
-      ? chatFolders.find((f: any) => String(f?.id || "").trim().toLowerCase() === rawFolderId)
-      : null;
-  const activeFolderId = matchedFolder ? rawFolderId : "all";
-  const includeSet = matchedFolder
-    ? new Set<string>((Array.isArray(matchedFolder.include) ? matchedFolder.include : []).map((x: any) => String(x || "").trim()).filter(Boolean))
-    : null;
-  const excludeSet = matchedFolder
-    ? new Set<string>((Array.isArray(matchedFolder.exclude) ? matchedFolder.exclude : []).map((x: any) => String(x || "").trim()).filter(Boolean))
-    : null;
-  const folderAllowsKey = (key: string): boolean => {
-    if (!matchedFolder) return true;
-    const k = String(key || "").trim();
-    if (!k) return false;
-    if (excludeSet && excludeSet.has(k)) return false;
-    if (!includeSet || !includeSet.size) return false;
-    return includeSet.has(k);
-  };
-  const folderTabsRow = activeTab === "chats" ? buildFolderTabs(activeFolderId, chatFolders) : null;
 
   const pinnedBoardRows: HTMLElement[] = [];
   const pinnedDialogRowByKey = new Map<string, HTMLElement>();
@@ -237,14 +219,6 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
       const f = state.friends.find((x) => x.id === id);
       if (!f) continue;
       if (!matchesFriend(f)) continue;
-      const k = dmKey(f.id);
-      const unread = Math.max(0, Number(f.unread || 0) || 0);
-      const attention = attnSet.has(f.id);
-      if (activeTab === "chats" && !folderAllowsKey(k)) continue;
-      if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention);
-      pinnedDialogRowByKey.set(key, row);
       pinnedContactEntries.push(f);
       continue;
     }
@@ -257,7 +231,6 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
       const meta = previewForConversation(state, k, "room", drafts[k]);
       const unread = computeRoomUnread(k);
       const mention = mentionForKey(k);
-      if (activeTab === "chats" && !folderAllowsKey(k)) continue;
       if (!passesChatFilter({ kind: "group", unread, mention })) continue;
       const row = roomRow(
         null,
@@ -318,38 +291,14 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     }
   };
 
-  if (activeTab === "chats") {
+  if (activeTab === "groups") {
     const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
-    const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
+    const groupItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
     const archivedItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
-
-    for (const f of state.friends || []) {
-      const id = String(f?.id || "").trim();
-      if (!id) continue;
-      const k = dmKey(id);
-      if (pinnedSet.has(k)) continue;
-      if (!folderAllowsKey(k)) continue;
-      if (!hasActiveDialogForFriend(f)) continue;
-      if (!matchesFriend(f)) continue;
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      const label = displayNameForFriend(state, f);
-      const unread = Math.max(0, Number(f.unread || 0) || 0);
-      const attention = attnSet.has(id);
-      if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
-      const item = {
-        sortTs: lastTsForKey(k),
-        priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
-        label,
-        row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attention),
-      };
-      if (!hasSidebarQuery && archivedSet.has(k)) archivedItems.push(item);
-      else dialogItems.push(item);
-    }
 
     for (const g of restGroups) {
       if (!matchesRoom(g)) continue;
       const k = roomKey(g.id);
-      if (!folderAllowsKey(k)) continue;
       const meta = previewForConversation(state, k, "room", drafts[k]);
       const unread = computeRoomUnread(k);
       const mention = mentionForKey(k);
@@ -370,40 +319,41 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
         ),
       };
       if (!hasSidebarQuery && archivedSet.has(k)) archivedItems.push(item);
-      else dialogItems.push(item);
+      else groupItems.push(item);
     }
 
-    dialogItems.sort(
-      (a, b) =>
-        b.sortTs - a.sortTs ||
-        b.priority - a.priority ||
-        a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
-    );
-    archivedItems.sort(
-      (a, b) =>
-        b.sortTs - a.sortTs ||
-        b.priority - a.priority ||
-        a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
-    );
-    const dialogRows = dialogItems.map((x) => x.row);
+    const sortSidebarItems = (
+      a: { sortTs: number; priority: number; label: string },
+      b: { sortTs: number; priority: number; label: string }
+    ) =>
+      b.sortTs - a.sortTs ||
+      b.priority - a.priority ||
+      a.label.localeCompare(b.label, "ru", { sensitivity: "base" });
+    groupItems.sort(sortSidebarItems);
+    archivedItems.sort(sortSidebarItems);
+    const groupRows = groupItems.map((x) => x.row);
     const archivedRows = archivedItems.map((x) => x.row);
-    const pinnedDialogRows = pinnedKeys.map((key) => pinnedDialogRowByKey.get(key)).filter(Boolean) as HTMLElement[];
+    const pinnedGroupRows = pinnedKeys
+      .filter((key) => key.startsWith("room:"))
+      .map((key) => pinnedDialogRowByKey.get(key))
+      .filter(Boolean) as HTMLElement[];
 
-    const chatFixedRows: HTMLElement[] = [];
-    if (pinnedDialogRows.length) chatFixedRows.push(...pinnedDialogRows);
-    chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
-    const archiveBlock = chatArchiveOpen
-      ? [
-          el("div", { class: "pane-section pane-section-archive" }, [`Архив (${chatArchiveCount})`]),
-          buildSidebarArchiveHint(),
-          ...(archivedRows.length ? archivedRows : [buildSidebarArchiveEmpty("По текущему фильтру в архиве нет чатов.")]),
-        ]
-      : [];
-    const chatRows = archiveBlock.length ? [...archiveBlock, ...dialogRows] : dialogRows;
-    const chatList = buildChatlist(chatFixedRows, chatRows, hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)", {
-      virtual: !chatArchiveOpen,
+    const rows: HTMLElement[] = [];
+    if (groupArchiveOpen) {
+      rows.push(
+        el("div", { class: "pane-section pane-section-archive" }, [`Архив (${groupArchiveCount})`]),
+        buildSidebarArchiveHint(),
+        ...(archivedRows.length ? archivedRows : [buildSidebarArchiveEmpty("По текущему фильтру в архиве нет групп.")])
+      );
+    }
+    const visibleRows = [...pinnedGroupRows, ...groupRows];
+    if (visibleRows.length) {
+      rows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Группы"]), ...visibleRows);
+    }
+    const groupList = buildChatlist([], rows, hasSidebarQuery ? "(ничего не найдено)" : "(пока нет групп)", {
+      virtual: !groupArchiveOpen,
     });
-    mountPwa([...(folderTabsRow ? [folderTabsRow] : []), ...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
+    mountPwa([groupList]);
     return;
   }
 
@@ -438,7 +388,7 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
 
     const boardFixedRows: HTMLElement[] = [];
     if (pinnedBoardRows.length) boardFixedRows.push(...pinnedBoardRows);
-    boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
+    boardFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Каналы"]));
     const archiveBlock = boardArchiveOpen
       ? [
           el("div", { class: "pane-section pane-section-archive" }, [`Архив (${boardArchiveCount})`]),
@@ -447,7 +397,7 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
         ]
       : [];
     const rows = archiveBlock.length ? [...archiveBlock, ...boardRows] : boardRows;
-    const boardList = buildChatlist(boardFixedRows, rows, hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)", {
+    const boardList = buildChatlist(boardFixedRows, rows, hasSidebarQuery ? "(ничего не найдено)" : "(пока нет каналов)", {
       virtual: !boardArchiveOpen,
     });
     mountPwa([boardList]);
@@ -456,14 +406,10 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
 
   if (activeTab === "contacts") {
     const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
-    const contactRowsAll = buildContactRows(contactCandidates);
+    const contactRowsAll = buildContactRows(activeContacts);
     const { ids: topPeerIds, rows: topPeerRows } = buildTopPeerContactRows(activeContacts);
     const activeContactRows = buildContactRows(activeContacts.filter((f) => !topPeerIds.has(f.id)));
-    const archivedContactRows = buildContactRows(archivedContacts);
-    const archiveBlock =
-      archiveOpen && archivedContactRows.length
-        ? [el("div", { class: "pane-section pane-section-archive" }, [`Архив (${archivedContactRows.length})`]), ...archivedContactRows]
-        : [];
+    const archiveBlock: HTMLElement[] = [];
 
     if (hasSidebarQuery) {
       const unknownAttnRows = unknownAttnPeers
@@ -512,48 +458,48 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     return;
   }
 
-  const profileRow = roomRow("☺", "Профиль", state.page === "profile" || state.page === "sessions", () => onSetPage("profile"), undefined, {
-    sub: "Имя, @handle, аватар",
+  const profileRow = roomRow("☺", "Профиль и настройки", shell.profileAreaOpen, () => onSetPage("profile"), undefined, {
+    sub: "Аккаунт, оформление, уведомления",
     time: null,
     hasDraft: false,
   });
   toggleClass(profileRow, "row-settings", true);
-  profileRow.setAttribute("title", "Настройки профиля и интерфейса");
-  const searchRow = roomRow("🔍", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
-    sub: "Глобальный поиск",
+  profileRow.setAttribute("title", "Профиль, внешний вид и настройки уведомлений");
+  const searchRow = roomRow("🔍", "Поиск по истории", shell.isSearchPage, () => onSetPage("search"), undefined, {
+    sub: "История, файлы, диалоги",
     time: null,
     hasDraft: false,
   });
-  searchRow.setAttribute("title", "Глобальный поиск");
-  const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
-    sub: "История и загрузки",
+  searchRow.setAttribute("title", "Глобальный поиск по истории");
+  const filesRow = roomRow("▦", "Медиа и файлы", shell.isFilesPage, () => onSetPage("files"), undefined, {
+    sub: "Передачи, загрузки, вложения",
     time: null,
     hasDraft: false,
   });
   filesRow.setAttribute("title", "Передача файлов и история");
   const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
 
-  const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
-    sub: "Групповой чат и приглашения",
+  const createGroupRow = roomRow("+", "Новая группа", shell.isGroupCreatePage, () => onCreateGroup(), undefined, {
+    sub: "Группа с приглашёнными участниками",
     time: null,
     hasDraft: false,
   });
-  createGroupRow.setAttribute("title", "Создать новый чат");
-  const createBoardRow = roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard(), undefined, {
-    sub: "Лента объявлений и новости",
+  createGroupRow.setAttribute("title", "Создать новую группу");
+  const createBoardRow = roomRow("+", "Новый канал", shell.isBoardCreatePage, () => onCreateBoard(), undefined, {
+    sub: "Новости и информация",
     time: null,
     hasDraft: false,
   });
-  createBoardRow.setAttribute("title", "Создать новую доску");
-  const infoRow = roomRow("?", "Info", state.page === "help", () => onSetPage("help"), undefined, {
-    sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
+  createBoardRow.setAttribute("title", "Создать новый канал");
+  const infoRow = roomRow("?", "Справка и версия", shell.isHelpPage, () => onSetPage("help"), undefined, {
+    sub: mobileUi ? "Версии и изменения" : "Помощь, версии и изменения",
     time: null,
     hasDraft: false,
   });
   infoRow.setAttribute("title", mobileUi ? "Справка и журнал обновлений" : "Подсказки по клавишам и журнал обновлений");
 
   const accountRows: HTMLElement[] = [];
-  if (state.conn === "connected" && !state.authed) {
+  if (shell.canLogin) {
     const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
       sub: "Вход или регистрация",
       time: null,
@@ -561,7 +507,7 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     });
     loginRow.setAttribute("title", "Войти или зарегистрироваться");
     accountRows.push(loginRow);
-  } else if (state.authed) {
+  } else if (shell.canLogout) {
     const logoutRow = roomRow("⏻", "Выход", false, () => onAuthLogout(), undefined, {
       sub: "Завершить сессию",
       time: null,

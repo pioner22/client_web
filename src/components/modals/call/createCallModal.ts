@@ -3,6 +3,14 @@ import { getMeetBaseUrl } from "../../../config/env";
 import { el } from "../../../helpers/dom/el";
 import { buildMeetJoinUrl } from "../../../helpers/calls/meetUrl";
 import { loadJitsiExternalApi, resolveJitsiApiDomain, resolveJitsiExternalApiScriptUrl } from "../../../helpers/calls/jitsiExternalApi";
+import {
+  CALL_QUALITY_UNKNOWN,
+  formatCallQualityLabel,
+  formatCallQualityTitle,
+  watchJitsiQuality,
+  type CallQualitySnapshot,
+} from "../../../helpers/calls/callQualityTelemetry";
+import { buildJitsiMediaPolicy } from "../../../helpers/calls/jitsiMediaPolicy";
 import { copyText } from "../../../helpers/dom/copyText";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../../helpers/avatar/avatarStore";
 
@@ -89,8 +97,11 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
   const top = el("div", { class: "call-topbar" }, [
     el("div", { class: "call-peer" }, [titleEl, subEl]),
-    el("div", { class: "call-top-actions" }, [openExternalBtn, copyBtn]),
   ]);
+  const qualityEl = el("div", { class: "call-quality call-quality-unknown", title: CALL_QUALITY_UNKNOWN.detail, "aria-live": "polite" }, [
+    formatCallQualityLabel(CALL_QUALITY_UNKNOWN),
+  ]);
+  top.append(qualityEl, el("div", { class: "call-top-actions" }, [openExternalBtn, copyBtn]));
 
   let avatarKindId: { kind: "dm" | "group"; id: string } = { kind: "dm", id: "" };
   const avatarEl = el("div", { class: "call-avatar", "aria-hidden": "true" }, [""]);
@@ -119,6 +130,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   let jitsiKey: string = "";
   let jitsiInitToken = 0;
   let jitsiFallbackTimer: number | null = null;
+  let disposeQualityWatch: (() => void) | null = null;
   let audioMuted: boolean | null = null;
   let videoMuted: boolean | null = null;
   let jitsiDisabledKey: string | null = null;
@@ -160,8 +172,23 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     jitsiFallbackTimer = null;
   }
 
+  function applyQualitySnapshot(snapshot: CallQualitySnapshot) {
+    qualityEl.textContent = formatCallQualityLabel(snapshot);
+    qualityEl.title = formatCallQualityTitle(snapshot);
+    qualityEl.className = `call-quality call-quality-${snapshot.level}`;
+  }
+
+  function resetQualitySnapshot() {
+    applyQualitySnapshot(CALL_QUALITY_UNKNOWN);
+  }
+
   function disposeJitsi() {
     clearJitsiFallbackTimer();
+    if (disposeQualityWatch) {
+      disposeQualityWatch();
+      disposeQualityWatch = null;
+    }
+    resetQualitySnapshot();
     audioMuted = null;
     videoMuted = null;
     micBtn.disabled = true;
@@ -246,13 +273,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
     try {
       if (surface.firstElementChild !== jitsiHost) surface.replaceChildren(jitsiHost);
-      const configOverwrite: Record<string, unknown> = {
-        prejoinPageEnabled: false,
-        disableDeepLinking: true,
-        startWithVideoMuted: mode === "audio",
-        startWithAudioMuted: false,
-        toolbarButtons: [],
-      };
+      const configOverwrite = buildJitsiMediaPolicy(mode);
       const interfaceConfigOverwrite: Record<string, unknown> = {
         TOOLBAR_BUTTONS: [],
         SHOW_JITSI_WATERMARK: false,
@@ -288,6 +309,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
     micBtn.disabled = false;
     camBtn.disabled = false;
+    disposeQualityWatch = watchJitsiQuality(jitsiApi, applyQualitySnapshot);
 
     try {
       jitsiApi.addEventListener?.("audioMuteStatusChanged", (e: any) => {

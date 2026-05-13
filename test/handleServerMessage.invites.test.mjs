@@ -189,6 +189,53 @@ test("handleServerMessage: update_required открывает экран обн�
   }
 });
 
+test("handleServerMessage: update_required на Android показывает явный prompt на обновление приложения", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevCapacitor = globalThis.Capacitor;
+  Object.defineProperty(globalThis, "Capacitor", {
+    value: {
+      getPlatform: () => "android",
+      isNativePlatform: () => true,
+    },
+    configurable: true,
+  });
+  try {
+    const { getState, patch } = createPatchHarness({
+      updateLatest: null,
+      updateDismissedLatest: null,
+      modal: null,
+      status: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "update_required",
+        latest: "0.1.785-aaaaaaaaaaaa",
+        android_app_update: true,
+        latest_android_version_name: "1.0.12",
+        latest_android_version_code: 13,
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.updateLatest, "1.0.12");
+    assert.deepEqual(st.modal, { kind: "update" });
+    assert.ok(String(st.status || "").includes("Android-приложения"));
+    assert.ok(String(st.status || "").includes("1.0.12"));
+    assert.ok(String(st.status || "").includes("Нужно обновиться"));
+  } finally {
+    if (prevCapacitor === undefined) {
+      delete globalThis.Capacitor;
+    } else {
+      Object.defineProperty(globalThis, "Capacitor", { value: prevCapacitor, configurable: true });
+    }
+    await cleanup();
+  }
+});
+
 test("handleServerMessage: update_required с build id инициирует SW update без модала", async () => {
   const { handleServerMessage, cleanup } = await loadHandleServerMessage();
   const nav = globalThis.navigator ?? {};

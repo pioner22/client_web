@@ -1,4 +1,5 @@
 import { el } from "../../helpers/dom/el";
+import { buildAppShellProjection } from "../../helpers/navigation/appShellProjection";
 import { splitBuildId } from "../../helpers/version/buildId";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { getMeetBaseUrl } from "../../config/env";
@@ -10,57 +11,13 @@ export function renderHeader(layout: Layout, state: AppState) {
   const webBuild = splitBuildId(state.clientVersion);
   const verTitle = state.serverVersion ? `srv ${state.serverVersion}` : "";
   const headerId = state.selfId ?? state.authRememberedId ?? "—";
-  let title = "Чат";
-  if (state.page === "search") title = "Поиск";
-  else if (state.page === "help") title = "Info";
-  else if (state.page === "profile") title = "Профиль";
-  else if (state.page === "sessions") title = "Сессии";
-  else if (state.page === "user") {
-    const id = String(state.userViewId || "").trim();
-    const p = id ? state.profiles?.[id] : null;
-    const dn = p?.display_name ? String(p.display_name).trim() : "";
-    title = dn ? `Контакт: ${dn}` : "Контакт";
-  }
-  else if (state.page === "group") {
-    const id = String(state.groupViewId || "").trim();
-    const g = id ? state.groups?.find((x) => x.id === id) : null;
-    title = `Чат: ${String(g?.name || id || "—")}`;
-  }
-  else if (state.page === "board") {
-    const id = String(state.boardViewId || "").trim();
-    const b = id ? state.boards?.find((x) => x.id === id) : null;
-    title = `Доска: ${String(b?.name || id || "—")}`;
-  }
-  else if (state.page === "files") title = "Файлы";
-  else if (state.page === "group_create") title = "Создать чат";
-  else if (state.page === "board_create") title = "Создать доску";
-  else {
-    const sel = state.selected;
-    if (sel) {
-      if (sel.kind === "dm") {
-        const p = state.profiles?.[sel.id];
-        const dn = p?.display_name ? String(p.display_name).trim() : "";
-        const h = p?.handle ? String(p.handle).trim() : "";
-        const label = dn || (h ? (h.startsWith("@") ? h : `@${h}`) : sel.id);
-        title = `Чат с: ${label}`;
-      }
-      else if (sel.kind === "group") {
-        const g = (state.groups || []).find((x) => x.id === sel.id);
-        title = `Чат: ${String(g?.name || sel.id)}`;
-      } else {
-        const b = (state.boards || []).find((x) => x.id === sel.id);
-        title = `Доска: ${String(b?.name || sel.id)}`;
-      }
-    }
-  }
+  const shell = buildAppShellProjection(state);
 
   const chatSearchBtn = null;
-  const navBackToMain = state.page !== "main";
-  const navBackFromChat = Boolean(state.page === "main" && state.selected);
-  const navAction = navBackToMain ? "nav-back" : navBackFromChat ? "chat-back" : "sidebar-toggle";
-  const navTitle = navBackToMain || navBackFromChat ? "Назад" : "Меню";
-  const navAria = navBackToMain ? "Назад" : navBackFromChat ? "Назад к списку" : "Открыть меню";
-  const navIcon = navAction === "sidebar-toggle" ? "☰" : "←";
+  const navAction = shell.navAction;
+  const navTitle = shell.navTitle;
+  const navAria = shell.navAria;
+  const navIcon = shell.navIcon;
 
   layout.headerLeft.replaceChildren(
     el(
@@ -80,15 +37,36 @@ export function renderHeader(layout: Layout, state: AppState) {
     "  ",
     el("span", { class: "hdr-ver", title: verTitle || undefined }, [`v${webBuild.version || "—"}`]),
     el("span", { class: "hdr-sep" }, [" | "]),
-    el("span", { class: "hdr-title" }, [title])
+    el("span", { class: "hdr-title" }, [shell.pageTitle])
   );
-  const showCallActions = Boolean(state.page === "main" && state.selected && state.selected.kind !== "board");
+  const showCallActions = shell.showCallActions;
   const meetReady = Boolean(getMeetBaseUrl());
   const canCall = Boolean(showCallActions && meetReady && state.authed && state.conn === "connected" && state.modal?.kind !== "call");
-  const showChatMenu = Boolean(state.page === "main" && state.selected);
-  const showAuthButton = Boolean(!state.authed && state.authMode !== "auto");
+  const showChatMenu = shell.showChatMenu;
+  const showAuthButton = shell.showAuthButton;
   const statusLabel = state.status || "";
   const statusEl = el("span", { class: "hdr-status" }, [statusLabel]);
+  const statusActionButtons = (state.toast?.actions || [])
+    .map((action) => ({
+      id: String(action?.id || "").trim(),
+      label: String(action?.label || "").trim(),
+      primary: Boolean(action?.primary),
+    }))
+    .filter((action) => action.id && action.label && action.id !== "dismiss")
+    .slice(0, 2)
+    .map((action) =>
+      el(
+        "button",
+        {
+          class: action.primary ? "btn hdr-status-action hdr-status-action-primary" : "btn hdr-status-action",
+          type: "button",
+          "data-action": "toast-action",
+          "data-toast-id": action.id,
+          title: action.label,
+        },
+        [action.label]
+      )
+    );
   const actionButtons: HTMLElement[] = [];
   if (showAuthButton) {
     actionButtons.push(
@@ -151,9 +129,12 @@ export function renderHeader(layout: Layout, state: AppState) {
       )
     );
   }
+  const statusActions = statusActionButtons.length ? el("span", { class: "hdr-status-actions" }, statusActionButtons) : null;
   const actions = actionButtons.length ? el("span", { class: "hdr-actions" }, actionButtons) : null;
   if (actions) {
-    layout.headerRight.replaceChildren(statusEl, actions);
+    layout.headerRight.replaceChildren(statusEl, ...(statusActions ? [statusActions] : []), actions);
+  } else if (statusActions) {
+    layout.headerRight.replaceChildren(statusEl, statusActions);
   } else {
     layout.headerRight.replaceChildren(statusEl);
   }

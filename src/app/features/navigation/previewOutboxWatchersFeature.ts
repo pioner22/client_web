@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, ConnStatus, TargetRef } from "../../../stores/types";
+import { hasWhenOnlineOutboxEntries, shouldAttemptOutboxDrain } from "../../../helpers/runtime/deliveryCoordinator";
 
 function previewIdsSignature(items: Array<{ id?: string }>): string {
   return items
@@ -17,14 +18,6 @@ function friendOnlineSignature(friends: Array<{ id?: string; online?: boolean }>
     })
     .filter(Boolean)
     .join("|");
-}
-
-function hasWhenOnlineOutbox(outbox: Record<string, Array<{ whenOnline?: boolean }>>): boolean {
-  for (const list of Object.values(outbox || {})) {
-    const arr = Array.isArray(list) ? list : [];
-    if (arr.some((e) => Boolean(e?.whenOnline))) return true;
-  }
-  return false;
 }
 
 export interface PreviewOutboxWatchersFeatureDeps {
@@ -116,8 +109,8 @@ export function installPreviewOutboxWatchersFeature(deps: PreviewOutboxWatchersF
     const nextSig = friendOnlineSignature(st.friends || []);
     if (nextSig === prevFriendOnlineSig) return;
     prevFriendOnlineSig = nextSig;
-    if (!st.authed || st.conn !== "connected") return;
-    if (!hasWhenOnlineOutbox(st.outbox)) return;
+    if (!hasWhenOnlineOutboxEntries(st.outbox)) return;
+    if (!shouldAttemptOutboxDrain(st)) return;
     drainOutbox();
   });
 }

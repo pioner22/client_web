@@ -1,4 +1,6 @@
 import { el } from "../../helpers/dom/el";
+import { formatTime } from "../../helpers/time";
+import { fileBadge } from "../../helpers/files/fileBadge";
 import type { ChatMessage } from "../../stores/types";
 
 type RenderChatPinnedSurfaceOptions = {
@@ -7,13 +9,34 @@ type RenderChatPinnedSurfaceOptions = {
   activeRaw: number | null;
 };
 
-function resolvePinnedPreview(msg: ChatMessage | null, activeId: number): string {
+type PinnedPreview = {
+  label: string;
+  preview: string;
+  meta: string;
+  kind: string;
+};
+
+function resolvePinnedPreview(msg: ChatMessage | null, activeId: number): PinnedPreview {
   const attachment = msg?.attachment;
   if (attachment?.kind === "file") {
-    return `Файл: ${String(attachment.name || "файл")}`;
+    const name = String(attachment.name || "файл");
+    const badge = fileBadge(name, attachment.mime);
+    return {
+      label: badge.kind === "pdf" ? "PDF закреплён" : "Файл закреплён",
+      preview: name,
+      meta: [badge.kind === "pdf" ? "PDF" : "Файл", attachment.size ? `${Math.round(attachment.size / 1024)} KB` : "", msg?.ts ? formatTime(msg.ts) : ""]
+        .filter(Boolean)
+        .join(" · "),
+      kind: badge.kind,
+    };
   }
   const text = String(msg?.text || "").trim();
-  return text || `Сообщение #${activeId}`;
+  return {
+    label: "Закреплено",
+    preview: text || `Сообщение #${activeId}`,
+    meta: [typeof activeId === "number" ? `#${activeId}` : "", msg?.ts ? formatTime(msg.ts) : ""].filter(Boolean).join(" · "),
+    kind: "text",
+  };
 }
 
 export function renderChatPinnedSurface(opts: RenderChatPinnedSurfaceOptions): HTMLElement | null {
@@ -23,10 +46,10 @@ export function renderChatPinnedSurface(opts: RenderChatPinnedSurfaceOptions): H
   const activeId = typeof activeRaw === "number" && pinnedIds.includes(activeRaw) ? activeRaw : pinnedIds[0];
   const activeIdx = Math.max(0, pinnedIds.indexOf(activeId));
   const pinnedMsg = msgs.find((msg) => typeof msg.id === "number" && msg.id === activeId) || null;
-  const previewRaw = resolvePinnedPreview(pinnedMsg, activeId);
-  const preview = previewRaw.length > 140 ? `${previewRaw.slice(0, 137)}...` : previewRaw;
+  const pin = resolvePinnedPreview(pinnedMsg, activeId);
+  const preview = pin.preview.length > 140 ? `${pin.preview.slice(0, 137)}...` : pin.preview;
 
-  const kickerChildren: Array<string | HTMLElement> = [el("span", { class: "chat-pinned-label" }, ["Закреплено"])];
+  const kickerChildren: Array<string | HTMLElement> = [el("span", { class: "chat-pinned-label" }, [pin.label])];
   if (pinnedIds.length > 1) {
     kickerChildren.push(
       el("span", { class: "chat-pinned-count", "aria-label": `Закреп ${activeIdx + 1} из ${pinnedIds.length}` }, [
@@ -42,6 +65,7 @@ export function renderChatPinnedSurface(opts: RenderChatPinnedSurfaceOptions): H
       el("div", { class: "chat-pinned-main" }, [
         el("div", { class: "chat-pinned-kicker" }, kickerChildren),
         el("span", { class: "chat-pinned-preview" }, [preview]),
+        ...(pin.meta ? [el("span", { class: "chat-pinned-meta" }, [pin.meta])] : []),
       ]),
       el("span", { class: "chat-pinned-chevron", "aria-hidden": "true" }, [""]),
     ]
@@ -57,9 +81,9 @@ export function renderChatPinnedSurface(opts: RenderChatPinnedSurfaceOptions): H
   if (pinnedIds.length > 2) {
     actions.push(el("button", { class: "btn chat-pinned-nav chat-pinned-list", type: "button", "data-action": "chat-pinned-list", "aria-label": "Все закрепы" }, [""]));
   }
-  actions.push(el("button", { class: "btn chat-pinned-close", type: "button", "data-action": "chat-pinned-hide", "aria-label": "Скрыть" }, [""]));
+  actions.push(el("button", { class: "btn chat-pinned-close", type: "button", "data-action": "chat-pinned-hide", "aria-label": "Открепить активное закреплённое сообщение" }, [""]));
 
-  return el("div", { class: "chat-pinned", role: "note" }, [
+  return el("div", { class: `chat-pinned chat-pinned-${pin.kind}`, role: "note", "data-pinned-count": String(pinnedIds.length) }, [
     el("span", { class: "chat-pinned-marker", "aria-hidden": "true" }, [""]),
     body,
     el("div", { class: "chat-pinned-actions" }, actions),

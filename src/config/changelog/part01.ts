@@ -2,6 +2,82 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.799",
+    date: "2026-05-13",
+    improved: [
+      "Release-контур синхронизирован для web/PWA, Android, macOS desktop и CLI downloads: новые сборки проходят один общий version/download manifest path.",
+      "macOS desktop feed и ZIP пересобираются вместе с public downloads, чтобы desktop-клиент видел тот же актуальный релиз, что и сайт.",
+      "Android debug APK обновлён отдельным versionCode/versionName, чтобы sideload-клиенты получали явный новый артефакт вместо повторного скачивания старой версии.",
+    ],
+    fixed: [
+      "Публичный сайт, PWA service worker и downloads manifest больше не должны расходиться после пересборки всех клиентов в рамках одного релизного прохода.",
+    ],
+  },
+  {
+    version: "0.1.798",
+    date: "2026-05-13",
+    improved: [
+      "History/runtime delivery контур стал единым: outbox, drafts, fileTransfers, retry policy и flush перед reload/install теперь проходят через общий delivery layer.",
+      "После восстановления истории из IndexedDB клиент больше не запускает немедленный forced tail reload: серверная сверка идет через общий freshness budget, чтобы не провоцировать reload storms в PWA/iOS.",
+      "Download runtime разгружен отдельным policy/type слоем, чтобы file download feature оставался ниже size-gate и не превращался обратно в монолит.",
+    ],
+    fixed: [
+      "Partial-state render контракты истории снова безопасно трактуют отсутствующий page как main surface, не ломая реальные profile/files страницы.",
+      "macOS desktop update install теперь сохраняет unified runtime delivery state перед перезапуском, а не разрозненные outbox/draft ветки.",
+    ],
+  },
+  {
+    version: "0.1.796",
+    date: "2026-05-12",
+    improved: [
+      "PWA/Web/Desktop строже отделяют provisional history cache от подтверждённой сервером истории: пока tail-reconcile не пришёл, старые network media urls из локального кеша больше не считаются валидным preview/source state.",
+      "Диагностика client_info стала чище: build_id теперь нормализуется по текущей версии приложения и не должен больше тянуть устаревший active build из localStorage после нового релиза.",
+    ],
+    fixed: [
+      "Старые удалённые фото/видео из кешированной истории больше не должны успевать запустить auto-hydration и media preview incidents до прихода server reconcile.",
+      "После нового релиза серверные логи больше не должны показывать ложную смесь вроде `version=0.1.796`, `build_id=0.1.794-*` для одного и того же PWA shell.",
+    ],
+  },
+  {
+    version: "0.1.795",
+    date: "2026-05-12",
+    improved: [
+      "История чатов теперь жёстче отделяет локальный provisional cache от подтверждённой сервером истории: после восстановления из IndexedDB клиент сразу дожимает реальный tail-reconcile с сервера.",
+      "Web/PWA/Desktop перестали доверять старым network transfer/thumb URLs из локального history cache, пока сервер не подтвердил текущий состав сообщений и вложений.",
+      "Visible media hydration для старых фото/видео работает безопаснее: удалённые или уже мёртвые вложения не должны бесконечно оживать из локального кеша поверх новой серверной истории.",
+    ],
+    fixed: [
+      "Удалённые сервером сообщения с вложениями теперь вычищаются из history_result через deleted_ids до merge в локальную историю, вместе с orphaned fileTransfers/thumb cache.",
+      "Старые битые media rows после reconnect/reopen больше не должны повторно рендериться как будто они ещё существуют на сервере.",
+    ],
+  },
+  {
+    version: "0.1.794",
+    date: "2026-05-12",
+    improved: [
+      "PWA/Web/Desktop: после media/history сбоев клиент теперь ставит stability-hold и не пытается автообновиться или перезагрузить shell в момент деградации истории.",
+      "Скачивание файлов в web/PWA стало безопаснее для standalone shell: fallback больше не уводит текущее приложение в same-tab navigation, если браузер не смог открыть download через скрытую ссылку.",
+      "Наблюдаемость media/history стала жёстче: client incidents теперь дополнительно отмечают локальное degraded-state окно, чтобы обновление и recovery-path не спорили с текущими ошибками вложений.",
+    ],
+    fixed: [
+      "PWA больше не должен самопроизвольно сбрасываться в момент, когда старое фото/видео из истории не смогло нормально догрузиться или открыть preview.",
+      "Ленивые media-chunk import failures во время активных history/media проблем больше не форсируют мгновенный reload поверх уже деградировавшего PWA shell.",
+    ],
+  },
+  {
+    version: "0.1.793",
+    date: "2026-05-12",
+    improved: [
+      "PWA/Web: экран «Справка» теперь показывает актуальный текущий релиз, а не зависает на старой changelog-версии, если сам клиент уже обновился.",
+      "macOS desktop: packaged-клиент теперь по умолчанию сам проверяет release feed после старта, поэтому новые desktop обновления не требуют скрытого env-флага для auto-check.",
+      "Публикация packaged release стала строже: web/PWA shell, public downloads и macOS desktop feed должны ехать одним согласованным комплектом артефактов.",
+    ],
+    fixed: [
+      "macOS auto-update больше не должен упираться в рассинхрон feed vs artifact: desktop feed и опубликованный ZIP выравниваются в один production contour.",
+      "PWA/help больше не создаёт ложное ощущение, что клиент остался на `v0.1.776`, когда сам runtime уже обновился до более нового build.",
+    ],
+  },
+  {
     version: "0.1.776",
     date: "2026-04-23",
     improved: [

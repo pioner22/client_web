@@ -35,13 +35,47 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const profileName = el("div", { class: "profile-name" }, ["—"]);
   const profileHandle = el("div", { class: "profile-handle" }, ["—"]);
   const profileId = el("div", { class: "profile-id" }, [""]);
+  const profileStatusPill = el("span", { class: "profile-pill profile-pill-status" }, ["—"]);
+  const profileThemePill = el("span", { class: "profile-pill" }, ["—"]);
+  const profileSessionsPill = el("span", { class: "profile-pill" }, ["—"]);
+  const profileSummary = el("div", { class: "profile-summary", "aria-label": "Сводка профиля" }, [
+    profileStatusPill,
+    profileThemePill,
+    profileSessionsPill,
+  ]);
+  const profileCompletenessValue = el("div", { class: "profile-insight-value" }, ["—"]);
+  const profileCompletenessDetail = el("div", { class: "profile-insight-detail" }, ["Поля профиля"]);
+  const profileNotifyValue = el("div", { class: "profile-insight-value" }, ["—"]);
+  const profileNotifyDetail = el("div", { class: "profile-insight-detail" }, ["Уведомления"]);
+  const profileDevicesValue = el("div", { class: "profile-insight-value" }, ["—"]);
+  const profileDevicesDetail = el("div", { class: "profile-insight-detail" }, ["Устройства"]);
+  const profileInsightGrid = el("div", { class: "profile-insight-grid", "aria-label": "Ключевые настройки профиля" }, [
+    el("div", { class: "profile-insight-card profile-insight-card-primary" }, [
+      el("div", { class: "profile-insight-label" }, ["Профиль"]),
+      profileCompletenessValue,
+      profileCompletenessDetail,
+    ]),
+    el("div", { class: "profile-insight-card" }, [
+      el("div", { class: "profile-insight-label" }, ["Связь"]),
+      profileNotifyValue,
+      profileNotifyDetail,
+    ]),
+    el("div", { class: "profile-insight-card" }, [
+      el("div", { class: "profile-insight-label" }, ["Сессии"]),
+      profileDevicesValue,
+      profileDevicesDetail,
+    ]),
+  ]);
 
   const avatarPreview = el("button", { class: "avatar avatar-xl profile-avatar-btn", type: "button", "aria-label": "Аватар профиля" });
   const avatarFile = el("input", { class: "hidden", type: "file", accept: "image/*" }) as HTMLInputElement;
   const btnAvatarUpload = el("button", { class: "btn", type: "button" }, ["Загрузить…"]);
   const btnAvatarClear = el("button", { class: "btn btn-danger", type: "button" }, ["Удалить"]);
   const avatarActions = el("div", { class: "profile-head-actions" }, [btnAvatarUpload, btnAvatarClear, avatarFile]);
-  const headTop = el("div", { class: "profile-head-top" }, [avatarPreview, el("div", { class: "profile-head-main" }, [profileName, profileHandle, profileId])]);
+  const headTop = el("div", { class: "profile-head-top" }, [
+    avatarPreview,
+    el("div", { class: "profile-head-main" }, [profileName, profileHandle, profileId, profileSummary]),
+  ]);
   const head = el("div", { class: "profile-card profile-head" }, [headTop, avatarActions]);
 
   const displayNameLabel = el("label", { class: "modal-label", for: "profile-display-name" }, ["Имя"]);
@@ -144,24 +178,31 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const actionsRow = el("div", { class: "page-actions" }, [btnSave, btnRefresh]);
 
   const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — сохранить · Esc — назад"]);
+  const field = (label: HTMLElement, control: HTMLElement, extraClass = ""): HTMLElement =>
+    el("div", { class: `profile-field-control${extraClass ? ` ${extraClass}` : ""}` }, [label, control]);
 
   const account = el("div", { class: "profile-card" }, [
     el("div", { class: "profile-card-title" }, ["Аккаунт"]),
-    displayNameLabel,
-    displayNameInput,
-    handleLabel,
-    handleInput,
-    statusLabel,
-    statusInput,
-    bioLabel,
-    bioInput,
+    el("div", { class: "profile-field-grid" }, [
+      field(displayNameLabel, displayNameInput),
+      field(handleLabel, handleInput),
+      field(statusLabel, statusInput, "profile-field-status"),
+    ]),
+    field(bioLabel, bioInput),
   ]);
 
-  const ui = el("div", { class: "profile-card" }, [
-    el("div", { class: "profile-card-title" }, ["Интерфейс"]),
+  const appearance = el("div", { class: "profile-card profile-card-appearance" }, [
+    el("div", { class: "profile-card-title" }, ["Оформление"]),
     themeLabel,
     themeToggle,
     themeHint,
+    skinLabel,
+    skinSelect,
+    skinHint,
+  ]);
+
+  const notifications = el("div", { class: "profile-card profile-card-notifications" }, [
+    el("div", { class: "profile-card-title" }, ["Уведомления"]),
     pushLabel,
     pushActions,
     pushStatus,
@@ -171,12 +212,13 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     notifySoundLabel,
     notifySoundActions,
     notifySoundHint,
+  ]);
+
+  const pwaCard = el("div", { class: "profile-card profile-card-pwa" }, [
+    el("div", { class: "profile-card-title" }, ["Приложение"]),
     pwaUpdateLabel,
     pwaUpdateActions,
     pwaUpdateHint,
-    skinLabel,
-    skinSelect,
-    skinHint,
   ]);
 
   const sessionsCard = el("div", { class: "profile-card" }, [
@@ -189,9 +231,12 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const root = el("div", { class: "page page-profile" }, [
     title,
     head,
+    profileInsightGrid,
     account,
+    appearance,
+    notifications,
     sessionsCard,
-    ui,
+    pwaCard,
     actionsRow,
     ...(hint ? [hint] : []),
   ]);
@@ -257,6 +302,20 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     const h = me?.handle ? String(me.handle).trim() : "";
     profileHandle.textContent = h ? (h.startsWith("@") ? h : `@${h}`) : "Логин не задан";
     profileId.textContent = me?.id ? `ID: ${me.id}` : "";
+    const statusRaw = String(me?.status || state.profileDraftStatus || "").trim();
+    profileStatusPill.textContent = statusRaw ? `Статус: ${statusRaw}` : "Статус не задан";
+    profileStatusPill.classList.toggle("is-muted", !statusRaw);
+    profileThemePill.textContent = state.theme === "light" ? "Светлая тема" : "Тёмная тема";
+    const profileFields = [
+      String(me?.display_name || state.profileDraftDisplayName || "").trim(),
+      h,
+      statusRaw,
+      String(me?.bio || state.profileDraftBio || "").trim(),
+    ];
+    const completion = Math.round((profileFields.filter(Boolean).length / profileFields.length) * 100);
+    profileCompletenessValue.textContent = `${completion}%`;
+    profileCompletenessDetail.textContent =
+      completion >= 100 ? "Заполнено всё" : completion >= 75 ? "Почти готово" : completion >= 50 ? "Нужно чуть больше" : "Добавьте имя, логин и статус";
 
     const myId = state.selfId || "";
     const url = myId ? getStoredAvatar("dm", myId) : null;
@@ -318,6 +377,8 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
       pushText = `${pushText} · ${state.pwaPushStatus}`;
     }
     pushStatus.textContent = pushText;
+    profileNotifyValue.textContent = subscribed ? "Push" : state.notifyInAppEnabled ? "In-app" : "Тихо";
+    profileNotifyDetail.textContent = subscribed ? "Push включен" : state.notifyInAppEnabled ? "Уведомления в приложении" : "Уведомления выключены";
     btnPushEnable.disabled = !pushSupported || !serverKey || subscribed;
     btnPushDisable.disabled = !pushSupported || !subscribed;
 
@@ -339,6 +400,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
 
     const sessionEntries = Array.isArray(state.sessionDevices) ? state.sessionDevices : [];
     const otherCount = sessionEntries.filter((entry) => !entry.current).length;
+    profileSessionsPill.textContent = sessionEntries.length ? `Сессий: ${sessionEntries.length}` : "Сессии: нет данных";
+    profileDevicesValue.textContent = sessionEntries.length ? String(sessionEntries.length) : "—";
+    profileDevicesDetail.textContent = otherCount ? `Других устройств: ${otherCount}` : sessionEntries.length ? "Только текущее" : "Нет данных";
     sessionsHint.textContent =
       state.sessionDevicesStatus || "Список устройств и управление сессиями открываются отдельно, чтобы профиль оставался компактным.";
     if (!sessionEntries.length) {

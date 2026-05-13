@@ -22,13 +22,14 @@ async function loadHelpers() {
       logLevel: "silent",
     });
     const mod = await import(pathToFileURL(outfile).href);
-    const required = ["putCachedFileBlob", "getCachedFileBlob", "isImageLikeFile"];
+    const required = ["putCachedFileBlob", "getCachedFileBlob", "removeCachedFileBlob", "isImageLikeFile"];
     for (const k of required) {
       if (typeof mod[k] !== "function") throw new Error(`fileBlobCache export missing: ${k}`);
     }
     return {
       putCachedFileBlob: mod.putCachedFileBlob,
       getCachedFileBlob: mod.getCachedFileBlob,
+      removeCachedFileBlob: mod.removeCachedFileBlob,
       isImageLikeFile: mod.isImageLikeFile,
       cleanup: () => rm(tempDir, { recursive: true, force: true }),
     };
@@ -93,6 +94,21 @@ test("fileBlobCache: getCachedFileBlob восстанавливает mime по 
     assert.ok(out);
     assert.equal(out.mime, "image/png");
     assert.equal(out.blob.type, "image/png");
+  } finally {
+    uninstall();
+    await cleanup();
+  }
+});
+
+test("fileBlobCache: removeCachedFileBlob удаляет blob и index entry", async () => {
+  const { putCachedFileBlob, getCachedFileBlob, removeCachedFileBlob, cleanup } = await loadHelpers();
+  const uninstall = installCachesMock();
+  try {
+    const blob = new Blob(["bye"], { type: "text/plain" });
+    await putCachedFileBlob("u1", "f3", blob, { mime: "text/plain", size: 3 });
+    assert.ok(await getCachedFileBlob("u1", "f3"));
+    assert.equal(await removeCachedFileBlob("u1", "f3"), true);
+    assert.equal(await getCachedFileBlob("u1", "f3"), null);
   } finally {
     uninstall();
     await cleanup();

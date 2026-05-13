@@ -1,10 +1,22 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { getCachedFileBlob } from "../../../helpers/files/fileBlobCache";
+import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
+import { markPwaStabilityHold } from "../../../helpers/pwa/stabilityHold";
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
 import type { DownloadState } from "./fileDownloadFeature";
 
-type StreamRequestMeta = { fileId: string; name: string; size: number; mime: string | null };
+type StreamRequestTarget = "download" | "viewer";
+
+type StreamRequestMeta = {
+  fileId: string;
+  name: string;
+  size: number;
+  mime: string | null;
+  streamId: string;
+  url: string;
+  target: StreamRequestTarget;
+};
 
 export interface FileDownloadActionsFeatureDeps {
   store: Store<AppState>;
@@ -17,6 +29,7 @@ export interface FileDownloadActionsFeature {
   pendingFileDownloads: Map<string, { name: string }>;
   resolveFileMeta: (fileId: string) => { name: string; size: number; mime: string | null };
   beginDownload: (fileId: string) => Promise<void>;
+  beginViewerStream: (fileId: string, meta?: { name?: string; size?: number; mime?: string | null }) => string | null;
   handlePwaStreamReady: (detail: any) => void;
   triggerBrowserDownload: (url: string, name: string) => void;
   postStreamChunk: (streamId: string, chunk: Uint8Array) => boolean;
@@ -82,16 +95,23 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
-  function buildStreamUrl(fileId: string, meta: { name: string; size: number; mime: string | null }, streamId: string): string {
+  function buildStreamUrl(
+    fileId: string,
+    meta: { name: string; size: number; mime: string | null },
+    streamId: string,
+    opts?: { inline?: boolean }
+  ): string {
     const params = new URLSearchParams();
     params.set("sid", streamId);
     if (meta.name) params.set("name", meta.name);
     if (meta.size) params.set("size", String(meta.size));
     if (meta.mime) params.set("mime", meta.mime);
+    if (opts?.inline) params.set("inline", "1");
     return `/__yagodka_stream__/files/${encodeURIComponent(fileId)}?${params.toString()}`;
   }
 
   function triggerBrowserDownload(url: string, name: string): void {
+    let clicked = false;
     try {
       const a = document.createElement("a");
       a.href = url;
@@ -101,9 +121,28 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
       document.body.appendChild(a);
       a.click();
       window.setTimeout(() => a.remove(), 0);
+      clicked = true;
     } catch {
-      window.location.href = url;
+      clicked = false;
     }
+    if (clicked) return;
+
+    try {
+      const opened = typeof window.open === "function" ? window.open(url, "_blank", "noopener,noreferrer") : null;
+      if (opened) {
+        try {
+          opened.opener = null;
+        } catch {
+          // ignore
+        }
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
+    markPwaStabilityHold("file_download_open_failed");
+    store.set({ status: `Ошибка файла: не удалось открыть скачивание (${name || "файл"})` });
   }
 
   function startStreamDownload(fileId: string, meta: { name: string; size: number; mime: string | null }): boolean {
@@ -112,13 +151,55 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
     const existing = Array.from(pendingStreamRequests.values()).some((req) => req.fileId === fileId);
     if (existing) return false;
     const streamId = makeStreamId();
-    pendingStreamRequests.set(streamId, { fileId, name: meta.name, size: meta.size, mime: meta.mime });
     const url = buildStreamUrl(fileId, meta, streamId);
+    pendingStreamRequests.set(streamId, {
+      fileId,
+      name: meta.name,
+      size: meta.size,
+      mime: meta.mime,
+      streamId,
+      url,
+      target: "download",
+    });
     triggerBrowserDownload(url, meta.name || "file");
     window.setTimeout(() => {
       if (pendingStreamRequests.has(streamId)) pendingStreamRequests.delete(streamId);
     }, 5000);
     return true;
+  }
+
+  function beginViewerStream(
+    fileId: string,
+    meta?: { name?: string; size?: number; mime?: string | null }
+  ): string | null {
+    const fid = String(fileId || "").trim();
+    if (!fid) return null;
+    if (!supportsStreamDownload()) return null;
+    const resolved = resolveFileMeta(fid);
+    const name = String(meta?.name || resolved.name || "файл");
+    const size = Number(meta?.size || resolved.size || 0) || 0;
+    const mime = meta?.mime ?? resolved.mime ?? null;
+    const existing = Array.from(pendingStreamRequests.values()).find(
+      (req) => req.fileId === fid && req.target === "viewer"
+    );
+    if (existing?.url) return existing.url;
+    if (pendingStreamRequests.size > 16) return null;
+    const streamId = makeStreamId();
+    const url = buildStreamUrl(fid, { name, size, mime }, streamId, { inline: true });
+    pendingStreamRequests.set(streamId, {
+      fileId: fid,
+      name,
+      size,
+      mime,
+      streamId,
+      url,
+      target: "viewer",
+    });
+    window.setTimeout(() => {
+      const pending = pendingStreamRequests.get(streamId);
+      if (pending?.target === "viewer") pendingStreamRequests.delete(streamId);
+    }, 10_000);
+    return url;
   }
 
   function resolveFileMeta(fileId: string): { name: string; size: number; mime: string | null } {
@@ -190,7 +271,7 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
             progress: 100,
           };
         });
-        return { ...prev, fileTransfers: nextTransfers };
+        return applyFileTransferMutation(prev, nextTransfers);
       }
       const nextEntry: FileTransferEntry = {
         localId: `ft-cache-${fid}`,
@@ -205,7 +286,7 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
         progress: 100,
         url,
       };
-      return { ...prev, fileTransfers: [nextEntry, ...prev.fileTransfers] };
+      return applyFileTransferMutation(prev, [nextEntry, ...prev.fileTransfers]);
     });
     scheduleSaveFileTransfers();
     triggerBrowserDownload(url, name);
@@ -266,7 +347,7 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
       streaming: true,
     });
     enqueueFileGet(req.fileId, { priority: "high" });
-    store.set({ status: `Скачивание: ${req.name || "файл"}` });
+    store.set({ status: `${req.target === "viewer" ? "Загрузка" : "Скачивание"}: ${req.name || "файл"}` });
   }
 
   function reset() {
@@ -278,6 +359,7 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
     pendingFileDownloads,
     resolveFileMeta,
     beginDownload,
+    beginViewerStream,
     handlePwaStreamReady,
     triggerBrowserDownload,
     postStreamChunk,

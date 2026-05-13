@@ -1,5 +1,6 @@
 import { GatewayClient, type GatewayRole, type GatewayTransport, type MsgHandler, type StatusHandler } from "../../../lib/net/gatewayClient";
 import { MultiplexGatewayClient } from "../../../lib/net/multiplexGatewayClient";
+import { isCapacitorNativeRuntime } from "../../../helpers/runtime/nativeRuntime";
 import type { Store } from "../../../stores/store";
 import type { AppState, ConnStatus } from "../../../stores/types";
 
@@ -153,6 +154,7 @@ export function createGatewayClientFeature(deps: Deps): GatewayClientFeature {
 
   const url = deps.getGatewayUrl();
   const canMultiplex =
+    !isCapacitorNativeRuntime() &&
     typeof window !== "undefined" &&
     typeof BroadcastChannel === "function" &&
     typeof navigator !== "undefined" &&

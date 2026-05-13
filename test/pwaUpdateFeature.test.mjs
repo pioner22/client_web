@@ -1,0 +1,318 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { build } from "esbuild";
+
+async function loadFeature() {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "yagodka-web-test-"));
+  const outfile = path.join(tempDir, "bundle.mjs");
+  try {
+    await build({
+      entryPoints: [path.resolve("src/app/features/pwa/pwaUpdateFeature.ts")],
+      outfile,
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      target: "node20",
+      sourcemap: false,
+      logLevel: "silent",
+    });
+    const mod = await import(pathToFileURL(outfile).href);
+    if (typeof mod.createPwaUpdateFeature !== "function") throw new Error("createPwaUpdateFeature export missing");
+    return { createPwaUpdateFeature: mod.createPwaUpdateFeature, cleanup: () => rm(tempDir, { recursive: true, force: true }) };
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function makeStorage() {
+  const data = new Map();
+  return {
+    getItem(key) {
+      return data.has(String(key)) ? data.get(String(key)) : null;
+    },
+    setItem(key, value) {
+      data.set(String(key), String(value));
+    },
+    removeItem(key) {
+      data.delete(String(key));
+    },
+  };
+}
+
+function makeEventTarget() {
+  const listeners = new Map();
+  return {
+    addEventListener(type, fn) {
+      const arr = listeners.get(type) || [];
+      arr.push(fn);
+      listeners.set(type, arr);
+    },
+    removeEventListener(type, fn) {
+      const arr = listeners.get(type) || [];
+      listeners.set(
+        type,
+        arr.filter((x) => x !== fn)
+      );
+    },
+    dispatchEvent(event) {
+      const arr = listeners.get(String(event.type)) || [];
+      for (const fn of arr.slice()) fn(event);
+      return true;
+    },
+  };
+}
+
+test("pwaUpdateFeature: новый BUILD_ID не подменяет clientVersion до реального reload", async () => {
+  const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const prevEventDesc = Object.getOwnPropertyDescriptor(globalThis, "Event");
+  const prevCustomEventDesc = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
+  const prevFetch = globalThis.fetch;
+  const helper = await loadFeature();
+  try {
+    const windowTarget = makeEventTarget();
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    const pendingTimers = [];
+    const windowStub = {
+      ...windowTarget,
+      localStorage,
+      sessionStorage,
+      location: { href: "https://yagodka.org/web/" },
+      setTimeout(fn, _ms) {
+        pendingTimers.push(fn);
+        return pendingTimers.length;
+      },
+      clearTimeout() {},
+    };
+    class EventStub {
+      constructor(type) {
+        this.type = String(type);
+      }
+    }
+    class CustomEventStub extends EventStub {
+      constructor(type, init = {}) {
+        super(type);
+        this.detail = init.detail;
+      }
+    }
+    Object.defineProperty(globalThis, "window", { value: windowStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: { visibilityState: "visible", activeElement: null },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          controller: { postMessage() {} },
+          getRegistration: async () => null,
+          ready: Promise.resolve(null),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "Event", { value: EventStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "CustomEvent", { value: CustomEventStub, configurable: true, writable: true });
+    globalThis.fetch = async () => ({ ok: true, text: async () => 'const BUILD_ID = "0.1.792-abcdef123456";' });
+
+    const sendCalls = [];
+    const store = {
+      state: {
+        authed: true,
+        conn: "connected",
+        selfId: "111",
+        clientVersion: "0.1.791-27ef803b5f72",
+        updateLatest: null,
+        pwaUpdateAvailable: false,
+        status: "",
+        fileTransfers: [],
+        historyLoading: {},
+        modal: null,
+        editing: null,
+        replyDraft: null,
+        forwardDraft: null,
+        chatSelection: null,
+      },
+      get() {
+        return this.state;
+      },
+      set(patch) {
+        this.state =
+          typeof patch === "function"
+            ? patch(this.state)
+            : {
+                ...this.state,
+                ...patch,
+              };
+      },
+    };
+
+    const feature = helper.createPwaUpdateFeature({
+      store,
+      send: (payload) => sendCalls.push(payload),
+      flushBeforeReload: () => {},
+      getLastUserInputAt: () => 0,
+      hasPendingHistoryActivityForUpdate: () => false,
+      hasPendingPreviewActivityForUpdate: () => false,
+    });
+    feature.installEventListeners();
+    windowStub.dispatchEvent(new CustomEventStub("yagodka:pwa-build", { detail: { buildId: "0.1.792-abcdef123456" } }));
+
+    assert.equal(store.state.clientVersion, "0.1.791-27ef803b5f72");
+    assert.equal(store.state.updateLatest, "0.1.792-abcdef123456");
+    assert.equal(store.state.pwaUpdateAvailable, true);
+    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), null);
+    assert.equal(sendCalls.length, 0);
+  } finally {
+    if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
+    else delete globalThis.window;
+    if (prevDocumentDesc) Object.defineProperty(globalThis, "document", prevDocumentDesc);
+    else delete globalThis.document;
+    if (prevNavigatorDesc) Object.defineProperty(globalThis, "navigator", prevNavigatorDesc);
+    else delete globalThis.navigator;
+    if (prevEventDesc) Object.defineProperty(globalThis, "Event", prevEventDesc);
+    else delete globalThis.Event;
+    if (prevCustomEventDesc) Object.defineProperty(globalThis, "CustomEvent", prevCustomEventDesc);
+    else delete globalThis.CustomEvent;
+    globalThis.fetch = prevFetch;
+    await helper.cleanup();
+  }
+});
+
+test("pwaUpdateFeature: auto-apply waits while recent media failures keep PWA stability hold active", async () => {
+  const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const prevEventDesc = Object.getOwnPropertyDescriptor(globalThis, "Event");
+  const prevCustomEventDesc = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
+  const helper = await loadFeature();
+  try {
+    const windowTarget = makeEventTarget();
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    const pendingTimers = [];
+    const replaceCalls = [];
+    localStorage.setItem(
+      "yagodka_pwa_stability_hold_v1",
+      JSON.stringify({ kind: "media_preview_failed", ts: Date.now(), until: Date.now() + 60_000 })
+    );
+    const windowStub = {
+      ...windowTarget,
+      localStorage,
+      sessionStorage,
+      location: {
+        href: "https://yagodka.org/web/",
+        replace(url) {
+          replaceCalls.push(String(url));
+        },
+        reload() {
+          replaceCalls.push("reload");
+        },
+      },
+      setTimeout(fn, _ms) {
+        pendingTimers.push(fn);
+        return pendingTimers.length;
+      },
+      clearTimeout() {},
+    };
+    class EventStub {
+      constructor(type) {
+        this.type = String(type);
+      }
+    }
+    class CustomEventStub extends EventStub {
+      constructor(type, init = {}) {
+        super(type);
+        this.detail = init.detail;
+      }
+    }
+    Object.defineProperty(globalThis, "window", { value: windowStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: { visibilityState: "visible", activeElement: null },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          controller: { postMessage() {} },
+          getRegistration: async () => null,
+          ready: Promise.resolve(null),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "Event", { value: EventStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "CustomEvent", { value: CustomEventStub, configurable: true, writable: true });
+
+    const store = {
+      state: {
+        authed: true,
+        conn: "connected",
+        selfId: "111",
+        clientVersion: "0.1.791-27ef803b5f72",
+        updateLatest: "0.1.792-abcdef123456",
+        pwaUpdateAvailable: true,
+        status: "",
+        fileTransfers: [],
+        historyLoading: {},
+        modal: null,
+        editing: null,
+        replyDraft: null,
+        forwardDraft: null,
+        chatSelection: null,
+      },
+      get() {
+        return this.state;
+      },
+      set(patch) {
+        this.state =
+          typeof patch === "function"
+            ? patch(this.state)
+            : {
+                ...this.state,
+                ...patch,
+              };
+      },
+    };
+
+    const feature = helper.createPwaUpdateFeature({
+      store,
+      send: () => {},
+      flushBeforeReload: () => {},
+      getLastUserInputAt: () => 0,
+      hasPendingHistoryActivityForUpdate: () => false,
+      hasPendingPreviewActivityForUpdate: () => false,
+    });
+
+    feature.scheduleAutoApplyPwaUpdate(1);
+    assert.equal(pendingTimers.length, 1);
+    pendingTimers.shift()();
+
+    assert.deepEqual(replaceCalls, []);
+    assert.equal(store.state.pwaUpdateAvailable, true);
+    assert.ok(pendingTimers.length >= 1);
+  } finally {
+    if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
+    else delete globalThis.window;
+    if (prevDocumentDesc) Object.defineProperty(globalThis, "document", prevDocumentDesc);
+    else delete globalThis.document;
+    if (prevNavigatorDesc) Object.defineProperty(globalThis, "navigator", prevNavigatorDesc);
+    else delete globalThis.navigator;
+    if (prevEventDesc) Object.defineProperty(globalThis, "Event", prevEventDesc);
+    else delete globalThis.Event;
+    if (prevCustomEventDesc) Object.defineProperty(globalThis, "CustomEvent", prevCustomEventDesc);
+    else delete globalThis.CustomEvent;
+    await helper.cleanup();
+  }
+});

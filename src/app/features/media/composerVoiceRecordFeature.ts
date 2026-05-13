@@ -1,9 +1,21 @@
 import { getStoredSessionToken, isSessionAutoAuthBlocked } from "../../../helpers/auth/session";
 import { pauseActiveMedia } from "../../../helpers/media/audioSession";
+import {
+  activateCaptureSession,
+  cancelPendingCaptureSession,
+  claimCaptureSession,
+  describeActiveCaptureSession,
+  forceReleaseMediaDevices,
+  hasActiveCaptureSession,
+  releaseCaptureSession,
+  requestCaptureStream,
+  type CaptureSessionOwner,
+} from "../../../helpers/media/captureSession";
 import { formatMediaAccessError, queryCapturePermissionState } from "../../../helpers/media/permissions";
 import { nowTs } from "../../../helpers/time";
 import type { Store } from "../../../stores/store";
 import type { AppState, TargetRef } from "../../../stores/types";
+import { createComposerRecorderSurface } from "./composerRecorderSurface";
 
 export type ToastFn = (
   message: string,
@@ -11,6 +23,7 @@ export type ToastFn = (
     kind?: "info" | "success" | "warn" | "error";
     timeoutMs?: number;
     placement?: "bottom" | "center";
+    actions?: Array<{ id: string; label: string; primary?: boolean; onClick: () => void }>;
   }
 ) => void;
 
@@ -60,8 +73,9 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
 
   const LOCK_DY_PX = 70;
   const CANCEL_DX_PX = 70;
-  const CLICK_SUPPRESS_MS = 600;
+  const CLICK_SUPPRESS_MS = 650;
 
+  let captureOwner: CaptureSessionOwner | null = null;
   let stream: MediaStream | null = null;
   let recorder: MediaRecorder | null = null;
   let chunks: BlobPart[] = [];
@@ -69,6 +83,8 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
   let recordingTarget: TargetRef | null = null;
   let recordCanceled = false;
   let recordingLocked = false;
+  let elapsedTimer: number | null = null;
+  let stopFallbackTimer: number | null = null;
   let suppressClickUntil = 0;
   let gesture:
     | {
@@ -82,6 +98,12 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
       }
     | null = null;
   let gestureToken = 0;
+
+  const recorderSurface = createComposerRecorderSurface({
+    anchorButton: voiceBtn,
+    onStop: () => finishRecording(),
+    onCancel: () => finishRecording({ cancel: true }),
+  });
 
   const applyPermissionUi = (state: PermissionState | null) => {
     if (state === lastPermState) return;
@@ -116,41 +138,69 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
     }
   };
 
-  const stopTracks = () => {
-    try {
-      for (const t of stream?.getTracks() ?? []) t.stop();
-    } catch {
-      // ignore
+  const startElapsedTimer = () => {
+    if (elapsedTimer !== null) window.clearInterval(elapsedTimer);
+    elapsedTimer = window.setInterval(() => {
+      if (!startedAt) return;
+      recorderSurface.update({ elapsedMs: Date.now() - startedAt });
+    }, 250);
+  };
+
+  const stopElapsedTimer = () => {
+    if (elapsedTimer !== null) {
+      window.clearInterval(elapsedTimer);
+      elapsedTimer = null;
     }
-    stream = null;
   };
 
   const reset = () => {
-    try {
-      recorder = null;
-      chunks = [];
-      startedAt = 0;
-      recordingTarget = null;
-      recordCanceled = false;
-      recordingLocked = false;
-      gesture = null;
-      setRecordingUi(false);
-    } catch {
-      // ignore
+    if (stopFallbackTimer !== null) {
+      window.clearTimeout(stopFallbackTimer);
+      stopFallbackTimer = null;
     }
+    recorder = null;
+    chunks = [];
+    startedAt = 0;
+    recordingTarget = null;
+    recordCanceled = false;
+    recordingLocked = false;
+    gesture = null;
+    captureOwner = null;
+    stream = null;
+    stopElapsedTimer();
+    setRecordingUi(false);
+    recorderSurface.clear();
   };
 
-  const stop = () => {
+  function finishRecording(opts?: { cancel?: boolean }) {
+    if (opts?.cancel) recordCanceled = true;
+    const current = recorder;
+    if (!current) {
+      cancelPendingCaptureSession(captureOwner);
+      releaseCaptureSession(captureOwner);
+      reset();
+      return;
+    }
     try {
-      recordCanceled = true;
-      recorder?.stop();
+      if (current.state !== "inactive") {
+        current.stop();
+        if (stopFallbackTimer !== null) window.clearTimeout(stopFallbackTimer);
+        stopFallbackTimer = window.setTimeout(() => {
+          stopFallbackTimer = null;
+          releaseCaptureSession(captureOwner);
+          reset();
+        }, 1400);
+      } else {
+        releaseCaptureSession(captureOwner);
+        reset();
+      }
     } catch {
-      // ignore
-    } finally {
-      stopTracks();
+      releaseCaptureSession(captureOwner);
       reset();
     }
-  };
+  }
+
+  const stop = () => finishRecording({ cancel: true });
 
   function ensureSendContext(): TargetRef | null {
     const st = store.get();
@@ -189,42 +239,85 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
     return target;
   }
 
-  async function startRecording(target: TargetRef) {
-    if (recorder) return;
+  async function startRecording(target: TargetRef, opts?: { locked?: boolean }) {
+    if (recorder || hasActiveCaptureSession()) {
+      showToast(describeActiveCaptureSession(), { kind: "info", timeoutMs: 3500 });
+      return;
+    }
     pauseActiveMedia();
+    const owner = claimCaptureSession("voice");
+    if (!owner) {
+      showToast(describeActiveCaptureSession(), { kind: "info", timeoutMs: 3500 });
+      return;
+    }
+    captureOwner = owner;
     recordCanceled = false;
-    recordingLocked = false;
+    recordingLocked = Boolean(opts?.locked);
     setRecordingUi(false);
     if (typeof window !== "undefined" && !window.isSecureContext) {
-      showToast("Запись доступна только по HTTPS", { kind: "warn", timeoutMs: 9000, placement: "center" });
+      cancelPendingCaptureSession(owner);
+      reset();
+      showToast("Запись доступна только по HTTPS", { kind: "warn", timeoutMs: 7000 });
       return;
     }
     const mediaDevices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
     if (!mediaDevices?.getUserMedia) {
-      showToast("Запись не поддерживается в этом браузере", { kind: "warn", timeoutMs: 7000, placement: "center" });
+      cancelPendingCaptureSession(owner);
+      reset();
+      showToast("Запись не поддерживается в этом браузере", { kind: "warn", timeoutMs: 6000 });
       return;
     }
     const MR = (globalThis as any).MediaRecorder as typeof MediaRecorder | undefined;
     if (!MR) {
-      showToast("Запись не поддерживается в этом браузере", { kind: "warn", timeoutMs: 7000, placement: "center" });
+      cancelPendingCaptureSession(owner);
+      reset();
+      showToast("Запись не поддерживается в этом браузере", { kind: "warn", timeoutMs: 6000 });
       return;
     }
     const perm = await queryCapturePermissionState("microphone");
     applyPermissionUi(perm);
     if (perm === "denied") {
-      showToast("Доступ к микрофону запрещён в настройках сайта/браузера", { kind: "warn", timeoutMs: 9000, placement: "center" });
+      cancelPendingCaptureSession(owner);
+      reset();
+      showToast("Разрешите микрофон в настройках приложения или браузера", { kind: "warn", timeoutMs: 7000 });
       return;
     }
+    let nextStream: MediaStream;
     try {
-      stream = await mediaDevices.getUserMedia({ audio: true, video: false });
+      nextStream = await requestCaptureStream(owner, { audio: true, video: false }, { retryCooldownMs: 360 });
     } catch (error) {
-      showToast(formatMediaAccessError("microphone", error), { kind: "warn", timeoutMs: 9000, placement: "center" });
+      cancelPendingCaptureSession(owner);
+      showToast(formatMediaAccessError("microphone", error), {
+        kind: "warn",
+        timeoutMs: 9000,
+        actions: [
+          {
+            id: "media_release_retry",
+            label: "Освободить и повторить",
+            primary: true,
+            onClick: () => {
+              forceReleaseMediaDevices();
+              void startRecording(target, { locked: true });
+            },
+          },
+        ],
+      });
       void syncPermissionUi();
-      stopTracks();
       reset();
       return;
     }
 
+    if (
+      !activateCaptureSession(owner, nextStream, () => {
+        recordCanceled = true;
+        finishRecording({ cancel: true });
+      })
+    ) {
+      reset();
+      showToast(describeActiveCaptureSession(), { kind: "info", timeoutMs: 3500 });
+      return;
+    }
+    stream = nextStream;
     recordingTarget = target;
     chunks = [];
     startedAt = Date.now();
@@ -233,15 +326,15 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
       pickSupportedMimeType(["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm", "audio/ogg"]) || undefined;
     try {
       recorder = mimeType ? new MR(stream, { mimeType }) : new MR(stream);
-    } catch (error) {
-      void error;
-      showToast("Не удалось начать запись", { kind: "error", timeoutMs: 7000, placement: "center" });
-      stopTracks();
+    } catch {
+      releaseCaptureSession(owner);
       reset();
+      showToast("Не удалось начать запись", { kind: "error", timeoutMs: 6000 });
       return;
     }
 
-    recorder.addEventListener("dataavailable", (e) => {
+    const currentRecorder = recorder;
+    currentRecorder.addEventListener("dataavailable", (e) => {
       try {
         const data = (e as BlobEvent).data;
         if (data && data.size > 0) chunks.push(data);
@@ -250,23 +343,27 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
       }
     });
 
-    recorder.addEventListener(
+    currentRecorder.addEventListener(
       "stop",
       () => {
+        if (stopFallbackTimer !== null) {
+          window.clearTimeout(stopFallbackTimer);
+          stopFallbackTimer = null;
+        }
         const tgt = recordingTarget;
         const canceled = recordCanceled;
         const elapsedMs = startedAt ? Math.max(0, Date.now() - startedAt) : 0;
         const nextChunks = chunks.slice();
-        const type = recorder?.mimeType || mimeType || "audio/webm";
-        stopTracks();
+        const type = currentRecorder.mimeType || mimeType || "audio/webm";
+        releaseCaptureSession(owner);
         reset();
         if (canceled) {
-          showToast("Запись отменена", { kind: "info", timeoutMs: 3500, placement: "center" });
+          showToast("Запись отменена", { kind: "info", timeoutMs: 1800 });
           return;
         }
         if (!tgt) return;
         if (!nextChunks.length || elapsedMs < 650) {
-          showToast("Запись слишком короткая", { kind: "info", timeoutMs: 4500, placement: "center" });
+          showToast("Запись слишком короткая", { kind: "info", timeoutMs: 2500 });
           return;
         }
         const blob = new Blob(nextChunks, { type });
@@ -279,42 +376,24 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
           // ignore
         }
         openFileSendModal([file], tgt);
-        const seconds = Math.round(elapsedMs / 1000);
-        if (seconds > 0) showToast(`Голосовое: ${seconds} сек`, { kind: "success", timeoutMs: 3500 });
+        const seconds = Math.max(1, Math.round(elapsedMs / 1000));
+        showToast(`Голосовое ${seconds} сек`, { kind: "success", timeoutMs: 2200 });
       },
       { once: true }
     );
 
     try {
-      recorder.start();
-    } catch (error) {
-      void error;
-      showToast("Не удалось начать запись", { kind: "error", timeoutMs: 7000, placement: "center" });
-      stopTracks();
+      currentRecorder.start();
+    } catch {
+      releaseCaptureSession(owner);
       reset();
+      showToast("Не удалось начать запись", { kind: "error", timeoutMs: 6000 });
       return;
     }
     setRecordingUi(true);
-    const holdMode = Boolean(gesture && !gesture.released);
-    showToast(
-      holdMode ? "Запись… отпустите чтобы отправить. Влево — отмена, вверх — закрепить." : "Запись голосового… нажмите ещё раз чтобы остановить",
-      {
-        kind: "info",
-        timeoutMs: 5000,
-        placement: "center",
-      }
-    );
+    recorderSurface.show({ kind: "voice", locked: recordingLocked, elapsedMs: 0 });
+    startElapsedTimer();
   }
-
-  const tryStopRecorder = (opts?: { cancel?: boolean }) => {
-    if (!recorder) return;
-    if (opts?.cancel) recordCanceled = true;
-    try {
-      recorder.stop();
-    } catch {
-      stop();
-    }
-  };
 
   const bind = () => {
     void syncPermissionUi();
@@ -354,12 +433,12 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
         const g = gesture;
         if (!g || g.token !== token) return;
         if (g.canceled) {
-          if (recorder) tryStopRecorder({ cancel: true });
+          finishRecording({ cancel: true });
           gesture = null;
           return;
         }
         if (g.released && !g.locked) {
-          if (recorder) tryStopRecorder();
+          finishRecording();
           gesture = null;
         }
       });
@@ -367,25 +446,21 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
 
     const onPointerMove = (e: PointerEvent) => {
       const g = gesture;
-      if (!g || g.pointerId !== e.pointerId) return;
-      if (g.canceled) return;
+      if (!g || g.pointerId !== e.pointerId || g.canceled) return;
       const dx = e.clientX - g.startX;
       const dy = e.clientY - g.startY;
       if (!g.locked && dy < -LOCK_DY_PX) {
         g.locked = true;
         recordingLocked = true;
         setRecordingUi(true);
-        showToast("Запись закреплена. Нажмите ещё раз, чтобы остановить и отправить.", {
-          kind: "info",
-          timeoutMs: 5000,
-          placement: "center",
-        });
+        recorderSurface.update({ locked: true, canceling: false });
       }
       if (!g.locked && dx < -CANCEL_DX_PX) {
         g.canceled = true;
         recordCanceled = true;
         setRecordingUi(true);
-        tryStopRecorder({ cancel: true });
+        recorderSurface.update({ canceling: true });
+        finishRecording({ cancel: true });
       }
     };
 
@@ -400,17 +475,12 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
         // ignore
       }
       if (recorder) {
-        if (g.canceled) {
-          tryStopRecorder({ cancel: true });
-        } else if (!g.locked) {
-          tryStopRecorder();
-        }
+        if (g.canceled) finishRecording({ cancel: true });
+        else if (!g.locked) finishRecording();
         gesture = null;
         return;
       }
-      if (g.locked) {
-        gesture = null;
-      }
+      if (g.locked) gesture = null;
     };
 
     voiceBtn.addEventListener("pointerdown", onPointerDown);
@@ -421,16 +491,12 @@ export function createComposerVoiceRecordFeature(deps: ComposerVoiceRecordFeatur
     voiceBtn.addEventListener("click", () => {
       if (Date.now() < suppressClickUntil) return;
       if (recorder) {
-        try {
-          recorder.stop();
-        } catch {
-          stop();
-        }
+        finishRecording();
         return;
       }
       const target = ensureSendContext();
       if (!target) return;
-      void startRecording(target);
+      void startRecording(target, { locked: true });
     });
   };
 

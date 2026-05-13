@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { closeModalState } from "../../../helpers/navigation/appShellState";
 
 export interface ModalCloseFeatureDeps {
   store: Store<AppState>;
@@ -28,7 +29,7 @@ export function createModalCloseFeature(deps: ModalCloseFeatureDeps): ModalClose
     }
     if (st.modal.kind === "file_send") {
       if (!closeFileSendModalIfFileSend()) {
-        store.set({ modal: null });
+        store.set((prev) => closeModalState(prev));
       }
       return;
     }
@@ -36,9 +37,9 @@ export function createModalCloseFeature(deps: ModalCloseFeatureDeps): ModalClose
       clearMembersAddLookups();
     }
     if (st.modal.kind === "update") {
-      store.set({ modal: null, updateDismissedLatest: st.updateLatest });
+      store.set((prev) => closeModalState(prev, { dismissUpdate: true }));
     } else {
-      store.set({ modal: null });
+      store.set((prev) => closeModalState(prev));
     }
   };
 

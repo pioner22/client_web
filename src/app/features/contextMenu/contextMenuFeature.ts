@@ -2,6 +2,7 @@ import { conversationKey, dmKey, roomKey } from "../../../helpers/chat/conversat
 import { messageSelectionKey } from "../../../helpers/chat/chatSelection";
 import { isPinnedMessage } from "../../../helpers/chat/pinnedMessages";
 import { getStoredAvatar } from "../../../helpers/avatar/avatarStore";
+import { fileBadge } from "../../../helpers/files/fileBadge";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage, ContextMenuItem, ContextMenuTargetKind } from "../../../stores/types";
 import { OUTBOX_SCHEDULE_GRACE_MS } from "../outbox/outboxFeature";
@@ -49,7 +50,7 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
       id: string,
       label: string,
       icon: string,
-      opts: Pick<ContextMenuItem, "danger" | "disabled"> = {}
+      opts: Pick<ContextMenuItem, "danger" | "disabled" | "subLabel" | "meta"> = {}
     ): ContextMenuItem => ({
       id,
       label,
@@ -364,9 +365,9 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
         msg?.reactions?.counts && typeof msg.reactions.counts === "object" && Object.keys(msg.reactions.counts).length
       );
       const primary: ContextMenuItem[] = [];
-      primary.push(makeItem("msg_reply", "Ответить", "↩", { disabled: !canReply || helperBlocked }));
-      if (repliesCount > 0) primary.push(makeItem("msg_view_replies", `Ответы (${repliesCount})`, "🧵"));
-      primary.push(makeItem("msg_forward", "Переслать", "↪", { disabled: !canReply || helperBlocked }));
+      primary.push(makeItem("msg_reply", "Ответить", "↩", { subLabel: "Начать ответ в этом чате", disabled: !canReply || helperBlocked }));
+      if (repliesCount > 0) primary.push(makeItem("msg_view_replies", `Ответы (${repliesCount})`, "🧵", { subLabel: "Показать ветку ответов" }));
+      primary.push(makeItem("msg_forward", "Переслать", "↪", { subLabel: "Отправить в другой чат", disabled: !canReply || helperBlocked }));
       primary.push(makeItem("msg_copy", copyLabel, "📋", { disabled: !msg }));
       primary.push(
         makeItem("msg_select_toggle", selectionSelected ? "Снять выбор" : "Выбрать", selectionSelected ? "☑️" : "✅", {
@@ -376,7 +377,10 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
       addGroup(primary);
 
       const editGroup: ContextMenuItem[] = [
-        makeItem("msg_pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌", { disabled: !canPin }),
+        makeItem("msg_pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌", {
+          subLabel: isPinned ? "Убрать из верхней панели" : "Показать наверху чата",
+          disabled: !canPin,
+        }),
       ];
       if (canEdit) {
         editGroup.push(
@@ -390,10 +394,21 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
       const fileGroup: ContextMenuItem[] = [];
       if ((msg as any)?.attachment?.kind === "file") {
         const fileId = String((msg as any).attachment.fileId || "").trim();
-        const hasLocalUrl = Boolean(
-          fileId && st.fileTransfers.find((t) => String(t.id || "").trim() === fileId && Boolean((t as any).url))
-        );
-        fileGroup.push(makeItem("msg_download", "Скачать", "⬇️", { disabled: !(fileId && (canAct || hasLocalUrl)) }));
+        const fileName = String((msg as any).attachment.name || "файл").trim();
+        const transfer = fileId ? st.fileTransfers.find((t) => String(t.id || "").trim() === fileId) || null : null;
+        const badge = fileBadge(fileName, (msg as any).attachment.mime || transfer?.mime || null);
+        const hasLocalUrl = Boolean(transfer && (transfer as any).url);
+        const fileSize = Number((msg as any).attachment.size || transfer?.size || 0);
+        const fileMeta = fileSize > 0 ? `${Math.round(fileSize / 1024)} KB` : "";
+        const fileReady = Boolean(fileId && (canAct || hasLocalUrl));
+        fileGroup.push({
+          id: "msg_download",
+          label: badge.kind === "pdf" ? (hasLocalUrl ? "Открыть PDF / скачать" : "Скачать PDF") : hasLocalUrl ? "Открыть / скачать файл" : "Скачать файл",
+          subLabel: fileName,
+          meta: [badge.label, fileMeta].filter(Boolean).join(" · "),
+          icon: badge.kind === "pdf" ? "PDF" : "⬇",
+          disabled: !fileReady,
+        });
       }
       addGroup(fileGroup);
 

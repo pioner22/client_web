@@ -1,7 +1,7 @@
 import { renderRichText } from "../../helpers/chat/richText";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { el } from "../../helpers/dom/el";
-import { isAudioLikeFile, isImageLikeFile, isVideoLikeFile } from "../../helpers/files/mediaKind";
+import { isAudioLikeFile, isImageLikeFile, isPdfLikeFile, isVideoLikeFile } from "../../helpers/files/mediaKind";
 import { safeUrl } from "../../helpers/security/safeUrl";
 import { renderViewerFooterShell, type ViewerRailItem } from "./viewerFooterShell";
 
@@ -92,6 +92,7 @@ export function renderFileViewerModal(
   const isImage = isImageLikeFile(titleText, mime);
   const isVideo = isVideoLikeFile(titleText, mime);
   const isAudio = isAudioLikeFile(titleText, mime);
+  const isPdf = isPdfLikeFile(titleText, mime);
   const isVisual = isImage || isVideo;
   const shouldAutoplay = Boolean(isVideo && opts?.autoplay);
   const posterRaw = isVideo ? String(opts?.posterUrl || "").trim() : "";
@@ -109,6 +110,7 @@ export function renderFileViewerModal(
   if (isImage) modalClasses.push("viewer-kind-image");
   if (isVideo) modalClasses.push("viewer-kind-video");
   if (isAudio) modalClasses.push("viewer-kind-audio");
+  if (isPdf) modalClasses.push("viewer-kind-pdf");
   if (captionText) modalClasses.push("viewer-has-caption");
   const box = el("div", { class: modalClasses.join(" "), role: "dialog", "aria-modal": "true" });
 
@@ -685,6 +687,13 @@ export function renderFileViewerModal(
   } else if (isAudio) {
     const audio = el("audio", { class: "viewer-audio", src: safeHref, controls: "true", preload: "metadata" }) as HTMLAudioElement;
     body = el("div", { class: "viewer-media viewer-media-audio" }, [audio]);
+  } else if (isPdf) {
+    const frame = el("iframe", { class: "viewer-pdf-frame", src: safeHref, title: titleText }) as HTMLIFrameElement;
+    const fallback = el("div", { class: "viewer-pdf-fallback" }, [
+      el("div", { class: "viewer-pdf-icon", "aria-hidden": "true" }, ["PDF"]),
+      el("div", { class: "viewer-pdf-copy" }, ["Если PDF не открылся в браузере, скачайте файл ниже."]),
+    ]);
+    body = el("div", { class: "viewer-media viewer-media-pdf" }, [frame, fallback]);
   } else {
     body = el("div", { class: "viewer-file" }, [
       el("div", { class: "viewer-file-icon", "aria-hidden": "true" }, ["FILE"]),

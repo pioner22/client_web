@@ -365,6 +365,49 @@ input.modal-input[type="file"]::file-selector-button:active {
   gap: 2px;
 }
 
+.call-quality {
+  flex: 0 1 auto;
+  max-width: min(34vw, 190px);
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-quality-good {
+  background: color-mix(in srgb, var(--good), transparent 78%);
+  border-color: color-mix(in srgb, var(--good), transparent 55%);
+}
+
+.call-quality-connecting,
+.call-quality-unstable {
+  background: color-mix(in srgb, var(--warn), transparent 78%);
+  border-color: color-mix(in srgb, var(--warn), transparent 55%);
+}
+
+.call-quality-failed {
+  background: color-mix(in srgb, var(--bad), transparent 76%);
+  border-color: color-mix(in srgb, var(--bad), transparent 50%);
+}
+
+@media (max-width: 480px) {
+  .call-quality {
+    max-width: 112px;
+    padding-inline: 8px;
+  }
+}
+
 .call-peer-title {
   font-size: 15px;
   font-weight: 800;

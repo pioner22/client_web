@@ -1,11 +1,14 @@
 import type { GatewayTransport } from "../../lib/net/gatewayClient";
-import type { AppState, FriendEntry, UserProfile } from "../../stores/types";
+import type { AppState, FriendEntry } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
+import { dropConversationHistorySyncState } from "../../helpers/chat/historySync";
+import { applyRosterSnapshot, applyRosterSyncState, setFriendPresence } from "../../helpers/roster/rosterSync";
 import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatarRev } from "../../helpers/avatar/avatarStore";
 import { sanitizeArchived, saveArchivedForUser } from "../../helpers/chat/archives";
 import { sanitizeChatFoldersSnapshot, saveChatFoldersForUser } from "../../helpers/chat/folders";
 import { sanitizePins, savePinsForUser } from "../../helpers/chat/pins";
 import { parseRoster } from "../../helpers/roster/parseRoster";
+import { applySidebarFolderSnapshot } from "../../helpers/sidebar/sidebarState";
 import { saveLastReadMarkers } from "../../helpers/ui/lastReadMarkers";
 import { prefsBootstrapDoneForUser, sysActionMessage, upsertConversationByLocalId } from "./common";
 
@@ -45,37 +48,17 @@ export function handleRosterPrefsMessage(
     }
 
     patch((prev) => {
-      let nextProfiles: Record<string, UserProfile> | null = null;
-      for (const f of r.friends) {
-        const id = String(f?.id ?? "").trim();
-        if (!id) continue;
-        const hasExtra =
-          (f as any).display_name !== undefined ||
-          (f as any).handle !== undefined ||
-          (f as any).avatar_rev !== undefined ||
-          (f as any).avatar_mime !== undefined;
-        if (!hasExtra) continue;
-        const cur = prev.profiles[id] ?? { id };
-        const next: UserProfile = {
-          ...cur,
-          id,
-          ...((f as any).display_name === undefined ? {} : { display_name: (f as any).display_name }),
-          ...((f as any).handle === undefined ? {} : { handle: (f as any).handle }),
-          ...((f as any).avatar_rev === undefined ? {} : { avatar_rev: (f as any).avatar_rev }),
-          ...((f as any).avatar_mime === undefined ? {} : { avatar_mime: (f as any).avatar_mime }),
-        };
-        if (!nextProfiles) nextProfiles = { ...prev.profiles };
-        nextProfiles[id] = next;
-      }
-      let nextState: any = {
-        ...prev,
-        friends: r.friends,
-        topPeers: r.topPeers,
-        pendingIn: r.pendingIn,
-        pendingOut: r.pendingOut,
-        ...(nextProfiles ? { profiles: nextProfiles } : {}),
-        ...(avatarChanged ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}),
-      };
+      let nextState: any = applyRosterSnapshot(
+        prev,
+        {
+          friends: r.friends,
+          topPeers: r.topPeers,
+          pendingIn: r.pendingIn,
+          pendingOut: r.pendingOut,
+        },
+        { source: "server", reconcilePending: false }
+      );
+      if (avatarChanged) nextState = { ...nextState, avatarsRev: (prev.avatarsRev || 0) + 1 };
       for (const peer of r.pendingIn) {
         const id = String(peer || "").trim();
         if (!id) continue;
@@ -109,7 +92,7 @@ export function handleRosterPrefsMessage(
       const byId = new Map<string, FriendEntry>(prev.friends.map((f) => [f.id, f]));
       const next: FriendEntry[] = ids.map((id) => byId.get(id) ?? { id, online: false, unread: 0, last_seen_at: null });
       next.sort((a: FriendEntry, b: FriendEntry) => a.id.localeCompare(b.id));
-      return { ...prev, friends: next };
+      return applyRosterSyncState({ ...prev, friends: next }, { loaded: true, source: "server", lastServerAt: Date.now() });
     });
     return true;
   }
@@ -125,25 +108,37 @@ export function handleRosterPrefsMessage(
     const hasArchived = Object.prototype.hasOwnProperty.call(msg || {}, "chat_archived");
     const hasFolders = Object.prototype.hasOwnProperty.call(msg || {}, "chat_folders");
 
-    const nextPatch: any = { muted, blocked, blockedBy };
-    if (hasPins) {
-      const pins = sanitizePins((msg as any).chat_pins);
-      nextPatch.pinned = pins;
-      if (uid) savePinsForUser(uid, pins);
-    }
-    if (hasArchived) {
-      const archived = sanitizeArchived((msg as any).chat_archived);
-      nextPatch.archived = archived;
-      if (uid) saveArchivedForUser(uid, archived);
-    }
-    if (hasFolders) {
-      const snap = sanitizeChatFoldersSnapshot((msg as any).chat_folders);
-      nextPatch.chatFolders = snap.folders;
-      nextPatch.sidebarFolderId = snap.active;
-      if (uid) saveChatFoldersForUser(uid, snap);
-    }
-
-    patch(nextPatch);
+    patch((prev) => {
+      const nextPatch: any = applyRosterSyncState(
+        {
+          ...prev,
+          muted,
+          blocked,
+          blockedBy,
+        },
+        {
+          loaded: true,
+          source: "server",
+          lastServerAt: Date.now(),
+        }
+      );
+      if (hasPins) {
+        const pins = sanitizePins((msg as any).chat_pins);
+        nextPatch.pinned = pins;
+        if (uid) savePinsForUser(uid, pins);
+      }
+      if (hasArchived) {
+        const archived = sanitizeArchived((msg as any).chat_archived);
+        nextPatch.archived = archived;
+        if (uid) saveArchivedForUser(uid, archived);
+      }
+      if (hasFolders) {
+        const snap = sanitizeChatFoldersSnapshot((msg as any).chat_folders);
+        Object.assign(nextPatch, applySidebarFolderSnapshot(nextPatch, snap, { source: "server", reconcilePending: false }));
+        if (uid) saveChatFoldersForUser(uid, snap);
+      }
+      return nextPatch;
+    });
 
     // One-time bootstrap: migrate local chatlist prefs -> server prefs, if server has no value yet.
     if (uid && !prefsBootstrapDoneForUser.has(uid)) {
@@ -174,8 +169,13 @@ export function handleRosterPrefsMessage(
       return true;
     }
     patch((prev) => ({
-      ...prev,
-      muted: value ? Array.from(new Set([...prev.muted, peer])) : prev.muted.filter((x) => x !== peer),
+      ...applyRosterSyncState(
+        {
+          ...prev,
+          muted: value ? Array.from(new Set([...prev.muted, peer])) : prev.muted.filter((x) => x !== peer),
+        },
+        { loaded: true, source: "server", lastServerAt: Date.now() }
+      ),
       status: value ? `Заглушено: ${peer}` : `Звук включён: ${peer}`,
     }));
     return true;
@@ -190,8 +190,13 @@ export function handleRosterPrefsMessage(
       return true;
     }
     patch((prev) => ({
-      ...prev,
-      blocked: value ? Array.from(new Set([...prev.blocked, peer])) : prev.blocked.filter((x) => x !== peer),
+      ...applyRosterSyncState(
+        {
+          ...prev,
+          blocked: value ? Array.from(new Set([...prev.blocked, peer])) : prev.blocked.filter((x) => x !== peer),
+        },
+        { loaded: true, source: "server", lastServerAt: Date.now() }
+      ),
       status: value ? `Заблокировано: ${peer}` : `Разблокировано: ${peer}`,
     }));
     return true;
@@ -201,8 +206,13 @@ export function handleRosterPrefsMessage(
     const value = Boolean(msg?.value);
     if (!peer) return true;
     patch((prev) => ({
-      ...prev,
-      blockedBy: value ? Array.from(new Set([...prev.blockedBy, peer])) : prev.blockedBy.filter((x) => x !== peer),
+      ...applyRosterSyncState(
+        {
+          ...prev,
+          blockedBy: value ? Array.from(new Set([...prev.blockedBy, peer])) : prev.blockedBy.filter((x) => x !== peer),
+        },
+        { loaded: true, source: "server", lastServerAt: Date.now() }
+      ),
       status: value ? `Вы заблокированы пользователем: ${peer}` : `Разблокировано пользователем: ${peer}`,
     }));
     return true;
@@ -217,14 +227,15 @@ export function handleRosterPrefsMessage(
     }
     patch((prev) => {
       const key = dmKey(peer);
-      const conv = { ...prev.conversations };
-      delete conv[key];
-      const loaded = { ...prev.historyLoaded };
-      delete loaded[key];
+      const next = dropConversationHistorySyncState(
+        {
+          ...prev,
+          conversations: Object.fromEntries(Object.entries(prev.conversations).filter(([entryKey]) => entryKey !== key)),
+        },
+        key
+      );
       return {
-        ...prev,
-        conversations: conv,
-        historyLoaded: loaded,
+        ...next,
         friends: prev.friends.map((f) => (f.id === peer ? { ...f, unread: 0 } : f)),
         status: `История очищена: ${peer}`,
       };
@@ -241,30 +252,19 @@ export function handleRosterPrefsMessage(
     }
     patch((prev) => {
       const key = roomKey(room);
-      const conversations = { ...prev.conversations };
-      delete conversations[key];
-      const historyLoaded = { ...prev.historyLoaded };
-      delete historyLoaded[key];
-      const historyCursor = { ...prev.historyCursor };
-      delete historyCursor[key];
-      const historyHasMore = { ...prev.historyHasMore };
-      delete historyHasMore[key];
-      const historyLoading = { ...prev.historyLoading };
-      delete historyLoading[key];
-      const historyVirtualStart = { ...prev.historyVirtualStart };
-      delete historyVirtualStart[key];
+      const next = dropConversationHistorySyncState(
+        {
+          ...prev,
+          conversations: Object.fromEntries(Object.entries(prev.conversations).filter(([entryKey]) => entryKey !== key)),
+        },
+        key
+      );
       const pinnedMessages = { ...prev.pinnedMessages };
       delete pinnedMessages[key];
       const pinnedMessageActive = { ...prev.pinnedMessageActive };
       delete pinnedMessageActive[key];
       return {
-        ...prev,
-        conversations,
-        historyLoaded,
-        historyCursor,
-        historyHasMore,
-        historyLoading,
-        historyVirtualStart,
+        ...next,
         pinnedMessages,
         pinnedMessageActive,
         status: `История очищена: ${room}`,
@@ -283,10 +283,7 @@ export function handleRosterPrefsMessage(
     const id = String(msg?.id ?? "");
     if (!id) return true;
     const online = Boolean(msg?.online);
-    patch((prev) => ({
-      ...prev,
-      friends: prev.friends.map((f) => (f.id === id ? { ...f, online } : f)),
-    }));
+    patch((prev) => setFriendPresence(prev, id, online));
     return true;
   }
   if (t === "unread_counts") {

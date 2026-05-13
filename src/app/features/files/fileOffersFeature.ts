@@ -1,4 +1,7 @@
 import { dmKey, roomKey } from "../../../helpers/chat/conversationKey";
+import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
+import { isTerminalFileTransferStatus } from "../../../helpers/runtime/deliveryCoordinator";
+import { isViewingDmPeer, isViewingRoomId } from "../../../helpers/navigation/mainConversationState";
 import { upsertConversation } from "../../../helpers/chat/upsertConversation";
 import { nowTs } from "../../../helpers/time";
 import type { Store } from "../../../stores/store";
@@ -80,10 +83,10 @@ export function createFileOffersFeature(deps: FileOffersFeatureDeps): FileOffers
         if (idx >= 0) transfers[idx] = { ...transfers[idx], ...base };
         else transfers.unshift(base);
       }
+      const next = applyFileTransferMutation(prev, transfers);
       return {
-        ...prev,
+        ...next,
         fileOffersIn: prev.fileOffersIn.filter((entry) => entry.id !== fid),
-        fileTransfers: transfers,
         ...(closeModal ? { modal: null } : {}),
         ...(silent ? {} : { status: offer ? `Принят файл: ${offer.name || "файл"}` : "Файл принят" }),
       };
@@ -96,35 +99,38 @@ export function createFileOffersFeature(deps: FileOffersFeatureDeps): FileOffers
     if (!fid) return;
     const offer = store.get().fileOffersIn.find((entry) => entry.id === fid);
     send({ type: "file_reject", file_id: fid });
-    store.set((prev) => ({
-      ...prev,
-      fileOffersIn: prev.fileOffersIn.filter((entry) => entry.id !== fid),
-      fileTransfers: offer
+    store.set((prev) => {
+      const nextTransfers = offer
         ? [
             {
               localId: nextTransferId(),
               id: offer.id,
               name: offer.name || "файл",
               size: offer.size || 0,
-              direction: "in",
+              direction: "in" as const,
               peer: offer.from || "—",
               room: offer.room ?? null,
-              status: "rejected",
+              status: "rejected" as const,
               progress: 0,
             },
             ...prev.fileTransfers,
           ]
-        : prev.fileTransfers,
-      modal: null,
-      status: offer ? `Отклонен файл: ${offer.name || "файл"}` : "Файл отклонен",
-    }));
+        : prev.fileTransfers;
+      const next = applyFileTransferMutation(prev, nextTransfers);
+      return {
+        ...next,
+        fileOffersIn: prev.fileOffersIn.filter((entry) => entry.id !== fid),
+        modal: null,
+        status: offer ? `Отклонен файл: ${offer.name || "файл"}` : "Файл отклонен",
+      };
+    });
     scheduleSaveFileTransfers();
   }
 
   function clearCompleted() {
     const toRevoke = store
       .get()
-      .fileTransfers.filter((entry) => ["complete", "uploaded", "error", "rejected"].includes(entry.status))
+      .fileTransfers.filter((entry) => isTerminalFileTransferStatus(entry.status))
       .map((entry) => entry.url)
       .filter((url): url is string => Boolean(url));
     for (const url of toRevoke) {
@@ -135,8 +141,10 @@ export function createFileOffersFeature(deps: FileOffersFeatureDeps): FileOffers
       }
     }
     store.set((prev) => ({
-      ...prev,
-      fileTransfers: prev.fileTransfers.filter((entry) => !["complete", "uploaded", "error", "rejected"].includes(entry.status)),
+      ...applyFileTransferMutation(
+        prev,
+        prev.fileTransfers.filter((entry) => !isTerminalFileTransferStatus(entry.status))
+      ),
       status: "Список передач очищен",
     }));
     scheduleSaveFileTransfers();
@@ -179,9 +187,7 @@ export function createFileOffersFeature(deps: FileOffersFeatureDeps): FileOffers
     const stNow = store.get();
     const roomId = offer.room ? String(offer.room) : "";
     const notifKey = roomId ? `file_offer:room:${roomId}:${fileId}` : `file_offer:dm:${offer.from}:${fileId}`;
-    const viewingSame =
-      Boolean(stNow.page === "main" && !stNow.modal && roomId && stNow.selected && stNow.selected.id === roomId) ||
-      Boolean(stNow.page === "main" && !stNow.modal && !roomId && stNow.selected?.kind === "dm" && stNow.selected.id === offer.from);
+    const viewingSame = Boolean((roomId && isViewingRoomId(stNow, roomId)) || (!roomId && isViewingDmPeer(stNow, offer.from)));
     try {
       if (stNow.notifyInAppEnabled && Notification?.permission === "granted" && tabNotifier.shouldShowSystemNotification(notifKey)) {
         const profile = stNow.profiles?.[offer.from];
@@ -247,4 +253,3 @@ export function createFileOffersFeature(deps: FileOffersFeatureDeps): FileOffers
 
   return { handleMessage, accept, reject, clearCompleted };
 }
-

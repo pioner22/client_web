@@ -1,5 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { conversationKey } from "../../helpers/chat/conversationKey";
+import { getConversationHistorySyncState } from "../../helpers/chat/historySync";
 import { markHistoryViewportCompensation } from "../../helpers/chat/historyViewportCoordinator";
 import { type ChatShiftAnchor, type UnreadDividerAnchor, captureChatShiftAnchor, findChatShiftAnchorElement } from "../../helpers/chat/historyViewportAnchors";
 import { captureAndStoreChatShiftAnchor, disconnectChatHistoryViewportObserver, getChatHistoryViewportRuntime } from "../../helpers/chat/historyViewportRuntime";
@@ -24,6 +25,8 @@ import {
 } from "../../helpers/chat/virtualHistory";
 import { CHAT_SEARCH_FILTERS } from "../../helpers/chat/chatSearch";
 import { createChatStickyBottomState, isChatStickyBottomActive } from "../../helpers/chat/stickyBottom";
+import { getActiveConversationTarget } from "../../helpers/navigation/mainConversationState";
+import { isRightPanelActiveForSelected } from "../../helpers/navigation/rightPanelState";
 import { resolveUnreadDivider } from "./historyLayoutModel";
 import { buildHistoryRenderSurface } from "./historyRenderSurface";
 import { clearDeferredPinnedSurface, renderPinnedDeferred, renderSearchAuxDeferred } from "./chatAuxRuntime";
@@ -130,8 +133,9 @@ function patchChatTransferProgress(scrollHost: HTMLElement, transfers: AppState[
 }
 
 export function renderChat(layout: Layout, state: AppState) {
+  const activeConversation = getActiveConversationTarget(state);
   const mobileUi = isMobileLikeUi();
-  const boardUi = Boolean(state.selected && state.selected.kind === "board");
+  const boardUi = Boolean(activeConversation && activeConversation.kind === "board");
   const scrollHost = layout.chatHost;
   const hostState = scrollHost as any;
   const albumLayout = (() => {
@@ -153,13 +157,13 @@ export function renderChat(layout: Layout, state: AppState) {
       return { maxWidth: fallbackMaxWidth, minWidth: 100, spacing: fallbackSpacing };
     }
   })();
-  const key = state.selected ? conversationKey(state.selected) : "";
+  const key = activeConversation ? conversationKey(activeConversation) : "";
   const selectionState = state.chatSelection && state.chatSelection.key === key ? state.chatSelection : null;
   const selectionSet =
     selectionState && Array.isArray(selectionState.ids) && selectionState.ids.length ? new Set(selectionState.ids) : null;
   const selectionCount = selectionSet ? selectionSet.size : 0;
   const maxScrollTop = () => Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
-  const selectedKindClass = state.selected ? state.selected.kind : null;
+  const selectedKindClass = activeConversation ? activeConversation.kind : null;
   layout.chat.classList.toggle("chat-board", selectedKindClass === "board");
   layout.chat.classList.toggle("chat-dm", selectedKindClass === "dm");
   layout.chat.classList.toggle("chat-group", selectedKindClass === "group");
@@ -171,7 +175,8 @@ export function renderChat(layout: Layout, state: AppState) {
   const sticky = viewportRuntime.stickyBottom;
   const stickyActive = isChatStickyBottomActive(scrollHost, sticky, key);
   const cachedMessages = key ? (state.conversations?.[key] ?? EMPTY_CHAT) : EMPTY_CHAT;
-  const allowSticky = Boolean(key && (state.historyLoaded?.[key] || cachedMessages.length));
+  const historySync = key ? getConversationHistorySyncState(state, key) : null;
+  const allowSticky = Boolean(key && ((historySync && historySync.loaded) || cachedMessages.length));
   // NOTE: autoscroll-on-open/sent is handled in app/mountApp.ts (pendingChatAutoScroll).
   // Here we only keep pinned-bottom stable during re-renders/content growth for the *current* chat.
   const shouldStick = Boolean(key && !keyChanged && allowSticky && (stickyActive || atBottomBefore));
@@ -207,13 +212,14 @@ export function renderChat(layout: Layout, state: AppState) {
   }
 
   const msgs = cachedMessages;
-  const historyLoaded = Boolean(key && state.historyLoaded && state.historyLoaded[key]);
-  const historyLoading = Boolean(key && state.historyLoading && state.historyLoading[key]);
-  const historyCursor = key && state.historyCursor ? Number(state.historyCursor[key]) : NaN;
-  const rawHasMore = key && state.historyHasMore ? state.historyHasMore[key] : undefined;
+  const historyLoaded = Boolean(historySync?.loaded);
+  const historyLoading = Boolean(historySync?.loading);
+  const historyCursor = Number(historySync?.cursor ?? NaN);
+  const rawHasMore = historySync?.hasMore ?? undefined;
   const hasMore = Boolean(key && (rawHasMore ?? (historyLoaded && Number.isFinite(historyCursor) && historyCursor > 0)));
   const loadingMore = Boolean(historyLoading && historyLoaded);
   const loadingInitial = Boolean(historyLoading && !historyLoaded);
+  const historyLoadingSlots = Math.max(0, Math.trunc(Number(historySync?.loadingSlots ?? 0) || 0));
   const searchActive = Boolean(state.chatSearchOpen && state.chatSearchQuery.trim());
   const hits = searchActive ? state.chatSearchHits || EMPTY_HITS : EMPTY_HITS;
   const hitSet = searchActive && hits.length ? new Set(hits) : null;
@@ -230,6 +236,7 @@ export function renderChat(layout: Layout, state: AppState) {
         historyLoaded: boolean;
         historyLoading: boolean;
         historyHasMore: boolean;
+        historyLoadingSlots: number;
         historyVirtualStart: number | null;
         searchOpen: boolean;
         searchQuery: string;
@@ -254,9 +261,9 @@ export function renderChat(layout: Layout, state: AppState) {
     | null;
   const pinnedIds = key && state.pinnedMessages ? state.pinnedMessages[key] : null;
   const activeRaw = key && state.pinnedMessageActive ? state.pinnedMessageActive[key] : null;
-  const selectedKind = state.selected?.kind ? String(state.selected.kind) : "";
-  const selectedId = state.selected?.id ? String(state.selected.id) : "";
-  const historyVirtualStart = key && state.historyVirtualStart ? state.historyVirtualStart[key] ?? null : null;
+  const selectedKind = activeConversation?.kind ? String(activeConversation.kind) : "";
+  const selectedId = activeConversation?.id ? String(activeConversation.id) : "";
+  const historyVirtualStart = historySync ? historySync.virtualStart ?? null : null;
   const lastRead = key && state.lastRead ? state.lastRead[key] ?? null : null;
   const selectionRef = selectionState;
   const renderState = {
@@ -268,6 +275,7 @@ export function renderChat(layout: Layout, state: AppState) {
     historyLoaded,
     historyLoading,
     historyHasMore: hasMore,
+    historyLoadingSlots,
     historyVirtualStart,
     searchOpen: Boolean(state.chatSearchOpen),
     searchQuery: String(state.chatSearchQuery || ""),
@@ -299,6 +307,7 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.historyLoaded === renderState.historyLoaded &&
     prevRender.historyLoading === renderState.historyLoading &&
     prevRender.historyHasMore === renderState.historyHasMore &&
+    prevRender.historyLoadingSlots === renderState.historyLoadingSlots &&
     prevRender.historyVirtualStart === renderState.historyVirtualStart &&
     prevRender.searchOpen === renderState.searchOpen &&
     prevRender.searchQuery === renderState.searchQuery &&
@@ -328,6 +337,7 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.historyLoaded === renderState.historyLoaded &&
     prevRender.historyLoading === renderState.historyLoading &&
     prevRender.historyHasMore === renderState.historyHasMore &&
+    prevRender.historyLoadingSlots === renderState.historyLoadingSlots &&
     prevRender.historyVirtualStart === renderState.historyVirtualStart &&
     prevRender.searchOpen === renderState.searchOpen &&
     prevRender.searchQuery === renderState.searchQuery &&
@@ -385,7 +395,7 @@ export function renderChat(layout: Layout, state: AppState) {
   const virtualAvgMap = viewportRuntime.virtualAvgHeights;
   const avgHeight = clampVirtualAvg(key ? virtualAvgMap.get(key) : null);
   const maxVirtualStart = getVirtualMaxStart(msgs.length, virtualWindow);
-  const preferredStart = virtualEnabled && shouldStick ? maxVirtualStart : state.historyVirtualStart?.[key];
+  const preferredStart = virtualEnabled && shouldStick ? maxVirtualStart : historySync?.virtualStart;
   const virtualStart = virtualEnabled ? getVirtualStart(msgs.length, preferredStart, virtualWindow) : 0;
   const virtualEnd = virtualEnabled ? getVirtualEnd(msgs.length, virtualStart, virtualWindow) : msgs.length;
   const topSpacerHeight = virtualEnabled ? Math.max(0, virtualStart) * avgHeight : 0;
@@ -401,7 +411,7 @@ export function renderChat(layout: Layout, state: AppState) {
     key,
     msgs,
     searchActive,
-    selected: state.selected,
+    selected: activeConversation,
     friends: state.friends,
     lastRead: state.lastRead,
     savedAnchor: key ? unreadMap.get(key) ?? null : null,
@@ -426,6 +436,7 @@ export function renderChat(layout: Layout, state: AppState) {
     historyLoaded,
     hasMore,
     loadingMore,
+    loadingMoreSlotCount: loadingMore ? historyLoadingSlots : 0,
     loadingInitial,
     virtualEnabled,
     virtualStart,
@@ -441,13 +452,8 @@ export function renderChat(layout: Layout, state: AppState) {
   const titleChildren: Array<string | HTMLElement> = [...chatTitleNodes(state)];
   const chatSearchEnabled = !mobileUi;
   const showChatSearchToggle = false;
-  if (state.selected) {
-    const infoActive = Boolean(
-      state.page === "main" &&
-        state.rightPanel &&
-        state.rightPanel.kind === state.selected.kind &&
-        state.rightPanel.id === state.selected.id
-    );
+  if (activeConversation) {
+    const infoActive = isRightPanelActiveForSelected(state);
     titleChildren.push(el("span", { class: "chat-title-spacer", "aria-hidden": "true" }, [""]));
     titleChildren.push(
       el(

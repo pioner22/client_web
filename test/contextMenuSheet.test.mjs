@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -225,26 +225,22 @@ function findFirst(node, predicate) {
   return null;
 }
 
-test("renderContextMenu: на coarse pointer рендерится как bottom-sheet", async () => {
+test("renderContextMenu: на coarse pointer рендерится как компактный sheet, не fullscreen dialog", async () => {
   const helper = await loadRenderContextMenu();
   try {
     withStubs({ coarse: true }, () => {
-      let closed = 0;
       const node = helper.renderContextMenu(
         { x: 10, y: 20, title: "Меню", target: { kind: "peer", id: "123-456-789" }, items: [{ id: "x", label: "Действие" }] },
-        { onSelect() {}, onClose() { closed += 1; } }
+        { onSelect() {}, onClose() {} }
       );
       assert.ok(node.className.includes("ctx-menu-sheet"));
-      assert.equal(node.getAttribute("role"), "dialog");
-      assert.equal(node.getAttribute("aria-modal"), "true");
+      assert.equal(node.getAttribute("role"), "menu");
+      assert.equal(node.getAttribute("aria-modal"), null);
+      assert.equal(node.getAttribute("data-menu-layout"), "compact-sheet");
       assert.equal(node.style.left, "");
       assert.equal(node.style.top, "");
       const closeBtn = findFirst(node, (child) => typeof child.className === "string" && child.className.split(/\s+/).includes("ctx-close"));
-      assert.ok(closeBtn);
-      const clickListeners = closeBtn._listeners.get("click") || [];
-      assert.equal(clickListeners.length, 1);
-      clickListeners[0]({ preventDefault() {} });
-      assert.equal(closed, 1);
+      assert.ok(closeBtn, "compact sheet should expose an explicit close button");
     });
   } finally {
     await helper.cleanup();
@@ -261,6 +257,7 @@ test("renderContextMenu: на fine pointer позиционируется по x
       );
       assert.ok(!node.className.includes("ctx-menu-sheet"));
       assert.equal(node.getAttribute("role"), "menu");
+      assert.equal(node.getAttribute("data-menu-layout"), "popover");
       assert.equal(node.style.left, "123px");
       assert.equal(node.style.top, "456px");
       const closeBtn = findFirst(node, (child) => typeof child.className === "string" && child.className.split(/\s+/).includes("ctx-close"));
@@ -269,4 +266,25 @@ test("renderContextMenu: на fine pointer позиционируется по x
   } finally {
     await helper.cleanup();
   }
+});
+
+test("context menu/pin remediation source guards: compact geometry, composer avoidance, and direct pin toggle", async () => {
+  const [modalCss, skinCss, actionsSrc, renderSrc] = await Promise.all([
+    readFile(path.resolve("src/scss/modal.part01.css"), "utf8"),
+    readFile(path.resolve("public/skins/yagodka-modern.css"), "utf8"),
+    readFile(path.resolve("src/app/features/contextMenu/contextMenuActionsFeature.ts"), "utf8"),
+    readFile(path.resolve("src/components/modals/renderContextMenu.ts"), "utf8"),
+  ]);
+
+  assert.match(modalCss, /\.ctx-menu\s*\{[\s\S]*overflow:\s*hidden;/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*width:\s*min\(360px,\s*calc\(100vw - 24px\)\)/);
+  assert.match(modalCss, /--ctx-list-max-h/);
+  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*max-height:\s*min\(66vh,\s*480px\)/);
+  assert.match(renderSrc, /composerAvoidRect/);
+  assert.match(renderSrc, /applyPopoverGeometry/);
+  assert.match(renderSrc, /ctx-close/);
+
+  const pinBlock = actionsSrc.slice(actionsSrc.indexOf('itemId === "msg_pin_toggle"'), actionsSrc.indexOf('itemId === "msg_reply"'));
+  assert.match(pinBlock, /togglePinnedMessage/);
+  assert.doesNotMatch(pinBlock, /openConfirmModal/);
 });

@@ -1,3 +1,5 @@
+import { isServiceWorkerRuntimeAvailable, unregisterServiceWorkersForUnsupportedRuntime } from "./serviceWorkerRuntime";
+
 let updateRegistration: ServiceWorkerRegistration | null = null;
 let updateNotified = false;
 let updatePollTimer: number | null = null;
@@ -32,6 +34,7 @@ export function __setUpdateRegistrationForTest(reg: ServiceWorkerRegistration | 
 }
 
 export function hasPwaUpdate(): boolean {
+  if (!isServiceWorkerRuntimeAvailable()) return false;
   return Boolean(updateRegistration?.waiting);
 }
 
@@ -83,7 +86,7 @@ async function resolveUpdateRegistration(timeoutMs = SW_READY_TIMEOUT_MS): Promi
 }
 
 export async function activatePwaUpdate(): Promise<boolean> {
-  if (!("serviceWorker" in navigator)) return false;
+  if (!isServiceWorkerRuntimeAvailable()) return false;
   const reg = updateRegistration ?? (await resolveUpdateRegistration());
   const waiting = reg?.waiting;
   if (!reg || !waiting) return false;
@@ -240,7 +243,10 @@ function startUpdatePolling(reg: ServiceWorkerRegistration) {
 }
 
 export function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
+  if (!isServiceWorkerRuntimeAvailable()) {
+    void unregisterServiceWorkersForUnsupportedRuntime();
+    return;
+  }
 
   // Service workers often break Vite HMR and cause "weird UI" during development due to aggressive caching.
   // In dev mode, ensure SW is not controlling the page.

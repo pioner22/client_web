@@ -1,6 +1,7 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { updateDraftMap } from "../../../helpers/chat/drafts";
 import { isAudioLikeFile, isImageLikeFile, isVideoLikeFile } from "../../../helpers/files/mediaKind";
+import { applyDraftMapMutation } from "../../../helpers/runtime/deliverySync";
 import type { Store } from "../../../stores/store";
 import type { AppState, TargetRef } from "../../../stores/types";
 import { scheduleSaveDrafts } from "../persistence/localPersistenceTimers";
@@ -39,7 +40,7 @@ export function createFileSendModalFeature(deps: FileSendModalFeatureDeps): File
     store.set((prev) => {
       const drafts = updateDraftMap(prev.drafts, key, text);
       const isCurrent = prev.selected ? conversationKey(prev.selected) === key : false;
-      return { ...prev, input: isCurrent ? text : prev.input, drafts };
+      return { ...applyDraftMapMutation(prev, drafts), input: isCurrent ? text : prev.input };
     });
     const isCurrent = store.get().selected ? conversationKey(store.get().selected as TargetRef) === key : false;
     if (isCurrent) {
@@ -62,9 +63,8 @@ export function createFileSendModalFeature(deps: FileSendModalFeatureDeps): File
     }
     const key = st.selected ? conversationKey(st.selected) : "";
     store.set((prev) => ({
-      ...prev,
+      ...applyDraftMapMutation(prev, key ? updateDraftMap(prev.drafts, key, "") : prev.drafts),
       input: "",
-      drafts: key ? updateDraftMap(prev.drafts, key, "") : prev.drafts,
     }));
     try {
       input.value = "";
@@ -81,7 +81,7 @@ export function createFileSendModalFeature(deps: FileSendModalFeatureDeps): File
     if (files.length === 1) {
       const file = files[0];
       const autoSendKind = file && typeof file === "object" ? String((file as any).__yagodka_auto_send || "") : "";
-      if (autoSendKind === "voice_record") {
+      if (autoSendKind === "voice_record" || autoSendKind === "video_note_record") {
         const st = store.get();
         if (st.conn !== "connected") {
           store.set({ status: "Нет соединения" });

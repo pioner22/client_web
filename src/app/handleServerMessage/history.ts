@@ -1,10 +1,13 @@
 import type { GatewayTransport } from "../../lib/net/gatewayClient";
 import type { AppState, ChatMessage, OutboxEntry } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
+import { applyConversationHistorySyncState, getConversationHistorySyncState } from "../../helpers/chat/historySync";
 import { shiftVirtualStartForPrepend } from "../../helpers/chat/historyViewportCoordinator";
 import { mergeMessages, prependedCount } from "../../helpers/chat/mergeMessages";
 import { removeOutboxEntry } from "../../helpers/chat/outbox";
-import { ingestHistoryResult } from "../../helpers/chat/historyIdb";
+import { deleteHistoryMessageById, ingestHistoryResult } from "../../helpers/chat/historyIdb";
+import { removeCachedFileBlob } from "../../helpers/files/fileBlobCache";
+import { applyFileTransferSnapshot, applyOutboxSnapshot } from "../../helpers/runtime/deliverySync";
 import { nowTs } from "../../helpers/time";
 import { saveLastReadMarkers } from "../../helpers/ui/lastReadMarkers";
 import { oldestLoadedId, parseAttachment, parseMessageRef, parseReactions } from "./common";
@@ -17,6 +20,104 @@ function debugHook(kind: string, data?: any) {
   } catch {
     // ignore
   }
+}
+
+function attachmentFileId(msg: ChatMessage | null | undefined): string {
+  const attachment = msg?.attachment;
+  if (!attachment || attachment.kind !== "file") return "";
+  return typeof attachment.fileId === "string" ? attachment.fileId.trim() : "";
+}
+
+function pruneDeletedMessagesForConversation(
+  prev: AppState,
+  key: string,
+  deletedIds: ReadonlySet<number>,
+  detachedFileIds: string[]
+): AppState {
+  if (!deletedIds.size) return prev;
+  const conv = prev.conversations?.[key];
+  if (!Array.isArray(conv) || !conv.length) return prev;
+  const removed = conv.filter((msg) => typeof msg?.id === "number" && deletedIds.has(msg.id));
+  if (!removed.length) return prev;
+  const nextConv = conv.filter((msg) => !(typeof msg?.id === "number" && deletedIds.has(msg.id)));
+
+  let nextTransfers = prev.fileTransfers;
+  let nextThumbs = prev.fileThumbs;
+  const removedFileIds = [...new Set(removed.map((msg) => attachmentFileId(msg)).filter(Boolean))];
+  for (const removedFileId of removedFileIds) {
+    let stillReferenced = false;
+    for (const [convKey, messages] of Object.entries(prev.conversations || {})) {
+      const list = convKey === key ? nextConv : messages;
+      if (!Array.isArray(list) || !list.length) continue;
+      if (list.some((msg) => attachmentFileId(msg) === removedFileId)) {
+        stillReferenced = true;
+        break;
+      }
+    }
+    if (stillReferenced) continue;
+    detachedFileIds.push(removedFileId);
+    nextTransfers = nextTransfers.filter((entry) => {
+      const match = String(entry.id || "").trim() === removedFileId;
+      if (!match) return true;
+      if (entry.url && entry.url.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(entry.url);
+        } catch {
+          // ignore
+        }
+      }
+      return false;
+    });
+    const existingThumb = nextThumbs?.[removedFileId] || null;
+    if (existingThumb) {
+      if (existingThumb.url && existingThumb.url.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(existingThumb.url);
+        } catch {
+          // ignore
+        }
+      }
+      nextThumbs = { ...(nextThumbs || {}) };
+      delete nextThumbs[removedFileId];
+    }
+  }
+
+  const pinnedIds = prev.pinnedMessages?.[key];
+  const removedPinnedIds = removed
+    .map((msg) => (typeof msg.id === "number" ? msg.id : 0))
+    .filter((id) => id > 0);
+  let nextPinnedMessages = prev.pinnedMessages;
+  let nextPinnedActive = prev.pinnedMessageActive;
+  if (Array.isArray(pinnedIds) && pinnedIds.some((id) => removedPinnedIds.includes(id))) {
+    nextPinnedMessages = { ...prev.pinnedMessages };
+    nextPinnedActive = { ...prev.pinnedMessageActive };
+    const nextList = pinnedIds.filter((id) => !deletedIds.has(id));
+    if (nextList.length) {
+      nextPinnedMessages[key] = nextList;
+      if (!nextList.includes(nextPinnedActive[key])) nextPinnedActive[key] = nextList[0];
+    } else {
+      delete nextPinnedMessages[key];
+      delete nextPinnedActive[key];
+    }
+  }
+
+  const editingRemoved =
+    Boolean(prev.editing && prev.editing.key === key && typeof prev.editing.id === "number" && deletedIds.has(prev.editing.id));
+  const next: AppState = applyFileTransferSnapshot(
+    {
+      ...prev,
+      conversations: { ...prev.conversations, [key]: nextConv },
+      fileThumbs: nextThumbs,
+      pinnedMessages: nextPinnedMessages,
+      pinnedMessageActive: nextPinnedActive,
+    },
+    nextTransfers,
+    { source: "server", reconcilePending: false }
+  );
+  if (editingRemoved) {
+    return { ...next, editing: null, input: prev.editing?.prevDraft || "" };
+  }
+  return next;
 }
 
 export function handleHistoryServerMessage(
@@ -34,6 +135,13 @@ export function handleHistoryServerMessage(
   if (!key) return true;
 
   const isPreview = Boolean(msg?.preview);
+  const deletedIds = Array.isArray(msg?.deleted_ids)
+    ? msg.deleted_ids
+        .map((value: unknown) => Number(value))
+        .filter((value: number) => Number.isFinite(value) && value > 0)
+        .map((value: number) => Math.trunc(value))
+    : [];
+  const deletedIdSet = deletedIds.length ? new Set<number>(deletedIds) : null;
   const beforeIdRaw = msg?.before_id;
   const hasBefore = beforeIdRaw !== undefined && beforeIdRaw !== null;
   const beforeIdValue = hasBefore ? Number(beforeIdRaw) : NaN;
@@ -57,6 +165,7 @@ export function handleHistoryServerMessage(
     const text = String(r?.text ?? "");
     const ts = Number(r?.ts ?? nowTs()) || nowTs();
     const id = r?.id === undefined || r?.id === null ? null : Number(r.id);
+    if (typeof id === "number" && Number.isFinite(id) && deletedIdSet?.has(Math.trunc(id))) continue;
     const kind: ChatMessage["kind"] = from === state.selfId ? "out" : "in";
     const hasId = typeof id === "number" && Number.isFinite(id);
     const delivered = Boolean(r?.delivered);
@@ -104,6 +213,25 @@ export function handleHistoryServerMessage(
     });
   } catch {
     // ignore
+  }
+
+  if (deletedIdSet?.size) {
+    const detachedFileIds: string[] = [];
+    patch((prev) => pruneDeletedMessagesForConversation(prev, key, deletedIdSet, detachedFileIds));
+    try {
+      const uid = String(state.selfId || "").trim();
+      if (uid) {
+        for (const msgId of deletedIdSet) {
+          void deleteHistoryMessageById(uid, msgId);
+        }
+        for (const fid of detachedFileIds) {
+          void removeCachedFileBlob(uid, fid);
+          void removeCachedFileBlob(uid, `thumb:${fid}`);
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 
   patch((prev) => {
@@ -182,25 +310,29 @@ export function handleHistoryServerMessage(
         }
       }
 
-      const base = {
-        ...prev,
+      const base = applyOutboxSnapshot(
+        {
+          ...prev,
+          ...(baseConv !== initialConv ? { conversations: { ...prev.conversations, [key]: baseConv } } : {}),
+        },
         outbox,
-        ...(baseConv !== initialConv ? { conversations: { ...prev.conversations, [key]: baseConv } } : {}),
-        ...(prev.historyLoading?.[key] ? { historyLoading: { ...prev.historyLoading, [key]: false } } : {}),
-      };
-      return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
+        { source: "server", reconcilePending: false }
+      );
+      const synced = getConversationHistorySyncState(prev, key).loading
+        ? applyConversationHistorySyncState(base, key, { loading: false })
+        : base;
+      return lastReadChanged ? { ...synced, lastRead: nextLastRead } : synced;
     }
 
     const nextConv = mergeMessages(baseConv, incoming);
     const delta = nextConv.length - baseConv.length;
     const actualPrependCount = hasBefore ? prependedCount(baseConv, nextConv) : null;
     const cursor = oldestLoadedId(nextConv);
-    const prevCursor = (prev as any).historyCursor || {};
-    const prevHasMoreMap = (prev as any).historyHasMore || {};
-    const prevLoadingMap = (prev as any).historyLoading || {};
+    const prevSync = getConversationHistorySyncState(prev, key);
+    const prevCursorValueFromSync = prevSync.cursor;
     const prevVirtualStart = (prev as any).historyVirtualStart ? (prev as any).historyVirtualStart[key] : undefined;
 
-    const prevCursorValue = prevCursor ? Number(prevCursor[key]) : NaN;
+    const prevCursorValue = typeof prevCursorValueFromSync === "number" ? prevCursorValueFromSync : NaN;
     const isStaleBeforeResponse =
       hasBefore &&
       Number.isFinite(beforeIdValue) &&
@@ -252,37 +384,52 @@ export function handleHistoryServerMessage(
     }
 
     if (isPreview) {
-      const base = {
-        ...prev,
-        conversations: { ...prev.conversations, [key]: nextConv },
-        outbox,
-        historyPreviewOnly: { ...prev.historyPreviewOnly, [key]: true },
-      };
+      const base = applyConversationHistorySyncState(
+        applyOutboxSnapshot(
+          {
+            ...prev,
+            conversations: { ...prev.conversations, [key]: nextConv },
+          },
+          outbox,
+          { source: "server", reconcilePending: false }
+        ),
+        key,
+        {
+        previewOnly: true,
+        source: "cache",
+        reconcilePending: true,
+      });
       return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
     }
 
-    const shouldClearPreviewOnly = hasBefore && Number.isFinite(beforeIdValue) && beforeIdValue === 0;
-    const prevPreviewOnly = prev.historyPreviewOnly || {};
-    let nextPreviewOnly = prevPreviewOnly;
-    if (shouldClearPreviewOnly && prevPreviewOnly[key]) {
-      nextPreviewOnly = { ...prevPreviewOnly };
-      delete nextPreviewOnly[key];
-    }
-
+    // Any non-preview server history response confirms the conversation state well enough
+    // to stop treating IndexedDB-restored media rows as provisional placeholders.
+    const shouldClearPreviewOnly = true;
     const resolvedHasMore = cursorStalled ? false : hasMore;
     const shouldUpdateHasMore = shouldSetHasMore && !isStaleBeforeResponse;
 
-    const base = {
-      ...prev,
-      conversations: { ...prev.conversations, [key]: nextConv },
-      outbox,
-      historyLoaded: { ...prev.historyLoaded, [key]: true },
-      historyPreviewOnly: nextPreviewOnly,
-      historyCursor: cursor !== null ? { ...prevCursor, [key]: cursor } : prevCursor,
-      historyHasMore: shouldUpdateHasMore ? { ...prevHasMoreMap, [key]: Boolean(resolvedHasMore) } : prevHasMoreMap,
-      historyLoading: { ...prevLoadingMap, [key]: false },
-      ...(shouldShiftVirtual ? { historyVirtualStart: { ...(prev as any).historyVirtualStart, [key]: nextVirtualStart } } : {}),
-    };
+    const base = applyConversationHistorySyncState(
+      applyOutboxSnapshot(
+        {
+          ...prev,
+          conversations: { ...prev.conversations, [key]: nextConv },
+          ...(shouldShiftVirtual ? { historyVirtualStart: { ...(prev as any).historyVirtualStart, [key]: nextVirtualStart } } : {}),
+        },
+        outbox,
+        { source: "server", reconcilePending: false }
+      ),
+      key,
+      {
+      loaded: true,
+      previewOnly: shouldClearPreviewOnly ? false : prevSync.previewOnly,
+      cursor,
+      hasMore: shouldUpdateHasMore ? Boolean(resolvedHasMore) : prevSync.hasMore,
+      loading: false,
+      source: "server",
+      reconcilePending: false,
+      lastServerAt: Date.now(),
+      virtualStart: shouldShiftVirtual && nextVirtualStart !== null ? nextVirtualStart : prevSync.virtualStart,
+    });
     return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
   });
   return true;

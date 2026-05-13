@@ -42,6 +42,31 @@
   line-height: 1.2;
 }
 
+.hdr-status-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.hdr-status-action {
+  min-height: 28px;
+  max-width: 132px;
+  padding: 0 9px;
+  border-radius: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.hdr-status-action-primary {
+  border-color: color-mix(in srgb, var(--focus), transparent 35%);
+}
+
 .hdr-actions {
   display: inline-flex;
   align-items: center;
@@ -1452,6 +1477,11 @@ html.app-typing .row-muted {
   white-space: nowrap;
   transition:
     color 160ms ease;
+}
+
+.sidebar-tabs-mobile .sidebar-tab,
+.sidebar-tabs-pwa .sidebar-tab {
+  padding-inline: 0.625rem;
 }
 
 .sidebar-tab::after {

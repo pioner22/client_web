@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { getActiveConversationTarget } from "../../../helpers/navigation/mainConversationState";
 
 export interface BoardEditorPreviewSyncFeatureDeps {
   store: Store<AppState>;
@@ -21,8 +22,9 @@ export function createBoardEditorPreviewSyncFeature(deps: BoardEditorPreviewSync
     boardPreviewRaf = window.requestAnimationFrame(() => {
       boardPreviewRaf = null;
       const st = store.get();
+      const activeConversation = getActiveConversationTarget(st);
       if (!st.boardComposerOpen) return;
-      if (st.selected?.kind !== "board") return;
+      if (!activeConversation || activeConversation.kind !== "board") return;
       const raw = String(input.value || "");
       const trimmed = raw.trimEnd();
       const preview = previewBody;

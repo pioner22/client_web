@@ -7,6 +7,7 @@ import { getPushOptOut } from "../helpers/pwa/pushPrefs";
 import { loadActiveBuildId } from "../helpers/pwa/buildIdStore";
 import { getNotifyInAppEnabled, getNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { getStoredMessageView } from "../helpers/ui/messageView";
+import { createRuntimeDeliverySyncState } from "../helpers/runtime/deliverySync";
 
 export function createInitialState(): AppState {
   const skin = getStoredSkinId();
@@ -55,14 +56,16 @@ export function createInitialState(): AppState {
     authRememberedId: rememberedId,
     skin,
     skins: [
+      { id: "yagodka-modern", title: "Yagodka Modern" },
       { id: "telegram-exact", title: "Telegram (точный)" },
     ],
     theme,
     messageView,
-    mobileSidebarTab: "chats",
+    mobileSidebarTab: "contacts",
     sidebarFolderId: "all",
     sidebarQuery: "",
     sidebarArchiveOpen: true,
+    sidebarSync: { loaded: false, source: "empty", reconcilePending: false, lastServerAt: null, lastLocalAt: null },
     presenceTick: 0,
     friends: [],
     topPeers: [],
@@ -87,14 +90,19 @@ export function createInitialState(): AppState {
     boards: [],
     selected: null,
     conversations: {},
+    historySync: {},
+    rosterSync: { loaded: false, source: "empty", reconcilePending: false, lastServerAt: null, lastPresenceAt: null },
+    profileSync: {},
     historyLoaded: {},
     historyPreviewOnly: {},
     historyCursor: {},
     historyHasMore: {},
     historyLoading: {},
+    historyLoadingSlots: {},
     historyVirtualStart: {},
     lastRead: {},
     outbox: {},
+    deliverySync: createRuntimeDeliverySyncState(),
     drafts: {},
     input: "",
     editing: null,

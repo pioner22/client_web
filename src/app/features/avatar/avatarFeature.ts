@@ -1,4 +1,10 @@
-import { clearStoredAvatar, imageFileToAvatarDataUrl, storeAvatar, type AvatarTargetKind } from "../../../helpers/avatar/avatarStore";
+import {
+  avatarDataUrlToUploadPayload,
+  clearStoredAvatar,
+  imageFileToAvatarDataUrl,
+  storeAvatar,
+  type AvatarTargetKind,
+} from "../../../helpers/avatar/avatarStore";
 import type { Store } from "../../../stores/store";
 import type { AppState, ContextMenuTargetKind } from "../../../stores/types";
 
@@ -24,6 +30,15 @@ export interface AvatarFeature {
 
 export function createAvatarFeature(deps: AvatarFeatureDeps): AvatarFeature {
   const { store, send } = deps;
+
+  function avatarErrorMessage(error: unknown): string {
+    const message = String((error as { message?: unknown } | null)?.message || error || "").trim();
+    if (message === "avatar_transport_too_large") return "Изображение слишком тяжёлое для аватарки";
+    if (message === "file_too_large") return "Файл слишком большой для аватарки";
+    if (message === "not_image") return "Нужен файл изображения";
+    if (message === "image_load_failed") return "Не удалось прочитать изображение";
+    return message || "ошибка";
+  }
 
   function bumpAvatars(status: string) {
     store.set((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1, status }));
@@ -74,13 +89,12 @@ export function createAvatarFeature(deps: AvatarFeatureDeps): AvatarFeature {
     void (async () => {
       try {
         const dataUrl = await imageFileToAvatarDataUrl(file, 128);
+        const payload = avatarDataUrlToUploadPayload(dataUrl);
         storeAvatar("dm", id, dataUrl);
         bumpAvatars("Аватар загружается…");
-        const base64 = String(dataUrl.split(",")[1] || "").trim();
-        if (!base64) throw new Error("bad_avatar_data");
-        send({ type: "avatar_set", mime: "image/png", data: base64 });
+        send({ type: "avatar_set", mime: payload.mime, data: payload.base64 });
       } catch (e) {
-        bumpAvatars(`Не удалось загрузить аватар: ${String((e as any)?.message || "ошибка")}`);
+        bumpAvatars(`Не удалось загрузить аватар: ${avatarErrorMessage(e)}`);
       }
     })();
   }
@@ -94,4 +108,3 @@ export function createAvatarFeature(deps: AvatarFeatureDeps): AvatarFeature {
 
   return { bumpAvatars, pickAvatarFor, removeAvatar, setProfileAvatar, clearProfileAvatar };
 }
-

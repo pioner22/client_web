@@ -1,12 +1,16 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, ThemeMode } from "../../../stores/types";
 import { clearStoredAuthAll } from "../../../helpers/auth/session";
+import { closeModalState, openAuthModal } from "../../../helpers/navigation/appShellState";
+import { getPublicBaseUrl } from "../../../config/env";
+import { getCapacitorPlatform, isCapacitorNativeRuntime } from "../../../helpers/runtime/nativeRuntime";
 
 export interface AuthUiActionsFeatureDeps {
   store: Store<AppState>;
   logout: () => void;
   authLoginFromDom: () => void;
   authRegisterFromDom: () => void;
+  authTouchIdFromDom?: () => void;
   closeModal: () => void;
   forceUpdateReload: (reason: string) => void;
   applyPwaUpdateNow: () => Promise<void> | void;
@@ -19,6 +23,7 @@ export interface AuthUiActionsFeature {
   onAuthLogout: () => void;
   onAuthLogin: () => void;
   onAuthRegister: () => void;
+  onAuthTouchId: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
   onAuthUseDifferentAccount: () => void;
   onCloseModal: () => void;
@@ -29,12 +34,35 @@ export interface AuthUiActionsFeature {
   onThemeChange: (theme: ThemeMode) => void;
 }
 
+function getAndroidApkDownloadUrl(): string {
+  try {
+    return new URL("downloads/android/yagodka-android-debug.apk", getPublicBaseUrl() || "https://yagodka.org/").href;
+  } catch {
+    return "https://yagodka.org/downloads/android/yagodka-android-debug.apk";
+  }
+}
+
+function openExternalUrl(url: string): void {
+  try {
+    const opened = window.open(url, "_system", "noopener,noreferrer");
+    if (opened) return;
+  } catch {
+    // Fall through to same-window navigation.
+  }
+  try {
+    window.location.href = url;
+  } catch {
+    // ignore
+  }
+}
+
 export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): AuthUiActionsFeature {
   const {
     store,
     logout,
     authLoginFromDom,
     authRegisterFromDom,
+    authTouchIdFromDom,
     closeModal,
     forceUpdateReload,
     applyPwaUpdateNow,
@@ -42,12 +70,7 @@ export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): Auth
     setTheme,
   } = deps;
 
-  const onAuthOpen = () =>
-    store.set((prev) => ({
-      ...prev,
-      authMode: prev.authRememberedId ? "login" : "register",
-      modal: { kind: "auth" },
-    }));
+  const onAuthOpen = () => store.set((prev) => openAuthModal(prev, { mode: prev.authRememberedId ? "login" : "register" }));
 
   const onAuthLogout = () => logout();
 
@@ -55,28 +78,43 @@ export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): Auth
 
   const onAuthRegister = () => authRegisterFromDom();
 
+  const onAuthTouchId = () => authTouchIdFromDom?.();
+
   const onAuthModeChange = (mode: "register" | "login") => {
-    store.set({ authMode: mode, modal: { kind: "auth" } });
+    store.set((prev) => openAuthModal(prev, { mode }));
   };
 
   const onAuthUseDifferentAccount = () => {
     clearStoredAuthAll();
-    store.set((prev) => ({
-      ...prev,
-      authMode: "login",
-      authRememberedId: null,
-      modal: { kind: "auth" },
-      status: "Введите ID или @логин, чтобы войти в другой аккаунт.",
-    }));
+    store.set((prev) =>
+      openAuthModal(
+        {
+          ...prev,
+          authRememberedId: null,
+        },
+        { mode: "login", status: "Введите ID или @логин, чтобы войти в другой аккаунт." }
+      )
+    );
   };
 
   const onCloseModal = () => closeModal();
 
   const onDismissUpdate = () => {
-    store.set({ modal: null, updateDismissedLatest: store.get().updateLatest });
+    store.set((prev) => closeModalState(prev, { dismissUpdate: true }));
   };
 
-  const onReloadUpdate = () => forceUpdateReload("update_required");
+  const onReloadUpdate = () => {
+    if (isCapacitorNativeRuntime() && getCapacitorPlatform() === "android") {
+      const url = getAndroidApkDownloadUrl();
+      store.set((prev) => ({
+        ...closeModalState(prev),
+        status: "Скачайте обновлённый Android APK и установите его поверх текущей версии.",
+      }));
+      openExternalUrl(url);
+      return;
+    }
+    forceUpdateReload("update_required");
+  };
 
   const onApplyPwaUpdate = () => {
     void applyPwaUpdateNow();
@@ -91,6 +129,7 @@ export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): Auth
     onAuthLogout,
     onAuthLogin,
     onAuthRegister,
+    onAuthTouchId,
     onAuthModeChange,
     onAuthUseDifferentAccount,
     onCloseModal,

@@ -5,16 +5,13 @@ import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { ActionModalPayload, AppState, FriendEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 import {
   attentionHintForPeer,
-  collectAttentionPeers,
-  collectSelfMentionHandles,
-  compactOneLine,
-  displayNameForFriend,
   friendRow,
-  hasSelfMention,
   isRowMenuOpen,
   previewForConversation,
   roomRow,
 } from "./renderSidebarHelpers";
+import { buildSidebarProjection } from "./sidebarProjection";
+import { renderSidebarDesktopDialogSurface } from "./renderSidebarDesktopDialogSurface";
 import { clearDeferredSidebarMenu, renderSidebarMenuDeferred } from "./renderSidebarMenuRuntime";
 import { clearDeferredSidebarDesktopTabs, renderSidebarDesktopTabsDeferred } from "./renderSidebarDesktopTabsRuntime";
 import { clearDeferredSidebarMobile, renderSidebarMobileDeferred } from "./renderSidebarMobileRuntime";
@@ -52,6 +49,7 @@ export function renderSidebar(
       return false;
     }
   })();
+  const projection = buildSidebarProjection(state);
   const hostState = target as any;
   const prevRender = hostState.__sidebarRenderState as
     | {
@@ -85,16 +83,16 @@ export function renderSidebar(
         fileOffersInRef: AppState["fileOffersIn"];
       }
     | null;
-  const selectedKind = state.selected?.kind ? String(state.selected.kind) : "";
-  const selectedId = state.selected?.id ? String(state.selected.id) : "";
-  const sidebarQueryRaw = compactOneLine(String((state as any).sidebarQuery || ""));
+  const selectedKind = projection.selectedKind;
+  const selectedId = projection.selectedId;
+  const sidebarQueryRaw = projection.sidebarQueryRaw;
   const renderState = {
     page: state.page,
     selectedKind,
     selectedId,
-    mobileTab: String(state.mobileSidebarTab || ""),
+    mobileTab: projection.mobileTab,
     sidebarQuery: sidebarQueryRaw,
-    sidebarArchiveOpen: state.sidebarArchiveOpen !== false,
+    sidebarArchiveOpen: projection.sidebarArchiveOpen,
     conn: String(state.conn || ""),
     authed: Boolean(state.authed),
     selfId: String(state.selfId || ""),
@@ -151,98 +149,19 @@ export function renderSidebar(
   if (canSkipRender) return;
   hostState.__sidebarRenderState = renderState;
 
-  const roomUnreadCache = new Map<string, number>();
-  const computeRoomUnread = (key: string): number => {
-    if (!key.startsWith("room:")) return 0;
-    if (roomUnreadCache.has(key)) return roomUnreadCache.get(key) || 0;
-    const conv = state.conversations?.[key] || [];
-    if (!Array.isArray(conv) || conv.length === 0) {
-      roomUnreadCache.set(key, 0);
-      return 0;
-    }
-    const marker = state.lastRead?.[key];
-    const lastReadId = Number((marker as any)?.id ?? 0);
-    const lastReadTs = Number((marker as any)?.ts ?? 0);
-    if (lastReadId <= 0 && lastReadTs <= 0) {
-      roomUnreadCache.set(key, 0);
-      return 0;
-    }
-    let count = 0;
-    for (let i = conv.length - 1; i >= 0; i -= 1) {
-      const msg = conv[i] as any;
-      if (!msg || msg.kind !== "in") continue;
-      const msgId = Number(msg.id ?? 0);
-      const msgTs = Number(msg.ts ?? 0);
-      if (lastReadId > 0) {
-        if (Number.isFinite(msgId) && msgId > lastReadId) {
-          count += 1;
-          continue;
-        }
-        if (Number.isFinite(msgId) && msgId <= lastReadId) break;
-        if (lastReadTs > 0 && msgTs > lastReadTs) {
-          count += 1;
-          continue;
-        }
-        if (lastReadTs > 0 && msgTs <= lastReadTs) break;
-        continue;
-      }
-      if (lastReadTs > 0) {
-        if (msgTs > lastReadTs) {
-          count += 1;
-          continue;
-        }
-        if (msgTs > 0 && msgTs <= lastReadTs) break;
-      }
-    }
-    roomUnreadCache.set(key, count);
-    return count;
-  };
-  const lastTsForKey = (key: string): number => {
-    const conv = state.conversations[key] || [];
-    const last = conv.length ? conv[conv.length - 1] : null;
-    const ts = last && typeof last.ts === "number" && Number.isFinite(last.ts) ? last.ts : 0;
-    return Math.max(0, ts);
-  };
-  const drafts = state.drafts || {};
-  const pinnedKeys = state.pinned || [];
-  const pinnedSet = new Set(pinnedKeys);
-  const attnSet = collectAttentionPeers(state);
-  const mutedSet = new Set((state.muted || []).map((x) => String(x || "").trim()).filter(Boolean));
-  const isMuted = (id: string): boolean => mutedSet.has(String(id || "").trim());
-  const selfMentionHandles = collectSelfMentionHandles(state);
-  const mentionForKey = (key: string): boolean => {
-    if (!selfMentionHandles.size) return false;
-    const conv = state.conversations[key] || [];
-    const last = conv.length ? conv[conv.length - 1] : null;
-    if (!last) return false;
-    if (last.kind !== "in") return false;
-    const from = String(last.from || "").trim();
-    if (from && state.selfId && from === state.selfId) return false;
-    const mentioned = hasSelfMention(String(last.text || ""), selfMentionHandles);
-    if (!mentioned) return false;
-    if (!key.startsWith("room:")) return true;
-    const marker = state.lastRead?.[key];
-    const lastReadId = Number(marker?.id ?? 0);
-    const lastReadTs = Number(marker?.ts ?? 0);
-    const msgId = Number(last.id ?? 0);
-    const msgTs = Number(last.ts ?? 0);
-    if (lastReadId > 0 && Number.isFinite(msgId) && msgId > 0 && msgId <= lastReadId) return false;
-    if (lastReadId <= 0 && lastReadTs > 0 && msgTs > 0 && msgTs <= lastReadTs) return false;
-    return true;
-  };
-  const friendMap = new Map<string, FriendEntry>();
-  for (const f of state.friends || []) {
-    const id = String(f.id || "").trim();
-    if (!id) continue;
-    friendMap.set(id, f);
-  }
-  const friendIdSet = new Set(friendMap.keys());
-  const unknownAttnPeers = Array.from(attnSet).filter((id) => !friendIdSet.has(id)).sort();
-  const boards = state.boards || [];
-  const groups = state.groups || [];
-  const sel = state.selected;
-  const sidebarQuery = sidebarQueryRaw.toLowerCase();
-  const hasSidebarQuery = Boolean(sidebarQuery);
+  const computeRoomUnread = projection.computeRoomUnread;
+  const lastTsForKey = projection.lastTsForKey;
+  const drafts = projection.drafts;
+  const pinnedKeys = projection.pinnedKeys;
+  const pinnedSet = projection.pinnedSet;
+  const attnSet = projection.attnSet;
+  const isMuted = projection.isMuted;
+  const mentionForKey = projection.mentionForKey;
+  const unknownAttnPeers = projection.unknownAttnPeers;
+  const boards = projection.boards;
+  const groups = projection.groups;
+  const sel = projection.selected;
+  const hasSidebarQuery = projection.hasSidebarQuery;
   const body = (() => {
     const existing =
       typeof (target as HTMLElement | null)?.querySelector === "function"
@@ -309,16 +228,7 @@ export function renderSidebar(
       // ignore
     }
   }
-  const currentSelectedKey = (() => {
-    if (state.page !== "main") return "";
-    const sel = state.selected;
-    if (!sel) return "";
-    const id = String((sel as any).id || "").trim();
-    if (!id) return "";
-    if (sel.kind === "dm") return dmKey(id);
-    if (sel.kind === "group" || sel.kind === "board") return roomKey(id);
-    return "";
-  })();
+  const currentSelectedKey = projection.currentSelectedKey;
   const prevSelectedKey = String((target as any)._sidebarPrevSelectedKey || "").trim();
   const shouldResetOnReturn = Boolean(
     (isMobile || isStandaloneDisplayMode()) && prevSelectedKey && !currentSelectedKey && state.page === "main"
@@ -343,92 +253,27 @@ export function renderSidebar(
       return false;
     }
   })();
-  const matchesQuery = (raw: string): boolean => {
-    if (!hasSidebarQuery) return true;
-    return String(raw || "").toLowerCase().includes(sidebarQuery);
-  };
+  const matchesQuery = projection.matchesQuery;
+  const matchesFriend = projection.matchesFriend;
+  const matchesRoom = projection.matchesRoom;
+  const archivedKeys = projection.archivedKeys;
+  const archivedSet = projection.archivedSet;
 
-  const matchesFriend = (f: FriendEntry): boolean => {
-    if (!hasSidebarQuery) return true;
-    const id = String(f.id || "").trim();
-    const p = id ? state.profiles?.[id] : null;
-    const dn = displayNameForFriend(state, f);
-    const handle = p?.handle ? String(p.handle).trim() : "";
-    const h = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "";
-    return matchesQuery([dn, h, id].filter(Boolean).join(" "));
-  };
+  const groupArchiveCount = projection.groupArchiveCount;
+  const groupArchiveVisible = projection.groupArchiveVisible;
+  const groupArchiveOpen = projection.groupArchiveOpen;
+  const groupArchiveToggle = groupArchiveVisible ? buildSidebarArchiveToggle(groupArchiveCount, groupArchiveOpen) : null;
 
-  const matchesRoom = (entry: { id: string; name?: string | null; handle?: string | null }): boolean => {
-    if (!hasSidebarQuery) return true;
-    const id = String(entry.id || "").trim();
-    const name = entry.name ? String(entry.name).trim() : "";
-    const handle = entry.handle ? String(entry.handle).trim() : "";
-    const h = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "";
-    return matchesQuery([name, h, id].filter(Boolean).join(" "));
-  };
-  const hasActiveDialogForFriend = (f: FriendEntry): boolean => {
-    const id = String(f.id || "").trim();
-    if (!id) return false;
-    const k = dmKey(id);
-    const conv = state.conversations[k] || [];
-    const hasConv = conv.length > 0;
-    const hasDraft = Boolean(String(drafts[k] || "").trim());
-    const unread = Math.max(0, Number(f.unread || 0) || 0);
-    const attention = attnSet.has(id);
-    return hasConv || hasDraft || unread > 0 || attention;
-  };
-
-  const archivedKeys = Array.isArray(state.archived) ? state.archived : [];
-  const archivedSet = new Set(archivedKeys);
-
-  const chatArchiveCount = hasSidebarQuery
-    ? 0
-    : (() => {
-        let count = 0;
-        for (const key of archivedKeys) {
-          if (pinnedSet.has(key)) continue;
-          if (key.startsWith("dm:")) {
-            const id = key.slice(3);
-            const f = friendMap.get(id);
-            if (f && matchesFriend(f) && hasActiveDialogForFriend(f)) count += 1;
-            continue;
-          }
-          if (key.startsWith("room:")) {
-            const roomId = key.slice(5);
-            const g = groups.find((x) => String(x?.id || "") === roomId);
-            if (g && matchesRoom(g)) count += 1;
-          }
-        }
-        return count;
-      })();
-  const chatArchiveVisible = chatArchiveCount > 0;
-  const chatArchiveOpen = chatArchiveVisible && state.sidebarArchiveOpen !== false;
-  const chatArchiveToggle = chatArchiveVisible ? buildSidebarArchiveToggle(chatArchiveCount, chatArchiveOpen) : null;
-
-  const boardArchiveCount = hasSidebarQuery
-    ? 0
-    : (() => {
-        let count = 0;
-        for (const key of archivedKeys) {
-          if (pinnedSet.has(key)) continue;
-          if (!key.startsWith("room:")) continue;
-          const roomId = key.slice(5);
-          const b = boards.find((x) => String(x?.id || "") === roomId);
-          if (b && matchesRoom(b)) count += 1;
-        }
-        return count;
-      })();
-  const boardArchiveVisible = boardArchiveCount > 0;
-  const boardArchiveOpen = boardArchiveVisible && state.sidebarArchiveOpen !== false;
+  const boardArchiveCount = projection.boardArchiveCount;
+  const boardArchiveVisible = projection.boardArchiveVisible;
+  const boardArchiveOpen = projection.boardArchiveOpen;
   const boardArchiveToggle = boardArchiveVisible ? buildSidebarArchiveToggle(boardArchiveCount, boardArchiveOpen) : null;
 
-  const contactCandidates = (state.friends || []).filter((f) => matchesFriend(f) && !pinnedSet.has(dmKey(f.id)));
-  const activeContacts = contactCandidates.filter((f) => hasActiveDialogForFriend(f));
-  const archivedContacts = contactCandidates.filter((f) => !hasActiveDialogForFriend(f));
-  const archiveCount = hasSidebarQuery ? 0 : archivedContacts.length;
-  const archiveVisible = archiveCount > 0;
-  const archiveOpen = archiveVisible && state.sidebarArchiveOpen !== false;
-  const archiveToggle = archiveVisible ? buildSidebarArchiveToggle(archiveCount, archiveOpen) : null;
+  const contactCandidates = projection.contactCandidates;
+  const activeContacts = projection.activeContacts;
+  const archivedContacts: FriendEntry[] = projection.archivedContacts;
+  const archiveOpen = false;
+  const archiveToggle = null;
   clearVirtualChatlist();
 
 
@@ -437,14 +282,14 @@ export function renderSidebar(
     clearDeferredSidebarMenu(target);
     clearDeferredSidebarStandalone(target);
     renderSidebarMobileDeferred({
-      target, state, body, isMobile, mobileUi,
+      target, state, body, mobileTab: projection.mobileTab, isMobile, mobileUi,
       forceResetScroll, hasSidebarQuery,
-      archiveToggle, chatArchiveToggle, boardArchiveToggle, chatArchiveOpen, boardArchiveOpen, archiveOpen,
-      chatArchiveCount, boardArchiveCount, buildSidebarArchiveHint, buildSidebarArchiveEmpty,
+      archiveToggle, groupArchiveToggle, boardArchiveToggle, groupArchiveOpen, boardArchiveOpen, archiveOpen,
+      groupArchiveCount, boardArchiveCount, buildSidebarArchiveHint, buildSidebarArchiveEmpty,
       pinnedKeys, pinnedSet, archivedSet, groups, boards, sel, drafts,
       matchesQuery, matchesFriend, matchesRoom, isMuted, lastTsForKey, attnSet, mentionForKey, computeRoomUnread,
-      buildSidebarTabButton, buildSidebarSearchBar, buildFolderTabs, buildChatlist,
-      setBodyChatlistClass, bindHeaderScroll, toggleClass, markCompactAvatarRows, dialogPriority, hasActiveDialogForFriend,
+      buildSidebarTabButton, buildSidebarSearchBar, buildChatlist,
+      setBodyChatlistClass, bindHeaderScroll, toggleClass, markCompactAvatarRows, dialogPriority,
       unknownAttnPeers, contactCandidates, activeContacts, archivedContacts, buildContactRows, buildTopPeerContactRows,
       onSelect, onOpenUser, onSetPage, onCreateGroup, onCreateBoard, onAuthOpen, onAuthLogout,
     });
@@ -463,17 +308,18 @@ export function renderSidebar(
       target,
       state,
       body,
+      mobileTab: projection.mobileTab,
       isMobile,
       mobileUi,
       forceResetScroll,
       hasSidebarQuery,
       archiveToggle,
-      chatArchiveToggle,
+      groupArchiveToggle,
       boardArchiveToggle,
-      chatArchiveOpen,
+      groupArchiveOpen,
       boardArchiveOpen,
       archiveOpen,
-      chatArchiveCount,
+      groupArchiveCount,
       boardArchiveCount,
       pinnedKeys,
       pinnedSet,
@@ -495,14 +341,12 @@ export function renderSidebar(
       buildSidebarHeaderToolbar,
       buildSidebarTabButton,
       buildSidebarSearchBar,
-      buildFolderTabs,
       buildChatlist,
       setBodyChatlistClass,
       bindHeaderScroll,
       toggleClass,
       markCompactAvatarRows,
       dialogPriority,
-      hasActiveDialogForFriend,
       unknownAttnPeers,
       contactCandidates,
       activeContacts,
@@ -521,14 +365,17 @@ export function renderSidebar(
   }
   clearDeferredSidebarStandalone(target);
 
-  // Desktop (browser): compact tabs (Контакты/Доски/Чаты), меню через кнопку в шапке.
-  type DesktopTab = "contacts" | "boards" | "chats" | "menu";
+  // Desktop (browser): compact tabs, меню через кнопку в шапке.
+  type DesktopTab = "contacts" | "groups" | "boards" | "menu";
   const allowMenuTab = false;
   const showMenuTab = false;
-  const defaultDesktopTab: DesktopTab = unknownAttnPeers.length ? "contacts" : "chats";
-  const rawDesktopTab = state.mobileSidebarTab;
+  const defaultDesktopTab: DesktopTab = "contacts";
+  const rawDesktopTab = projection.mobileTab;
   let activeDesktopTab: DesktopTab =
-    rawDesktopTab === "contacts" || rawDesktopTab === "boards" || rawDesktopTab === "chats" || rawDesktopTab === "menu"
+    rawDesktopTab === "contacts" ||
+    rawDesktopTab === "groups" ||
+    rawDesktopTab === "boards" ||
+    rawDesktopTab === "menu"
       ? rawDesktopTab
       : defaultDesktopTab;
   if (!allowMenuTab && activeDesktopTab === "menu") activeDesktopTab = defaultDesktopTab;
@@ -548,17 +395,17 @@ export function renderSidebar(
   }
 
   const desktopTabContacts = buildSidebarTabButton("contacts", activeDesktopTab, "Контакты");
-  const desktopTabBoards = buildSidebarTabButton("boards", activeDesktopTab, "Доски");
-  const desktopTabChats = buildSidebarTabButton("chats", activeDesktopTab, "Чаты");
+  const desktopTabGroups = buildSidebarTabButton("groups", activeDesktopTab, "Группы");
+  const desktopTabBoards = buildSidebarTabButton("boards", activeDesktopTab, "Каналы");
   const desktopTabMenu = showMenuTab ? buildSidebarTabButton("menu", activeDesktopTab, "Меню") : null;
 
   const desktopTabs = el("div", { class: "sidebar-tabs sidebar-tabs-desktop", role: "tablist", "aria-label": "Раздел" }, [
     desktopTabContacts,
+    desktopTabGroups,
     desktopTabBoards,
-    desktopTabChats,
     ...(desktopTabMenu ? [desktopTabMenu] : []),
   ]);
-  const desktopTabsList = [desktopTabContacts, desktopTabBoards, desktopTabChats, ...(desktopTabMenu ? [desktopTabMenu] : [])];
+  const desktopTabsList = [desktopTabContacts, desktopTabGroups, desktopTabBoards, ...(desktopTabMenu ? [desktopTabMenu] : [])];
   desktopTabs.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     const dir = e.key === "ArrowRight" ? 1 : -1;
@@ -571,13 +418,19 @@ export function renderSidebar(
   const searchBarAction =
     activeDesktopTab === "contacts"
       ? archiveToggle
-      : activeDesktopTab === "chats"
-        ? chatArchiveToggle
-        : activeDesktopTab === "boards"
-          ? boardArchiveToggle
-          : null;
+      : activeDesktopTab === "groups"
+          ? groupArchiveToggle
+          : activeDesktopTab === "boards"
+            ? boardArchiveToggle
+            : null;
   const searchBar = buildSidebarSearchBar(
-    activeDesktopTab === "contacts" ? "Поиск контакта" : activeDesktopTab === "boards" ? "Поиск доски" : "Поиск",
+    activeDesktopTab === "contacts"
+      ? "Поиск контакта"
+      : activeDesktopTab === "groups"
+          ? "Поиск группы"
+          : activeDesktopTab === "boards"
+            ? "Поиск канала"
+            : "Поиск",
     searchBarAction ? { action: searchBarAction } : undefined
   );
   const headerToolbar = buildSidebarHeaderToolbar(activeDesktopTab);
@@ -589,32 +442,7 @@ export function renderSidebar(
       : [searchBar]),
   ]);
   const header = el("div", { class: "sidebar-header" }, [headerStack]);
-  const chatFiltersRow: HTMLElement | null = null;
   const passesChatFilter = (_opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean => true;
-
-  const chatFolders = Array.isArray((state as any).chatFolders) ? (state as any).chatFolders : [];
-  const rawFolderId =
-    activeDesktopTab === "chats" ? String((state as any).sidebarFolderId || "all").trim().toLowerCase() : "all";
-  const matchedFolder =
-    rawFolderId !== "all"
-      ? chatFolders.find((f: any) => String(f?.id || "").trim().toLowerCase() === rawFolderId)
-      : null;
-  const activeFolderId = matchedFolder ? rawFolderId : "all";
-  const includeSet = matchedFolder
-    ? new Set<string>((Array.isArray(matchedFolder.include) ? matchedFolder.include : []).map((x: any) => String(x || "").trim()).filter(Boolean))
-    : null;
-  const excludeSet = matchedFolder
-    ? new Set<string>((Array.isArray(matchedFolder.exclude) ? matchedFolder.exclude : []).map((x: any) => String(x || "").trim()).filter(Boolean))
-    : null;
-  const folderAllowsKey = (key: string): boolean => {
-    if (!matchedFolder) return true;
-    const k = String(key || "").trim();
-    if (!k) return false;
-    if (excludeSet && excludeSet.has(k)) return false;
-    if (!includeSet || !includeSet.size) return false;
-    return includeSet.has(k);
-  };
-  const folderTabsRow = activeDesktopTab === "chats" ? buildFolderTabs(activeFolderId, chatFolders) : null;
 
   const pinnedBoardRows: HTMLElement[] = [];
   const pinnedContactEntries: FriendEntry[] = [];
@@ -625,14 +453,6 @@ export function renderSidebar(
       const f = state.friends.find((x) => x.id === id);
       if (!f) continue;
       if (!matchesFriend(f)) continue;
-      const k = dmKey(f.id);
-      const unread = Math.max(0, Number(f.unread || 0) || 0);
-      const attention = attnSet.has(f.id);
-      if (activeDesktopTab === "chats" && !folderAllowsKey(k)) continue;
-      if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      const row = friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === f.id), meta, onSelect, onOpenUser, attention);
-      pinnedDialogRowByKey.set(key, row);
       pinnedContactEntries.push(f);
       continue;
     }
@@ -645,7 +465,6 @@ export function renderSidebar(
       const meta = previewForConversation(state, k, "room", drafts[k]);
       const unread = computeRoomUnread(k);
       const mention = mentionForKey(k);
-      if (activeDesktopTab === "chats" && !folderAllowsKey(k)) continue;
       if (!passesChatFilter({ kind: "group", unread, mention })) continue;
       const row = roomRow(
         null,
@@ -748,100 +567,34 @@ export function renderSidebar(
   }
   clearDeferredSidebarMenu(target);
 
-  if (activeDesktopTab === "chats") {
+  if (activeDesktopTab === "groups") {
     clearDeferredSidebarDesktopTabs(target);
-    const restGroups = groups.filter((g) => !pinnedSet.has(roomKey(g.id)));
-    const dialogItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
-    const archivedItems: Array<{ sortTs: number; priority: number; label: string; row: HTMLElement }> = [];
-
-    for (const f of state.friends || []) {
-      const id = String(f?.id || "").trim();
-      if (!id) continue;
-      const k = dmKey(id);
-      if (pinnedSet.has(k)) continue;
-      if (!folderAllowsKey(k)) continue;
-      if (!hasActiveDialogForFriend(f)) continue;
-      if (!matchesFriend(f)) continue;
-      const meta = previewForConversation(state, k, "dm", drafts[k]);
-      const label = displayNameForFriend(state, f);
-      const unread = Math.max(0, Number(f.unread || 0) || 0);
-      const attention = attnSet.has(id);
-      if (!passesChatFilter({ kind: "dm", unread, attention })) continue;
-      const item = {
-        sortTs: lastTsForKey(k),
-        priority: dialogPriority({ hasDraft: meta.hasDraft, unread, attention }),
-        label,
-        row: friendRow(state, f, Boolean(sel && sel.kind === "dm" && sel.id === id), meta, onSelect, onOpenUser, attention),
-      };
-      if (!hasSidebarQuery && archivedSet.has(k)) archivedItems.push(item);
-      else dialogItems.push(item);
-    }
-
-    for (const g of restGroups) {
-      if (!matchesRoom(g)) continue;
-      const k = roomKey(g.id);
-      if (!folderAllowsKey(k)) continue;
-      const meta = previewForConversation(state, k, "room", drafts[k]);
-      const unread = computeRoomUnread(k);
-      const mention = mentionForKey(k);
-      const label = String(g.name || g.id);
-      if (!passesChatFilter({ kind: "group", unread, mention })) continue;
-      const item = {
-        sortTs: lastTsForKey(k),
-        priority: dialogPriority({ hasDraft: meta.hasDraft, mention, unread }),
-        label,
-        row: roomRow(
-          null,
-          label,
-          Boolean(sel && sel.kind === "group" && sel.id === g.id),
-          () => onSelect({ kind: "group", id: g.id }),
-          { kind: "group", id: g.id },
-          meta,
-          { mention, muted: isMuted(g.id), unread, menuOpen: isRowMenuOpen(state, "group", g.id) }
-        ),
-      };
-      if (!hasSidebarQuery && archivedSet.has(k)) archivedItems.push(item);
-      else dialogItems.push(item);
-    }
-
-    dialogItems.sort(
-      (a, b) =>
-        b.sortTs - a.sortTs ||
-        b.priority - a.priority ||
-        a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
-    );
-    archivedItems.sort(
-      (a, b) =>
-        b.sortTs - a.sortTs ||
-        b.priority - a.priority ||
-        a.label.localeCompare(b.label, "ru", { sensitivity: "base" })
-    );
-    const dialogRows = dialogItems.map((x) => x.row);
-    const archivedRows = archivedItems.map((x) => x.row);
-    const pinnedDialogRows = pinnedKeys
-      .map((key) => pinnedDialogRowByKey.get(key))
-      .filter(Boolean) as HTMLElement[];
-
-    const chatFixedRows: HTMLElement[] = [];
-    if (pinnedDialogRows.length) {
-      chatFixedRows.push(...pinnedDialogRows);
-    }
-    chatFixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Чаты"]));
-    const archiveBlock = chatArchiveOpen
-      ? [
-          el("div", { class: "pane-section pane-section-archive" }, [`Архив (${chatArchiveCount})`]),
-          buildSidebarArchiveHint(),
-          ...(archivedRows.length ? archivedRows : [buildSidebarArchiveEmpty("По текущему фильтру в архиве нет чатов.")]),
-        ]
-      : [];
-    const chatRows = archiveBlock.length ? [...archiveBlock, ...dialogRows] : dialogRows;
-    const chatList = buildChatlist(
-      chatFixedRows,
-      chatRows,
-      hasSidebarQuery ? "(ничего не найдено)" : "(пока нет чатов)",
-      { virtual: !chatArchiveOpen }
-    );
-    mountDesktop([...(folderTabsRow ? [folderTabsRow] : []), ...(chatFiltersRow ? [chatFiltersRow] : []), chatList]);
+    renderSidebarDesktopDialogSurface({
+      kind: "groups",
+      state,
+      groups,
+      sel,
+      drafts,
+      pinnedKeys,
+      pinnedSet,
+      archivedSet,
+      pinnedDialogRowByKey,
+      hasSidebarQuery,
+      groupArchiveOpen,
+      groupArchiveCount,
+      matchesRoom,
+      isMuted,
+      lastTsForKey,
+      mentionForKey,
+      computeRoomUnread,
+      passesChatFilter,
+      dialogPriority,
+      buildSidebarArchiveHint,
+      buildSidebarArchiveEmpty,
+      buildChatlist,
+      onSelect,
+      mountDesktop,
+    });
     return;
   }
 

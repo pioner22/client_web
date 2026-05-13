@@ -27,6 +27,7 @@ async function loadHistorySync() {
     }
     return {
       newestServerMessageId: mod.newestServerMessageId,
+      getConversationHistorySyncState: mod.getConversationHistorySyncState,
       cleanup: () => rm(tempDir, { recursive: true, force: true }),
     };
   } catch (e) {
@@ -53,3 +54,43 @@ test("historySync: newestServerMessageId игнорирует локальные
   }
 });
 
+test("historySync: mixed historySync и legacy maps читаются по live legacy flags, а не по stale raw snapshot", async () => {
+  const { getConversationHistorySyncState, cleanup } = await loadHistorySync();
+  try {
+    const state = {
+      historySync: {
+        "dm:peer-1": {
+          loaded: true,
+          previewOnly: true,
+          cursor: 99,
+          hasMore: true,
+          loading: true,
+          loadingSlots: 5,
+          virtualStart: 7,
+          source: "cache",
+          reconcilePending: true,
+          lastServerAt: null,
+        },
+      },
+      historyLoaded: { "dm:peer-1": true },
+      historyPreviewOnly: {},
+      historyCursor: { "dm:peer-1": 42 },
+      historyHasMore: { "dm:peer-1": false },
+      historyLoading: {},
+      historyLoadingSlots: {},
+      historyVirtualStart: {},
+    };
+    const sync = getConversationHistorySyncState(state, "dm:peer-1");
+    assert.equal(sync.loaded, true);
+    assert.equal(sync.previewOnly, false);
+    assert.equal(sync.cursor, 42);
+    assert.equal(sync.hasMore, false);
+    assert.equal(sync.loading, false);
+    assert.equal(sync.loadingSlots, 0);
+    assert.equal(sync.virtualStart, 0);
+    assert.equal(sync.source, "cache");
+    assert.equal(sync.reconcilePending, true);
+  } finally {
+    await cleanup();
+  }
+});

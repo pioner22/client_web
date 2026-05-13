@@ -1,4 +1,10 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
+import {
+  getActiveConversationKey,
+  getActiveConversationTarget,
+  hasActiveConversationSelection,
+  isMainConversationSurface,
+} from "../../../helpers/navigation/mainConversationState";
 import type { Layout } from "../../../components/layout/types";
 import type { Store } from "../../../stores/store";
 import type { AppState, TargetRef } from "../../../stores/types";
@@ -108,7 +114,7 @@ export function installMainRenderSubscriptionFeature(deps: MainRenderSubscriptio
     if (st.modal && st.modal.kind !== "context_menu") {
       closeMobileSidebar();
     }
-    if (st.page === "main" && !st.modal && !st.selected) {
+    if (isMainConversationSurface(st) && !getActiveConversationTarget(st)) {
       if (mobileSidebarMq.matches && !isMobileSidebarOpen()) {
         setMobileSidebarOpen(true);
       } else if (floatingSidebarMq.matches && !isFloatingSidebarOpen()) {
@@ -119,13 +125,14 @@ export function installMainRenderSubscriptionFeature(deps: MainRenderSubscriptio
       scheduleAutoApplyPwaUpdate();
     }
     if (st.authed && !prevAuthed) {
-      if (st.selected) {
-        requestHistory(st.selected, { force: true, deltaLimit: 2000, prefetchBefore: true });
-        if (st.selected.kind === "dm") {
-          maybeSendMessageRead(st.selected.id);
+      const activeConversation = getActiveConversationTarget(st);
+      if (activeConversation) {
+        requestHistory(activeConversation, { force: true, deltaLimit: 2000, prefetchBefore: true });
+        if (activeConversation.kind === "dm") {
+          maybeSendMessageRead(activeConversation.id);
         }
       }
-      if (st.page === "main" && st.selected && !st.modal && !mobileSidebarMq.matches) {
+      if (hasActiveConversationSelection(st) && !mobileSidebarMq.matches) {
         scheduleFocusComposer();
       }
     }
@@ -136,10 +143,10 @@ export function installMainRenderSubscriptionFeature(deps: MainRenderSubscriptio
       maybeAutoFillHistoryViewport();
       maybeAutoRetryHistory();
     }
-    if (st.authed && st.selfId && st.selected) {
+    if (st.authed && st.selfId && hasActiveConversationSelection(st)) {
       getHistoryFeature()?.maybeBootstrapPrefetch(st);
     }
-    const selectedKey = st.selected ? conversationKey(st.selected) : "";
+    const selectedKey = getActiveConversationKey(st);
     const selectedSig = selectedKey ? convoSig(st.conversations[selectedKey] ?? []) : "";
     const autoFetchChanged =
       selectedKey !== prevAutoFetchKey ||
@@ -148,7 +155,7 @@ export function installMainRenderSubscriptionFeature(deps: MainRenderSubscriptio
     prevAutoFetchKey = selectedKey;
     prevAutoFetchSig = selectedSig;
     prevAutoFetchTransfersRef = st.fileTransfers;
-    if (st.page === "main" && selectedKey && autoFetchChanged) {
+    if (isMainConversationSurface(st) && selectedKey && autoFetchChanged) {
       previewAutoFetchFeature.scheduleAutoFetchVisiblePreviews();
       maybeAutoFillHistoryViewport();
     }

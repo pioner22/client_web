@@ -402,6 +402,35 @@ export async function getCachedFileBlob(
   }
 }
 
+export async function removeCachedFileBlob(userId: string, fileId: string): Promise<boolean> {
+  const uid = normalizeId(userId);
+  const fid = normalizeId(fileId);
+  if (!uid || !fid) return false;
+
+  let removed = false;
+  try {
+    const rows = loadIndex(uid);
+    if (rows.some((entry) => entry.fileId === fid)) {
+      saveIndex(
+        uid,
+        rows.filter((entry) => entry.fileId !== fid)
+      );
+      removed = true;
+    }
+  } catch {
+    // ignore
+  }
+
+  if (!(await cacheAvailable())) return removed;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const deleted = await cache.delete(requestUrl(uid, fid));
+    return Boolean(removed || deleted);
+  } catch {
+    return removed;
+  }
+}
+
 async function pruneFileCacheForPut(userId: string, keepFileId: string, bytesNeeded: number): Promise<void> {
   const uid = normalizeId(userId);
   const keep = normalizeId(keepFileId);

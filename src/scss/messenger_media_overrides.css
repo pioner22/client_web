@@ -172,6 +172,76 @@ html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-
   min-height: auto;
 }
 
+/* 5a) Voice/audio playback should read as one frameless control, not as a stack of chips. */
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) {
+  width: min(390px, 100%);
+  max-width: min(390px, calc(100vw - 48px));
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-out.msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) {
+  margin-left: auto;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .file-main {
+  width: 100%;
+  display: grid;
+  gap: 0;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .file-title,
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .file-chip-row,
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .file-meta {
+  display: none;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .chat-voice {
+  width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .chat-voice-play,
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .chat-voice-speed {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .chat-voice-play {
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .chat-voice-speed {
+  min-width: 34px;
+  width: auto;
+  height: 34px;
+  padding: 0 2px;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .chat-voice-track {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) {
+    width: min(360px, 100%);
+    max-width: calc(100vw - 36px);
+  }
+
+  .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .chat-voice {
+    grid-template-columns: 38px minmax(100px, 1fr) minmax(38px, auto) minmax(32px, auto);
+    column-gap: 6px;
+  }
+}
+
 /* 6) Stickers / round video (heuristic flags from client).
  * These are pure UI affordances and must not affect boards.
  */

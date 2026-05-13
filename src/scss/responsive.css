@@ -145,6 +145,12 @@
     margin: 0;
   }
 
+  .sidebar-tabs.sidebar-tabs-mobile .sidebar-tab {
+    min-width: 4.75rem;
+    padding-inline: 0.5rem;
+    font-size: 0.875rem;
+  }
+
   .sidebar-searchbar {
     margin-bottom: 0;
   }
@@ -235,39 +241,34 @@
   }
 
   .toast-host {
-    bottom: calc(var(--safe-bottom-pad) + 86px);
+    display: none !important;
+    pointer-events: none !important;
+    top: calc(env(safe-area-inset-top) + var(--header-h, 56px) + 8px);
+    bottom: auto;
   }
 
-  .toast-host[data-toast-placement="center"] .toast {
-    width: min(520px, 92vw);
-    max-width: min(520px, 92vw);
-    max-height: calc(100vh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
-    max-height: calc(100svh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
-    max-height: calc(100dvh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--sp-2);
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
+  .toast-host[data-toast-placement="status"] .toast {
+    width: min(420px, calc(100vw - 20px));
+    max-width: min(420px, calc(100vw - 20px));
+    max-height: min(34vh, 260px);
+    overflow: hidden;
   }
 
-  .toast-host[data-toast-placement="center"] .toast-msg {
+  .toast-host[data-toast-placement="status"] .toast-msg {
     white-space: normal;
-    text-overflow: clip;
-    overflow: visible;
-    text-align: center;
+    text-align: left;
     word-break: break-word;
     hyphens: auto;
   }
 
-  .toast-host[data-toast-placement="center"] .toast-actions {
-    width: 100%;
+  .toast-host[data-toast-placement="status"] .toast-actions {
+    width: auto;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: end;
   }
 
-  .toast-host[data-toast-placement="center"] .toast-btn {
-    flex: 1 1 120px;
+  .toast-host[data-toast-placement="status"] .toast-btn {
+    flex: 0 0 auto;
   }
 }
 
@@ -705,6 +706,42 @@
     backdrop-filter: none;
   }
 
+  html.env-os-android .hdr {
+    min-height: 56px;
+    padding-top: max(var(--header-pad-y), env(safe-area-inset-top));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--header-bg), var(--panel2) 20%), var(--header-bg)),
+      var(--header-bg);
+  }
+
+  html.env-os-android .hdr-right {
+    min-height: 22px;
+  }
+
+  html.env-os-android .input-wrap {
+    --composer-bottom-edge-pad: max(8px, var(--safe-bottom-layout-pad));
+    background: color-mix(in srgb, var(--composer-bg), var(--panel2) 8%);
+    box-shadow:
+      0 -1px 0 color-mix(in srgb, var(--line), transparent 58%),
+      0 -10px 26px color-mix(in srgb, var(--panel), transparent 82%);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+
+  html.env-os-android .composer-field {
+    border-width: 1px;
+    border-color: color-mix(in srgb, var(--line), transparent 46%);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 8px 20px color-mix(in srgb, var(--panel), transparent 88%);
+  }
+
+  html.env-os-android .sidebar-tabs.sidebar-tabs-mobile .sidebar-tab {
+    min-height: 46px;
+    padding-inline: 0.375rem;
+    font-size: 13px;
+  }
+
   .kbd-open .chat-col {
     --chat-history-bottom-gap: 6px;
   }
@@ -1070,20 +1107,19 @@
 }
 
 @media (max-width: 600px) {
-  .toast-host[data-toast-placement="center"] .toast {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: center;
+  .toast-host[data-toast-placement="status"] .toast {
+    align-items: center;
+    text-align: left;
   }
 
-  .toast-host[data-toast-placement="center"] .toast-actions {
-    width: 100%;
-    justify-content: center;
+  .toast-host[data-toast-placement="status"] .toast-actions {
+    width: auto;
+    justify-content: end;
     flex-wrap: wrap;
   }
 
-  .toast-host[data-toast-placement="center"] .toast-btn {
-    flex: 1 1 140px;
+  .toast-host[data-toast-placement="status"] .toast-btn {
+    flex: 0 0 auto;
     width: auto;
   }
 }

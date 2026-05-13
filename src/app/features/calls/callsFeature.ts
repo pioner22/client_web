@@ -2,6 +2,7 @@ import { getMeetBaseUrl } from "../../../config/env";
 import type { AppState, TargetRef } from "../../../stores/types";
 import type { Store } from "../../../stores/store";
 import { buildMeetJoinUrl, type CallMode } from "../../../helpers/calls/meetUrl";
+import { formatMediaAccessError, queryCapturePermissionState, type MediaAccessKind } from "../../../helpers/media/permissions";
 import { isMobileLikeUi } from "../../../helpers/ui/mobileLike";
 import type { TabNotifierLike } from "../../../helpers/notify/tabNotifierLazy";
 
@@ -103,40 +104,6 @@ function callTitleForIncoming(
   return fromLabel ? `Входящий: ${fromLabel} (${kind})` : `Входящий (${kind})`;
 }
 
-type MediaAccessKind = "microphone" | "camera" | "camera_microphone";
-
-function formatMediaAccessError(kind: MediaAccessKind, errorRaw: unknown): string {
-  const name = String((errorRaw as { name?: unknown } | null)?.name ?? "").trim().toLowerCase();
-  const accessLabel =
-    kind === "camera" ? "камере" : kind === "camera_microphone" ? "камере и микрофону" : "микрофону";
-  if (name === "notallowederror" || name === "permissiondeniederror" || name === "securityerror") {
-    return `Разрешите доступ к ${accessLabel} в браузере`;
-  }
-  if (name === "notfounderror" || name === "devicesnotfounderror") {
-    if (kind === "camera") return "Камера не найдена";
-    if (kind === "camera_microphone") return "Камера или микрофон не найдены";
-    return "Микрофон не найден";
-  }
-  if (name === "notreadableerror" || name === "trackstarterror" || name === "aborterror") {
-    if (kind === "camera") return "Камера занята другим приложением";
-    if (kind === "camera_microphone") return "Камера или микрофон заняты другим приложением";
-    return "Микрофон занят другим приложением";
-  }
-  if (kind === "camera") return "Не удалось получить доступ к камере";
-  if (kind === "camera_microphone") return "Не удалось получить доступ к камере и микрофону";
-  return "Не удалось получить доступ к микрофону";
-}
-
-async function queryPermissionState(kind: "microphone" | "camera"): Promise<PermissionState | null> {
-  if (typeof navigator === "undefined" || !navigator.permissions?.query) return null;
-  try {
-    const status = await navigator.permissions.query({ name: kind as PermissionName });
-    return status?.state ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function formatCallEndNotice(reasonRaw: string, opts: { isCaller: boolean; bySelf: boolean }): { label: string; kind: "info" | "warn" } {
   const reason = String(reasonRaw || "").trim();
   if (reason === "timeout") return { label: "Нет ответа", kind: "warn" };
@@ -207,7 +174,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       if (stNow.modal?.kind === "call" && stNow.modal.phase === "creating" && !String(stNow.modal.callId || "").trim()) {
         store.set({ modal: null });
       }
-      showToast("Не удалось начать звонок (нет ответа). Попробуйте ещё раз", { kind: "warn", timeoutMs: 8000, placement: "center" });
+      showToast("Не удалось начать звонок (нет ответа). Попробуйте ещё раз", { kind: "warn", timeoutMs: 8000 });
     }, 9000);
   }
 
@@ -243,20 +210,20 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     const mediaDevices = navigator.mediaDevices;
     if (!mediaDevices?.getUserMedia) return true;
     if (mediaAccessInFlight) {
-      showToast("Подтвердите запрос камеры/микрофона в браузере", { kind: "info", timeoutMs: 5000, placement: "center" });
+      showToast("Подтвердите запрос камеры/микрофона в приложении", { kind: "info", timeoutMs: 5000 });
       return false;
     }
 
-    // If browser already has explicit deny, it may skip prompts; surface a clear action hint.
-    const micState = await queryPermissionState("microphone");
+    // If the app/browser already has explicit deny, it may skip prompts; surface a clear action hint.
+    const micState = await queryCapturePermissionState("microphone");
     if (micState === "denied") {
-      showToast("Доступ к микрофону запрещён в настройках сайта/браузера", { kind: "warn", timeoutMs: 9000, placement: "center" });
+      showToast("Доступ к микрофону запрещён в настройках приложения или браузера", { kind: "warn", timeoutMs: 9000 });
       return false;
     }
     if (mode === "video") {
-      const camState = await queryPermissionState("camera");
+      const camState = await queryCapturePermissionState("camera");
       if (camState === "denied") {
-        showToast("Доступ к камере запрещён в настройках сайта/браузера", { kind: "warn", timeoutMs: 9000, placement: "center" });
+        showToast("Доступ к камере запрещён в настройках приложения или браузера", { kind: "warn", timeoutMs: 9000 });
         return false;
       }
     }
@@ -268,7 +235,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         stream = await mediaDevices.getUserMedia(constraints);
         return true;
       } catch (error) {
-        showToast(formatMediaAccessError(kind, error), { kind: "warn", timeoutMs: 8000, placement: "center" });
+        showToast(formatMediaAccessError(kind, error), { kind: "warn", timeoutMs: 8000 });
         return false;
       } finally {
         try {
@@ -338,7 +305,6 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       showToast("Браузер заблокировал новую вкладку. Используйте кнопку «Открыть отдельно».", {
         kind: "warn",
         timeoutMs: 7000,
-        placement: "center",
       });
     }
 
@@ -405,7 +371,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       clearCallCreateTimeout();
       callCreateLocalId = null;
       store.set({ modal: null });
-      showToast("Не удалось начать звонок (ошибка соединения)", { kind: "warn", timeoutMs: 8000, placement: "center" });
+      showToast("Не удалось начать звонок (ошибка соединения)", { kind: "warn", timeoutMs: 8000 });
     }
   }
 
@@ -470,7 +436,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         }
         const reason = String(msg?.reason ?? "ошибка");
         const limit = typeof msg?.limit === "number" && Number.isFinite(msg.limit) ? Math.trunc(msg.limit) : undefined;
-        showToast(formatCallCreateError(reason, limit), { kind: "warn", timeoutMs: 8000, placement: "center" });
+        showToast(formatCallCreateError(reason, limit), { kind: "warn", timeoutMs: 8000 });
         return true;
       }
 
@@ -518,7 +484,6 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         showToast(targetLabel ? `Вызываем: ${targetLabel}` : "Вызываем…", {
           kind: "info",
           timeoutMs: 6000,
-          placement: "center",
         });
       }
       return true;
@@ -611,7 +576,6 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         showToast(title, {
           kind: "info",
           timeoutMs: 12000,
-          placement: "center",
           actions: [
             { id: `call_accept:${callId}`, label: "Принять", primary: true, onClick: () => acceptCall(callId) },
             { id: `call_decline:${callId}`, label: "Отклонить", onClick: () => declineCall(callId) },
@@ -656,7 +620,6 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
           showToast(notice.label, {
             kind: notice.kind,
             timeoutMs: 7000,
-            ...(notice.kind === "warn" ? { placement: "center" as const } : {}),
           });
         }
       }

@@ -1,9 +1,11 @@
 export type AvatarTargetKind = "dm" | "group" | "board";
+export type AvatarUploadMime = "image/png" | "image/jpeg" | "image/webp";
 
 const STORAGE_PREFIX = "yagodka_avatar:";
 const REV_PREFIX = "yagodka_avatar_rev:";
 const MAX_DATA_URL_LEN = 220_000;
 const MEM_CACHE_MAX = 250;
+const MAX_AVATAR_UPLOAD_BYTES = 45 * 1024;
 
 const memAvatar = new Map<string, string>();
 const memRev = new Map<string, number>();
@@ -32,6 +34,38 @@ function isSafeDataUrl(value: string): boolean {
   if (!value) return false;
   if (value.length > MAX_DATA_URL_LEN) return false;
   return value.startsWith("data:image/");
+}
+
+function base64DecodedSize(value: string): number {
+  const clean = String(value || "").replace(/\s+/g, "");
+  if (!clean) return 0;
+  let padding = 0;
+  if (clean.endsWith("==")) padding = 2;
+  else if (clean.endsWith("=")) padding = 1;
+  return Math.max(0, Math.floor((clean.length * 3) / 4) - padding);
+}
+
+function avatarUploadMime(value: string): AvatarUploadMime | null {
+  const clean = String(value || "").trim().toLowerCase();
+  if (clean === "image/png" || clean === "image/jpeg" || clean === "image/webp") return clean;
+  return null;
+}
+
+export function avatarDataUrlToUploadPayload(dataUrl: string): {
+  mime: AvatarUploadMime;
+  base64: string;
+  bytes: number;
+} {
+  const raw = String(dataUrl || "").trim();
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(raw);
+  if (!match) throw new Error("bad_avatar_data");
+  const mime = avatarUploadMime(match[1] || "");
+  if (!mime) throw new Error("bad_avatar_mime");
+  const base64 = String(match[2] || "").replace(/\s+/g, "");
+  if (!base64) throw new Error("bad_avatar_data");
+  const bytes = base64DecodedSize(base64);
+  if (!bytes || bytes > MAX_AVATAR_UPLOAD_BYTES) throw new Error("avatar_transport_too_large");
+  return { mime, base64, bytes };
 }
 
 function evictStoredAvatarData(exceptStorageKey: string) {
@@ -145,6 +179,58 @@ export function avatarHue(seed: string): number {
   return h;
 }
 
+function canvasToBlob(canvas: HTMLCanvasElement, mime: AvatarUploadMime, quality?: number): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof canvas.toBlob === "function") {
+        canvas.toBlob((blob) => resolve(blob || null), mime, quality);
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    resolve(null);
+  });
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("avatar_read_failed"));
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+function makeAvatarCanvas(source: CanvasImageSource, size: number, opaque = false): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const target = Math.max(32, Math.min(256, Math.trunc(size || 0) || 128));
+  canvas.width = target;
+  canvas.height = target;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("no_canvas");
+  if (opaque) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, target, target);
+  }
+  const sw = Number((source as { width?: number }).width || 0) || target;
+  const sh = Number((source as { height?: number }).height || 0) || target;
+  ctx.drawImage(source, 0, 0, sw, sh, 0, 0, target, target);
+  return canvas;
+}
+
+async function exportAvatarDataUrl(canvas: HTMLCanvasElement, mime: AvatarUploadMime, quality?: number): Promise<string> {
+  const blob = await canvasToBlob(canvas, mime, quality);
+  if (blob && blob.size > 0) {
+    return blobToDataUrl(blob);
+  }
+  return canvas.toDataURL(mime, quality);
+}
+
 export async function imageFileToAvatarDataUrl(file: File, size = 128): Promise<string> {
   if (!file) throw new Error("no_file");
   const mime = String(file.type ?? "").trim().toLowerCase();
@@ -193,14 +279,40 @@ export async function imageFileToAvatarDataUrl(file: File, size = 128): Promise<
     const sx = Math.floor((sw - side) / 2);
     const sy = Math.floor((sh - side) / 2);
 
-    const canvas = document.createElement("canvas");
     const target = Math.max(48, Math.min(256, Math.floor(size || 128)));
+    const canvas = document.createElement("canvas");
     canvas.width = target;
     canvas.height = target;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("no_canvas");
     ctx.drawImage(source, sx, sy, side, side, 0, 0, target, target);
-    return canvas.toDataURL("image/png");
+
+    const sizeCandidates = Array.from(
+      new Set([target, Math.min(target, 112), Math.min(target, 96), Math.min(target, 80), Math.min(target, 64)])
+    ).filter((value) => value > 0);
+    const formatAttempts: Array<{ mime: AvatarUploadMime; quality?: number; opaque?: boolean }> = [
+      { mime: "image/webp", quality: 0.82 },
+      { mime: "image/jpeg", quality: 0.86, opaque: true },
+      { mime: "image/webp", quality: 0.72 },
+      { mime: "image/jpeg", quality: 0.74, opaque: true },
+      { mime: "image/png" },
+    ];
+
+    let lastError: Error | null = null;
+    for (const candidateSize of sizeCandidates) {
+      const scaledCanvas = candidateSize === target ? canvas : makeAvatarCanvas(canvas, candidateSize, false);
+      for (const attempt of formatAttempts) {
+        try {
+          const exportCanvas = attempt.opaque ? makeAvatarCanvas(scaledCanvas, candidateSize, true) : scaledCanvas;
+          const dataUrl = await exportAvatarDataUrl(exportCanvas, attempt.mime, attempt.quality);
+          avatarDataUrlToUploadPayload(dataUrl);
+          return dataUrl;
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error || "avatar_export_failed"));
+        }
+      }
+    }
+    throw lastError || new Error("avatar_transport_too_large");
   } finally {
     try {
       bitmap?.close();

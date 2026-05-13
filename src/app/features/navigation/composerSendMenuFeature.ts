@@ -1,4 +1,5 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
+import { getActiveConversationTarget } from "../../../helpers/navigation/mainConversationState";
 import type { Store } from "../../../stores/store";
 import type { AppState, ContextMenuItem, MessageHelperDraft, TargetRef } from "../../../stores/types";
 
@@ -34,14 +35,15 @@ export function createComposerSendMenuFeature(deps: ComposerSendMenuFeatureDeps)
   const getComposerFinalText = (st: AppState): string => {
     const raw = String(getComposerRawText() || "");
     const text = raw.trimEnd();
-    const key = st.selected ? conversationKey(st.selected) : "";
+    const activeConversation = getActiveConversationTarget(st);
+    const key = activeConversation ? conversationKey(activeConversation) : "";
     const forwardDraft = st.forwardDraft && key && st.forwardDraft.key === key ? st.forwardDraft : null;
     const forwardFallback = !text && forwardDraft ? String(forwardDraft.text || forwardDraft.preview || "") : "";
     return text || forwardFallback;
   };
 
   const buildSendMenuDraftFromComposer = (st: AppState): SendMenuDraft | null => {
-    const sel = st.selected;
+    const sel = getActiveConversationTarget(st);
     if (!sel) return null;
     const key = conversationKey(sel);
     const replyDraft = st.replyDraft && st.replyDraft.key === key ? st.replyDraft : null;
@@ -94,7 +96,7 @@ export function createComposerSendMenuFeature(deps: ComposerSendMenuFeatureDeps)
   const openSendMenu = (x: number, y: number) => {
     const st = store.get();
     if (st.modal) return;
-    const sel = st.selected;
+    const sel = getActiveConversationTarget(st);
     if (!sel) {
       store.set({ status: "Выберите контакт или чат слева" });
       return;
@@ -141,7 +143,7 @@ export function createComposerSendMenuFeature(deps: ComposerSendMenuFeatureDeps)
   const openSendScheduleModal = () => {
     const st = store.get();
     if (st.modal) return;
-    const sel = st.selected;
+    const sel = getActiveConversationTarget(st);
     if (!sel) {
       store.set({ status: "Выберите контакт или чат слева" });
       return;

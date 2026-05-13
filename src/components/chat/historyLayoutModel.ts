@@ -1,5 +1,6 @@
 import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import { type UnreadDividerAnchor, findUnreadAnchorIndex, unreadAnchorForMessage } from "../../helpers/chat/historyViewportAnchors";
+import { sanitizeTargetRef } from "../../helpers/navigation/viewState";
 import type { AppState, ChatMessage } from "../../stores/types";
 
 import {
@@ -54,8 +55,9 @@ export function resolveUnreadDivider(opts: ResolveUnreadDividerOptions): Resolve
     unreadIdx = normalizeUnreadIndex(msgs, findUnreadAnchorIndex(msgs, opts.savedAnchor));
   }
 
-  if (unreadIdx < 0 && opts.selected?.kind === "dm") {
-    const peerId = String(opts.selected?.id || "").trim();
+  const selected = sanitizeTargetRef(opts.selected);
+  if (unreadIdx < 0 && selected?.kind === "dm") {
+    const peerId = String(selected.id || "").trim();
     const unread = (opts.friends || []).find((friend) => friend.id === peerId)?.unread ?? 0;
     if (unread > 0) {
       unreadIdx = normalizeUnreadIndex(msgs, Math.max(0, Math.min(msgs.length - 1, msgs.length - unread)));

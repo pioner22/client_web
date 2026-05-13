@@ -1,4 +1,5 @@
 import { el } from "../../helpers/dom/el";
+import { buildAppShellProjection } from "../../helpers/navigation/appShellProjection";
 import type { AppState, PageKind } from "../../stores/types";
 import { roomRow } from "./renderSidebarHelpers";
 
@@ -31,8 +32,9 @@ function toggleClass(node: HTMLElement | null | undefined, cls: string, enabled:
 
 export function renderSidebarMenuSurface(ctx: RenderSidebarMenuCtx) {
   const { state, mobileUi, onSetPage, onCreateGroup, onCreateBoard, onAuthOpen, onAuthLogout, mountDesktop } = ctx;
+  const shell = buildAppShellProjection(state);
 
-  const profileRow = roomRow("☺", "Профиль", state.page === "profile" || state.page === "sessions", () => onSetPage("profile"), undefined, {
+  const profileRow = roomRow("☺", "Профиль", shell.profileAreaOpen, () => onSetPage("profile"), undefined, {
     sub: "Имя, @handle, аватар",
     time: null,
     hasDraft: false,
@@ -40,14 +42,14 @@ export function renderSidebarMenuSurface(ctx: RenderSidebarMenuCtx) {
   toggleClass(profileRow, "row-settings", true);
   profileRow.setAttribute("title", "Настройки профиля и интерфейса");
 
-  const searchRow = roomRow("🔍", "Поиск", state.page === "search", () => onSetPage("search"), undefined, {
+  const searchRow = roomRow("🔍", "Поиск", shell.isSearchPage, () => onSetPage("search"), undefined, {
     sub: "Глобальный поиск",
     time: null,
     hasDraft: false,
   });
   searchRow.setAttribute("title", "Глобальный поиск");
 
-  const filesRow = roomRow("▦", "Файлы", state.page === "files", () => onSetPage("files"), undefined, {
+  const filesRow = roomRow("▦", "Файлы", shell.isFilesPage, () => onSetPage("files"), undefined, {
     sub: "История и загрузки",
     time: null,
     hasDraft: false,
@@ -55,22 +57,22 @@ export function renderSidebarMenuSurface(ctx: RenderSidebarMenuCtx) {
   filesRow.setAttribute("title", "Передача файлов и история");
   const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
 
-  const createGroupRow = roomRow("+", "Создать чат", state.page === "group_create", () => onCreateGroup(), undefined, {
-    sub: "Групповой чат и приглашения",
+  const createGroupRow = roomRow("+", "Создать группу", shell.isGroupCreatePage, () => onCreateGroup(), undefined, {
+    sub: "Группа с приглашёнными участниками",
     time: null,
     hasDraft: false,
   });
-  createGroupRow.setAttribute("title", "Создать новый групповой чат");
+  createGroupRow.setAttribute("title", "Создать новую группу");
 
-  const createBoardRow = roomRow("+", "Создать доску", state.page === "board_create", () => onCreateBoard(), undefined, {
-    sub: "Доска (чтение всем, запись владельцу)",
+  const createBoardRow = roomRow("+", "Создать канал", shell.isBoardCreatePage, () => onCreateBoard(), undefined, {
+    sub: "Канал новостей и информации",
     time: null,
     hasDraft: false,
   });
-  createBoardRow.setAttribute("title", "Создать новую доску");
+  createBoardRow.setAttribute("title", "Создать новый канал");
   const createRows: HTMLElement[] = [createGroupRow, createBoardRow];
 
-  const infoRow = roomRow("?", "Info", state.page === "help", () => onSetPage("help"), undefined, {
+  const infoRow = roomRow("?", "Info", shell.isHelpPage, () => onSetPage("help"), undefined, {
     sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
     time: null,
     hasDraft: false,
@@ -78,7 +80,7 @@ export function renderSidebarMenuSurface(ctx: RenderSidebarMenuCtx) {
   infoRow.setAttribute("title", mobileUi ? "Справка и журнал обновлений" : "Подсказки по клавишам и журнал обновлений");
 
   const accountRows: HTMLElement[] = [];
-  if (state.conn === "connected" && !state.authed) {
+  if (shell.canLogin) {
     const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
       sub: "Вход или регистрация",
       time: null,
@@ -86,7 +88,7 @@ export function renderSidebarMenuSurface(ctx: RenderSidebarMenuCtx) {
     });
     loginRow.setAttribute("title", "Войти или зарегистрироваться");
     accountRows.push(loginRow);
-  } else if (state.authed) {
+  } else if (shell.canLogout) {
     const logoutIcon = mobileUi ? "⏻" : "⎋";
     const logoutRow = roomRow(logoutIcon, mobileUi ? "Выход" : "Выход (F10)", false, () => onAuthLogout(), undefined, {
       sub: "Завершить сессию",

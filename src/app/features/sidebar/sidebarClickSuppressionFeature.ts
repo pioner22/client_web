@@ -20,7 +20,6 @@ export function createSidebarClickSuppressionFeature(
     sidebar,
     getClickSuppressionState,
     setClickSuppressionState,
-    isSidebarClickSuppressed,
     disarmSidebarClickSuppression,
   } = deps;
 
@@ -35,7 +34,7 @@ export function createSidebarClickSuppressionFeature(
     const consumed = consumeCtxClickSuppression(getClickSuppressionState(), kind, id);
     setClickSuppressionState(consumed.state);
     const keySuppressed = consumed.suppressed;
-    const shouldSuppress = isSidebarClickSuppressed() || keySuppressed;
+    const shouldSuppress = keySuppressed;
     if (!shouldSuppress) return;
     e.preventDefault();
     e.stopPropagation();

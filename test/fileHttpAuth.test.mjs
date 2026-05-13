@@ -33,6 +33,68 @@ async function loadHelper() {
   }
 }
 
+function setDesktopPublicBaseUrl(publicBaseUrl) {
+  const hadDesktop = Object.prototype.hasOwnProperty.call(globalThis, "yagodkaDesktop");
+  const previousDesktop = globalThis.yagodkaDesktop;
+  Object.defineProperty(globalThis, "yagodkaDesktop", {
+    value: { config: { publicBaseUrl } },
+    configurable: true,
+  });
+  return () => {
+    if (hadDesktop) {
+      Object.defineProperty(globalThis, "yagodkaDesktop", {
+        value: previousDesktop,
+        configurable: true,
+      });
+    } else {
+      delete globalThis.yagodkaDesktop;
+    }
+  };
+}
+
+function setNativePublicBaseUrl(publicBaseUrl) {
+  const hadCapacitor = Object.prototype.hasOwnProperty.call(globalThis, "Capacitor");
+  const previousCapacitor = globalThis.Capacitor;
+  const hadNative = Object.prototype.hasOwnProperty.call(globalThis, "yagodkaNative");
+  const previousNative = globalThis.yagodkaNative;
+  const previousLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+  Object.defineProperty(globalThis, "Capacitor", {
+    value: {
+      getPlatform: () => "android",
+      isNativePlatform: () => true,
+    },
+    configurable: true,
+  });
+  Object.defineProperty(globalThis, "yagodkaNative", {
+    value: { config: { publicBaseUrl } },
+    configurable: true,
+  });
+  Object.defineProperty(globalThis, "location", {
+    value: { href: "https://localhost/index.html" },
+    configurable: true,
+  });
+  return () => {
+    if (hadCapacitor) {
+      Object.defineProperty(globalThis, "Capacitor", {
+        value: previousCapacitor,
+        configurable: true,
+      });
+    } else {
+      delete globalThis.Capacitor;
+    }
+    if (hadNative) {
+      Object.defineProperty(globalThis, "yagodkaNative", {
+        value: previousNative,
+        configurable: true,
+      });
+    } else {
+      delete globalThis.yagodkaNative;
+    }
+    if (previousLocation) Object.defineProperty(globalThis, "location", previousLocation);
+    else delete globalThis.location;
+  };
+}
+
 test("fileHttpAuth: вычищает legacy t= из query и не поднимает его в Authorization header", async () => {
   const { liftFileHttpTokenToBearer, cleanup } = await loadHelper();
   try {
@@ -40,6 +102,40 @@ test("fileHttpAuth: вычищает legacy t= из query и не поднима
     assert.equal(out.url, "https://yagodka.org/files/f123?x=1");
     assert.deepEqual(out.headers, {});
   } finally {
+    await cleanup();
+  }
+});
+
+test("fileHttpAuth: file:// base использует desktop public base для bearer URL", async () => {
+  const restoreDesktop = setDesktopPublicBaseUrl("https://yagodka.org/");
+  const { liftFileHttpTokenToBearer, rememberFileHttpBearer, cleanup } = await loadHelper();
+  try {
+    const normalized = rememberFileHttpBearer("/files/f888", "desktop-secret", {
+      base: "file:///Applications/Yagodka.app/Contents/Resources/app.asar/dist/index.html",
+    });
+    assert.equal(normalized, "https://yagodka.org/files/f888");
+    const out = liftFileHttpTokenToBearer("/files/f888", {
+      base: "file:///Applications/Yagodka.app/Contents/Resources/app.asar/dist/index.html",
+    });
+    assert.equal(out.url, "https://yagodka.org/files/f888");
+    assert.deepEqual(out.headers, { Authorization: "Bearer desktop-secret" });
+  } finally {
+    restoreDesktop();
+    await cleanup();
+  }
+});
+
+test("fileHttpAuth: native https://localhost base использует public base вместо WebView origin", async () => {
+  const restoreNative = setNativePublicBaseUrl("https://yagodka.org/");
+  const { liftFileHttpTokenToBearer, rememberFileHttpBearer, cleanup } = await loadHelper();
+  try {
+    const normalized = rememberFileHttpBearer("/files/f999", "native-secret");
+    assert.equal(normalized, "https://yagodka.org/files/f999");
+    const out = liftFileHttpTokenToBearer("/files/f999");
+    assert.equal(out.url, "https://yagodka.org/files/f999");
+    assert.deepEqual(out.headers, { Authorization: "Bearer native-secret" });
+  } finally {
+    restoreNative();
     await cleanup();
   }
 });

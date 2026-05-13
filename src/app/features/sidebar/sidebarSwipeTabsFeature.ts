@@ -1,7 +1,8 @@
+import { normalizeMobileSidebarTab } from "../../../helpers/sidebar/sidebarState";
 import type { Store } from "../../../stores/store";
 import type { AppState, MobileSidebarTab } from "../../../stores/types";
 
-const MOBILE_SIDEBAR_TAB_ORDER: MobileSidebarTab[] = ["contacts", "boards", "chats", "menu"];
+const MOBILE_SIDEBAR_TAB_ORDER: MobileSidebarTab[] = ["contacts", "groups", "boards", "menu"];
 
 export interface SidebarSwipeTabsFeatureDeps {
   store: Store<AppState>;
@@ -104,9 +105,9 @@ export function createSidebarSwipeTabsFeature(deps: SidebarSwipeTabsFeatureDeps)
   };
 
   const nextMobileSidebarTab = (dir: -1 | 1): MobileSidebarTab | null => {
-    const cur = store.get().mobileSidebarTab;
+    const cur = normalizeMobileSidebarTab(store.get().mobileSidebarTab);
     const idx = MOBILE_SIDEBAR_TAB_ORDER.indexOf(cur);
-    const safeIdx = idx >= 0 ? idx : MOBILE_SIDEBAR_TAB_ORDER.indexOf("chats");
+    const safeIdx = idx >= 0 ? idx : MOBILE_SIDEBAR_TAB_ORDER.indexOf("contacts");
     const nextIdx = safeIdx + dir;
     if (nextIdx < 0 || nextIdx >= MOBILE_SIDEBAR_TAB_ORDER.length) return null;
     return MOBILE_SIDEBAR_TAB_ORDER[nextIdx] || null;

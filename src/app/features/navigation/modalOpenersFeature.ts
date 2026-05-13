@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, ConfirmAction } from "../../../stores/types";
+import { openAuthModal, openCreatePageState, openModalState } from "../../../helpers/navigation/appShellState";
 
 type RoomTargetKind = "group" | "board";
 
@@ -43,11 +44,11 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
     prepareMembersChips?.();
     const st = store.get();
     if (!st.authed) {
-      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      store.set((prev) => openAuthModal(prev, { message: "Сначала войдите или зарегистрируйтесь" }));
       return;
     }
     resetCreateMembers("group_create");
-    store.set({ page: "group_create", groupCreateMessage: "" });
+    store.set((prev) => openCreatePageState(prev, "group_create"));
   };
 
   const openBoardCreateModal = () => {
@@ -55,11 +56,11 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
     prepareMembersChips?.();
     const st = store.get();
     if (!st.authed) {
-      store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
+      store.set((prev) => openAuthModal(prev, { message: "Сначала войдите или зарегистрируйтесь" }));
       return;
     }
     resetCreateMembers("board_create");
-    store.set({ page: "board_create", boardCreateMessage: "" });
+    store.set((prev) => openCreatePageState(prev, "board_create"));
   };
 
   const openMembersAddModal = (targetKind: RoomTargetKind, targetId: string) => {
@@ -68,7 +69,7 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
     closeMobileSidebar();
     prepareMembersChips?.();
     const { title } = resolveRoomTitle(targetKind, targetId);
-    store.set({ modal: { kind: "members_add", targetKind, targetId, title } });
+    store.set((prev) => openModalState(prev, { kind: "members_add", targetKind, targetId, title }));
   };
 
   const openMembersRemoveModal = (targetKind: RoomTargetKind, targetId: string) => {
@@ -76,7 +77,7 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
     if (!st.authed) return;
     closeMobileSidebar();
     const { title } = resolveRoomTitle(targetKind, targetId);
-    store.set({ modal: { kind: "members_remove", targetKind, targetId, title } });
+    store.set((prev) => openModalState(prev, { kind: "members_remove", targetKind, targetId, title }));
   };
 
   const openRenameModal = (targetKind: RoomTargetKind, targetId: string) => {
@@ -84,7 +85,7 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
     if (!st.authed) return;
     closeMobileSidebar();
     const { title, currentName } = resolveRoomTitle(targetKind, targetId);
-    store.set({ modal: { kind: "rename", targetKind, targetId, title, currentName } });
+    store.set((prev) => openModalState(prev, { kind: "rename", targetKind, targetId, title, currentName }));
   };
 
   const openConfirmModal = (payload: {
@@ -96,7 +97,7 @@ export function createModalOpenersFeature(deps: ModalOpenersFeatureDeps): ModalO
     danger?: boolean;
   }) => {
     closeMobileSidebar();
-    store.set({ modal: { kind: "confirm", ...payload } });
+    store.set((prev) => openModalState(prev, { kind: "confirm", ...payload }));
   };
 
   return {

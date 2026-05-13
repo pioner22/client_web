@@ -32,6 +32,14 @@ test("calls: call_invite is not blocked by toast dedupe", async () => {
   assert.ok(!/if \(!showToastHere\) return true;/.test(src));
 });
 
+test("calls: media/call status goes through status line, not center popups", async () => {
+  const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
+  assert.doesNotMatch(src, /placement:\s*"center"/);
+  assert.doesNotMatch(src, /занят[аы]? другим приложением/);
+  assert.doesNotMatch(src, /настройках сайта/);
+  assert.match(src, /queryCapturePermissionState/);
+});
+
 test("calls: client sends call_invite_ack and dedupes same call invite", async () => {
   const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
   assert.match(src, /call_invite_ack/);
@@ -49,4 +57,26 @@ test("calls: jitsi external API uses configured meet host", async () => {
   const src = await readFile(path.resolve("src/helpers/calls/jitsiExternalApi.ts"), "utf8");
   assert.ok(!/meet\.jit\.si/.test(src));
   assert.match(src, /return host;/);
+});
+
+test("calls: modal wires Jitsi quality telemetry", async () => {
+  const modalSrc = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
+  const telemetrySrc = await readFile(path.resolve("src/helpers/calls/callQualityTelemetry.ts"), "utf8");
+  const css = await readCssWithImports("src/scss/modal.css");
+  assert.match(modalSrc, /watchJitsiQuality/);
+  assert.match(modalSrc, /call-quality/);
+  assert.match(telemetrySrc, /videoQualityChanged/);
+  assert.match(telemetrySrc, /p2pStatusChanged/);
+  assert.match(telemetrySrc, /peerConnectionFailure/);
+  assert.match(telemetrySrc, /getRoomsInfo/);
+  assert.match(css, /\.call-quality/);
+});
+
+test("calls: modal wires Jitsi media policy", async () => {
+  const modalSrc = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
+  const policySrc = await readFile(path.resolve("src/helpers/calls/jitsiMediaPolicy.ts"), "utf8");
+  assert.match(modalSrc, /buildJitsiMediaPolicy\(mode\)/);
+  assert.match(policySrc, /maxBitratesVideo/);
+  assert.match(policySrc, /enableLayerSuspension/);
+  assert.match(policySrc, /saveData/);
 });

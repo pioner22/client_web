@@ -1,6 +1,7 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { isVideoLikeFile } from "../../../helpers/files/mediaKind";
 import { requestVoiceAutoplay } from "../../../helpers/media/audioSession";
+import { getActiveConversationKey } from "../../../helpers/navigation/mainConversationState";
 import type { ChatSurfaceDeferredDeps } from "./chatSurfaceEventsFeature";
 
 type ViewerKindHint = "image" | "video";
@@ -77,7 +78,7 @@ export function createChatSurfaceMediaActions(deps: ChatSurfaceDeferredDeps) {
             const idxRaw = String(preview.getAttribute("data-msg-idx") || "").trim();
             const msgIdx = idxRaw ? Number(idxRaw) : NaN;
             const st = store.get();
-            const chatKey = st.selected ? conversationKey(st.selected) : "";
+            const chatKey = getActiveConversationKey(st);
             if (!chatKey || !Number.isFinite(msgIdx)) return;
             const url = String(preview.getAttribute("data-url") || "").trim() || null;
             const fileId = String(preview.getAttribute("data-file-id") || "").trim() || null;
@@ -124,7 +125,7 @@ export function createChatSurfaceMediaActions(deps: ChatSurfaceDeferredDeps) {
     const msgIdxRaw = viewBtn.getAttribute("data-msg-idx");
     const msgIdx = msgIdxRaw !== null && msgIdxRaw.trim() ? Number(msgIdxRaw) : null;
     const st = store.get();
-    const chatKey = st.selected ? conversationKey(st.selected) : null;
+    const chatKey = getActiveConversationKey(st) || null;
     closeMobileSidebar();
 
     const openFallback = () => {

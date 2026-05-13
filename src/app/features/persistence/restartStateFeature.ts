@@ -4,32 +4,13 @@ import { sanitizeDraftMap } from "../../../helpers/chat/drafts";
 import { sanitizePins } from "../../../helpers/chat/pins";
 import type { ChatSearchFilter } from "../../../helpers/chat/chatSearch";
 import type { AppState, PageKind, TargetRef } from "../../../stores/types";
+import type { AppShellRestoreSnapshot } from "../../../helpers/navigation/appShellState";
 
 const RESTART_STATE_KEY = "yagodka_restart_state_v1";
 const PAGE_KINDS: ReadonlyArray<PageKind> = ["main", "search", "profile", "user", "group", "board", "files"];
 const CHAT_SEARCH_FILTERS: ReadonlyArray<ChatSearchFilter> = ["all", "media", "files", "links", "music", "voice"];
 
-export interface RestartStateSnapshot {
-  page?: PageKind;
-  userViewId?: string | null;
-  groupViewId?: string | null;
-  boardViewId?: string | null;
-  selected?: TargetRef | null;
-  input?: string;
-  drafts?: Record<string, string>;
-  pinned?: string[];
-  archived?: string[];
-  chatSearchOpen?: boolean;
-  chatSearchQuery?: string;
-  chatSearchDate?: string;
-  chatSearchFilter?: ChatSearchFilter;
-  chatSearchPos?: number;
-  searchQuery?: string;
-  profileDraftDisplayName?: string;
-  profileDraftHandle?: string;
-  profileDraftBio?: string;
-  profileDraftStatus?: string;
-}
+export interface RestartStateSnapshot extends AppShellRestoreSnapshot {}
 
 export interface RestartStateFeature {
   save: (state: AppState) => void;

@@ -5,6 +5,7 @@ import {
 } from "../history/historyMediaHydrationRuntime";
 import { getChatHistoryViewportRuntime } from "../../../helpers/chat/historyViewportRuntime";
 import { createChatStickyBottomState, isChatStickyBottomActive } from "../../../helpers/chat/stickyBottom";
+import { hasActiveConversationSelection } from "../../../helpers/navigation/mainConversationState";
 import type { ChatHostDeferredDeps } from "./chatHostDeferredRuntime";
 export { resolveStablePreviewAspectRatio };
 export { didPreviewGeometryChange };
@@ -114,7 +115,7 @@ export function installChatHostDeferredEvents(deps: ChatHostDeferredDeps) {
     }
     const st = store.get();
     if (st.page !== "main") return;
-    if (!st.selected) return;
+    if (!hasActiveConversationSelection(st)) return;
     markUserChatScroll();
   });
 

@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { formatTime } from "../../helpers/time";
-import { conversationKey } from "../../helpers/chat/conversationKey";
+import { conversationKey, dmKey, roomKey } from "../../helpers/chat/conversationKey";
+import { getConversationHistorySyncState } from "../../helpers/chat/historySync";
 import { isPinnedMessage } from "../../helpers/chat/pinnedMessages";
 import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import type { AppState, ChatMessage, ChatMessageRef, FileOfferIn, FileTransferEntry } from "../../stores/types";
@@ -10,6 +11,8 @@ import { isAudioLikeFile, isImageLikeFile, isVideoLikeFile, normalizeFileName } 
 import { safeUrl } from "../../helpers/security/safeUrl";
 import { renderRichText } from "../../helpers/chat/richText";
 import { renderBoardPost } from "../../helpers/boards/boardPost";
+import { getActiveConversationTarget } from "../../helpers/navigation/mainConversationState";
+import { sanitizeTargetRef } from "../../helpers/navigation/viewState";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
 import {
@@ -27,6 +30,7 @@ import { renderDeferredVoicePlayer } from "./chatDeferredMediaRuntime";
 import { renderDeferredSysMessage } from "./chatSpecialMessageRuntime";
 import { renderDeferredVisualPreview } from "./chatVisualPreviewRuntime";
 import { CHAT_MEDIA_PREVIEW_SCALE, type FileAttachmentInfo, isVideoNoteName, resolvePreviewBaseWidthPx } from "./chatVisualPreviewShared";
+import { renderChatFileActions, renderChatFilePills, resolveChatFileSurfaceInfo } from "./chatFileAttachmentSurface";
 import { renderMediaOverlayControls } from "./mediaOverlayControls";
 import { renderMessageContentShell } from "./messageContentShell";
 import { renderMessageSelectionControl } from "./messageSelectionControl";
@@ -120,7 +124,7 @@ export function avatar(kind: "dm" | "group" | "board", id: string): HTMLElement 
 }
 
 export function chatTitleNodes(state: AppState): Array<string | HTMLElement> {
-  const sel = state.selected;
+  const sel = getActiveConversationTarget(state) ?? sanitizeTargetRef(state.selected);
   if (!sel) return ["Чат"];
   if (sel.kind === "dm") {
     const p = state.profiles?.[sel.id];
@@ -456,8 +460,23 @@ export function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { 
   const name = String(transfer?.name || offer?.name || att.name || "файл");
   const size = Number(transfer?.size ?? offer?.size ?? att.size ?? 0) || 0;
   const mime = att.mime || transfer?.mime || offer?.mime || null;
+  const isImage = isImageLikeFile(name, mime);
+  const isVideo = isVideoLikeFile(name, mime);
+  const isAudio = isAudioLikeFile(name, mime);
+  const activeConversation = getActiveConversationTarget(state) ?? sanitizeTargetRef(state.selected);
+  const selectedKey = activeConversation ? conversationKey(activeConversation) : "";
+  const messageKey = m.room ? roomKey(String(m.room || "")) : dmKey(String(m.kind === "out" ? (m.to || "") : (m.from || "")));
+  const previewOnly = Boolean(selectedKey && messageKey === selectedKey && getConversationHistorySyncState(state, messageKey).previewOnly);
   const base = typeof location !== "undefined" ? location.href : "http://localhost/";
-  const url = transfer?.url ? safeUrl(transfer.url, { base, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
+  const shouldTrustRuntimeUrl = (raw: string | null | undefined): boolean => {
+    const value = String(raw || "").trim();
+    if (!value) return false;
+    if (!previewOnly) return true;
+    return value.startsWith("blob:");
+  };
+  const url = shouldTrustRuntimeUrl(transfer?.url)
+    ? safeUrl(String(transfer?.url || ""), { base, allowedProtocols: ["http:", "https:", "blob:"] })
+    : null;
   const mobileUi = opts?.mobileUi ?? false;
   const hideProgressText = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
   const statusLine = transfer
@@ -469,13 +488,10 @@ export function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { 
         ? "Входящий файл (принять в «Файлы»)"
         : "Входящий файл (принять в «Файлы» / F7)"
       : "";
-  const isImage = isImageLikeFile(name, mime);
-  const isVideo = isVideoLikeFile(name, mime);
-  const isAudio = isAudioLikeFile(name, mime);
   const hasProgress = Boolean(transfer && (transfer.status === "uploading" || transfer.status === "downloading"));
   const fileId = att.fileId ? String(att.fileId) : transfer?.id ? String(transfer.id) : offer?.id ? String(offer.id) : null;
   const thumbUrl =
-    fileId && state.fileThumbs?.[fileId]?.url
+    fileId && shouldTrustRuntimeUrl(state.fileThumbs?.[fileId]?.url)
       ? safeUrl(state.fileThumbs[fileId].url, { base, allowedProtocols: ["http:", "https:", "blob:"] })
       : null;
   const thumbMeta = fileId ? state.fileThumbs?.[fileId] ?? null : null;
@@ -670,7 +686,7 @@ export function messageLine(
     const actionKind = m.attachment?.kind === "action" ? String(m.attachment.payload?.kind || "") : "";
     const line = renderDeferredSysMessage({ message: m });
     applyMessageDataset(line, m.kind, {
-      boardUi: Boolean(opts?.boardUi && state.selected?.kind === "board"),
+      boardUi: Boolean(opts?.boardUi),
       mobileUi: opts?.mobileUi,
       attachKind: m.attachment?.kind,
       actionKind,
@@ -690,7 +706,7 @@ export function messageLine(
   const titleLabel = showHandle ? `${fromLabel} ${fromHandle}` : fromLabel;
   const showFrom = true;
   const canOpenProfile = Boolean(displayFromId);
-  const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
+  const boardUi = Boolean(opts?.boardUi);
   const meta = buildMessageMeta(m);
   const metaNode = el("div", { class: "msg-meta" }, meta);
   const bodyChildren: HTMLElement[] = [];
@@ -744,12 +760,19 @@ export function messageLine(
     if (transfer?.receivedBy?.length) metaEls.push(el("div", { class: "file-meta" }, [`Получили: ${transfer.receivedBy.join(", ")}`]));
 
     const badge = fileBadge(name, mime);
+    const fileSurface = resolveChatFileSurfaceInfo(info);
     const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
     icon.style.setProperty("--file-h", String(badge.hue));
     const fileName = boardUi ? { title: name, display: name } : shortenChatFileNameTelegram(name, 4, 25);
     const fileNameEl = el("div", { class: "file-name", title: fileName.title }, [fileName.display]);
-    const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, fileNameEl]), ...metaEls];
-    if (transfer && (transfer.status === "uploading" || transfer.status === "downloading")) {
+    const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, fileNameEl]), renderChatFilePills(info, fileSurface), ...metaEls];
+    const isImage = info.isImage;
+    const isVideo = info.isVideo;
+    const isAudio = info.isAudio;
+    const voice = isAudio && isVoiceNoteName(name);
+    const videoNote = isVideo && isVideoNoteName(name);
+    const isVisualMedia = isImage || isVideo;
+    if (!isVisualMedia && transfer && (transfer.status === "uploading" || transfer.status === "downloading")) {
       const progress = Math.max(0, Math.min(100, Math.round(transfer.progress || 0)));
       const label = transfer.status === "uploading" ? `Загрузка ${progress}%` : `Скачивание ${progress}%`;
       const candy = el("span", { class: "file-progress-candy", "aria-hidden": "true" });
@@ -770,12 +793,6 @@ export function messageLine(
         )
       );
     }
-
-    const isImage = info.isImage;
-    const isVideo = info.isVideo;
-    const isAudio = info.isAudio;
-    const voice = isAudio && isVoiceNoteName(name);
-    const videoNote = isVideo && isVideoNoteName(name);
 
     if (isAudio) {
       if (voice) {
@@ -807,37 +824,16 @@ export function messageLine(
       }
     }
 
-    const actions: HTMLElement[] = [];
-    if (offer?.id) {
-      actions.push(
-        el(
-          "button",
-          { class: "btn btn-primary file-action file-action-accept", type: "button", "data-action": "file-accept", "data-file-id": offer.id, "aria-label": `Принять: ${name}` },
-          ["Принять"]
-        )
-      );
-    } else if (info.fileId) {
-      actions.push(
-        el(
-          "button",
-          { class: "btn file-action file-action-download", type: "button", "data-action": "file-download", "data-file-id": info.fileId, "aria-label": `Скачать: ${name}` },
-          ["Скачать"]
-        )
-      );
-    } else if (url) {
-      actions.push(
-        el("a", { class: "btn file-action file-action-download", href: url, download: name, title: `Скачать: ${name}`, "aria-label": `Скачать: ${name}` }, [
-          "Скачать",
-        ])
-      );
-    }
-
     const rowChildren: HTMLElement[] = [el("div", { class: "file-main" }, mainChildren)];
 
     const caption = String(m.text || "").trim();
     const viewerCaption = caption && !caption.startsWith("[file]") ? caption : "";
+    const actions = renderChatFileActions(info, fileSurface, {
+      caption: viewerCaption,
+      msgIdx: opts?.msgIdx,
+      visualMedia: isImage || isVideo,
+    });
     const hasViewerCaption = Boolean(viewerCaption);
-    const isVisualMedia = isImage || isVideo;
     const ratio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
     const canApplyMediaFlags = Boolean(!boardUi && !hasViewerCaption && ratio !== null);
     const stickerCandidate = canApplyMediaFlags && ratio !== null ? isWebpStickerCandidate(info, ratio) : false;
@@ -850,10 +846,10 @@ export function messageLine(
 
     const hasProgress = info.hasProgress;
     const fileRowClass = isVisualMedia
-      ? `file-row file-row-chat file-row-image${isVideo ? " file-row-video" : ""}${videoNote ? " file-row-video-note" : ""}${hasProgress ? " file-row-progress" : ""}`
+      ? `file-row file-row-chat file-row-image ${fileSurface.rowClass}${isVideo ? " file-row-video" : ""}${videoNote ? " file-row-video-note" : ""}${hasProgress ? " file-row-progress" : ""}`
       : isAudio
-        ? `file-row file-row-chat file-row-audio${voice ? " file-row-voice" : ""}`
-        : "file-row file-row-chat";
+        ? `file-row file-row-chat file-row-audio ${fileSurface.rowClass}${voice ? " file-row-voice" : ""}`
+        : `file-row file-row-chat ${fileSurface.rowClass}`;
     if (!isVisualMedia) rowChildren.push(el("div", { class: "file-actions" }, actions));
     else visualMediaActions = actions;
     fileRowEl = el("div", { class: fileRowClass }, rowChildren);
@@ -875,7 +871,7 @@ export function messageLine(
       hasCaption = true;
       hasText = true;
       emojiOnly = emojiOnlyCaption;
-      const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
+      const boardUi = Boolean(opts?.boardUi);
       captionNode =
         boardUi && !emojiOnlyCaption
           ? el("div", { class: "msg-text msg-caption msg-text-board" }, [renderBoardPost(viewerCaption)])
@@ -899,7 +895,7 @@ export function messageLine(
     const textEmojiOnly = isEmojiOnlyText(trimmedText);
     hasText = Boolean(trimmedText);
     emojiOnly = textEmojiOnly;
-    const boardUi = Boolean(opts?.boardUi && state.selected?.kind === "board");
+    const boardUi = Boolean(opts?.boardUi);
     const textNode =
       boardUi && !textEmojiOnly
         ? el("div", { class: "msg-text msg-text-board" }, [renderBoardPost(m.text)])
@@ -962,7 +958,7 @@ export function messageLine(
   const cls = m.attachment ? `msg msg-${m.kind} msg-attach` : `msg msg-${m.kind}`;
   const line = el("div", { class: cls }, lineChildren);
   applyMessageDataset(line, m.kind, {
-    boardUi: Boolean(opts?.boardUi && state.selected?.kind === "board"),
+    boardUi: Boolean(opts?.boardUi),
     mobileUi: opts?.mobileUi,
     refKind,
     hasReacts: Boolean(reacts),

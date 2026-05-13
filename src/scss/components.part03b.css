@@ -120,60 +120,59 @@
 
 .toast-host {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--safe-bottom-pad) + 12px);
+  left: auto;
+  right: calc(env(safe-area-inset-right) + 12px);
+  top: calc(env(safe-area-inset-top) + var(--header-h, 56px) + 10px);
+  bottom: auto;
   z-index: 45;
   display: grid;
-  place-items: center;
-  padding: 0 12px;
+  place-items: start end;
+  width: min(430px, calc(100vw - 24px));
+  padding: 0;
   pointer-events: none;
 }
 
-.toast-host[data-toast-placement="center"] {
-  top: 0;
-  bottom: 0;
-  padding: calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 12px);
+.toast-host,
+.toast-host[data-toast-placement="status"] {
+  display: none !important;
+  pointer-events: none !important;
 }
 
-.toast-host[data-toast-placement="center"] .toast {
-  width: min(520px, 92vw);
-  max-width: min(520px, 92vw);
-  max-height: calc(100vh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
-  max-height: calc(100svh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
-  max-height: calc(100dvh - (env(safe-area-inset-top) + env(safe-area-inset-bottom) + 48px));
-  overflow: auto;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--sp-2);
+.toast-host[data-toast-placement="status"] {
+  top: calc(env(safe-area-inset-top) + var(--header-h, 56px) + 10px);
+  bottom: auto;
+  padding: 0;
 }
 
-.toast-host[data-toast-placement="center"] .toast.toast-warn,
-.toast-host[data-toast-placement="center"] .toast.toast-error {
-  /* Calls errors should be compact and not look like a modal dialog. */
-  width: min(260px, 92vw);
-  max-width: min(260px, 92vw);
-  padding: 6px 8px;
+.toast-host[data-toast-placement="status"] .toast {
+  width: min(430px, calc(100vw - 24px));
+  max-width: min(430px, calc(100vw - 24px));
+  max-height: min(36vh, 280px);
+  overflow: hidden;
 }
 
-.toast-host[data-toast-placement="center"] .toast-msg {
+.toast-host[data-toast-placement="status"] .toast.toast-warn,
+.toast-host[data-toast-placement="status"] .toast.toast-error {
+  width: min(430px, calc(100vw - 24px));
+  max-width: min(430px, calc(100vw - 24px));
+}
+
+.toast-host[data-toast-placement="status"] .toast-msg {
   white-space: normal;
-  text-overflow: clip;
-  overflow: visible;
-  text-align: center;
+  text-align: left;
   overflow-wrap: anywhere;
   word-break: break-word;
   hyphens: auto;
 }
 
-.toast-host[data-toast-placement="center"] .toast-actions {
-  width: 100%;
+.toast-host[data-toast-placement="status"] .toast-actions {
+  width: auto;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: end;
 }
 
-.toast-host[data-toast-placement="center"] .toast-btn {
-  flex: 1 1 120px;
+.toast-host[data-toast-placement="status"] .toast-btn {
+  flex: 0 0 auto;
 }
 
 .toast {

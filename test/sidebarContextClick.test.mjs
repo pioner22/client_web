@@ -64,6 +64,9 @@ async function withDomStubs(run) {
       const v = String(value);
       this._attrs.set(k, v);
     }
+    removeAttribute(name) {
+      this._attrs.delete(String(name));
+    }
     hasAttribute(name) {
       return this._attrs.has(String(name));
     }
@@ -129,6 +132,7 @@ async function withDomStubs(run) {
     createTextNode(text) {
       return { nodeType: 3, textContent: String(text) };
     },
+    documentElement: { dataset: {} },
   };
   globalThis.window = {
     matchMedia: () => ({ matches: false }),
@@ -229,6 +233,24 @@ test("sidebar: Ctrl+Click/ПКМ не активирует строку (не м
       btn.dispatchEvent({ type: "click", ctrlKey: false, button: 0 });
       assert.equal(calls.length, 1);
       assert.deepEqual(calls[0], { kind: "dm", id: "123-456-789" });
+
+      document.documentElement.dataset.sidebarClickSuppressUntil = String(Date.now() + 1000);
+      btn.dispatchEvent({ type: "click", ctrlKey: false, button: 0 });
+      assert.equal(calls.length, 2, "root context suppression should not eat ordinary row activation");
+
+      btn.setAttribute("data-ctx-suppress-until", String(Date.now() + 1000));
+      btn.dispatchEvent({
+        type: "click",
+        ctrlKey: false,
+        button: 0,
+        preventDefault() {},
+        stopPropagation() {},
+      });
+      assert.equal(calls.length, 2, "local context suppression should block the immediate follow-up click");
+
+      btn.setAttribute("data-ctx-suppress-until", "0");
+      btn.dispatchEvent({ type: "click", ctrlKey: false, button: 0 });
+      assert.equal(calls.length, 3, "ordinary click after local suppression should work");
     });
   } finally {
     await helper.cleanup();

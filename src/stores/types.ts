@@ -259,7 +259,7 @@ export type PageKind =
 
 export type AuthMode = "auto" | "register" | "login";
 
-export type MobileSidebarTab = "chats" | "contacts" | "boards" | "menu";
+export type MobileSidebarTab = "chats" | "groups" | "contacts" | "boards" | "menu";
 
 export interface ChatFolderEntry {
   id: string;
@@ -461,6 +461,58 @@ export interface SkinInfo {
 
 export type ThemeMode = "light" | "dark";
 export type MessageViewMode = "bubble" | "plain" | "compact";
+export type HistorySyncSource = "empty" | "cache" | "server";
+export type DomainSyncSource = "empty" | "cache" | "server";
+
+export interface ConversationHistorySyncState {
+  loaded: boolean;
+  previewOnly: boolean;
+  cursor: number | null;
+  hasMore: boolean | null;
+  loading: boolean;
+  loadingSlots: number;
+  virtualStart: number;
+  source: HistorySyncSource;
+  reconcilePending: boolean;
+  lastServerAt: number | null;
+}
+
+export interface RosterSyncState {
+  loaded: boolean;
+  source: DomainSyncSource;
+  reconcilePending: boolean;
+  lastServerAt: number | null;
+  lastPresenceAt: number | null;
+}
+
+export interface ProfileSyncState {
+  loaded: boolean;
+  source: DomainSyncSource;
+  lastServerAt: number | null;
+  avatarCheckedAt: number | null;
+}
+
+export interface SidebarSyncState {
+  loaded: boolean;
+  source: DomainSyncSource;
+  reconcilePending: boolean;
+  lastServerAt: number | null;
+  lastLocalAt: number | null;
+}
+
+export interface RuntimeDeliveryDomainSyncState {
+  loaded: boolean;
+  source: DomainSyncSource;
+  reconcilePending: boolean;
+  lastServerAt: number | null;
+  lastLocalAt: number | null;
+}
+
+export interface RuntimeDeliverySyncState {
+  drafts: RuntimeDeliveryDomainSyncState;
+  fileTransfers: RuntimeDeliveryDomainSyncState;
+  outbox: RuntimeDeliveryDomainSyncState;
+}
 
 export interface AppState {
   conn: ConnStatus;
@@ -483,6 +535,7 @@ export interface AppState {
   sidebarFolderId: string;
   sidebarQuery: string;
   sidebarArchiveOpen: boolean;
+  sidebarSync: SidebarSyncState;
   presenceTick: number;
 
   friends: FriendEntry[];
@@ -510,15 +563,20 @@ export interface AppState {
 
   selected: TargetRef | null;
   conversations: Record<string, ChatMessage[]>;
+  historySync: Record<string, ConversationHistorySyncState>;
+  rosterSync: RosterSyncState;
+  profileSync: Record<string, ProfileSyncState>;
   historyLoaded: Record<string, boolean>;
   historyPreviewOnly: Record<string, boolean>;
   historyCursor: Record<string, number>;
   historyHasMore: Record<string, boolean>;
   historyLoading: Record<string, boolean>;
+  historyLoadingSlots: Record<string, number>;
   historyVirtualStart: Record<string, number>;
   lastRead: Record<string, LastReadMarker>;
 
   outbox: Record<string, OutboxEntry[]>;
+  deliverySync: RuntimeDeliverySyncState;
 
   drafts: Record<string, string>;
   input: string;

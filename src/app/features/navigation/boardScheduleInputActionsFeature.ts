@@ -1,5 +1,7 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { updateDraftMap } from "../../../helpers/chat/drafts";
+import { getActiveConversationTarget } from "../../../helpers/navigation/mainConversationState";
+import { applyDraftMapMutation } from "../../../helpers/runtime/deliverySync";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 
@@ -41,7 +43,7 @@ export function createBoardScheduleInputActionsFeature(deps: BoardScheduleInputA
     if (scheduleAddBtn) {
       event.preventDefault();
       const st = store.get();
-      const sel = st.selected;
+      const sel = getActiveConversationTarget(st);
       if (!sel || sel.kind !== "board") return true;
       if (!st.authed || !st.selfId) {
         store.set({ modal: { kind: "auth", message: "Сначала войдите или зарегистрируйтесь" } });
@@ -101,7 +103,10 @@ export function createBoardScheduleInputActionsFeature(deps: BoardScheduleInputA
       store.set((prev) => prev);
 
       const convKey = conversationKey(sel);
-      store.set((prev) => ({ ...prev, input: "", drafts: convKey ? updateDraftMap(prev.drafts, convKey, "") : prev.drafts }));
+      store.set((prev) => {
+        const drafts = convKey ? updateDraftMap(prev.drafts, convKey, "") : prev.drafts;
+        return { ...applyDraftMapMutation(prev, drafts), input: "" };
+      });
       scheduleSaveDrafts();
       try {
         input.value = "";
@@ -115,7 +120,7 @@ export function createBoardScheduleInputActionsFeature(deps: BoardScheduleInputA
       return true;
     }
 
-    const scheduleClearBtn = target?.closest("button[data-action='board-schedule-clear']") as HTMLButtonElement | null;
+      const scheduleClearBtn = target?.closest("button[data-action='board-schedule-clear']") as HTMLButtonElement | null;
     if (scheduleClearBtn) {
       event.preventDefault();
       boardScheduleInput.value = "";

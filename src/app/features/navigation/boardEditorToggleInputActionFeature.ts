@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { getActiveConversationTarget } from "../../../helpers/navigation/mainConversationState";
 
 export interface BoardEditorToggleInputActionFeatureDeps {
   store: Store<AppState>;
@@ -20,9 +21,10 @@ export function createBoardEditorToggleInputActionFeature(
     const boardToggle = target?.closest("button[data-action='board-editor-toggle']") as HTMLButtonElement | null;
     if (!boardToggle) return false;
     const st = store.get();
-    if (!st.selected || st.selected.kind !== "board") return true;
+    const activeConversation = getActiveConversationTarget(st);
+    if (!activeConversation || activeConversation.kind !== "board") return true;
     event.preventDefault();
-    const board = (st.boards || []).find((entry) => entry.id === st.selected?.id);
+    const board = (st.boards || []).find((entry) => entry.id === activeConversation.id);
     const owner = String(board?.owner_id || "").trim();
     const me = String(st.selfId || "").trim();
     if (!st.authed) {

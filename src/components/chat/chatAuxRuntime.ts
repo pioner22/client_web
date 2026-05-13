@@ -1,4 +1,5 @@
 import { el } from "../../helpers/dom/el";
+import { hasActiveConversationSelection } from "../../helpers/navigation/mainConversationState";
 import type { Layout } from "../layout/types";
 import type { AppState, ChatMessage } from "../../stores/types";
 import type { RenderChatPinnedDeferredOptions, RenderChatSearchDeferredOptions } from "./chatAuxSurface";
@@ -17,7 +18,7 @@ function renderPinnedPlaceholder(ctx: RenderChatPinnedDeferredOptions, message: 
 
 function renderSearchPlaceholder(ctx: RenderChatSearchDeferredOptions, message: string) {
   const { layout, state, searchResultsOpen } = ctx;
-  if (state.selected && state.chatSearchOpen) {
+  if (hasActiveConversationSelection(state) && state.chatSearchOpen) {
     layout.chatSearchFooter.classList.remove("hidden");
     layout.chatSearchFooter.replaceChildren(el("div", { class: "chat-search-footer-row chat-search-footer-loading", role: "status", "aria-live": "polite" }, [message]));
   } else {

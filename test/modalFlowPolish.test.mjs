@@ -281,6 +281,11 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.auth-session-card\b/);
   assert.match(css, /\.auth-entry-layout\b/);
   assert.match(css, /\.auth-entry-hero\b/);
+  assert.match(css, /\.auth-hero-brand-block\b/);
+  assert.match(css, /\.auth-hero-orb\s*{[^}]*position:\s*relative;/s);
+  assert.match(css, /\.auth-hero-wordmark\b/);
+  assert.match(css, /\.auth-hero-message\b/);
+  assert.match(css, /\.auth-welcome-screen\s+\.screen-brand\s*{[^}]*letter-spacing:\s*0;/s);
   assert.match(css, /\.auth-entry-panel\b/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-hero\s*{[^}]*display:\s*none;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-chip-row\s*{[^}]*display:\s*none;/);
@@ -298,4 +303,11 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(renderAppSrc, /prevSendScheduleAt/);
   assert.match(renderAppSrc, /hadSendScheduleModal/);
   assert.match(renderAppSrc, /state\.modal\?\.kind === "send_schedule"/);
+
+  const authSrc = await readFile(path.resolve("src/components/modals/renderAuthModal.ts"), "utf8");
+  assert.match(authSrc, /auth-hero-brand-block/);
+  assert.match(authSrc, /auth-hero-wordmark/);
+  assert.match(authSrc, /auth-hero-message/);
+  assert.match(authSrc, /copy\.heroTitle/);
+  assert.match(authSrc, /copy\.heroCopy/);
 });

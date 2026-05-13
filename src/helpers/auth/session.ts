@@ -8,6 +8,15 @@ const TOKEN_RE = /^[A-Za-z0-9_-]{16,512}$/;
 
 let runtimeSessionToken: string | null = null;
 
+function desktopBridge(): YagodkaDesktopBridge | null {
+  try {
+    const bridge = (globalThis as typeof globalThis & { yagodkaDesktop?: YagodkaDesktopBridge }).yagodkaDesktop;
+    return bridge && typeof bridge === "object" ? bridge : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeToken(input: unknown): string | null {
   const raw = String(input ?? "").trim();
   if (!raw) return null;
@@ -116,10 +125,20 @@ export function storeSessionToken(token: string): void {
   if (!v) return;
   runtimeSessionToken = v;
   clearLegacySessionPersistence();
+  try {
+    void desktopBridge()?.saveSessionToken?.(v);
+  } catch {
+    // ignore
+  }
 }
 
 export function clearStoredSessionToken(): void {
   runtimeSessionToken = null;
+  try {
+    void desktopBridge()?.clearSessionToken?.();
+  } catch {
+    // ignore
+  }
   clearLegacySessionPersistence();
 }
 
@@ -146,4 +165,35 @@ export function blockSessionAutoAuth(): void {
 export function clearSessionAutoAuthBlock(): void {
   writeResumeBlock(RESUME_BLOCK_STORAGE_KEY, null);
   writeResumeBlock(LEGACY_RESUME_BLOCK_KEY, null);
+}
+
+export function canUseDesktopBiometricUnlock(): boolean {
+  const bridge = desktopBridge();
+  return Boolean(bridge?.features?.touchId && typeof bridge.unlockSession === "function");
+}
+
+export async function hasDesktopBiometricSession(): Promise<boolean> {
+  const bridge = desktopBridge();
+  if (!bridge?.hasSessionToken) return false;
+  try {
+    const result = await bridge.hasSessionToken();
+    return Boolean(result?.available && result?.touchId);
+  } catch {
+    return false;
+  }
+}
+
+export async function unlockDesktopBiometricSession(reason = "Войти в Ягодку"): Promise<string | null> {
+  const bridge = desktopBridge();
+  if (!bridge?.unlockSession) return null;
+  try {
+    const result = await bridge.unlockSession(reason);
+    const token = normalizeToken(result?.token);
+    if (!result?.ok || !token) return null;
+    runtimeSessionToken = token;
+    clearLegacySessionPersistence();
+    return token;
+  } catch {
+    return null;
+  }
 }

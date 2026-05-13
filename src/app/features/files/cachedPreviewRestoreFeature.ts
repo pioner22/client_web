@@ -1,4 +1,5 @@
 import { getCachedFileBlob, putCachedFileBlob } from "../../../helpers/files/fileBlobCache";
+import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
 
@@ -17,6 +18,7 @@ type PreviewTransferItem = {
   name: string;
   size: number;
   mime: string | null;
+  kind?: "image" | "video" | "audio";
   direction: "in" | "out";
   peer: string;
   room: string | null;
@@ -254,7 +256,7 @@ export function createCachedPreviewRestoreFeature(
       }
 
       if (!changed && !added.length) return prev;
-      return { ...prev, fileTransfers: added.length ? [...added, ...nextTransfers] : nextTransfers };
+      return applyFileTransferMutation(prev, added.length ? [...added, ...nextTransfers] : nextTransfers);
     });
 
     scheduleSaveFileTransfers();

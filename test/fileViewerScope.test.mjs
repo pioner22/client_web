@@ -115,3 +115,40 @@ test("fileViewerScope: sameFileViewerContext matches the active viewer and ignor
     await cleanup();
   }
 });
+
+test("fileViewerScope: shouldApplyPendingFileViewerResult upgrades same viewer and does not hijack another modal", async () => {
+  const { mod, cleanup } = await loadHelper();
+  try {
+    assert.equal(
+      mod.shouldApplyPendingFileViewerResult(null, {
+        fileId: "file-1",
+        chatKey: "dm:u1",
+        msgIdx: 7,
+      }),
+      true
+    );
+    assert.equal(
+      mod.shouldApplyPendingFileViewerResult(
+        { kind: "file_viewer", fileId: "file-1", chatKey: "dm:u1", msgIdx: 7 },
+        { fileId: "file-1", chatKey: "dm:u1", msgIdx: 7 }
+      ),
+      true
+    );
+    assert.equal(
+      mod.shouldApplyPendingFileViewerResult(
+        { kind: "file_viewer", fileId: "file-2", chatKey: "dm:u2", msgIdx: 9 },
+        { fileId: "file-1", chatKey: "dm:u1", msgIdx: 7 }
+      ),
+      false
+    );
+    assert.equal(
+      mod.shouldApplyPendingFileViewerResult(
+        { kind: "context_menu", chatKey: "dm:u1", msgIdx: 7 },
+        { fileId: "file-1", chatKey: "dm:u1", msgIdx: 7 }
+      ),
+      false
+    );
+  } finally {
+    await cleanup();
+  }
+});

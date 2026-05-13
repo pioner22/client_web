@@ -112,3 +112,247 @@ test("handleServerMessage: history_result прокидывает room из ве�
   }
 });
 
+test("handleServerMessage: message_deleted вычищает orphaned file transfer и thumb state", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevUrl = globalThis.URL;
+  globalThis.URL = { ...(prevUrl || {}), revokeObjectURL() {} };
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      conversations: {
+        [key]: [
+          {
+            kind: "in",
+            from: peer,
+            to: selfId,
+            text: "[file] a.png",
+            ts: 1,
+            id: 10,
+            attachment: { kind: "file", fileId: "f-1", name: "a.png", size: 123, mime: "image/png" },
+          },
+        ],
+      },
+      fileTransfers: [
+        {
+          localId: "ft-1",
+          id: "f-1",
+          name: "a.png",
+          size: 123,
+          mime: "image/png",
+          direction: "in",
+          peer,
+          room: null,
+          status: "complete",
+          progress: 100,
+          url: "blob:test-1",
+        },
+      ],
+      fileThumbs: {
+        "f-1": { url: "blob:thumb-1", mime: "image/jpeg", ts: 1 },
+      },
+      pinnedMessages: {},
+      pinnedMessageActive: {},
+      editing: null,
+      input: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "message_deleted",
+        from: peer,
+        to: selfId,
+        id: 10,
+        ok: true,
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.deepEqual(st.conversations[key], []);
+    assert.deepEqual(st.fileTransfers, []);
+    assert.deepEqual(st.fileThumbs, {});
+  } finally {
+    if (prevUrl === undefined) delete globalThis.URL;
+    else globalThis.URL = prevUrl;
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: history_result.deleted_ids вычищает resurrected media rows и orphaned cache state", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevUrl = globalThis.URL;
+  globalThis.URL = { ...(prevUrl || {}), revokeObjectURL() {} };
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      selected: { kind: "dm", id: peer },
+      conversations: {
+        [key]: [
+          {
+            kind: "in",
+            from: peer,
+            to: selfId,
+            text: "[file] zombie.webm",
+            ts: 1,
+            id: 10,
+            attachment: { kind: "file", fileId: "f-zombie", name: "zombie.webm", size: 110, mime: "video/webm" },
+          },
+          {
+            kind: "in",
+            from: peer,
+            to: selfId,
+            text: "[file] ok.jpg",
+            ts: 2,
+            id: 11,
+            attachment: { kind: "file", fileId: "f-live", name: "ok.jpg", size: 123, mime: "image/jpeg" },
+          },
+        ],
+      },
+      fileTransfers: [
+        {
+          localId: "ft-zombie",
+          id: "f-zombie",
+          name: "zombie.webm",
+          size: 110,
+          mime: "video/webm",
+          direction: "in",
+          peer,
+          room: null,
+          status: "complete",
+          progress: 100,
+          url: "https://yagodka.org/files/f-zombie",
+        },
+        {
+          localId: "ft-live",
+          id: "f-live",
+          name: "ok.jpg",
+          size: 123,
+          mime: "image/jpeg",
+          direction: "in",
+          peer,
+          room: null,
+          status: "complete",
+          progress: 100,
+          url: "blob:live",
+        },
+      ],
+      fileThumbs: {
+        "f-zombie": { url: "https://yagodka.org/files/thumb/f-zombie", mime: "image/jpeg", ts: 1 },
+        "f-live": { url: "blob:thumb-live", mime: "image/jpeg", ts: 2 },
+      },
+      historyLoaded: {},
+      historyPreviewOnly: {},
+      pinnedMessages: {},
+      pinnedMessageActive: {},
+      editing: null,
+      input: "",
+      outbox: {},
+    });
+
+    handleServerMessage(
+      {
+        type: "history_result",
+        peer,
+        before_id: 0,
+        deleted_ids: [10],
+        rows: [
+          {
+            id: 10,
+            from: peer,
+            text: "[file] zombie.webm",
+            ts: 1,
+            attachment: { kind: "file", file_id: "f-zombie", name: "zombie.webm", size: 110, mime: "video/webm" },
+          },
+          {
+            id: 11,
+            from: peer,
+            text: "[file] ok.jpg",
+            ts: 2,
+            attachment: { kind: "file", file_id: "f-live", name: "ok.jpg", size: 123, mime: "image/jpeg" },
+          },
+        ],
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.historyLoaded[key], true);
+    assert.equal(st.conversations[key].length, 1);
+    assert.equal(st.conversations[key][0].id, 11);
+    assert.deepEqual(
+      st.fileTransfers.map((entry) => entry.id),
+      ["f-live"]
+    );
+    assert.deepEqual(Object.keys(st.fileThumbs), ["f-live"]);
+  } finally {
+    if (prevUrl === undefined) delete globalThis.URL;
+    else globalThis.URL = prevUrl;
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: любой non-preview history_result снимает provisional historyPreviewOnly", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      selected: { kind: "dm", id: peer },
+      conversations: {
+        [key]: [
+          {
+            kind: "in",
+            from: peer,
+            to: selfId,
+            text: "[file] cached.jpg",
+            ts: 1,
+            id: 10,
+            attachment: { kind: "file", fileId: "f-cached", name: "cached.jpg", size: 123, mime: "image/jpeg" },
+          },
+        ],
+      },
+      historyLoaded: { [key]: true },
+      historyPreviewOnly: { [key]: true },
+      historyLoading: { [key]: true },
+      outbox: {},
+      fileTransfers: [],
+      fileThumbs: {},
+      pinnedMessages: {},
+      pinnedMessageActive: {},
+      editing: null,
+      input: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "history_result",
+        peer,
+        since_id: 10,
+        rows: [],
+        deleted_ids: [],
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.historyPreviewOnly[key], undefined);
+    assert.equal(st.historyLoaded[key], true);
+    assert.equal(Boolean(st.historyLoading?.[key]), false);
+  } finally {
+    await cleanup();
+  }
+});

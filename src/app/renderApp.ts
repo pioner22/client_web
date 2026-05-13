@@ -17,13 +17,19 @@ import { renderModal } from "../components/modals/renderModal";
 import { renderAuthModal } from "../components/modals/renderAuthModal";
 import { renderToast } from "../components/toast/renderToast";
 import { el } from "../helpers/dom/el";
-import { conversationKey } from "../helpers/chat/conversationKey";
 import { resetChatHistoryViewportRuntime } from "../helpers/chat/historyViewportRuntime";
 import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
 import { focusElement } from "../helpers/ui/focus";
 import { isIOS } from "../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { maxBoardScheduleDelayMs } from "../helpers/boards/boardSchedule";
+import {
+  getConversationViewportKey,
+  getConversationViewportTarget,
+  hasConversationViewportSelection,
+} from "../helpers/navigation/mainConversationState";
+import { applyRightPanelViewState, getRightPanelTitle, shouldShowRightPanel } from "../helpers/navigation/rightPanelState";
+import { getRightPanelTarget } from "../helpers/navigation/viewState";
 import { createLazyCallModalRuntime } from "./bootstrap/lazyCallModalRuntime";
 import { applyOverlaySurface, resolveModalPresentation } from "./features/navigation/modalSurface";
 import {
@@ -291,6 +297,7 @@ export interface RenderActions {
   onToggleSidebarArchive: () => void;
   onAuthLogin: () => void;
   onAuthRegister: () => void;
+  onAuthTouchId: () => void;
   onAuthModeChange: (mode: "register" | "login") => void;
   onAuthUseDifferentAccount: () => void;
   onAuthOpen: () => void;
@@ -372,17 +379,15 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const modalPresentation = resolveModalPresentation({ authed: state.authed, modal: state.modal });
   const fullScreenKind = modalPresentation.fullScreenKind;
   const fullScreenActive = modalPresentation.fullScreenActive;
+  const conversationViewportTarget = getConversationViewportTarget(state);
+  const conversationViewportKey = getConversationViewportKey(state);
 
   // Контекстное меню не должно "ломать" макет и прятать composer.
   // Composer показываем только когда выбран чат/контакт/доска (как в tweb).
-  const chatInputVisible =
-    !fullScreenActive &&
-    state.page === "main" &&
-    Boolean(state.selected) &&
-    (!state.modal || state.modal.kind === "context_menu");
+  const chatInputVisible = !fullScreenActive && Boolean(conversationViewportTarget);
   const mobileUi = isMobileLikeUi();
-  const rightTarget = state.rightPanel;
-  const showRightPanel = !fullScreenActive && Boolean(rightTarget && state.page === "main" && !mobileUi);
+  const rightTarget = getRightPanelTarget(state);
+  const showRightPanel = shouldShowRightPanel(state, { fullScreenActive, mobileUi });
   const authModalVisible = modalPresentation.authModalVisible;
   if (typeof document !== "undefined") {
     document.body.classList.toggle("has-right-col", showRightPanel);
@@ -405,8 +410,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   layout.inputWrap.classList.toggle("composer-too-long", tooLong);
   layout.inputWrap.classList.toggle("composer-near-limit", nearLimit && !tooLong);
 
-  const sel = state.selected;
-  const selectedKey = sel ? conversationKey(sel) : "";
+  const sel = conversationViewportTarget;
+  const selectedKey = conversationViewportKey;
   const editing = state.editing && state.editing.key === selectedKey ? state.editing : null;
   const replyDraft = !editing && state.replyDraft && state.replyDraft.key === selectedKey ? state.replyDraft : null;
   const forwardDraft = !editing && state.forwardDraft && state.forwardDraft.key === selectedKey ? state.forwardDraft : null;
@@ -677,6 +682,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const modalActions = {
     onAuthLogin: actions.onAuthLogin,
     onAuthRegister: actions.onAuthRegister,
+    onAuthTouchId: actions.onAuthTouchId,
     onAuthModeChange: actions.onAuthModeChange,
     onAuthOpen: actions.onAuthOpen,
     onAuthUseDifferentAccount: actions.onAuthUseDifferentAccount,
@@ -720,6 +726,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       ? renderAuthModal(state.authMode, state.authRememberedId, authMessage, state.status, state.conn, state.skins, state.skin, {
           onLogin: actions.onAuthLogin,
           onRegister: actions.onAuthRegister,
+          onTouchId: actions.onAuthTouchId,
           onModeChange: actions.onAuthModeChange,
           onUseDifferentAccount: actions.onAuthUseDifferentAccount,
           onSkinChange: actions.onSkinChange,
@@ -799,7 +806,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   // - file_viewer: поверх (overlay) как fullscreen viewer (Telegram‑паттерн)
   const inlineModal = modalPresentation.inlineModal;
   layout.chat.classList.toggle("chat-page", state.page !== "main" || inlineModal);
-  const showChatTop = state.page === "main" && !inlineModal && Boolean(state.selected);
+  const showChatTop = !inlineModal && hasConversationViewportSelection(state);
   layout.chatTop.classList.toggle("hidden", !showChatTop);
   if (!showChatTop) {
     // When switching to pages/modals, clear chat header state so returning to chat is treated as "fresh".
@@ -1081,9 +1088,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   if (showRightPanel && rightTarget) {
     const { shell, title, body } = ensureRightPanelShell(actions);
     if (rightTarget.kind === "dm") {
-      title.textContent = "Контакт";
+      title.textContent = getRightPanelTitle(rightTarget);
       if (rightUserPageRuntime.page) {
-        const viewState = { ...state, userViewId: rightTarget.id, groupViewId: null, boardViewId: null };
+        const viewState = applyRightPanelViewState(state, rightTarget);
         rightUserPageRuntime.page.update(viewState);
         body.replaceChildren(rightUserPageRuntime.page.root);
       } else {
@@ -1101,11 +1108,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
             const activeLayout = latestDeferredRenderLayout;
             const activeState = latestDeferredRenderState;
             if (!activeLayout || !activeState) return;
-            const activeTarget = activeState.rightPanel;
+            const activeTarget = getRightPanelTarget(activeState);
             if (!activeTarget || activeTarget.kind !== "dm") return;
             const { shell, title, body } = ensureRightPanelShell(actions);
-            title.textContent = "Контакт";
-            const viewState = { ...activeState, userViewId: activeTarget.id, groupViewId: null, boardViewId: null };
+            title.textContent = getRightPanelTitle(activeTarget);
+            const viewState = applyRightPanelViewState(activeState, activeTarget);
             page.update(viewState);
             body.replaceChildren(page.root);
             mountRightCol(activeLayout, shell);
@@ -1113,9 +1120,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         );
       }
     } else if (rightTarget.kind === "group") {
-      title.textContent = "Чат";
+      title.textContent = getRightPanelTitle(rightTarget);
       if (rightGroupPageRuntime.page) {
-        const viewState = { ...state, groupViewId: rightTarget.id, userViewId: null, boardViewId: null };
+        const viewState = applyRightPanelViewState(state, rightTarget);
         rightGroupPageRuntime.page.update(viewState);
         body.replaceChildren(rightGroupPageRuntime.page.root);
       } else {
@@ -1150,11 +1157,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
             const activeLayout = latestDeferredRenderLayout;
             const activeState = latestDeferredRenderState;
             if (!activeLayout || !activeState) return;
-            const activeTarget = activeState.rightPanel;
+            const activeTarget = getRightPanelTarget(activeState);
             if (!activeTarget || activeTarget.kind !== "group") return;
             const { shell, title, body } = ensureRightPanelShell(actions);
-            title.textContent = "Чат";
-            const viewState = { ...activeState, groupViewId: activeTarget.id, userViewId: null, boardViewId: null };
+            title.textContent = getRightPanelTitle(activeTarget);
+            const viewState = applyRightPanelViewState(activeState, activeTarget);
             page.update(viewState);
             body.replaceChildren(page.root);
             mountRightCol(activeLayout, shell);
@@ -1162,9 +1169,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
         );
       }
     } else if (rightTarget.kind === "board") {
-      title.textContent = "Доска";
+      title.textContent = getRightPanelTitle(rightTarget);
       if (rightBoardPageRuntime.page) {
-        const viewState = { ...state, boardViewId: rightTarget.id, userViewId: null, groupViewId: null };
+        const viewState = applyRightPanelViewState(state, rightTarget);
         rightBoardPageRuntime.page.update(viewState);
         body.replaceChildren(rightBoardPageRuntime.page.root);
       } else {
@@ -1199,11 +1206,11 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
             const activeLayout = latestDeferredRenderLayout;
             const activeState = latestDeferredRenderState;
             if (!activeLayout || !activeState) return;
-            const activeTarget = activeState.rightPanel;
+            const activeTarget = getRightPanelTarget(activeState);
             if (!activeTarget || activeTarget.kind !== "board") return;
             const { shell, title, body } = ensureRightPanelShell(actions);
-            title.textContent = "Доска";
-            const viewState = { ...activeState, boardViewId: activeTarget.id, userViewId: null, groupViewId: null };
+            title.textContent = getRightPanelTitle(activeTarget);
+            const viewState = applyRightPanelViewState(activeState, activeTarget);
             page.update(viewState);
             body.replaceChildren(page.root);
             mountRightCol(activeLayout, shell);

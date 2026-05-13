@@ -22,12 +22,18 @@ async function loadHelpers() {
       logLevel: "silent",
     });
     const mod = await import(pathToFileURL(outfile).href);
-    const required = ["sanitizeFileTransfers", "parseFileTransfersPayload", "serializeFileTransfersPayload"];
+    const required = [
+      "sanitizeFileTransfers",
+      "sanitizeRuntimeFileTransfers",
+      "parseFileTransfersPayload",
+      "serializeFileTransfersPayload",
+    ];
     for (const k of required) {
       if (typeof mod[k] !== "function") throw new Error(`fileTransferHistory export missing: ${k}`);
     }
     return {
       sanitizeFileTransfers: mod.sanitizeFileTransfers,
+      sanitizeRuntimeFileTransfers: mod.sanitizeRuntimeFileTransfers,
       parseFileTransfersPayload: mod.parseFileTransfersPayload,
       serializeFileTransfersPayload: mod.serializeFileTransfersPayload,
       cleanup: () => rm(tempDir, { recursive: true, force: true }),
@@ -84,6 +90,46 @@ test("fileTransferHistory: serialize/parse сохраняет только termi
   }
 });
 
+test("fileTransferHistory: runtime sanitizer сохраняет активные transfer-состояния", async () => {
+  const { sanitizeRuntimeFileTransfers, sanitizeFileTransfers, cleanup } = await loadHelpers();
+  try {
+    const input = [
+      {
+        localId: "local-1",
+        id: null,
+        name: "uploading.mov",
+        size: 3,
+        direction: "out",
+        peer: "222-222-222",
+        room: null,
+        status: "uploading",
+        progress: 33,
+        url: "blob:preview",
+      },
+      {
+        localId: "download-1",
+        id: "f-down",
+        name: "photo.jpg",
+        size: 5,
+        direction: "in",
+        peer: "222-222-222",
+        status: "downloading",
+        progress: 20,
+      },
+    ];
+
+    const runtime = sanitizeRuntimeFileTransfers(input);
+    assert.equal(runtime.length, 2);
+    assert.equal(runtime[0].id, null);
+    assert.equal(runtime[0].status, "uploading");
+    assert.equal(runtime[0].url, "blob:preview");
+    assert.equal(runtime[1].status, "downloading");
+    assert.deepEqual(sanitizeFileTransfers(input), []);
+  } finally {
+    await cleanup();
+  }
+});
+
 test("fileTransferHistory: parseFileTransfersPayload устойчив к мусору", async () => {
   const { parseFileTransfersPayload, cleanup } = await loadHelpers();
   try {
@@ -94,4 +140,3 @@ test("fileTransferHistory: parseFileTransfersPayload устойчив к мус�
     await cleanup();
   }
 });
-

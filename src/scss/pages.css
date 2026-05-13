@@ -743,6 +743,12 @@
   opacity: 0.9;
 }
 
+.info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .info-list {
   margin: 0;
   padding-left: 18px;

@@ -1,4 +1,5 @@
 import { el } from "../../helpers/dom/el";
+import { getActiveConversationTarget } from "../../helpers/navigation/mainConversationState";
 import { formatTime } from "../../helpers/time";
 import type { Layout } from "../layout/types";
 import type { AppState, ChatMessage } from "../../stores/types";
@@ -35,9 +36,10 @@ export function renderPinnedSurface(opts: RenderChatPinnedDeferredOptions): void
 
 export function renderSearchDeferredSurface(opts: RenderChatSearchDeferredOptions): void {
   const { layout, state, msgs, hits, activePos, searchResultsOpen, friendLabels } = opts;
+  const activeConversation = getActiveConversationTarget(state);
 
   let searchFooter: HTMLElement | null = null;
-  if (state.selected && state.chatSearchOpen) {
+  if (activeConversation && state.chatSearchOpen) {
     const total = hits.length;
     const hasQuery = Boolean((state.chatSearchQuery || "").trim());
     const countLabel = total ? `${Math.min(activePos + 1, total)}/${total}` : hasQuery ? "0/0" : "";
@@ -107,7 +109,7 @@ export function renderSearchDeferredSurface(opts: RenderChatSearchDeferredOption
       windowHits = hits.slice(windowStart, windowStart + maxResults);
     }
     const rows: HTMLElement[] = [];
-    const showFrom = Boolean(state.selected && state.selected.kind !== "dm");
+    const showFrom = Boolean(activeConversation && activeConversation.kind !== "dm");
     for (let i = 0; i < windowHits.length; i += 1) {
       const msgIdx = windowHits[i];
       const m = msgs[msgIdx];

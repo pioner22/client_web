@@ -1,6 +1,9 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { getChatHistoryViewportRuntime } from "../../../helpers/chat/historyViewportRuntime";
+import { getActiveConversationTarget, isMainConversationSurface } from "../../../helpers/navigation/mainConversationState";
+import { shouldShowRightPanelOverlay } from "../../../helpers/navigation/rightPanelState";
 import { isChatHostNearBottom, isChatStickyBottomActive } from "../../../helpers/chat/stickyBottom";
+import { normalizeMobileSidebarTab, setMobileSidebarTabValue } from "../../../helpers/sidebar/sidebarState";
 import type { Store } from "../../../stores/store";
 import type { AppState, MobileSidebarTab } from "../../../stores/types";
 
@@ -93,7 +96,7 @@ export function createSidebarOverlayFeature(deps: SidebarOverlayFeatureDeps): Si
   }
 
   function shouldShowRightOverlay(st: AppState): boolean {
-    return Boolean(st.rightPanel && st.page === "main" && !st.modal && rightOverlayMq.matches && !isMobileLikeUi());
+    return shouldShowRightPanelOverlay(st, { overlayMatches: rightOverlayMq.matches, mobileUi: isMobileLikeUi() });
   }
 
   function syncNavOverlay() {
@@ -161,12 +164,13 @@ export function createSidebarOverlayFeature(deps: SidebarOverlayFeatureDeps): Si
     const suppress = Boolean(opts?.suppressStickBottomRestore);
     withSuppressedStickBottomRestore(suppress, () => {
       const st = store.get();
-      const forcedOpen = Boolean(mobileSidebarMq.matches && st.page === "main" && !st.selected && !st.modal);
+      const activeTarget = getActiveConversationTarget(st);
+      const forcedOpen = Boolean(mobileSidebarMq.matches && isMainConversationSurface(st) && !activeTarget);
       const shouldOpen = Boolean((open || forcedOpen) && mobileSidebarMq.matches);
       if (mobileSidebarOpen === shouldOpen) return;
 
       const prevOpen = mobileSidebarOpen;
-      const selKey = st.page === "main" && st.selected ? conversationKey(st.selected) : "";
+      const selKey = activeTarget ? conversationKey(activeTarget) : "";
       const restoreKey =
         !shouldOpen &&
         prevOpen &&
@@ -217,12 +221,13 @@ export function createSidebarOverlayFeature(deps: SidebarOverlayFeatureDeps): Si
     const suppress = Boolean(opts?.suppressStickBottomRestore);
     withSuppressedStickBottomRestore(suppress, () => {
       const st = store.get();
-      const forcedOpen = Boolean(floatingSidebarMq.matches && st.page === "main" && !st.selected && !st.modal);
+      const activeTarget = getActiveConversationTarget(st);
+      const forcedOpen = Boolean(floatingSidebarMq.matches && isMainConversationSurface(st) && !activeTarget);
       const shouldOpen = Boolean((open || forcedOpen) && floatingSidebarMq.matches);
       if (floatingSidebarOpen === shouldOpen) return;
 
       const prevOpen = floatingSidebarOpen;
-      const selKey = st.page === "main" && st.selected ? conversationKey(st.selected) : "";
+      const selKey = activeTarget ? conversationKey(activeTarget) : "";
       const restoreKey =
         !shouldOpen &&
         prevOpen &&
@@ -277,13 +282,13 @@ export function createSidebarOverlayFeature(deps: SidebarOverlayFeatureDeps): Si
   }
 
   function setMobileSidebarTab(tab: MobileSidebarTab) {
-    const next: MobileSidebarTab = tab === "contacts" || tab === "menu" || tab === "boards" ? tab : "chats";
-    if (store.get().mobileSidebarTab === next) {
+    const next = normalizeMobileSidebarTab(tab);
+    if (normalizeMobileSidebarTab(store.get().mobileSidebarTab) === next) {
       resetSidebarScrollTop("smooth");
       return;
     }
     markSidebarResetScroll();
-    store.set({ mobileSidebarTab: next });
+    store.set((prev) => setMobileSidebarTabValue(prev, next));
   }
 
   const onNavOverlayClick = () => {

@@ -1,4 +1,10 @@
-import { getStoredSessionToken, isSessionAutoAuthBlocked } from "../../../helpers/auth/session";
+import {
+  canUseDesktopBiometricUnlock,
+  getStoredSessionToken,
+  hasDesktopBiometricSession,
+  isSessionAutoAuthBlocked,
+  unlockDesktopBiometricSession,
+} from "../../../helpers/auth/session";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 
@@ -12,6 +18,7 @@ export interface AuthFeature {
   maybeAutoAuthOnConnected: () => void;
   authLoginFromDom: () => void;
   authRegisterFromDom: () => void;
+  authTouchIdFromDom: () => void;
 }
 
 export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
@@ -44,6 +51,18 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
     }
     if (token && autoAuthAttemptedForConn) {
       return;
+    }
+    if (!token && canUseDesktopBiometricUnlock()) {
+      void hasDesktopBiometricSession().then((available) => {
+        if (!available) return;
+        const latest = store.get();
+        if (latest.authed || latest.conn !== "connected") return;
+        store.set((prev) => ({
+          ...prev,
+          authMode: prev.authRememberedId ? "login" : "register",
+          status: "Соединение установлено. Можно войти по Touch ID или паролю.",
+        }));
+      });
     }
     store.set((prev) => ({
       ...prev,
@@ -91,5 +110,24 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
     send({ type: "register", password: pw });
   }
 
-  return { resetAutoAuthAttempt, maybeAutoAuthOnConnected, authLoginFromDom, authRegisterFromDom };
+  async function authTouchIdFromDom() {
+    if (store.get().conn !== "connected") {
+      store.set({ status: "Нет соединения с сервером" });
+      return;
+    }
+    if (!canUseDesktopBiometricUnlock()) {
+      store.set({ modal: { kind: "auth", message: "Touch ID доступен только в desktop-приложении на macOS." } });
+      return;
+    }
+    store.set({ status: "Подтвердите Touch ID, чтобы открыть сохранённую сессию…" });
+    const token = await unlockDesktopBiometricSession("Войти в Ягодку");
+    if (!token) {
+      store.set({ modal: { kind: "auth", message: "Не удалось войти по Touch ID. Используйте пароль." } });
+      return;
+    }
+    autoAuthAttemptedForConn = true;
+    send({ type: "auth", session: token });
+  }
+
+  return { resetAutoAuthAttempt, maybeAutoAuthOnConnected, authLoginFromDom, authRegisterFromDom, authTouchIdFromDom };
 }

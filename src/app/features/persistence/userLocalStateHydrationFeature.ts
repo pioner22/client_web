@@ -9,6 +9,17 @@ import { loadPinnedBarHiddenForUser } from "../../../helpers/chat/pinnedBarHidde
 import { loadPinsForUser } from "../../../helpers/chat/pins";
 import { loadBoardScheduleForUser } from "../../../helpers/boards/boardSchedule";
 import { loadFileTransfersForUser } from "../../../helpers/files/fileTransferHistory";
+import {
+  applyDraftMapSnapshot,
+  applyFileTransferSnapshot,
+  applyOutboxSnapshot,
+} from "../../../helpers/runtime/deliverySync";
+import {
+  mergeRestoredFileTransfers,
+  shouldReconcileFileTransfersFromCache,
+  shouldReconcileOutboxFromWorker,
+} from "../../../helpers/runtime/deliveryCoordinator";
+import { applySidebarFolderSnapshot } from "../../../helpers/sidebar/sidebarState";
 import type { Store } from "../../../stores/store";
 import type { AppState, OutboxEntry } from "../../../stores/types";
 import { mergeConversationMaps, scheduleSaveOutbox } from "./localPersistenceTimers";
@@ -145,6 +156,10 @@ export function createUserLocalStateHydrationFeature(
 
     const storedHistory = needHistoryCache ? loadHistoryCacheForUser(userId) : null;
     const historyCacheConversations = storedHistory ? storedHistory.conversations : {};
+    const mergedHistorySync = (() => {
+      if (!storedHistory) return st.historySync;
+      return { ...storedHistory.historySync, ...(st.historySync || {}) };
+    })();
     const mergedHistoryCursor = storedHistory ? { ...storedHistory.historyCursor, ...st.historyCursor } : st.historyCursor;
     const mergedHistoryHasMore = (() => {
       const merged = { ...(st.historyHasMore || {}) };
@@ -159,23 +174,19 @@ export function createUserLocalStateHydrationFeature(
       return merged;
     })();
     const mergedHistoryLoaded = storedHistory ? { ...st.historyLoaded, ...storedHistory.historyLoaded } : st.historyLoaded;
+    const mergedHistoryPreviewOnly = (() => {
+      const merged = { ...(st.historyPreviewOnly || {}) };
+      if (!storedHistory) return merged;
+      for (const [key, item] of Object.entries(storedHistory.historySync || {})) {
+        if (item?.previewOnly) merged[key] = true;
+      }
+      return merged;
+    })();
     const baseConversations = storedHistory ? mergeConversationMaps(historyCacheConversations, st.conversations) : st.conversations;
 
-    const storedFileTransfers = needFileTransfers ? loadFileTransfersForUser(userId) : [];
-    const mergedFileTransfers = (() => {
-      if (!needFileTransfers) return st.fileTransfers;
-      const present = new Set<string>();
-      for (const e of st.fileTransfers) {
-        const k = String(e.id || e.localId || "").trim();
-        if (k) present.add(k);
-      }
-      const extras = storedFileTransfers.filter((e) => {
-        const k = String(e.id || e.localId || "").trim();
-        if (!k) return false;
-        return !present.has(k);
-      });
-      return extras.length ? [...st.fileTransfers, ...extras] : st.fileTransfers;
-    })();
+    const shouldRestoreFileTransfers = needFileTransfers && shouldReconcileFileTransfersFromCache(st, userId);
+    const storedFileTransfers = shouldRestoreFileTransfers ? loadFileTransfersForUser(userId) : [];
+    const mergedFileTransfers = needFileTransfers ? mergeRestoredFileTransfers(st.fileTransfers, storedFileTransfers) : st.fileTransfers;
 
     const storedOutboxRaw = needOutbox ? loadOutboxForUser(userId) : {};
     const storedOutbox = (() => {
@@ -264,22 +275,41 @@ export function createUserLocalStateHydrationFeature(
       return merged;
     })();
 
-    store.set((prev) => ({
-      ...prev,
-      drafts: mergedDrafts,
-      pinned: mergedPins,
-      archived: mergedArchived,
-      chatFolders: mergedChatFolders,
-      sidebarFolderId: mergedFolderId,
-      pinnedMessages: mergedPinnedMessages,
-      pinnedBarHidden: mergedPinnedBarHidden,
-      fileTransfers: mergedFileTransfers,
-      outbox: mergedOutbox,
-      conversations: mergedConversations,
-      ...(storedHistory ? { historyLoaded: mergedHistoryLoaded, historyCursor: mergedHistoryCursor, historyHasMore: mergedHistoryHasMore } : {}),
-      boardScheduledPosts: mergedBoardSchedule,
-      ...(restoredInput !== null ? { input: restoredInput } : {}),
-    }));
+    store.set((prev) => {
+      let next = {
+        ...prev,
+        pinned: mergedPins,
+        archived: mergedArchived,
+        pinnedMessages: mergedPinnedMessages,
+        pinnedBarHidden: mergedPinnedBarHidden,
+        conversations: mergedConversations,
+        ...(storedHistory
+          ? {
+              historySync: mergedHistorySync,
+              historyLoaded: mergedHistoryLoaded,
+              historyPreviewOnly: mergedHistoryPreviewOnly,
+              historyCursor: mergedHistoryCursor,
+              historyHasMore: mergedHistoryHasMore,
+            }
+          : {}),
+        boardScheduledPosts: mergedBoardSchedule,
+        ...(restoredInput !== null ? { input: restoredInput } : {}),
+      };
+      next = applyDraftMapSnapshot(next, mergedDrafts, { source: "cache", reconcilePending: true });
+      next = applyFileTransferSnapshot(next, mergedFileTransfers, {
+        source: "cache",
+        reconcilePending: shouldRestoreFileTransfers,
+      });
+      next = applyOutboxSnapshot(next, mergedOutbox, { source: "cache", reconcilePending: true });
+      if (needChatFolders) {
+        next = applySidebarFolderSnapshot(
+          next,
+          { v: 1, active: mergedFolderId, folders: mergedChatFolders },
+          { source: "cache", reconcilePending: true }
+        );
+      }
+      return next;
+    });
 
     if (restoredInput !== null) {
       try {
@@ -292,7 +322,9 @@ export function createUserLocalStateHydrationFeature(
 
     scheduleSaveOutbox(store);
     armBoardScheduleTimer();
-    void syncOutboxFromServiceWorker(userId);
+    if (shouldReconcileOutboxFromWorker(store.get(), userId)) {
+      void syncOutboxFromServiceWorker(userId);
+    }
     return true;
   };
 

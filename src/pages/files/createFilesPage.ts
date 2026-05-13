@@ -137,6 +137,13 @@ function transferStatus(entry: FileTransferEntry): string {
   return entry.direction === "out" ? "Ожидание подтверждения" : "Ожидание отправителя";
 }
 
+function transferTone(entry: FileTransferEntry): "active" | "done" | "error" | "idle" {
+  if (entry.status === "uploading" || entry.status === "downloading") return "active";
+  if (entry.status === "complete" || entry.status === "uploaded") return "done";
+  if (entry.status === "error" || entry.status === "rejected") return "error";
+  return "idle";
+}
+
 function isPreviewableKind(kind: FileBadgeKind): boolean {
   return kind === "image" || kind === "video";
 }
@@ -204,6 +211,16 @@ function groupTransfers(entries: FileTransferEntry[]): TransferGroup[] {
 export function createFilesPage(actions: FilesPageActions): FilesPage {
   const mobileUi = isMobileLikeUi();
   const title = el("div", { class: "chat-title" }, ["Файлы"]);
+  const incomingMetricValue = el("div", { class: "files-metric-value" }, ["0"]);
+  const activeMetricValue = el("div", { class: "files-metric-value" }, ["0"]);
+  const cachedMetricValue = el("div", { class: "files-metric-value" }, ["0"]);
+  const overviewMetric = (label: string, value: HTMLElement, detail: string): HTMLElement =>
+    el("div", { class: "files-metric" }, [value, el("div", { class: "files-metric-label" }, [label]), el("div", { class: "files-metric-detail" }, [detail])]);
+  const filesOverview = el("div", { class: "files-overview", "aria-label": "Сводка файлов" }, [
+    overviewMetric("Входящие", incomingMetricValue, "ожидают решения"),
+    overviewMetric("Активные", activeMetricValue, "идёт передача"),
+    overviewMetric("В кэше", cachedMetricValue, "доступны локально"),
+  ]);
 
   const sendTitle = el("div", { class: "pane-section" }, ["Отправка"]);
   const fileInput = el("input", { class: "modal-input", type: "file" }) as HTMLInputElement;
@@ -214,13 +231,16 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   const sendForm = el("div", { class: "page-form" }, [sendStack, sendBtn]);
   const sendBlock = el("div", { class: "page-card files-section" }, [sendTitle, sendForm]);
 
+  const offersCount = el("span", { class: "files-count" }, ["0"]);
   const offersTitle = el("div", { class: "pane-section" }, ["Входящие предложения"]);
+  const offersHeader = el("div", { class: "files-section-head" }, [offersTitle, offersCount]);
   const offersList = el("div", { class: "files-list" });
-  const offersBlock = el("div", { class: "page-card files-section" }, [offersTitle, offersList]);
+  const offersBlock = el("div", { class: "page-card files-section" }, [offersHeader, offersList]);
 
   const transfersTitle = el("div", { class: "pane-section" }, ["Передачи"]);
+  const transfersCount = el("span", { class: "files-count" }, ["0"]);
   const clearBtn = el("button", { class: "btn", type: "button" }, ["Очистить завершенные"]);
-  const transfersHeader = el("div", { class: "files-header" }, [transfersTitle, clearBtn]);
+  const transfersHeader = el("div", { class: "files-header" }, [el("div", { class: "files-section-head" }, [transfersTitle, transfersCount]), clearBtn]);
   const transfersList = el("div", { class: "files-list" });
   const transfersBlock = el("div", { class: "page-card files-section" }, [transfersHeader, transfersList]);
 
@@ -297,6 +317,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
 
   const root = el("div", { class: "page page-files" }, [
     title,
+    filesOverview,
     sendBlock,
     offersBlock,
     transfersBlock,
@@ -451,15 +472,18 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     const badge = fileBadge(offer.name || "файл", null);
     const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
     icon.style.setProperty("--file-h", String(badge.hue));
-    return el("div", { class: "file-row" }, [
-      el("div", { class: "file-main" }, [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [offer.name || "файл"])]), ...metaEls]),
+    const status = el("span", { class: "file-status file-status-idle" }, ["Новое"]);
+    return el("div", { class: `file-row file-row-${badge.kind} file-row-offer` }, [
+      el("div", { class: "file-main" }, [
+        el("div", { class: "file-title" }, [icon, el("div", { class: "file-title-main" }, [el("div", { class: "file-name" }, [offer.name || "файл"]), status])]),
+        el("div", { class: "file-meta-grid" }, metaEls),
+      ]),
       el("div", { class: "file-actions" }, [acceptBtn, rejectBtn]),
     ]);
   }
 
   function renderTransfer(entry: FileTransferEntry, state: AppState): HTMLElement {
-    const hideProgressText = entry.status === "uploading" || entry.status === "downloading";
-    const statusLine = hideProgressText ? "" : transferStatus(entry);
+    const statusLabel = transferStatus(entry);
     const base = typeof location !== "undefined" ? location.href : "http://localhost/";
     const safeHref = entry.url ? safeUrl(entry.url, { base, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
     const fileId = String(entry.id || "").trim();
@@ -472,7 +496,6 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       metaLines.push(`От:`);
     }
     metaLines.push(`Размер: ${formatBytes(entry.size)}`);
-    if (statusLine) metaLines.push(statusLine);
     if (entry.acceptedBy?.length) metaLines.push(`Приняли: ${entry.acceptedBy.join(", ")}`);
     if (entry.receivedBy?.length) metaLines.push(`Получили: ${entry.receivedBy.join(", ")}`);
     const metaEls = metaLines.map((line) => {
@@ -487,7 +510,14 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     const badge = fileBadge(entry.name || "файл", entry.mime ?? null);
     const icon = el("span", { class: `file-icon file-icon-${badge.kind}`, "aria-hidden": "true" }, [badge.label]);
     icon.style.setProperty("--file-h", String(badge.hue));
-    const mainChildren: HTMLElement[] = [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [entry.name || "файл"])]), ...metaEls];
+    const statusPill = el("span", { class: `file-status file-status-${transferTone(entry)}` }, [statusLabel]);
+    const mainChildren: HTMLElement[] = [
+      el("div", { class: "file-title" }, [
+        icon,
+        el("div", { class: "file-title-main" }, [el("div", { class: "file-name" }, [entry.name || "файл"]), statusPill]),
+      ]),
+      el("div", { class: "file-meta-grid" }, metaEls),
+    ];
     if (entry.status === "uploading" || entry.status === "downloading") {
       const progress = Math.max(0, Math.min(100, Math.round(entry.progress || 0)));
       const label = entry.status === "uploading" ? `Загрузка ${progress}%` : `Скачивание ${progress}%`;
@@ -512,6 +542,9 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     const actionsList: HTMLElement[] = [];
     const canDownload = entry.status === "complete" || entry.status === "uploaded";
     if (canDownload && safeHref) {
+      if (isPreviewableKind(badge.kind)) {
+        actionsList.push(el("a", { class: "btn file-action", href: safeHref, target: "_blank", rel: "noopener" }, ["Открыть"]));
+      }
       actionsList.push(el("a", { class: "btn file-action file-action-download", href: safeHref, download: entry.name }, ["Скачать"]));
     } else if (canDownload && fileId) {
       actionsList.push(
@@ -567,7 +600,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       el("div", { class: "file-main" }, mainChildren),
       actionsList.length ? el("div", { class: "file-actions" }, actionsList) : el("div", { class: "file-actions" })
     );
-    return el("div", { class: `file-row ${statusClass}` }, rowChildren);
+    return el("div", { class: `file-row file-row-${badge.kind} ${statusClass}` }, rowChildren);
   }
 
   function renderTransferGroup(group: TransferGroup, state: AppState): HTMLElement {
@@ -747,6 +780,11 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
   function update(state: AppState) {
     lastState = state;
     updateFileMeta();
+    const activeTransfers = state.fileTransfers.filter((entry) => entry.status === "uploading" || entry.status === "downloading").length;
+    incomingMetricValue.textContent = String(state.fileOffersIn.length);
+    activeMetricValue.textContent = String(activeTransfers);
+    offersCount.textContent = String(state.fileOffersIn.length);
+    transfersCount.textContent = String(state.fileTransfers.length);
 
     const userId = state.selfId;
     const canUseCache = Boolean(userId && state.authed);
@@ -851,6 +889,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
     }
 
     if (!canUseCache || !userId) {
+      cachedMetricValue.textContent = "0";
       cachedList.replaceChildren(
         el("div", { class: "page-empty" }, [
           el("div", { class: "page-empty-title" }, ["Кэш недоступен"]),
@@ -859,6 +898,7 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
       );
     } else {
       const cached = listFileCacheEntries(userId, { limit: 240 });
+      cachedMetricValue.textContent = String(cached.length);
       const inTransfers = new Set(state.fileTransfers.map((e) => String(e.id || "").trim()).filter(Boolean));
       const extra = cached.filter((e) => Boolean(e.fileId) && !inTransfers.has(e.fileId));
       if (!extra.length) {
@@ -881,12 +921,16 @@ export function createFilesPage(actions: FilesPageActions): FilesPage {
             ]
               .filter(Boolean)
               .map((line) => el("div", { class: "file-meta" }, [line]));
+            const status = el("span", { class: "file-status file-status-done" }, ["В кэше"]);
             const btnOpen = el("button", { class: "btn", type: "button" }, ["Открыть"]);
             const btnDownload = el("button", { class: "btn btn-primary", type: "button" }, ["Скачать"]);
             btnOpen.addEventListener("click", () => void openCachedFile(userId, entry.fileId, name || "файл", "open"));
             btnDownload.addEventListener("click", () => void openCachedFile(userId, entry.fileId, name || "файл", "download"));
-            return el("div", { class: "file-row" }, [
-              el("div", { class: "file-main" }, [el("div", { class: "file-title" }, [icon, el("div", { class: "file-name" }, [name])]), ...meta]),
+            return el("div", { class: `file-row file-row-${badge.kind} file-row-cached` }, [
+              el("div", { class: "file-main" }, [
+                el("div", { class: "file-title" }, [icon, el("div", { class: "file-title-main" }, [el("div", { class: "file-name" }, [name]), status])]),
+                el("div", { class: "file-meta-grid" }, meta),
+              ]),
               el("div", { class: "file-actions" }, [btnOpen, btnDownload]),
             ]);
           })

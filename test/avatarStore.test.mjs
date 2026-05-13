@@ -129,3 +129,19 @@ test("avatarStore: не падает при ошибках localStorage (quota/d
     await cleanup();
   }
 });
+
+test("avatarStore: avatarDataUrlToUploadPayload парсит mime/base64 и режет oversized payload", async () => {
+  const { mod, cleanup } = await loadModule("src/helpers/avatar/avatarStore.ts");
+  try {
+    const { avatarDataUrlToUploadPayload } = mod;
+    const payload = avatarDataUrlToUploadPayload("data:image/webp;base64,QUJDRA==");
+    assert.equal(payload.mime, "image/webp");
+    assert.equal(payload.base64, "QUJDRA==");
+    assert.equal(payload.bytes, 4);
+
+    const huge = `data:image/png;base64,${"A".repeat(70_000)}`;
+    assert.throws(() => avatarDataUrlToUploadPayload(huge), /avatar_transport_too_large/);
+  } finally {
+    await cleanup();
+  }
+});

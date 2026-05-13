@@ -1,5 +1,6 @@
 import type { ActionModalBoardInvite, ActionModalGroupInvite, ActionModalGroupJoinRequest, AppState } from "../../stores/types";
 import { dmKey } from "../../helpers/chat/conversationKey";
+import { isViewingDmPeer } from "../../helpers/navigation/mainConversationState";
 import {
   isDocHidden,
   maybePlaySound,
@@ -20,7 +21,7 @@ function resolvePeerLabel(state: AppState, peer: string): string {
 }
 
 function isViewingPeerDm(state: AppState, peer: string): boolean {
-  return Boolean(state.page === "main" && !state.modal && state.selected?.kind === "dm" && state.selected.id === peer);
+  return isViewingDmPeer(state, peer);
 }
 
 export function handleActionConversationMessage(t: string, msg: any, state: AppState, patch: PatchFn): boolean {

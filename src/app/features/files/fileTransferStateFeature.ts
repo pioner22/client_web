@@ -1,3 +1,4 @@
+import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
 
@@ -24,7 +25,7 @@ export function createFileTransferStateFeature(deps: FileTransferStateFeatureDep
         changed = true;
         return apply(entry);
       });
-      return changed ? { ...prev, fileTransfers: next } : prev;
+      return changed ? applyFileTransferMutation(prev, next) : prev;
     });
     scheduleSaveFileTransfers();
   };

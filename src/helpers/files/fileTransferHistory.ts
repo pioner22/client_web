@@ -36,17 +36,20 @@ function normalizeStatus(raw: unknown): FileTransferStatus | null {
   return null;
 }
 
-function sanitizeEntry(raw: unknown): FileTransferEntry | null {
+function sanitizeEntry(raw: unknown, opts?: { terminalOnly?: boolean; persistable?: boolean }): FileTransferEntry | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as any;
   const id = typeof obj.id === "string" ? obj.id.trim() : "";
-  if (!id) return null;
+  const terminalOnly = opts?.terminalOnly !== false;
+  const persistable = opts?.persistable !== false;
+  if (!id && terminalOnly) return null;
 
   const status = normalizeStatus(obj.status);
-  if (!status || !TERMINAL_STATUSES.has(status)) return null;
+  if (!status || (terminalOnly && !TERMINAL_STATUSES.has(status))) return null;
 
   const localIdRaw = typeof obj.localId === "string" ? obj.localId.trim() : "";
-  const localId = localIdRaw || `ft-${id}`;
+  const localId = localIdRaw || (id ? `ft-${id}` : "");
+  if (!localId) return null;
 
   const nameRaw = typeof obj.name === "string" ? obj.name : "";
   const name = nameRaw.trim() || "файл";
@@ -76,10 +79,14 @@ function sanitizeEntry(raw: unknown): FileTransferEntry | null {
   const error = errorRaw || null;
   const mimeRaw = typeof obj.mime === "string" ? obj.mime.trim() : "";
   const mime = mimeRaw || null;
+  const urlRaw = typeof obj.url === "string" ? obj.url.trim() : "";
+  const url = urlRaw || null;
+  const acceptedBy = normalizeStringList(obj.acceptedBy);
+  const receivedBy = normalizeStringList(obj.receivedBy);
 
   return {
     localId,
-    id,
+    id: id || null,
     name,
     size,
     direction,
@@ -89,7 +96,23 @@ function sanitizeEntry(raw: unknown): FileTransferEntry | null {
     progress,
     ...(error ? { error } : {}),
     ...(mime ? { mime } : {}),
+    ...(!persistable && url ? { url } : {}),
+    ...(!persistable && acceptedBy.length ? { acceptedBy } : {}),
+    ...(!persistable && receivedBy.length ? { receivedBy } : {}),
   };
+}
+
+function normalizeStringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const value = typeof item === "string" ? item.trim() : "";
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
 }
 
 export function sanitizeFileTransfers(raw: unknown): FileTransferEntry[] {
@@ -97,9 +120,27 @@ export function sanitizeFileTransfers(raw: unknown): FileTransferEntry[] {
   const out: FileTransferEntry[] = [];
   const seen = new Set<string>();
   for (const it of raw) {
-    const entry = sanitizeEntry(it);
+    const entry = sanitizeEntry(it, { terminalOnly: true, persistable: true });
     if (!entry) continue;
     const key = String(entry.id || "").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(entry);
+    if (out.length >= MAX_ENTRIES) break;
+  }
+  return out;
+}
+
+export function sanitizeRuntimeFileTransfers(raw: unknown): FileTransferEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: FileTransferEntry[] = [];
+  const seen = new Set<string>();
+  for (const it of raw) {
+    const entry = sanitizeEntry(it, { terminalOnly: false, persistable: false });
+    if (!entry) continue;
+    const id = String(entry.id || "").trim();
+    const localId = String(entry.localId || "").trim();
+    const key = id ? `id:${id}` : `local:${localId}`;
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(entry);

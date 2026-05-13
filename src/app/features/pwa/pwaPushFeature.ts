@@ -1,4 +1,5 @@
 import { setPushOptOut } from "../../../helpers/pwa/pushPrefs";
+import { isServiceWorkerRuntimeAvailable } from "../../../helpers/pwa/serviceWorkerRuntime";
 import { isIOS } from "../../../helpers/ui/iosInputAssistant";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
@@ -95,7 +96,7 @@ function vapidKeyToUint8Array(key: string): Uint8Array<ArrayBuffer> {
 }
 
 async function getPushRegistration(): Promise<ServiceWorkerRegistration | null> {
-  if (!("serviceWorker" in navigator)) return null;
+  if (!isServiceWorkerRuntimeAvailable()) return null;
   try {
     return await navigator.serviceWorker.ready;
   } catch {
@@ -118,7 +119,7 @@ export function createPwaPushFeature(deps: PwaPushFeatureDeps): PwaPushFeature {
   let pushSyncInFlight = false;
 
   async function getPushRegistrationWithTimeout(mode: "auto" | "manual", timeoutMs: number): Promise<ServiceWorkerRegistration | null> {
-    if (!("serviceWorker" in navigator)) return null;
+    if (!isServiceWorkerRuntimeAvailable()) return null;
     const prefix = mode === "auto" ? "Авто‑подписка: " : "";
     const ready = new Promise<ServiceWorkerRegistration | null>((resolve) => {
       let done = false;
@@ -352,4 +353,3 @@ export function createPwaPushFeature(deps: PwaPushFeatureDeps): PwaPushFeature {
 
   return { installAutoSync, enablePush, disablePush, syncExistingPushSubscription, onLogout };
 }
-

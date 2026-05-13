@@ -161,11 +161,16 @@ test("chat pinned surface: multi-pin state gets prev/next actions and count chip
         activeRaw: 11,
       });
       assert.ok(surface);
-      assert.equal(surface.className, "chat-pinned");
+      assert.ok(surface.className.split(/\s+/).includes("chat-pinned"));
+      assert.ok(surface.className.split(/\s+/).includes("chat-pinned-text"));
+      assert.equal(surface.getAttribute("data-pinned-count"), "2");
 
       const count = findFirst(surface, (node) => node && node.className === "chat-pinned-count");
       assert.ok(count);
       assert.equal(count._children[0]?.textContent, "2/2");
+
+      const thumb = findFirst(surface, (node) => node && node.className === "chat-pinned-thumb");
+      assert.equal(thumb, null, "pinned bar should stay compact without a large thumbnail block");
 
       const prev = findFirst(surface, (node) => node && typeof node.getAttribute === "function" && node.getAttribute("data-action") === "chat-pinned-prev");
       const next = findFirst(surface, (node) => node && typeof node.getAttribute === "function" && node.getAttribute("data-action") === "chat-pinned-next");
@@ -179,14 +184,24 @@ test("chat pinned surface: multi-pin state gets prev/next actions and count chip
   }
 });
 
-test("service surfaces css: pinned/jump/toast/composer badges are covered by dedicated layer", async () => {
+test("service surfaces css: pinned/jump/header-status/composer badges are covered by dedicated layer", async () => {
   const styleSrc = await readFile(path.resolve("src/scss/style.css"), "utf8");
   assert.match(styleSrc, /@import "\.\/service-surfaces\.css";/);
 
   const css = await readFile(path.resolve("src/scss/service-surfaces.css"), "utf8");
+  const headerCss = await readFile(path.resolve("src/scss/components.part01.css"), "utf8");
   assert.match(css, /\.chat-pinned-marker\b/);
   assert.match(css, /\.chat-pinned-prev::before/);
   assert.match(css, /\.chat-jump-badge\b/);
   assert.match(css, /\.btn\.composer-action\[data-media-perm="denied"\]::after/);
-  assert.match(css, /\.toast-host\[data-toast-placement="center"\]\s+\.toast\.toast-warn/);
+  assert.match(css, /\.toast-host\s*\{[\s\S]*display:\s*none\s*!important;/);
+  assert.match(headerCss, /\.hdr-status-actions\b/);
+  assert.match(css, /composer-video-self-preview/);
+  assert.match(css, /\.composer-recorder\[data-recorder-mode="recording"\]\s+\.composer-video-self-preview/);
+  assert.match(css, /contain:\s*layout paint/);
+
+  const deferredActions = await readFile(path.resolve("src/app/features/navigation/chatSurfaceDeferredActions.ts"), "utf8");
+  const hideBlock = deferredActions.slice(deferredActions.indexOf('action === "chat-pinned-hide"'), deferredActions.indexOf('action === "chat-pinned-list"'));
+  assert.match(hideBlock, /unpinActiveForSelected/);
+  assert.doesNotMatch(hideBlock, /kind:\s*"confirm"/);
 });

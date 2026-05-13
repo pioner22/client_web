@@ -1,7 +1,7 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage, TargetRef } from "../../../stores/types";
 import { conversationKey, dmKey, roomKey } from "../../../helpers/chat/conversationKey";
-import { newestServerMessageId } from "../../../helpers/chat/historySync";
+import { applyConversationHistorySyncState, getConversationHistorySyncState, newestServerMessageId } from "../../../helpers/chat/historySync";
 import { loadHistoryCachePrefs } from "../../../helpers/chat/historyCachePrefs";
 import { countHistoryMessagesForConvo, getHistoryConvoMeta, getHistoryLatestMessages, getHistoryMessagesBefore } from "../../../helpers/chat/historyIdb";
 import { historyViewportRecentlyCompensated, shiftVirtualStartForPrepend } from "../../../helpers/chat/historyViewportCoordinator";
@@ -27,6 +27,7 @@ export interface HistoryFeatureDeps {
   deviceCaps: DeviceCapsLike;
   chatHost: HTMLElement;
   scrollToBottom: (key: string) => void;
+  reportIncident?: (kind: string, detail?: Record<string, unknown> | null, opts?: { key?: string; dedupeMs?: number }) => boolean;
 }
 
 export interface HistoryFeature {
@@ -60,7 +61,8 @@ function oldestServerMessageId(msgs: ChatMessage[]): number | null {
 }
 
 export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
-  const { store, send, deviceCaps, chatHost, scrollToBottom } = deps;
+  const { store, send, deviceCaps, chatHost, scrollToBottom, reportIncident } = deps;
+  const HISTORY_MORE_LIMIT = 200;
 
   const historyRequested = new Set<string>();
   const historyDeltaRequested = new Set<string>();
@@ -74,11 +76,14 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const historyPrefetchBootstrap = new Set<string>();
   const HISTORY_REQUEST_TIMEOUT_MS = deviceCaps.historyRequestTimeoutMs;
   const HISTORY_REQUEST_RETRY_LIMIT = 2;
-  const HISTORY_AUTO_RETRY_MS = 30_000;
+  const HISTORY_AUTO_RETRY_MS = 120_000;
   const HISTORY_PREFETCH_TIMEOUT_MS = 10_000;
   const HISTORY_HAS_MORE_BYPASS_MS = 8_000;
   const HISTORY_HAS_MORE_BYPASS_MAX = 2;
-  const HISTORY_BOTTOM_SYNC_MIN_MS = 2_500;
+  const HISTORY_BOTTOM_SYNC_MIN_MS = 45_000;
+  const HISTORY_SELECTED_DELTA_REVALIDATE_MS = deviceCaps.slowNetwork ? 5 * 60 * 1000 : 3 * 60 * 1000;
+  const HISTORY_TAIL_REVALIDATE_MS = deviceCaps.slowNetwork ? 12 * 60 * 1000 : 8 * 60 * 1000;
+  const HISTORY_BACKGROUND_NETWORK_MIN_MS = deviceCaps.slowNetwork ? 20 * 60 * 1000 : 12 * 60 * 1000;
   const HISTORY_PREFETCH_LIMIT = deviceCaps.historyPrefetchLimit;
   const HISTORY_WARMUP_LIMIT = deviceCaps.historyWarmupLimit;
   const HISTORY_WARMUP_CONCURRENCY = deviceCaps.historyWarmupConcurrency;
@@ -109,8 +114,8 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const HISTORY_BACKFILL_QUEUE_MAX = deviceCaps.slowNetwork ? 30 : deviceCaps.constrained ? 50 : 70;
   const HISTORY_BACKFILL_DELAY_MS = deviceCaps.slowNetwork ? 1600 : deviceCaps.constrained ? 1050 : 780;
   const HISTORY_BACKFILL_TIMEOUT_MS = Math.max(12_000, Math.min(30_000, HISTORY_REQUEST_TIMEOUT_MS + 3000));
-  const HISTORY_BACKFILL_TAIL_REVALIDATE_MS = 6 * 60 * 60 * 1000;
-  const HISTORY_BACKFILL_DELTA_REVALIDATE_MS = deviceCaps.slowNetwork ? 6 * 60 * 1000 : deviceCaps.constrained ? 4 * 60 * 1000 : 3 * 60 * 1000;
+  const HISTORY_BACKFILL_TAIL_REVALIDATE_MS = 24 * 60 * 60 * 1000;
+  const HISTORY_BACKFILL_DELTA_REVALIDATE_MS = deviceCaps.slowNetwork ? 45 * 60 * 1000 : deviceCaps.constrained ? 35 * 60 * 1000 : 30 * 60 * 1000;
   const HISTORY_BACKFILL_DELTA_LIMIT = deviceCaps.slowNetwork ? 220 : deviceCaps.constrained ? 420 : 800;
 
   const historyBackfillQueue: TargetRef[] = [];
@@ -125,6 +130,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   let lastHistoryFillAt = 0;
   let lastHistoryFillKey = "";
   let pendingChatAutoScroll: { key: string; waitForHistory: boolean } | null = null;
+  const historyNetworkLastAt = new Map<string, number>();
 
   const debugHook = (kind: string, data?: any) => {
     try {
@@ -137,6 +143,50 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   };
 
   const historyRequestTimerKey = (key: string, mode: HistoryRequestMode) => `${key}:${mode}`;
+
+  const resolveHistoryLoadingSlotCount = (limit: number): number => {
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(400, Math.trunc(limit))) : HISTORY_MORE_LIMIT;
+    const maxSlots = deviceCaps.constrained || deviceCaps.slowNetwork ? 4 : 6;
+    return Math.max(3, Math.min(maxSlots, Math.ceil(safeLimit / 50)));
+  };
+
+  const setHistoryLoadingSlots = (key: string, count: number) => {
+    const cleanKey = String(key || "").trim();
+    if (!cleanKey) return;
+    const nextCount = Math.max(0, Math.trunc(Number(count || 0) || 0));
+    store.set((prev) => {
+      const sync = getConversationHistorySyncState(prev, cleanKey);
+      if (sync.loadingSlots === nextCount) return prev;
+      return applyConversationHistorySyncState(prev, cleanKey, { loadingSlots: nextCount });
+    });
+  };
+
+  const clearHistoryLoadingSlots = (key: string) => {
+    setHistoryLoadingSlots(key, 0);
+  };
+
+  const shouldUseHistoryNetwork = (key: string, mode: string, minMs: number, opts?: { force?: boolean }): boolean => {
+    if (opts?.force) return true;
+    const cleanMode = String(mode || "history").trim() || "history";
+    const budgetKey = `${key}:${cleanMode}`;
+    const now = Date.now();
+    const last = historyNetworkLastAt.get(budgetKey) || 0;
+    if (last && now - last < minMs) {
+      debugHook("history.request.blocked_budget", {
+        key,
+        mode: cleanMode,
+        remaining_ms: Math.max(0, minMs - (now - last)),
+      });
+      return false;
+    }
+    historyNetworkLastAt.set(budgetKey, now);
+    return true;
+  };
+
+  const metaFresh = (timestampRaw: number | undefined, ttlMs: number): boolean => {
+    const ts = Number(timestampRaw ?? 0) || 0;
+    return Boolean(ts && Date.now() - ts < ttlMs);
+  };
 
   const clearHistoryRequestTimer = (key: string, mode: HistoryRequestMode, opts?: { resetAttempts?: boolean }) => {
     const timerKey = historyRequestTimerKey(key, mode);
@@ -203,7 +253,8 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   };
 
   const canLoadOlderHistory = (st: AppState, key: string, mode: string): boolean => {
-    if (st.historyHasMore?.[key] !== false) return true;
+    const sync = getConversationHistorySyncState(st, key);
+    if (sync.hasMore !== false) return true;
     const consumed = consumeHistoryHasMoreBypass(key);
     if (!consumed) return false;
     debugHook("history.has_more_bypass", {
@@ -231,18 +282,19 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     const key = conversationKey(t);
     if (!key) return;
     const force = Boolean(opts?.force);
+    const sync = getConversationHistorySyncState(st, key);
 
-    const previewOnly = Boolean(st.historyPreviewOnly?.[key]);
+    const previewOnly = sync.previewOnly;
     const cachedList = st.conversations?.[key] || [];
-    const cachedCursor = st.historyCursor?.[key];
+    const cachedCursor = sync.cursor;
     const cachedCursorValue = typeof cachedCursor === "number" && Number.isFinite(cachedCursor) && cachedCursor > 0 ? Math.floor(cachedCursor) : null;
     const cachedHasServer =
       !previewOnly &&
       (cachedList.some((m) => typeof m?.id === "number" && Number.isFinite(m.id) && m.id > 0) ||
         cachedCursorValue !== null);
     const hasServerHistoryState = cachedHasServer;
-    const hasStaleLoaded = Boolean(st.historyLoaded?.[key]) && !hasServerHistoryState;
-    const effectiveLoaded = !force && Boolean(st.historyLoaded?.[key]) && hasServerHistoryState;
+    const hasStaleLoaded = sync.loaded && !hasServerHistoryState;
+    const effectiveLoaded = !force && sync.loaded && hasServerHistoryState;
 
     if (hasStaleLoaded) {
       debugHook("history.request.stale_loaded", {
@@ -252,11 +304,8 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
         force,
       });
       store.set((prev) => {
-        const prevLoaded = prev.historyLoaded || {};
-        if (!prevLoaded[key]) return prev;
-        const nextLoaded = { ...prevLoaded };
-        delete nextLoaded[key];
-        return { ...prev, historyLoaded: nextLoaded };
+        if (!getConversationHistorySyncState(prev, key).loaded) return prev;
+        return applyConversationHistorySyncState(prev, key, { loaded: false });
       });
     }
 
@@ -265,12 +314,17 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
         typeof cachedCursor === "number" && Number.isFinite(cachedCursor) && cachedCursor > 0
           ? Math.floor(cachedCursor)
           : oldestServerMessageId(cachedList);
-      store.set((prev) => ({
-        ...prev,
-        historyLoaded: { ...prev.historyLoaded, [key]: true },
-        ...(prev.historyLoading?.[key] ? { historyLoading: { ...prev.historyLoading, [key]: false } } : {}),
-        ...(derivedCursor ? { historyCursor: { ...prev.historyCursor, [key]: derivedCursor } } : {}),
-      }));
+      store.set((prev) =>
+        applyConversationHistorySyncState(prev, key, {
+          loaded: true,
+          previewOnly: false,
+          loading: false,
+          cursor: derivedCursor,
+          source: "server",
+          reconcilePending: false,
+          lastServerAt: Date.now(),
+        })
+      );
     }
 
     // 0) Local-first: if we have a full history cache in IndexedDB, hydrate the tail before hitting the server.
@@ -279,7 +333,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       if (Date.now() >= missUntil && !historyIdbHydrating.has(key) && !historyRequested.has(key)) {
         historyIdbHydrating.add(key);
         markChatAutoScroll(key, true);
-        store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+        store.set((prev) => applyConversationHistorySyncState(prev, key, { loading: true }));
         void (async () => {
           try {
             const snap = store.get();
@@ -288,7 +342,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
             const cached = await getHistoryLatestMessages(uid, key, { limit: HISTORY_IDB_TAIL_LIMIT });
             if (!cached.length) {
               historyIdbNoCacheUntil.set(key, Date.now() + HISTORY_IDB_MISS_TTL_MS);
-              store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: false } }));
+              store.set((prev) => applyConversationHistorySyncState(prev, key, { loading: false }));
               requestHistory(t, opts);
               return;
             }
@@ -298,26 +352,34 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
               const prevConv = prev.conversations?.[key] || [];
               const merged = prevConv.length ? mergeMessages(prevConv, cached) : cached;
               const cursor = derivedCursor || oldestServerMessageId(merged);
-              const prevPreviewOnly = prev.historyPreviewOnly || {};
-              let nextPreviewOnly = prevPreviewOnly;
-              if (prevPreviewOnly[key]) {
-                nextPreviewOnly = { ...prevPreviewOnly };
-                delete nextPreviewOnly[key];
-              }
-              return {
+              return applyConversationHistorySyncState({
                 ...prev,
                 conversations: { ...prev.conversations, [key]: merged },
-                historyLoaded: { ...prev.historyLoaded, [key]: true },
-                historyPreviewOnly: nextPreviewOnly,
-                ...(cursor ? { historyCursor: { ...prev.historyCursor, [key]: cursor } } : {}),
-                ...(meta ? { historyHasMore: { ...prev.historyHasMore, [key]: !meta.backfilled } } : {}),
-                historyLoading: { ...prev.historyLoading, [key]: false },
-              };
+              }, key, {
+                loaded: true,
+                previewOnly: true,
+                cursor,
+                hasMore: meta ? !meta.backfilled : null,
+                loading: false,
+                source: "cache",
+                reconcilePending: true,
+                lastServerAt: null,
+              });
             });
-            // Best-effort delta sync for freshness (edits/deletes/new messages).
+            // Local-first: draw cached history immediately, then revalidate through the shared
+            // network budget so stale cache cannot trigger reload storms on slow clients.
             const after = store.get();
             const selectedKey = after.selected ? conversationKey(after.selected) : "";
-            if (selectedKey === key) requestHistory(t, { ...opts, force: true });
+            if (selectedKey === key && shouldUseHistoryNetwork(key, "selected_tail_after_cache", HISTORY_SELECTED_DELTA_REVALIDATE_MS)) {
+              requestHistory(t, opts);
+            } else if (
+              selectedKey === key &&
+              meta &&
+              !metaFresh(meta.delta_checked_at, HISTORY_SELECTED_DELTA_REVALIDATE_MS) &&
+              shouldUseHistoryNetwork(key, "selected_delta_after_cache", HISTORY_SELECTED_DELTA_REVALIDATE_MS)
+            ) {
+              requestHistory(t, { ...opts, deltaLimit: Math.min(Number(opts?.deltaLimit ?? 200), 200) });
+            }
           } finally {
             historyIdbHydrating.delete(key);
           }
@@ -329,6 +391,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     // 1) Первый заход в чат: забираем "хвост" (последние сообщения), чтобы быстро заполнить экран.
     if (!effectiveLoaded && !cachedHasServer) {
       if (historyRequested.has(key)) return;
+      if (!shouldUseHistoryNetwork(key, "tail", HISTORY_TAIL_REVALIDATE_MS, { force })) return;
       const cached = cachedList.length > 0;
       const baseTarget = t.kind === "dm" ? { type: "history", peer: t.id } : { type: "history", room: t.id };
       debugHook("history.request", {
@@ -344,7 +407,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       markChatAutoScroll(key, !cached);
       historyRequested.add(key);
       armHistoryRequestTimeout(key, "before");
-      store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+      store.set((prev) => applyConversationHistorySyncState(prev, key, { loading: true }));
       send({ ...baseTarget, before_id: 0, limit: 200 });
       return;
     }
@@ -354,7 +417,8 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     const since = newestServerMessageId(st.conversations[key] ?? []);
     const now = Date.now();
     const last = historyDeltaRequestedAt.get(key) ?? 0;
-    if (!opts?.force && now - last < 1500) return;
+    if (!opts?.force && now - last < HISTORY_SELECTED_DELTA_REVALIDATE_MS) return;
+    if (!shouldUseHistoryNetwork(key, "delta", HISTORY_SELECTED_DELTA_REVALIDATE_MS, { force: Boolean(opts?.force) })) return;
     historyDeltaRequestedAt.set(key, now);
     historyDeltaRequested.add(key);
     armHistoryRequestTimeout(key, "delta");
@@ -395,11 +459,13 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       debugHook("history.blocked", { key, mode: "prefetch", reason: "hasMore=false", limit: HISTORY_PREFETCH_LIMIT });
       return;
     }
+    const prefetchSync = getConversationHistorySyncState(st, key);
     if (historyPrefetchRequested.has(key)) return;
     if (historyRequested.has(key)) return;
-    if (st.historyLoading?.[key]) return;
-    const before = st.historyCursor[key];
+    if (prefetchSync.loading) return;
+    const before = prefetchSync.cursor;
     if (!before || !Number.isFinite(before) || before <= 0) return;
+    if (!shouldUseHistoryNetwork(key, "prefetch", HISTORY_BACKGROUND_NETWORK_MIN_MS)) return;
     historyPrefetchRequested.add(key);
     armHistoryPrefetchTimeout(key);
     debugHook("history.request", {
@@ -425,19 +491,35 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       const attempts = (historyRequestAttempts.get(timerKey) ?? 0) + 1;
       historyRequestAttempts.set(timerKey, attempts);
       const canRetry = attempts <= HISTORY_REQUEST_RETRY_LIMIT;
+      const snapshot = store.get();
+      reportIncident?.(
+        "history_request_timeout",
+        {
+          mode,
+          attempts,
+          final_failure: !canRetry,
+          history_loaded: getConversationHistorySyncState(snapshot, key).loaded,
+          history_loading: getConversationHistorySyncState(snapshot, key).loading,
+          history_has_more: getConversationHistorySyncState(snapshot, key).hasMore,
+          history_cursor: getConversationHistorySyncState(snapshot, key).cursor,
+        },
+        {
+          key: `history_request_timeout:${key}:${mode}:${canRetry ? "retry" : "final"}`,
+          dedupeMs: canRetry ? HISTORY_REQUEST_TIMEOUT_MS : HISTORY_AUTO_RETRY_MS,
+        }
+      );
       if (mode === "before") {
         if (!historyRequested.has(key)) return;
         historyRequested.delete(key);
         historyPreviewRequested.delete(key);
         store.set((prev) => {
-          if (!prev.historyLoading?.[key]) return prev;
+          if (!getConversationHistorySyncState(prev, key).loading) return prev;
           if (canRetry) {
             const status = "История не отвечает, повторяем…";
             return prev.status === status ? prev : { ...prev, status };
           }
           return {
-            ...prev,
-            historyLoading: { ...prev.historyLoading, [key]: false },
+            ...applyConversationHistorySyncState(prev, key, { loading: false, loadingSlots: 0 }),
             status: "История не отвечает. Повторите позже.",
           };
         });
@@ -456,7 +538,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
         canRetry,
       });
       if (mode === "before") {
-        if (st.historyLoaded?.[key]) {
+        if (getConversationHistorySyncState(st, key).loaded) {
           requestMoreHistory();
         } else {
           requestHistory(st.selected, { force: true, deltaLimit: 2000 });
@@ -559,6 +641,12 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       const tailStale = !tailCheckedAt || now - tailCheckedAt > HISTORY_BACKFILL_TAIL_REVALIDATE_MS;
       const needTail = !meta || maxId <= 0;
       if (needTail) {
+        if (!shouldUseHistoryNetwork(key, "backfill_tail", HISTORY_BACKGROUND_NETWORK_MIN_MS)) {
+          historyBackfillInFlight.delete(key);
+          clearHistoryBackfillTimer(key);
+          scheduleBackfill();
+          return;
+        }
         debugHook("history.backfill.request", {
           key,
           mode: "tail",
@@ -574,6 +662,12 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       const deltaCheckedAt = meta?.delta_checked_at ?? 0;
       const deltaStale = !deltaCheckedAt || now - deltaCheckedAt > HISTORY_BACKFILL_DELTA_REVALIDATE_MS;
       if (deltaStale && maxId > 0) {
+        if (!shouldUseHistoryNetwork(key, "backfill_delta", HISTORY_BACKGROUND_NETWORK_MIN_MS)) {
+          historyBackfillInFlight.delete(key);
+          clearHistoryBackfillTimer(key);
+          scheduleBackfill();
+          return;
+        }
         if (historyDeltaRequested.has(key)) {
           debugHook("history.backfill.skip", { key, mode: "delta", reason: "delta_in_flight" });
           historyBackfillInFlight.delete(key);
@@ -597,6 +691,12 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       }
 
       if (tailStale) {
+        if (!shouldUseHistoryNetwork(key, "backfill_tail_revalidate", HISTORY_BACKGROUND_NETWORK_MIN_MS)) {
+          historyBackfillInFlight.delete(key);
+          clearHistoryBackfillTimer(key);
+          scheduleBackfill();
+          return;
+        }
         debugHook("history.backfill.request", {
           key,
           mode: "tail_revalidate",
@@ -622,9 +722,21 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
         }
         const cursor = Number(meta.min_id ?? 0) || 0;
         if (cursor > 0) {
+          if (!shouldUseHistoryNetwork(key, "backfill_before", HISTORY_BACKGROUND_NETWORK_MIN_MS)) {
+            historyBackfillInFlight.delete(key);
+            clearHistoryBackfillTimer(key);
+            scheduleBackfill();
+            return;
+          }
           debugHook("history.backfill.request", { key, mode: "before", before: cursor, limit: HISTORY_BACKFILL_LIMIT });
           if (target.kind === "dm") send({ type: "history", peer: target.id, before_id: cursor, limit: HISTORY_BACKFILL_LIMIT });
           else send({ type: "history", room: target.id, before_id: cursor, limit: HISTORY_BACKFILL_LIMIT });
+          return;
+        }
+        if (!shouldUseHistoryNetwork(key, "backfill_tail_repair", HISTORY_BACKGROUND_NETWORK_MIN_MS)) {
+          historyBackfillInFlight.delete(key);
+          clearHistoryBackfillTimer(key);
+          scheduleBackfill();
           return;
         }
         debugHook("history.backfill.request", { key, mode: "tail_repair", limit: HISTORY_IDB_TAIL_LIMIT, reason: "missing_min_id" });
@@ -655,7 +767,10 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     if (st.page !== "main") return;
     if (st.modal && st.modal.kind !== "context_menu") return;
     const selectedKey = st.selected ? conversationKey(st.selected) : "";
-    if (selectedKey && (!st.historyLoaded?.[selectedKey] || st.historyLoading?.[selectedKey])) return;
+    if (selectedKey) {
+      const selectedSync = getConversationHistorySyncState(st, selectedKey);
+      if (!selectedSync.loaded || selectedSync.loading) return;
+    }
     if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") {
       if (historyBackfillQueue.length) {
         historyBackfillTimer = window.setTimeout(drainHistoryBackfillQueue, HISTORY_BACKFILL_DELAY_MS);
@@ -691,8 +806,9 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const shouldWarmupHistoryTarget = (st: AppState, key: string): boolean => {
     if (!key) return false;
     if (st.selected && conversationKey(st.selected) === key) return false;
-    if (st.historyLoaded?.[key]) return false;
-    if (st.historyLoading?.[key]) return false;
+    const sync = getConversationHistorySyncState(st, key);
+    if (sync.loaded) return false;
+    if (sync.loading) return false;
     if (historyRequested.has(key) || historyDeltaRequested.has(key) || historyPrefetchRequested.has(key)) return false;
     if (historyWarmupRequested.has(key) || historyWarmupQueued.has(key) || historyWarmupInFlight.has(key)) return false;
     if ((st.conversations[key] || []).length) return false;
@@ -751,27 +867,20 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
         const meta = await getHistoryConvoMeta(uid, key);
         store.set((prev) => {
           if ((prev.conversations?.[key] || []).length) return prev;
-          const nextHasMore = meta ? { ...prev.historyHasMore, [key]: !meta.backfilled } : null;
-          return {
+          return applyConversationHistorySyncState({
             ...prev,
             conversations: { ...prev.conversations, [key]: cached },
-            historyPreviewOnly: { ...prev.historyPreviewOnly, [key]: true },
-            ...(nextHasMore ? { historyHasMore: nextHasMore } : {}),
-          };
+          }, key, {
+            previewOnly: true,
+            hasMore: meta ? !meta.backfilled : null,
+            source: "cache",
+            reconcilePending: true,
+          });
         });
         return;
       }
 
-      // No cache yet: seed from server (tail).
-      const live = store.get();
-      if (!live.authed || live.conn !== "connected") return;
-      if (!live.netLeader) return;
-      usedNetwork = true;
-      if (target.kind === "dm") {
-        send({ type: "history", peer: target.id, before_id: 0, limit: HISTORY_WARMUP_LIMIT });
-      } else {
-        send({ type: "history", room: target.id, before_id: 0, limit: HISTORY_WARMUP_LIMIT });
-      }
+      debugHook("history.warmup.skip_network", { key, reason: "local_first_no_cache" });
     } catch {
       // ignore
     } finally {
@@ -797,7 +906,10 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     if (st.page !== "main") return;
     if (st.modal && st.modal.kind !== "context_menu") return;
     const selectedKey = st.selected ? conversationKey(st.selected) : "";
-    if (selectedKey && (!st.historyLoaded?.[selectedKey] || st.historyLoading?.[selectedKey])) return;
+    if (selectedKey) {
+      const selectedSync = getConversationHistorySyncState(st, selectedKey);
+      if (!selectedSync.loaded || selectedSync.loading) return;
+    }
     if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") {
       if (historyWarmupQueue.length) {
         historyWarmupTimer = window.setTimeout(drainHistoryWarmupQueue, HISTORY_WARMUP_DELAY_MS);
@@ -836,12 +948,13 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     const key = conversationKey(t);
     if (!key) return;
     if (historyPreviewRequested.has(key)) return;
-    if (st.historyLoaded[key]) return;
+    if (getConversationHistorySyncState(st, key).loaded) return;
     if ((st.conversations[key] || []).length) return;
     const last = historyPreviewLastAt.get(key) ?? 0;
     const now = Date.now();
     if (now - last < 5 * 60 * 1000) return;
     historyPreviewLastAt.set(key, now);
+    if (!shouldUseHistoryNetwork(key, "preview", HISTORY_BACKGROUND_NETWORK_MIN_MS)) return;
     historyPreviewRequested.add(key);
     if (t.kind === "dm") {
       send({ type: "history", peer: t.id, before_id: 0, limit: 1, preview: true });
@@ -884,7 +997,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     }
     if (!st.selected) return;
     const key = conversationKey(st.selected);
-    if (!st.historyLoaded[key]) {
+    if (!getConversationHistorySyncState(st, key).loaded) {
       requestHistory(st.selected);
       return;
     }
@@ -893,13 +1006,14 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       debugHook("history.blocked", { key, mode: "more", reason: "hasMore=false" });
       return;
     }
-    const before = st.historyCursor[key];
+    const before = getConversationHistorySyncState(st, key).cursor;
     if (!before || !Number.isFinite(before) || before <= 0) return;
 
     // Local-first: try to satisfy "load older" from IndexedDB cache to reduce server load (Telegram-like).
     if (st.selfId) {
       historyRequested.add(key);
-      store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+      setHistoryLoadingSlots(key, resolveHistoryLoadingSlotCount(HISTORY_MORE_LIMIT));
+      store.set((prev) => applyConversationHistorySyncState(prev, key, { loading: true }));
       void (async () => {
         let usedNetwork = false;
         try {
@@ -918,24 +1032,22 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
               const prependShift = actualPrependCount !== null && actualPrependCount >= 0 ? actualPrependCount : delta;
               const nextVirtualStart = shiftVirtualStartForPrepend(prevVirtualStart, prependShift);
               const shouldShiftVirtual = nextVirtualStart !== null && nextVirtualStart !== prevVirtualStart;
-              return {
+              return applyConversationHistorySyncState({
                 ...prev,
                 conversations: { ...prev.conversations, [key]: nextConv },
-                ...(cursor ? { historyCursor: { ...prev.historyCursor, [key]: cursor } } : {}),
-                historyLoading: { ...prev.historyLoading, [key]: false },
-                ...(shouldShiftVirtual ? { historyVirtualStart: { ...prev.historyVirtualStart, [key]: nextVirtualStart } } : {}),
-              };
+              }, key, {
+                cursor,
+                loading: false,
+                loadingSlots: 0,
+                virtualStart: shouldShiftVirtual && nextVirtualStart !== null ? nextVirtualStart : prevVirtualStart,
+              });
             });
             return;
           }
 
           const meta = await getHistoryConvoMeta(uid, key);
           if (meta?.backfilled) {
-            store.set((prev) => ({
-              ...prev,
-              historyHasMore: { ...prev.historyHasMore, [key]: false },
-              historyLoading: { ...prev.historyLoading, [key]: false },
-            }));
+            store.set((prev) => applyConversationHistorySyncState(prev, key, { hasMore: false, loading: false, loadingSlots: 0 }));
             return;
           }
 
@@ -946,6 +1058,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
           if (!selected) return;
           const selectedKey = conversationKey(selected);
           if (!selectedKey || selectedKey !== key) return;
+          if (!shouldUseHistoryNetwork(key, "more", 3000)) return;
           usedNetwork = true;
           armHistoryRequestTimeout(key, "before");
           debugHook("history.request", {
@@ -966,8 +1079,8 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
           if (!usedNetwork) {
             historyRequested.delete(key);
             store.set((prev) => {
-              if (!prev.historyLoading?.[key]) return prev;
-              return { ...prev, historyLoading: { ...prev.historyLoading, [key]: false } };
+              if (!getConversationHistorySyncState(prev, key).loading) return prev;
+              return applyConversationHistorySyncState(prev, key, { loading: false, loadingSlots: 0 });
             });
           }
         }
@@ -976,9 +1089,17 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     }
 
     historyRequested.add(key);
+    setHistoryLoadingSlots(key, resolveHistoryLoadingSlotCount(HISTORY_MORE_LIMIT));
     armHistoryRequestTimeout(key, "before");
-    store.set((prev) => ({ ...prev, historyLoading: { ...prev.historyLoading, [key]: true } }));
+    store.set((prev) => applyConversationHistorySyncState(prev, key, { loading: true }));
     debugHook("history.request", { key, mode: "more", before, kind: st.selected?.kind, force: false, prefetchBefore: false });
+    if (!shouldUseHistoryNetwork(key, "more", 3000)) {
+      historyRequested.delete(key);
+      clearHistoryRequestTimer(key, "before");
+      clearHistoryLoadingSlots(key);
+      store.set((prev) => applyConversationHistorySyncState(prev, key, { loading: false }));
+      return;
+    }
     if (st.selected.kind === "dm") {
       send({ type: "history", peer: st.selected.id, before_id: before, limit: 200 });
     } else {
@@ -999,7 +1120,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     }
     if (pendingChatAutoScroll && autoScrollKey && st.page === "main" && (!st.modal || st.modal.kind === "context_menu")) {
       const waitForHistory = pendingChatAutoScroll.waitForHistory;
-      const loaded = Boolean(st.historyLoaded && st.historyLoaded[autoScrollKey]);
+      const loaded = Boolean(getConversationHistorySyncState(st, autoScrollKey).loaded);
       if (!waitForHistory || loaded) {
         scrollToBottom(autoScrollKey);
         pendingChatAutoScroll = null;
@@ -1022,9 +1143,9 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
 
     const key = conversationKey(st.selected);
     if (!key) return;
-    if (!st.historyLoaded[key]) return;
+    if (!getConversationHistorySyncState(st, key).loaded) return;
     if (!canLoadOlderHistory(st, key, "scroll")) return;
-    if (st.historyLoading[key]) return;
+    if (getConversationHistorySyncState(st, key).loading) return;
     if (historyRequested.has(key)) return;
     const maxTop = Math.max(0, chatHost.scrollHeight - chatHost.clientHeight);
     const atBottom = scrollTop >= maxTop - 24;
@@ -1038,7 +1159,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       return;
     }
 
-    const cursor = st.historyCursor[key];
+    const cursor = getConversationHistorySyncState(st, key).cursor;
     if (!cursor || !Number.isFinite(cursor) || cursor <= 0) return;
 
     // Telegram-like: если пользователь доскроллил до верха — подтянуть более ранние сообщения.
@@ -1069,11 +1190,11 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
 
     const key = conversationKey(st.selected);
     if (!key) return;
-    if (!st.historyLoaded[key]) return;
+    if (!getConversationHistorySyncState(st, key).loaded) return;
     if (!canLoadOlderHistory(st, key, "fill")) return;
-    if (st.historyLoading[key]) return;
+    if (getConversationHistorySyncState(st, key).loading) return;
     if (historyRequested.has(key)) return;
-    const cursor = st.historyCursor[key];
+    const cursor = getConversationHistorySyncState(st, key).cursor;
     if (!cursor || !Number.isFinite(cursor) || cursor <= 0) return;
 
     if (chatHost.scrollHeight > chatHost.clientHeight + 32) return;
@@ -1093,8 +1214,9 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
 
     const key = conversationKey(st.selected);
     if (!key) return;
-    if (st.historyLoaded[key]) return;
-    if (st.historyLoading[key]) return;
+    const sync = getConversationHistorySyncState(st, key);
+    if (sync.loaded) return;
+    if (sync.loading) return;
     if (historyRequested.has(key)) return;
 
     const now = Date.now();
@@ -1190,17 +1312,11 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     historyBackfillTimers.clear();
     store.set((prev) => {
       if (!pendingBefore.size) return prev;
-      let nextLoading = prev.historyLoading;
-      let changed = false;
       for (const key of pendingBefore) {
-        if (!prev.historyLoading?.[key]) continue;
-        if (!changed) {
-          nextLoading = { ...prev.historyLoading };
-          changed = true;
-        }
-        nextLoading[key] = false;
+        if (!getConversationHistorySyncState(prev, key).loading) continue;
+        prev = applyConversationHistorySyncState(prev, key, { loading: false, loadingSlots: 0 });
       }
-      return changed ? { ...prev, historyLoading: nextLoading } : prev;
+      return prev;
     });
   };
 
@@ -1218,12 +1334,12 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       preview,
       hasMore: rawHasMore !== undefined ? Boolean(rawHasMore) : undefined,
       readUpToId: msg?.read_up_to_id ?? null,
-      hasHistoryLoading: Boolean(key && st.historyLoading?.[key]),
+      hasHistoryLoading: Boolean(key && getConversationHistorySyncState(st, key).loading),
     });
     if (!key) return;
     const isPreview = Boolean(msg?.preview);
     const isBefore = msg?.before_id !== undefined && msg?.before_id !== null;
-    const priorHasMore = st.historyHasMore?.[key];
+    const priorHasMore = getConversationHistorySyncState(st, key).hasMore;
     if (!preview && priorHasMore === false && isBefore) {
       if (rows.length > 0) {
         if (rawHasMore === false) {
@@ -1240,6 +1356,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     if (isPreview) {
       historyPreviewRequested.delete(key);
     } else {
+      clearHistoryLoadingSlots(key);
       if (isBefore) {
         if (historyRequested.has(key)) {
           historyRequested.delete(key);
@@ -1271,10 +1388,10 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const maybeBootstrapPrefetch: HistoryFeature["maybeBootstrapPrefetch"] = (st) => {
     if (!st.authed || !st.selfId || !st.selected) return;
     const key = conversationKey(st.selected);
-    const cursor = key ? st.historyCursor?.[key] : null;
+    const cursor = key ? getConversationHistorySyncState(st, key).cursor : null;
     if (
       key &&
-      st.historyLoaded?.[key] &&
+      getConversationHistorySyncState(st, key).loaded &&
       canLoadOlderHistory(st, key, "bootstrap") &&
       typeof cursor === "number" &&
       Number.isFinite(cursor) &&
@@ -1283,7 +1400,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       !historyPrefetchRequested.has(key) &&
       !historyRequested.has(key) &&
       !historyDeltaRequested.has(key) &&
-      !st.historyLoading?.[key]
+      !getConversationHistorySyncState(st, key).loading
     ) {
       historyPrefetchBootstrap.add(key);
       requestHistory(st.selected, { prefetchBefore: true });
@@ -1312,6 +1429,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     clearPendingRequests();
     historyDeltaRequestedAt.clear();
     historyPreviewLastAt.clear();
+    historyNetworkLastAt.clear();
     clearAllHistoryHasMoreBypass();
     historyBottomSyncAt.clear();
   };

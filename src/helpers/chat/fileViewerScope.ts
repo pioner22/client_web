@@ -87,3 +87,11 @@ export function sameFileViewerContext(
   const nextMsgIdx = Number.isFinite(ctx.msgIdx) ? Math.trunc(Number(ctx.msgIdx)) : null;
   return Boolean(modalChatKey && nextChatKey && modalChatKey === nextChatKey && modalMsgIdx !== null && modalMsgIdx === nextMsgIdx);
 }
+
+export function shouldApplyPendingFileViewerResult(
+  modal: FileViewerContextLike | null | undefined,
+  ctx: { fileId?: string | null; chatKey?: string | null; msgIdx?: number | null }
+): boolean {
+  if (!modal) return true;
+  return sameFileViewerContext(modal, ctx);
+}

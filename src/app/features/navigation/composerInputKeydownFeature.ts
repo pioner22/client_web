@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { getActiveConversationTarget } from "../../../helpers/navigation/mainConversationState";
 
 export interface ComposerInputKeydownFeatureDeps {
   store: Store<AppState>;
@@ -37,7 +38,8 @@ export function createComposerInputKeydownFeature(deps: ComposerInputKeydownFeat
         return;
       }
       const st = store.get();
-      const boardEditorOpen = Boolean(st.boardComposerOpen && st.selected?.kind === "board");
+      const activeConversation = getActiveConversationTarget(st);
+      const boardEditorOpen = Boolean(st.boardComposerOpen && activeConversation?.kind === "board");
 
       if (e.key === "Enter" && !e.shiftKey) {
         if (boardEditorOpen) {

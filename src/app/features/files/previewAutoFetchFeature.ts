@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
+import { getConversationHistorySyncState } from "../../../helpers/chat/historySync";
 import { canDrainFilePrefetch, canDrainFileRuntime, isFileRuntimeDocumentVisible } from "./fileRuntimePolicy";
 
 type AutoDownloadKind = "image" | "video" | "audio" | "file";
@@ -14,6 +15,7 @@ type RestoreTask = {
   peer: string;
   room: string | null;
   prefetch: boolean;
+  priority: "high" | "prefetch";
   restorePreview: boolean;
   retryWindowMs: number;
 };
@@ -23,6 +25,7 @@ type PreviewTransferItem = {
   name: string;
   size: number;
   mime: string | null;
+  kind?: "image" | "video" | "audio";
   direction: "in" | "out";
   peer: string;
   room: string | null;
@@ -45,6 +48,7 @@ type EnqueueFileGetOptions = { priority?: "high" | "prefetch"; silent?: boolean 
 export interface PreviewAutoFetchFeatureDeps {
   store: Store<AppState>;
   chatHost: HTMLElement;
+  reportIncident?: (kind: string, detail?: Record<string, unknown> | null, opts?: { key?: string; dedupeMs?: number }) => boolean;
   conversationKey: (target: NonNullable<AppState["selected"]>) => string;
   convoSig: (msgs: any[]) => string;
   devicePrefetchAllowed: boolean;
@@ -73,12 +77,48 @@ const WARMUP_MAX_SCAN = 160;
 const WARMUP_MAX_TASKS = 30;
 const WARMUP_PREFETCH_MAX_BYTES = 24 * 1024 * 1024;
 
+export function resolveVisiblePreviewFetchPlan(params: {
+  fileKind: "image" | "video" | "audio";
+  devicePrefetchAllowed: boolean;
+  shouldBackgroundPrefetch: boolean;
+}): { prefetch: boolean; priority: "high" | "prefetch" } {
+  const fileKind = params.fileKind;
+  const canBackgroundPrefetch = Boolean(params.devicePrefetchAllowed && params.shouldBackgroundPrefetch);
+  if (fileKind === "audio") {
+    return { prefetch: false, priority: "high" };
+  }
+  if (canBackgroundPrefetch) {
+    // Visible media must still hydrate even if another runtime is leader or saveData changes later.
+    // Keep background/full-hydration intent, but use a user-visible high-priority request.
+    return { prefetch: true, priority: "high" };
+  }
+  return { prefetch: false, priority: "high" };
+}
+
+export function hasTrustedRuntimeUrl(url: string | null | undefined, previewOnly: boolean): boolean {
+  const value = String(url || "").trim();
+  if (!value) return false;
+  if (!previewOnly) return true;
+  return value.startsWith("blob:");
+}
+
+function ensurePreviewPlaceholder(node: HTMLButtonElement): void {
+  if (node.querySelector(".chat-file-placeholder")) return;
+  const label = node.classList.contains("chat-file-preview-video") ? "Видео" : "Фото";
+  const placeholder = document.createElement("div");
+  placeholder.className = "chat-file-placeholder";
+  placeholder.setAttribute("aria-hidden", "true");
+  placeholder.textContent = label;
+  node.appendChild(placeholder);
+}
+
 export function createPreviewAutoFetchFeature(
   deps: PreviewAutoFetchFeatureDeps
 ): PreviewAutoFetchFeature {
   const {
     store,
     chatHost,
+    reportIncident,
     conversationKey,
     convoSig,
     devicePrefetchAllowed,
@@ -117,6 +157,33 @@ export function createPreviewAutoFetchFeature(
     return autoDownloadCachePolicyFeature.canAutoDownloadFullFile(st.selfId || null, kind, size);
   };
 
+  const shouldHydrateFullPreview = (
+    name: string,
+    mime: string | null,
+    size: number,
+    kindHint?: string | null
+  ): boolean => {
+    const st = store.get();
+    const kind = autoDownloadCachePolicyFeature.resolveAutoDownloadKind(name, mime, kindHint);
+    if (kind === "image" || kind === "video") {
+      return (
+        autoDownloadCachePolicyFeature.shouldCachePreview(name, mime, size) ||
+        autoDownloadCachePolicyFeature.canAutoDownloadFullFile(st.selfId || null, kind, size)
+      );
+    }
+    return autoDownloadCachePolicyFeature.canAutoDownloadFullFile(st.selfId || null, kind, size);
+  };
+
+  const shouldRestoreFullPreview = (
+    kind: "image" | "video" | "audio",
+    name: string,
+    mime: string | null,
+    size: number
+  ): boolean => {
+    if (kind === "audio") return shouldHydrateFullPreview(name, mime, size, kind);
+    return shouldHydrateFullPreview(name, mime, size, kind) || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes;
+  };
+
   const autoFetchVisiblePreviews = async () => {
     const st = store.get();
     if (!canDrainFileRuntime(st)) return;
@@ -126,7 +193,9 @@ export function createPreviewAutoFetchFeature(
 
     const now = Date.now();
     const convoKey = conversationKey(st.selected);
-    if (convoKey && st.historyLoading?.[convoKey]) return;
+    const convoSync = convoKey ? getConversationHistorySyncState(st, convoKey) : null;
+    if (convoSync?.loading) return;
+    const previewOnly = Boolean(convoSync?.previewOnly);
 
     const hostRect = chatHost.getBoundingClientRect();
     const inlineVideos = chatHost.querySelectorAll("video.chat-file-video");
@@ -162,6 +231,7 @@ export function createPreviewAutoFetchFeature(
         ...prev,
         kind: prev.kind || task.kind,
         prefetch: prev.prefetch || task.prefetch,
+        priority: prev.priority === "high" || task.priority === "high" ? "high" : "prefetch",
         restorePreview: prev.restorePreview || task.restorePreview,
         retryWindowMs: Math.min(prev.retryWindowMs, task.retryWindowMs),
       });
@@ -184,18 +254,74 @@ export function createPreviewAutoFetchFeature(
       const mediaFailed =
         (img instanceof HTMLImageElement && img.complete && img.naturalWidth === 0) ||
         (video instanceof HTMLVideoElement && Boolean(video.error));
-      if (!isEmpty && !mediaFailed) continue;
+      const name = String(node.getAttribute("data-name") || "");
+      const mimeRaw = node.getAttribute("data-mime");
+      const mime = mimeRaw ? String(mimeRaw) : null;
+      const size = Number(node.getAttribute("data-size") || 0) || 0;
+      const kindHint =
+        String(node.getAttribute("data-file-kind") || "").trim().toLowerCase() ||
+        (node.classList.contains("chat-file-preview-video") ? "video" : "image");
+      const previewKind = kindHint === "video" ? "video" : "image";
+      const shouldBackgroundPrefetch = shouldAutoFetchPreview(name, mime, size, false, kindHint);
+      const fetchPlan = resolveVisiblePreviewFetchPlan({
+        fileKind: previewKind,
+        devicePrefetchAllowed,
+        shouldBackgroundPrefetch,
+      });
+      const shouldHydrateFull = devicePrefetchAllowed && shouldHydrateFullPreview(name, mime, size, kindHint);
+      const restorePreview = shouldRestoreFullPreview(previewKind, name, mime, size);
+      const isMediaHint = kindHint === "image" || kindHint === "video" || kindHint === "audio";
+      const shouldAttemptRestore = isMediaHint && (previewKind === "image" || previewKind === "video");
+      const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+      const thumb = st.fileThumbs?.[fileId] || null;
+      const trustedTransferUrl = hasTrustedRuntimeUrl(existing?.url, previewOnly);
+      const trustedThumbUrl = hasTrustedRuntimeUrl(thumb?.url, previewOnly);
+      const shouldDeferPreviewOnlyHydration = previewOnly && !trustedTransferUrl && !trustedThumbUrl;
+
+      if (shouldDeferPreviewOnlyHydration) {
+        node.classList.add("chat-file-preview-empty");
+        ensurePreviewPlaceholder(node);
+        if (thumb?.url && !trustedThumbUrl) {
+          clearFileThumb(fileId);
+        }
+        if (existing?.url && !trustedTransferUrl) {
+          updateTransferByFileId(fileId, (entry) => {
+            if (entry.url && entry.url.startsWith("blob:")) {
+              try {
+                URL.revokeObjectURL(entry.url);
+              } catch {
+                // ignore
+              }
+            }
+            return { ...entry, url: null };
+          });
+        }
+        if (img instanceof HTMLImageElement) img.remove();
+        if (video instanceof HTMLVideoElement) video.remove();
+        continue;
+      }
 
       if (mediaFailed) {
+        reportIncident?.(
+          "media_preview_failed",
+          {
+            file_id: fileId,
+            media_kind: previewKind,
+            name: name || null,
+            mime,
+            size,
+            had_thumb: Boolean(thumb?.url),
+            had_transfer_url: Boolean(existing?.url),
+            reason: img instanceof HTMLImageElement ? "image_decode_failed" : "video_preview_failed",
+            retry_window_ms: previewKind === "video" ? previewAutoFailRetryMs : previewAutoRetryMs,
+          },
+          {
+            key: `media_preview_failed:${fileId}:${previewKind}`,
+            dedupeMs: Math.max(previewAutoFailRetryMs, previewAutoRetryMs),
+          }
+        );
         node.classList.add("chat-file-preview-empty");
-        if (!node.querySelector(".chat-file-placeholder")) {
-          const label = node.classList.contains("chat-file-preview-video") ? "Видео" : "Фото";
-          const placeholder = document.createElement("div");
-          placeholder.className = "chat-file-placeholder";
-          placeholder.setAttribute("aria-hidden", "true");
-          placeholder.textContent = label;
-          node.appendChild(placeholder);
-        }
+        ensurePreviewPlaceholder(node);
         if (img instanceof HTMLImageElement) img.remove();
         if (video instanceof HTMLVideoElement) video.remove();
       }
@@ -203,10 +329,12 @@ export function createPreviewAutoFetchFeature(
       const rect = node.getBoundingClientRect();
       if (rect.bottom < hostRect.top - previewAutoOverscan || rect.top > hostRect.bottom + previewAutoOverscan) continue;
       if (!fileId) continue;
-      const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
       if (existing?.status === "downloading") continue;
 
-      const thumb = st.fileThumbs?.[fileId] || null;
+      if (!isEmpty && !mediaFailed) {
+        if (trustedTransferUrl) continue;
+        if (trustedThumbUrl && !shouldHydrateFull) continue;
+      }
       if (mediaFailed && thumb?.url) {
         clearFileThumb(fileId);
       }
@@ -223,22 +351,6 @@ export function createPreviewAutoFetchFeature(
           return { ...entry, url: null };
         });
       }
-      // NOTE: For outgoing videos on mobile UI we may have a blob `transfer.url`, but still render an empty preview
-      // (we don't inline <video>). In that case we still want to fetch the real thumbnail.
-      if (!isEmpty && (existing?.url || thumb?.url) && !mediaFailed) continue;
-
-      const name = String(node.getAttribute("data-name") || "");
-      const mimeRaw = node.getAttribute("data-mime");
-      const mime = mimeRaw ? String(mimeRaw) : null;
-      const size = Number(node.getAttribute("data-size") || 0) || 0;
-      const kindHint =
-        String(node.getAttribute("data-file-kind") || "").trim().toLowerCase() ||
-        (node.classList.contains("chat-file-preview-video") ? "video" : "image");
-      const previewKind = kindHint === "video" ? "video" : "image";
-      const shouldPrefetch = devicePrefetchAllowed && shouldAutoFetchPreview(name, mime, size, false, kindHint);
-      const isMediaHint = kindHint === "image" || kindHint === "video" || kindHint === "audio";
-      const restorePreview = previewKind === "image" && (shouldPrefetch || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
-      const shouldAttemptRestore = isMediaHint && (previewKind === "image" || previewKind === "video");
 
       if (shouldAttemptRestore && convoKey) {
         const msgIdx = Number(node.getAttribute("data-msg-idx") || NaN);
@@ -259,14 +371,15 @@ export function createPreviewAutoFetchFeature(
           direction,
           peer,
           room,
-          prefetch: shouldPrefetch,
+          prefetch: fetchPlan.prefetch,
+          priority: fetchPlan.priority,
           restorePreview,
           retryWindowMs: mediaFailed ? previewAutoFailRetryMs : previewAutoRetryMs,
         });
         continue;
       }
 
-      if (shouldPrefetch) {
+      if (shouldBackgroundPrefetch || fetchPlan.priority === "high") {
         upsertRestoreTask({
           fileId,
           kind: previewKind,
@@ -276,7 +389,8 @@ export function createPreviewAutoFetchFeature(
           direction: "in",
           peer: "—",
           room: null,
-          prefetch: true,
+          prefetch: fetchPlan.prefetch,
+          priority: fetchPlan.priority,
           restorePreview,
           retryWindowMs: mediaFailed ? previewAutoFailRetryMs : previewAutoRetryMs,
         });
@@ -290,15 +404,36 @@ export function createPreviewAutoFetchFeature(
       const fileId = String(node.getAttribute("data-file-id") || "").trim();
       if (!fileId) continue;
       const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
+      const trustedTransferUrl = hasTrustedRuntimeUrl(existing?.url, previewOnly);
       if (existing?.status === "downloading") continue;
-      if (existing?.url) continue;
+      if (previewOnly && !trustedTransferUrl) {
+        if (existing?.url) {
+          updateTransferByFileId(fileId, (entry) => {
+            if (entry.url && entry.url.startsWith("blob:")) {
+              try {
+                URL.revokeObjectURL(entry.url);
+              } catch {
+                // ignore
+              }
+            }
+            return { ...entry, url: null };
+          });
+        }
+        continue;
+      }
+      if (trustedTransferUrl) continue;
       const name = String(node.getAttribute("data-name") || "Аудио");
       const mimeRaw = node.getAttribute("data-mime");
       const mime = mimeRaw ? String(mimeRaw) : null;
       const size = Number(node.getAttribute("data-size") || 0) || 0;
-      const shouldPrefetch = devicePrefetchAllowed && shouldAutoFetchPreview(name, mime, size, true, "audio");
+      const shouldBackgroundPrefetch = shouldAutoFetchPreview(name, mime, size, true, "audio");
+      const fetchPlan = resolveVisiblePreviewFetchPlan({
+        fileKind: "audio",
+        devicePrefetchAllowed,
+        shouldBackgroundPrefetch,
+      });
       const shouldAttemptRestore =
-        Boolean(convoKey) && (shouldPrefetch || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
+        Boolean(convoKey) && (shouldBackgroundPrefetch || fetchPlan.priority === "high" || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
       if (!shouldAttemptRestore || !convoKey) continue;
 
       const msgIdx = Number(node.getAttribute("data-msg-idx") || NaN);
@@ -319,7 +454,8 @@ export function createPreviewAutoFetchFeature(
         direction,
         peer,
         room,
-        prefetch: shouldPrefetch,
+        prefetch: fetchPlan.prefetch,
+        priority: fetchPlan.priority,
         restorePreview: false,
         retryWindowMs: previewAutoRetryMs,
       });
@@ -334,14 +470,15 @@ export function createPreviewAutoFetchFeature(
     const restoredThumbIds = mediaIds.length
       ? await cachedPreviewRestoreFeature.restoreCachedThumbsIntoStateBatch(mediaIds)
       : new Set<string>();
-    const imageTasksToRestore = restoreTasks.filter((t) => t.kind === "image" && t.restorePreview && !restoredThumbIds.has(t.fileId));
-    const restoredMediaIds = imageTasksToRestore.length
+    const mediaTasksToRestore = restoreTasks.filter((t) => (t.kind === "image" || t.kind === "video") && t.restorePreview);
+    const restoredMediaIds = mediaTasksToRestore.length
       ? await cachedPreviewRestoreFeature.restoreCachedPreviewsIntoTransfersBatch(
-          imageTasksToRestore.map((t) => ({
+          mediaTasksToRestore.map((t) => ({
             fileId: t.fileId,
             name: t.name,
             size: t.size,
             mime: t.mime,
+            kind: t.kind,
             direction: t.direction,
             peer: t.peer,
             room: t.room,
@@ -362,17 +499,22 @@ export function createPreviewAutoFetchFeature(
         )
       : new Set<string>();
 
-    const restoredIds = new Set<string>([...restoredThumbIds, ...restoredMediaIds, ...restoredAudioIds]);
-    if (!canDrainFilePrefetch(store.get(), { prefetchAllowed: devicePrefetchAllowed, requireLeader: true })) return;
+    const restoredFullIds = new Set<string>([...restoredMediaIds, ...restoredAudioIds]);
+    if (!canDrainFileRuntime(store.get())) return;
     for (const t of restoreTasks) {
-      if (restoredIds.has(t.fileId)) continue;
+      const needsFullRestore = t.kind === "audio" || Boolean(t.restorePreview);
+      if (needsFullRestore ? restoredFullIds.has(t.fileId) : restoredThumbIds.has(t.fileId) || restoredFullIds.has(t.fileId)) continue;
       const isVisibleMedia = t.kind === "image" || t.kind === "video";
-      if (!t.prefetch && !isVisibleMedia) continue;
+      if (t.priority !== "high" && !t.prefetch && !isVisibleMedia) continue;
       const k = `${st.selfId}:${t.fileId}`;
       const lastAttempt = previewPrefetchAttempted.get(k) || 0;
       if (lastAttempt && now - lastAttempt < t.retryWindowMs) continue;
+      if (t.priority === "prefetch") {
+        const latest = store.get();
+        if (!canDrainFilePrefetch(latest, { prefetchAllowed: devicePrefetchAllowed, requireLeader: true })) continue;
+      }
       previewPrefetchAttempted.set(k, now);
-      enqueueFileGet(t.fileId, { priority: t.prefetch ? "prefetch" : "high", silent: true });
+      enqueueFileGet(t.fileId, { priority: t.priority, silent: true });
     }
   };
 
@@ -388,7 +530,7 @@ export function createPreviewAutoFetchFeature(
 
     const key = conversationKey(st.selected);
     if (!key) return;
-    if (st.historyLoading[key]) return;
+    if (getConversationHistorySyncState(st, key).loading) return;
 
     const msgs = st.conversations[key] || [];
     if (!msgs.length) return;
@@ -414,15 +556,14 @@ export function createPreviewAutoFetchFeature(
         const isMedia = autoDownloadCachePolicyFeature.isMediaLikeFile(name, mime);
         const kind = autoDownloadCachePolicyFeature.resolveAutoDownloadKind(name, mime, null);
         if (kind === "file") continue;
-        const shouldPrefetch =
-          devicePrefetchAllowed &&
-          autoDownloadCachePolicyFeature.shouldCachePreview(name, mime, size) &&
-          (kind !== "audio" || autoDownloadCachePolicyFeature.canAutoDownloadFullFile(uid, kind, size));
-        const shouldAttemptRestore = isMedia && (shouldPrefetch || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
+        const shouldHydrateFull = devicePrefetchAllowed && shouldHydrateFullPreview(name, mime, size, kind);
+        const shouldPrefetch = shouldHydrateFull;
+        const shouldAttemptRestore = isMedia && (shouldHydrateFull || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
         if (!shouldAttemptRestore) continue;
-        if ((kind === "image" || kind === "video") && st.fileThumbs?.[fid]?.url) continue;
         const already = st.fileTransfers.find((t) => String(t.id || "").trim() === fid && Boolean(t.url));
         if (already) continue;
+        const hasThumb = Boolean(st.fileThumbs?.[fid]?.url);
+        if ((kind === "image" || kind === "video") && hasThumb && !shouldHydrateFull) continue;
 
         seen.add(fid);
         tasks.push({
@@ -435,7 +576,8 @@ export function createPreviewAutoFetchFeature(
           peer: String(m.kind === "out" ? (m.to || m.room || "") : (m.from || "")) || "—",
           room: typeof m.room === "string" ? m.room : null,
           prefetch: shouldPrefetch,
-          restorePreview: kind === "image",
+          priority: "prefetch",
+          restorePreview: shouldHydrateFull || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes,
         });
         if (tasks.length >= WARMUP_MAX_TASKS) break;
       }
@@ -443,20 +585,20 @@ export function createPreviewAutoFetchFeature(
       const now = Date.now();
       const mediaTasks = tasks.filter((t) => t.kind === "image" || t.kind === "video");
       const mediaIds = mediaTasks.map((t) => t.fileId);
-      const imageTasks = tasks.filter((t) => t.kind === "image");
       const audioTasks = tasks.filter((t) => t.kind === "audio");
 
       const restoredThumbIds = mediaIds.length
         ? await cachedPreviewRestoreFeature.restoreCachedThumbsIntoStateBatch(mediaIds)
         : new Set<string>();
-      const imageTasksToRestore = imageTasks.filter((t) => t.restorePreview && !restoredThumbIds.has(t.fileId));
-      const restoredMediaIds = imageTasksToRestore.length
+      const mediaTasksToRestore = mediaTasks.filter((t) => t.restorePreview);
+      const restoredMediaIds = mediaTasksToRestore.length
         ? await cachedPreviewRestoreFeature.restoreCachedPreviewsIntoTransfersBatch(
-            imageTasksToRestore.map((t) => ({
+            mediaTasksToRestore.map((t) => ({
               fileId: t.fileId,
               name: t.name,
               size: t.size,
               mime: t.mime,
+              kind: t.kind,
               direction: t.direction,
               peer: t.peer,
               room: t.room,
@@ -477,9 +619,10 @@ export function createPreviewAutoFetchFeature(
           )
         : new Set<string>();
 
-      const restoredIds = new Set<string>([...restoredThumbIds, ...restoredMediaIds, ...restoredAudioIds]);
+      const restoredFullIds = new Set<string>([...restoredMediaIds, ...restoredAudioIds]);
       for (const t of tasks) {
-        if (restoredIds.has(t.fileId)) continue;
+        const needsFullRestore = t.kind === "audio" || Boolean(t.restorePreview);
+        if (needsFullRestore ? restoredFullIds.has(t.fileId) : restoredThumbIds.has(t.fileId) || restoredFullIds.has(t.fileId)) continue;
         if (!t.prefetch) continue;
         try {
           const latest = store.get();

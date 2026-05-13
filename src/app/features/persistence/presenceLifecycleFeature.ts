@@ -6,12 +6,11 @@ const PRESENCE_UI_TICK_MS = 30_000;
 export interface PresenceLifecycleFeatureDeps {
   store: Store<AppState>;
   flushHistoryCache: () => void;
-  flushFileTransfers: () => void;
-  flushOutbox: () => void;
+  flushRuntimeDelivery: () => void;
 }
 
 export function installPresenceLifecycleFeature(deps: PresenceLifecycleFeatureDeps): void {
-  const { store, flushHistoryCache, flushFileTransfers, flushOutbox } = deps;
+  const { store, flushHistoryCache, flushRuntimeDelivery } = deps;
 
   let presenceUiTimer: number | null = null;
 
@@ -25,8 +24,7 @@ export function installPresenceLifecycleFeature(deps: PresenceLifecycleFeatureDe
   const flushCachesOnHide = () => {
     if (document.visibilityState !== "hidden") return;
     flushHistoryCache();
-    flushFileTransfers();
-    flushOutbox();
+    flushRuntimeDelivery();
   };
 
   presenceUiTimer = window.setInterval(tickPresenceUi, PRESENCE_UI_TICK_MS);
@@ -44,7 +42,10 @@ export function installPresenceLifecycleFeature(deps: PresenceLifecycleFeatureDe
       presenceUiTimer = null;
     }
     flushHistoryCache();
-    flushFileTransfers();
-    flushOutbox();
+    flushRuntimeDelivery();
+  });
+  window.addEventListener("beforeunload", () => {
+    flushHistoryCache();
+    flushRuntimeDelivery();
   });
 }

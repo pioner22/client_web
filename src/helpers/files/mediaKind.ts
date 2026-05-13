@@ -10,6 +10,7 @@ export const AUDIO_NAME_HINT_RE =
 export const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|ico|svg|heic|heif)$/;
 export const VIDEO_EXT_RE = /\.(mp4|m4v|mov|webm|ogv|mkv|avi|3gp|3g2)$/;
 export const AUDIO_EXT_RE = /\.(mp3|m4a|aac|wav|ogg|opus|flac)$/;
+export const PDF_EXT_RE = /\.pdf$/;
 
 export function normalizeFileName(value: string): string {
   const raw = String(value || "").trim();
@@ -66,6 +67,12 @@ export function isVideoLikeFile(name: string, mime?: string | null): boolean {
 
 export function isAudioLikeFile(name: string, mime?: string | null): boolean {
   return resolveMediaKind(name, mime) === "audio";
+}
+
+export function isPdfLikeFile(name: string, mime?: string | null): boolean {
+  const mt = normalizeMime(mime);
+  if (mt === "application/pdf" || mt.endsWith("+pdf")) return true;
+  return PDF_EXT_RE.test(normalizeFileName(name));
 }
 
 export function isMediaLikeFile(name: string, mime?: string | null, hint?: string | null): boolean {

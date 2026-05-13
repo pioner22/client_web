@@ -1,6 +1,7 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { resolveViewerSourceScope } from "../../../helpers/chat/fileViewerScope";
-import { isImageLikeFile, isVideoLikeFile } from "../../../helpers/files/mediaKind";
+import { isImageLikeFile, isPdfLikeFile, isVideoLikeFile } from "../../../helpers/files/mediaKind";
+import { isIOS, isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
 
@@ -61,6 +62,7 @@ export interface FileViewerFeatureDeps {
     }
   ) => Promise<boolean>;
   enqueueFileGet: (fileId: string, opts?: { priority?: "high" | "prefetch"; silent?: boolean }) => void;
+  beginViewerStream?: (fileId: string, meta?: { name?: string; size?: number; mime?: string | null }) => string | null;
   setPendingFileViewer: (state: PendingFileViewer) => void;
 }
 
@@ -87,7 +89,7 @@ function isVisualMediaMessage(st: AppState, msg: ChatMessage | null | undefined)
   const name = String(att.name || entry?.name || "файл");
   const mime = (att.mime ?? entry?.mime) || null;
   const hasThumb = Boolean(fileId && st.fileThumbs?.[fileId]?.url);
-  return isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || hasThumb;
+  return isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || isPdfLikeFile(name, mime) || hasThumb;
 }
 
 export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewerFeature {
@@ -97,6 +99,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     jumpToChatMsgIdx,
     tryOpenFileViewerFromCache,
     enqueueFileGet,
+    beginViewerStream,
     setPendingFileViewer,
   } = deps;
 
@@ -111,6 +114,58 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
   };
 
   const VIEWER_PREFETCH_MAX_BYTES = 24 * 1024 * 1024;
+  const shouldUseInlineViewerStream = (fileId: string, name: string, mime: string | null, kindHint: "image" | "video" | null): boolean => {
+    if (!beginViewerStream) return false;
+    if (!fileId) return false;
+    if (!isIOS() || !isStandaloneDisplayMode()) return false;
+    if (kindHint === "image" || kindHint === "video") return true;
+    return isImageLikeFile(name, mime) || isVideoLikeFile(name, mime);
+  };
+
+  const openInlineViewerStream = (params: {
+    fileId: string;
+    name: string;
+    size: number;
+    mime: string | null;
+    caption: string | null;
+    autoplay: boolean;
+    chatKey: string | null;
+    msgIdx: number | null;
+    reason: string;
+  }): boolean => {
+    const fileId = String(params.fileId || "").trim();
+    if (!fileId || !beginViewerStream) return false;
+    const streamUrl = beginViewerStream(fileId, {
+      name: params.name,
+      size: params.size,
+      mime: params.mime,
+    });
+    if (!streamUrl) return false;
+    debugHook("file.viewer.stream", {
+      fileId,
+      reason: params.reason,
+      chatKey: params.chatKey,
+      msgIdx: params.msgIdx,
+      size: params.size,
+      mime: params.mime ? String(params.mime).slice(0, 80) : null,
+    });
+    store.set({
+      modal: buildModalState({
+        fileId,
+        url: streamUrl,
+        name: params.name,
+        size: params.size,
+        mime: params.mime,
+        caption: params.caption,
+        autoplay: params.autoplay,
+        chatKey: params.chatKey,
+        msgIdx: params.msgIdx,
+      }),
+      status: `Загрузка: ${params.name || fileId}`,
+    });
+    if (params.chatKey && params.msgIdx !== null) maybePrefetchNeighbors(params.chatKey, params.msgIdx);
+    return true;
+  };
 
   const queueViewerDownload = (params: {
     fileId: string;
@@ -248,7 +303,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const thumbUrl = fileId && st.fileThumbs?.[fileId]?.url ? String(st.fileThumbs[fileId].url || "").trim() : null;
     const kindHint = fallback?.kindHint === "image" || fallback?.kindHint === "video" ? fallback.kindHint : null;
     const hintedMedia = kindHint === "image" || kindHint === "video";
-    if (!(hintedMedia || isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || hasThumb)) {
+    if (!(hintedMedia || isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || isPdfLikeFile(name, mime) || hasThumb)) {
       debugHook("file.viewer.open.skip", { chatKey, msgIdx, fileId, reason: "not_media_like", kindHint });
       return false;
     }
@@ -277,6 +332,23 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       });
       store.set({ modal: buildModalState({ fileId, url, name, size, mime, caption, autoplay, chatKey, msgIdx }) });
       maybePrefetchNeighbors(chatKey, msgIdx);
+      return true;
+    }
+    if (
+      fileId &&
+      shouldUseInlineViewerStream(fileId, name, mime, kindHint) &&
+      openInlineViewerStream({
+        fileId,
+        name,
+        size,
+        mime,
+        caption,
+        autoplay,
+        chatKey,
+        msgIdx,
+        reason: "ios_inline_stream_open",
+      })
+    ) {
       return true;
     }
     const canOpenThumbNow = Boolean(
@@ -374,6 +446,12 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const mime = (modal.mime ?? null) || null;
     const rawCaption = String(modal.caption || "").trim();
     const caption = rawCaption && !rawCaption.startsWith("[file]") ? rawCaption : null;
+    const kindHint =
+      isVideoLikeFile(name, mime)
+        ? "video"
+        : isImageLikeFile(name, mime)
+          ? "image"
+          : null;
 
     debugHook("file.viewer.recover.start", {
       fileId,
@@ -396,6 +474,22 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     });
     debugHook("file.viewer.recover.cache", { fileId, ok: Boolean(opened) });
     if (opened) return;
+    if (
+      shouldUseInlineViewerStream(fileId, name, mime, kindHint) &&
+      openInlineViewerStream({
+        fileId,
+        name,
+        size,
+        mime,
+        caption,
+        autoplay: kindHint === "video",
+        chatKey: chatKey || null,
+        msgIdx,
+        reason: "ios_inline_stream_recover",
+      })
+    ) {
+      return;
+    }
 
     const now = Date.now();
     const prev = viewerRecover.get(fileId) || { lastDownloadAt: 0 };

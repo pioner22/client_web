@@ -21,6 +21,7 @@ export interface BuildHistoryRenderSurfaceOptions {
   historyLoaded: boolean;
   hasMore: boolean;
   loadingMore: boolean;
+  loadingMoreSlotCount: number;
   loadingInitial: boolean;
   virtualEnabled: boolean;
   virtualStart: number;
@@ -67,6 +68,7 @@ export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions
     historyLoaded,
     hasMore,
     loadingMore,
+    loadingMoreSlotCount,
     loadingInitial,
     virtualEnabled,
     virtualStart,
@@ -154,7 +156,15 @@ export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions
 
   if (key && hasMore && loadingMore) {
     const loader = el("div", { class: "chat-history-loader", role: "status", "aria-live": "polite" }, ["Загрузка…"]);
-    lineItems.unshift(el("div", { class: "chat-history-more-wrap" }, [loader]));
+    const loadingNodes: HTMLElement[] = [el("div", { class: "chat-history-more-wrap" }, [loader])];
+    const slotCount = Math.max(0, Math.trunc(Number(loadingMoreSlotCount || 0) || 0));
+    for (let i = 0; i < slotCount; i += 1) {
+      const slot = skeletonMsg(i % 2 === 0 ? "in" : "out", i);
+      slot.classList.add("chat-history-slot");
+      slot.setAttribute("data-history-slot", String(i));
+      loadingNodes.push(slot);
+    }
+    lineItems.unshift(...loadingNodes);
   }
 
   if (key && !historyLoaded && !loadingInitial && lineItems.length) {

@@ -3,9 +3,11 @@ import { conversationKey, dmKey, roomKey } from "../../../helpers/chat/conversat
 import { resolveVirtualStartForIndex } from "../../../helpers/chat/historyViewportCoordinator";
 import { saveChatFoldersForUser, sanitizeChatFoldersSnapshot } from "../../../helpers/chat/folders";
 import { sanitizePins, savePinsForUser, togglePin } from "../../../helpers/chat/pins";
-import { isPinnedMessage, savePinnedMessagesForUser } from "../../../helpers/chat/pinnedMessages";
+import { savePinnedBarHiddenForUser } from "../../../helpers/chat/pinnedBarHidden";
+import { isPinnedMessage, savePinnedMessagesForUser, togglePinnedMessage } from "../../../helpers/chat/pinnedMessages";
 import { updateOutboxEntry } from "../../../helpers/chat/outbox";
 import { ensureChatMessageLoadedById } from "../../../helpers/chat/ensureHistoryMessage";
+import { applySidebarFolderMutation } from "../../../helpers/sidebar/sidebarState";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
 import { avatarKindForTarget } from "../avatar/avatarFeature";
@@ -539,7 +541,7 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
         { id: fid, title, include: includeKey ? [includeKey] : [], exclude: [] },
       ];
       const snap = sanitizeChatFoldersSnapshot({ v: 1, active: fid, folders: nextFolders });
-      store.set({ chatFolders: snap.folders, sidebarFolderId: snap.active });
+      store.set((prev) => applySidebarFolderMutation(prev, snap));
       saveChatFoldersForUser(st2.selfId, snap);
       if (st2.conn === "connected" && st2.authed) {
         send({ type: "prefs_set", values: { chat_folders: snap } });
@@ -567,7 +569,7 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
         return { ...f, include: nextInclude };
       });
       const snap = sanitizeChatFoldersSnapshot({ v: 1, active: st2.sidebarFolderId, folders: nextFolders });
-      store.set({ chatFolders: snap.folders, sidebarFolderId: snap.active });
+      store.set((prev) => applySidebarFolderMutation(prev, snap));
       if (st2.selfId) saveChatFoldersForUser(st2.selfId, snap);
       if (st2.conn === "connected" && st2.authed) {
         send({ type: "prefs_set", values: { chat_folders: snap } });
@@ -596,7 +598,7 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
       }
       const nextFolders = st2.chatFolders.map((f) => (String(f.id || "").trim().toLowerCase() === fid ? { ...f, title } : f));
       const snap = sanitizeChatFoldersSnapshot({ v: 1, active: st2.sidebarFolderId, folders: nextFolders });
-      store.set({ chatFolders: snap.folders, sidebarFolderId: snap.active });
+      store.set((prev) => applySidebarFolderMutation(prev, snap));
       saveChatFoldersForUser(st2.selfId, snap);
       if (st2.conn === "connected" && st2.authed) {
         send({ type: "prefs_set", values: { chat_folders: snap } });
@@ -621,7 +623,7 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
       const nextFolders = st2.chatFolders.filter((f) => String(f.id || "").trim().toLowerCase() !== fid);
       const nextActive = String(st2.sidebarFolderId || "").trim().toLowerCase() === fid ? "all" : st2.sidebarFolderId;
       const snap = sanitizeChatFoldersSnapshot({ v: 1, active: nextActive, folders: nextFolders });
-      store.set({ chatFolders: snap.folders, sidebarFolderId: snap.active });
+      store.set((prev) => applySidebarFolderMutation(prev, snap));
       saveChatFoldersForUser(st2.selfId, snap);
       if (st2.conn === "connected" && st2.authed) {
         send({ type: "prefs_set", values: { chat_folders: snap } });
@@ -997,19 +999,24 @@ export function createContextMenuActionsFeature(deps: ContextMenuActionsFeatureD
           return;
         }
         const wasPinned = isPinnedMessage(st.pinnedMessages, selKey, msgId);
-        const previewRaw =
-          msg?.attachment?.kind === "file"
-            ? `Файл: ${String(msg.attachment.name || "файл")}`
-            : String(msg?.text || "").trim() || `Сообщение #${msgId}`;
-        const preview = previewRaw.length > 180 ? `${previewRaw.slice(0, 177)}…` : previewRaw;
+        const nextPinned = togglePinnedMessage(st.pinnedMessages, selKey, msgId);
+        const nextIds = nextPinned[selKey] || [];
+        const nextActive = { ...st.pinnedMessageActive };
+        if (!wasPinned) {
+          nextActive[selKey] = msgId;
+        } else if (nextActive[selKey] === msgId || !nextIds.includes(nextActive[selKey])) {
+          if (nextIds.length) nextActive[selKey] = nextIds[0];
+          else delete nextActive[selKey];
+        }
+        const nextHidden = { ...(st.pinnedBarHidden || {}) };
+        delete nextHidden[selKey];
+        store.set({ pinnedMessages: nextPinned, pinnedMessageActive: nextActive, pinnedBarHidden: nextHidden, chatSelection: null });
+        if (st.selfId) {
+          savePinnedMessagesForUser(st.selfId, nextPinned);
+          savePinnedBarHiddenForUser(st.selfId, nextHidden);
+        }
+        showToast(wasPinned ? "Сообщение откреплено" : "Сообщение закреплено", { kind: "success" });
         close();
-        openConfirmModal({
-          title: wasPinned ? "Открепить сообщение" : "Закрепить сообщение",
-          message: preview,
-          confirmLabel: wasPinned ? "Открепить" : "Закрепить",
-          cancelLabel: "Отмена",
-          action: { kind: "pinned_message_toggle", chatKey: selKey, msgId },
-        });
         return;
       }
 

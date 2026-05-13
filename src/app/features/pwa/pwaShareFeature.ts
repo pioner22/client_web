@@ -1,6 +1,7 @@
 import { APP_MSG_MAX_LEN } from "../../../config/app";
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { updateDraftMap } from "../../../helpers/chat/drafts";
+import { applyDraftMapMutation } from "../../../helpers/runtime/deliverySync";
 import type { Store } from "../../../stores/store";
 import type { AppState, ConnStatus, TargetRef } from "../../../stores/types";
 
@@ -72,7 +73,7 @@ export function createPwaShareFeature(deps: PwaShareFeatureDeps): PwaShareFeatur
     store.set((prev) => {
       const key = conversationKey(target);
       const drafts = updateDraftMap(prev.drafts, key, nextTrimmed);
-      return { ...prev, input: nextTrimmed, drafts };
+      return { ...applyDraftMapMutation(prev, drafts), input: nextTrimmed };
     });
     scheduleSaveDrafts();
   }

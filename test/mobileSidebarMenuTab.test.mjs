@@ -208,6 +208,30 @@ function ctxKeyForSidebarRow(row) {
   return `${kind}:${id}`;
 }
 
+function sidebarRowsInSection(chatlist, sectionLabel) {
+  const rows = [];
+  const kids = Array.isArray(chatlist?._children) ? chatlist._children : [];
+  let active = false;
+  for (const node of kids) {
+    if (!node || typeof node !== "object") continue;
+    if (node.tagName === "DIV" && String(node.className || "").includes("pane-section")) {
+      if (active) break;
+      active = collectText(node).trim() === sectionLabel;
+      continue;
+    }
+    if (!active || node.tagName !== "BUTTON") continue;
+    const key = ctxKeyForSidebarRow(node);
+    if (key) rows.push(key);
+  }
+  return rows;
+}
+
+function sidebarRowsAll(chatlist) {
+  return findAll(chatlist, (node) => node.tagName === "BUTTON")
+    .map((row) => ctxKeyForSidebarRow(row))
+    .filter(Boolean);
+}
+
 function mkState(tab) {
   return {
     friends: [{ id: "123-456-789", online: true, friend: true, unread: 0 }],
@@ -229,7 +253,7 @@ function mkState(tab) {
   };
 }
 
-test("mobile sidebar: 4 вкладки (Контакты/Доски/Чаты/Меню)", async () => {
+test("mobile sidebar: 4 вкладки (Контакты/Группы/Каналы/Меню), старое chats открывает Контакты", async () => {
   const helper = await loadRenderSidebar();
   try {
     await withDomStubs(
@@ -254,7 +278,9 @@ test("mobile sidebar: 4 вкладки (Контакты/Доски/Чаты/М�
         await flushLazySidebarRender();
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
-        assert.deepEqual(labels, ["Контакты", "Доски", "Чаты", "Меню"]);
+        assert.deepEqual(labels, ["Контакты", "Группы", "Каналы", "Меню"]);
+        assert.equal(hasText(target, "Контакты"), true);
+        assert.equal(hasText(target, "Сообщения"), false);
       },
       { isMobile: true }
     );
@@ -287,7 +313,7 @@ test("mobile sidebar: Контакты не содержат пункты мен
         );
         await flushLazySidebarRender();
         assert.equal(hasText(target, "Поиск"), false);
-        assert.equal(hasText(target, "Создать чат"), false);
+        assert.equal(hasText(target, "Создать группу"), false);
         assert.equal(hasText(target, "Онлайн"), false);
       },
       { isMobile: true }
@@ -322,7 +348,7 @@ test("mobile sidebar: Меню содержит навигацию/создан�
         await flushLazySidebarRender();
         assert.equal(hasText(target, "Навигация"), true);
         assert.equal(hasText(target, "Поиск"), true);
-        assert.equal(hasText(target, "Создать чат"), true);
+        assert.equal(hasText(target, "Создать группу"), true);
         assert.equal(hasText(target, "Подсказки"), true);
         assert.equal(hasText(target, "Онлайн"), false);
       },
@@ -401,7 +427,7 @@ test("mobile sidebar: поиск фильтрует список и вызыва
   }
 });
 
-test("mobile sidebar: Чаты = активные ЛС + группы (не весь список контактов)", async () => {
+test("mobile sidebar: Контакты показывают личные строки без групп и каналов", async () => {
   const helper = await loadRenderSidebar();
   try {
     await withDomStubs(
@@ -413,7 +439,7 @@ test("mobile sidebar: Чаты = активные ЛС + группы (не ве
             { id: "222-222-222", online: false, unread: 0 },
           ],
           groups: [{ id: "g-1", name: "Группа 1" }],
-          boards: [],
+          boards: [{ id: "b-1", name: "Канал 1" }],
           pinned: [],
           pendingIn: [],
           pendingOut: [],
@@ -429,6 +455,7 @@ test("mobile sidebar: Чаты = активные ЛС + группы (не ве
             "dm:111-111-111": [{ ts: 10, from: "111-111-111", text: "hi", kind: "in" }],
             "dm:222-222-222": [],
             "room:g-1": [],
+            "room:b-1": [{ ts: 20, from: "111-111-111", text: "board", kind: "in" }],
           },
           drafts: {},
         };
@@ -436,9 +463,11 @@ test("mobile sidebar: Чаты = активные ЛС + группы (не ве
         helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
         await flushLazySidebarRender();
 
+        assert.equal(hasText(target, "Личные сообщения"), false);
         assert.equal(hasText(target, "111-111-111"), true);
-        assert.equal(hasText(target, "Группа 1"), true);
-        assert.equal(hasText(target, "222-222-222"), false);
+        assert.equal(hasText(target, "222-222-222"), true);
+        assert.equal(hasText(target, "Группа 1"), false);
+        assert.equal(hasText(target, "Канал 1"), false);
       },
       { isMobile: true }
     );
@@ -447,7 +476,53 @@ test("mobile sidebar: Чаты = активные ЛС + группы (не ве
   }
 });
 
-test("mobile sidebar: Контакты показывают всех пользователей (не только активные ЛС)", async () => {
+test("mobile sidebar: Группы показывают только созданные групповые пространства", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    await withDomStubs(
+      async () => {
+        const target = document.createElement("div");
+        const state = {
+          friends: [{ id: "111-111-111", online: true, unread: 0 }],
+          groups: [{ id: "g-1", name: "Группа 1" }],
+          boards: [{ id: "b-1", name: "Канал 1" }],
+          pinned: [],
+          pendingIn: [],
+          pendingOut: [],
+          pendingGroupInvites: [],
+          pendingGroupJoinRequests: [],
+          pendingBoardInvites: [],
+          fileOffersIn: [],
+          selected: null,
+          page: "main",
+          mobileSidebarTab: "groups",
+          sidebarQuery: "",
+          conversations: {
+            "dm:111-111-111": [{ ts: 10, from: "111-111-111", text: "hi", kind: "in" }],
+            "room:g-1": [{ ts: 20, from: "111-111-111", text: "group", kind: "in" }],
+            "room:b-1": [{ ts: 30, from: "111-111-111", text: "channel", kind: "in" }],
+          },
+          drafts: {},
+        };
+
+        helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
+
+        assert.equal(hasText(target, "Группы"), true);
+        assert.equal(hasText(target, "Группа 1"), true);
+        assert.equal(hasText(target, "Канал 1"), false);
+        const chatlists = findAll(target, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
+        assert.equal(chatlists.length > 0, true);
+        assert.deepEqual(sidebarRowsInSection(chatlists[0], "Группы"), ["room:g-1"]);
+      },
+      { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("mobile sidebar: Контакты показывают всех пользователей", async () => {
   const helper = await loadRenderSidebar();
   try {
     await withDomStubs(
@@ -491,7 +566,7 @@ test("mobile sidebar: Контакты показывают всех польз�
   }
 });
 
-test("mobile sidebar: pinned rows следуют порядку state.pinned (dm/group вперемешку)", async () => {
+test("mobile sidebar: pinned rows остаются внутри своих секций", async () => {
   const helper = await loadRenderSidebar();
   try {
     await withDomStubs(
@@ -517,12 +592,12 @@ test("mobile sidebar: pinned rows следуют порядку state.pinned (dm
           fileOffersIn: [],
           selected: null,
           page: "main",
-          mobileSidebarTab: "chats",
+          mobileSidebarTab: "contacts",
           sidebarQuery: "",
           sidebarChatFilter: "all",
           conversations: {
-            "dm:111-111-111": [],
-            "dm:222-222-222": [],
+            "dm:111-111-111": [{ ts: 1, from: "111-111-111", text: "a", kind: "in" }],
+            "dm:222-222-222": [{ ts: 2, from: "222-222-222", text: "b", kind: "in" }],
             "room:g-1": [],
             "room:g-2": [],
           },
@@ -535,16 +610,14 @@ test("mobile sidebar: pinned rows следуют порядку state.pinned (dm
         const chatlists = findAll(target, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
         assert.equal(chatlists.length > 0, true);
         const chatlist = chatlists[0];
-        const pinned = [];
-        const kids = Array.isArray(chatlist._children) ? chatlist._children : [];
-        for (const node of kids) {
-          if (!node || typeof node !== "object") continue;
-          if (node.tagName === "DIV" && String(node.className || "").includes("pane-section")) break;
-          if (node.tagName !== "BUTTON") continue;
-          const key = ctxKeyForSidebarRow(node);
-          if (key) pinned.push(key);
-        }
-        assert.deepEqual(pinned, state.pinned);
+        assert.deepEqual(sidebarRowsAll(chatlist), ["dm:111-111-111", "dm:222-222-222"]);
+
+        const groupsTarget = document.createElement("div");
+        helper.renderSidebar(groupsTarget, { ...state, mobileSidebarTab: "groups" }, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
+        const groupChatlists = findAll(groupsTarget, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
+        assert.equal(groupChatlists.length > 0, true);
+        assert.deepEqual(sidebarRowsInSection(groupChatlists[0], "Группы"), ["room:g-1", "room:g-2"]);
       },
       { isMobile: true }
     );
@@ -553,7 +626,7 @@ test("mobile sidebar: pinned rows следуют порядку state.pinned (dm
   }
 });
 
-test("mobile sidebar: Чаты сортируются по активности (last_ts) по убыванию", async () => {
+test("mobile sidebar: Контакты показывают превью личных диалогов, группы остаются отдельно", async () => {
   const helper = await loadRenderSidebar();
   try {
     await withDomStubs(
@@ -576,7 +649,7 @@ test("mobile sidebar: Чаты сортируются по активности 
           fileOffersIn: [],
           selected: null,
           page: "main",
-          mobileSidebarTab: "chats",
+          mobileSidebarTab: "contacts",
           sidebarQuery: "",
           sidebarChatFilter: "all",
           conversations: {
@@ -593,22 +666,17 @@ test("mobile sidebar: Чаты сортируются по активности 
         const chatlists = findAll(target, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
         assert.equal(chatlists.length > 0, true);
         const chatlist = chatlists[0];
-        const kids = Array.isArray(chatlist._children) ? chatlist._children : [];
-        const afterHeader = [];
-        let seenHeader = false;
-        for (const node of kids) {
-          if (!node || typeof node !== "object") continue;
-          if (!seenHeader) {
-            if (node.tagName === "DIV" && String(node.className || "").includes("pane-section")) {
-              seenHeader = true;
-            }
-            continue;
-          }
-          if (node.tagName !== "BUTTON") continue;
-          const key = ctxKeyForSidebarRow(node);
-          if (key) afterHeader.push(key);
-        }
-        assert.deepEqual(afterHeader.slice(0, 3), ["dm:222-222-222", "room:g-1", "dm:111-111-111"]);
+        assert.deepEqual(sidebarRowsAll(chatlist), ["dm:111-111-111", "dm:222-222-222"]);
+        assert.equal(hasText(target, "b"), true);
+        assert.equal(hasText(target, "c"), false);
+
+        const groupsTarget = document.createElement("div");
+        helper.renderSidebar(groupsTarget, { ...state, mobileSidebarTab: "groups" }, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+        await flushLazySidebarRender();
+        const groupChatlists = findAll(groupsTarget, (n) => n.tagName === "DIV" && String(n.className || "").includes("chatlist"));
+        assert.equal(groupChatlists.length > 0, true);
+        assert.deepEqual(sidebarRowsInSection(groupChatlists[0], "Группы"), ["room:g-1"]);
+        assert.equal(hasText(groupsTarget, "c"), true);
       },
       { isMobile: true }
     );
@@ -642,7 +710,7 @@ test("standalone sidebar: desktop PWA рендерит tabs без отдель�
         await flushLazySidebarRender();
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
-        assert.deepEqual(labels, ["Контакты", "Доски", "Чаты"]);
+        assert.deepEqual(labels, ["Контакты", "Группы", "Каналы"]);
         assert.equal(hasText(target, "Меню"), false);
       },
       { isMobile: false, standalone: true }

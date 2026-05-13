@@ -20,7 +20,7 @@ SERVER_PORT ?= 7777
 
 ROOT_DIR := $(abspath $(CURDIR)/..)
 
-.PHONY: help deps dev typecheck build preview web-local web-remote web-check ws-gateway-run
+.PHONY: help deps dev typecheck build preview desktop-dev desktop-build desktop-dist desktop-dist-mac desktop-dist-win desktop-dist-linux web-local web-remote web-check ws-gateway-run
 
 help:
 	@echo "Web client (client-web/) commands:"
@@ -31,6 +31,12 @@ help:
 # tsc --noEmit"
 	@echo "  make build                        # vite build"
 	@echo "  make preview                      # vite preview"
+	@echo "  make desktop-dev                  # Electron shell against local Vite URL"
+	@echo "  make desktop-build                # Vite build + unpacked Electron app"
+	@echo "  make desktop-dist                 # platform installer via electron-builder"
+	@echo "  make desktop-dist-mac             # macOS dmg/zip"
+	@echo "  make desktop-dist-win             # Windows NSIS installer"
+	@echo "  make desktop-dist-linux           # Linux AppImage/deb"
 	@echo ""
 	@echo "End-to-end local run (from root Makefile):"
 	@echo "  make web-local                    # TCP server + WS gateway + Vite dev"
@@ -55,6 +61,24 @@ build: deps
 
 preview: deps
 	npm run preview -- --host $(VITE_HOST) --port $(WEB_CLIENT_PORT)
+
+desktop-dev: deps
+	npm run desktop:dev
+
+desktop-build: deps
+	npm run desktop:build
+
+desktop-dist: deps
+	npm run desktop:dist
+
+desktop-dist-mac: deps
+	npm run desktop:dist:mac
+
+desktop-dist-win: deps
+	npm run desktop:dist:win
+
+desktop-dist-linux: deps
+	npm run desktop:dist:linux
 
 # Delegate to repo-root Makefile so the whole stack can be started/tested.
 web-local:

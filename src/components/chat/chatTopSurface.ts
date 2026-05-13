@@ -2,11 +2,12 @@ import { el } from "../../helpers/dom/el";
 import { CHAT_SEARCH_FILTERS } from "../../helpers/chat/chatSearch";
 import { messageSelectionKey } from "../../helpers/chat/chatSelection";
 import { isPinnedMessage } from "../../helpers/chat/pinnedMessages";
+import { hasActiveConversationSelection } from "../../helpers/navigation/mainConversationState";
 import type { AppState, ChatMessage } from "../../stores/types";
 import { formatSelectionCount } from "./renderChatHelpers";
 
 export function renderChatSearchBarSurface(state: AppState, chatSearchEnabled: boolean): HTMLElement | null {
-  if (!state.selected || !state.chatSearchOpen || !chatSearchEnabled) return null;
+  if (!hasActiveConversationSelection(state) || !state.chatSearchOpen || !chatSearchEnabled) return null;
   const input = el("input", {
     class: "modal-input chat-search-input",
     id: "chat-search-input",

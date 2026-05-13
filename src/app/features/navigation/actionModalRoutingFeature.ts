@@ -1,4 +1,5 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
+import { getActiveConversationKey } from "../../../helpers/navigation/mainConversationState";
 import type { Store } from "../../../stores/store";
 import type { ActionModalPayload, AppState, PageKind, TargetRef } from "../../../stores/types";
 
@@ -20,8 +21,8 @@ export function createActionModalRoutingFeature(deps: ActionModalRoutingFeatureD
   const jumpToMessage = (findIdx: (msgs: any[]) => number) => {
     const attempt = () => {
       const st = store.get();
-      if (!st.selected) return;
-      const key = conversationKey(st.selected);
+      const key = getActiveConversationKey(st);
+      if (!key) return;
       const msgs = (st.conversations && (st.conversations as any)[key]) || [];
       const idx = findIdx(Array.isArray(msgs) ? msgs : []);
       if (idx < 0) return;

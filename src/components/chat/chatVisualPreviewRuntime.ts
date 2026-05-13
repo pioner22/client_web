@@ -1,6 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import type { ChatVisualPreviewOptions, FileAttachmentInfo } from "./chatVisualPreviewShared";
-import { isVideoNoteName } from "./chatVisualPreviewShared";
+import { isVideoNoteName, resolveFallbackPreviewAspectRatio } from "./chatVisualPreviewShared";
 
 type ChatVisualPreviewModule = typeof import("./chatVisualPreviewSurface");
 
@@ -57,13 +57,21 @@ function renderPlaceholderProgress(info: FileAttachmentInfo): HTMLElement | null
   );
 }
 
+function canInlineLocalVideoPreview(info: FileAttachmentInfo, opts: ChatVisualPreviewOptions | undefined, fixedAspect: boolean): boolean {
+  const bytes = Number(info.size || 0) || 0;
+  const inlineVideoMaxBytes = 8 * 1024 * 1024;
+  return Boolean(info.isVideo && !fixedAspect && info.url && !opts?.mobileUi && bytes > 0 && bytes <= inlineVideoMaxBytes);
+}
+
 function renderDeferredVisualPlaceholder(options: RenderDeferredVisualPreviewOptions): HTMLButtonElement | null {
   const { info, opts } = options;
   if (!info.isImage && !info.isVideo) return null;
   const fixedAspect = Boolean(opts?.className && opts.className.split(/\s+/).includes("chat-file-preview-album"));
   const videoNote = Boolean(info.isVideo && !fixedAspect && isVideoNoteName(info.name));
-  const previewUrl = info.isImage ? info.thumbUrl || info.url : info.thumbUrl;
-  if (!previewUrl && !info.fileId) return null;
+  const canInlineVideo = canInlineLocalVideoPreview(info, opts, fixedAspect);
+  const previewUrl = info.isImage ? info.thumbUrl || info.url : fixedAspect ? info.thumbUrl : canInlineVideo ? info.url : info.thumbUrl;
+  const hasPendingLocalVideo = Boolean(info.isVideo && info.transfer?.localId && info.transfer.status !== "complete");
+  if (!previewUrl && !info.fileId && !hasPendingLocalVideo) return null;
 
   const classes = info.isImage
     ? previewUrl
@@ -95,9 +103,24 @@ function renderDeferredVisualPlaceholder(options: RenderDeferredVisualPreviewOpt
   if (opts?.caption) attrs["data-caption"] = opts.caption;
 
   const child =
-    previewUrl
-      ? el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" })
-      : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, [info.isImage ? "Фото" : "Видео"]);
+    info.isVideo && canInlineVideo
+      ? (() => {
+          const video = el("video", {
+            class: "chat-file-video",
+            src: info.url || undefined,
+            preload: "metadata",
+            playsinline: "true",
+            muted: "true",
+            loop: "true",
+            ...(info.thumbUrl ? { poster: info.thumbUrl } : {}),
+          }) as HTMLVideoElement;
+          video.muted = true;
+          video.defaultMuted = true;
+          return video;
+        })()
+      : previewUrl
+        ? el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" })
+        : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, [info.isImage ? "Фото" : "Видео"]);
   const children: HTMLElement[] = [child];
   if (info.isVideo && !progressOverlay) {
     children.push(el("span", { class: "chat-file-video-toggle", "aria-hidden": "true" }, [""]));
@@ -109,6 +132,7 @@ function renderDeferredVisualPlaceholder(options: RenderDeferredVisualPreviewOpt
     if (videoNote) mount.style.aspectRatio = "1 / 1";
     else if (info.thumbW && info.thumbH) mount.style.aspectRatio = String(info.thumbW / info.thumbH);
     else if (info.mediaW && info.mediaH) mount.style.aspectRatio = String(info.mediaW / info.mediaH);
+    else mount.style.aspectRatio = resolveFallbackPreviewAspectRatio(info) || "";
   }
 
   return mount;

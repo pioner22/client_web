@@ -43,6 +43,7 @@ import { saveLastActiveTarget } from "../helpers/ui/lastActiveTarget";
 import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { autosizeInput } from "../helpers/ui/autosizeInput";
 import { applyLegacyIdMask } from "../helpers/id/legacyIdMask";
+import { getActiveConversationTarget } from "../helpers/navigation/mainConversationState";
 import { createInitialState } from "./createInitialState";
 import { handleServerMessage } from "./handleServerMessage";
 import {
@@ -79,6 +80,7 @@ import { createPreviewAutoFetchFeature } from "./features/files/previewAutoFetch
 import { createLocalVideoThumbFeature, type LocalVideoThumbFeature } from "./features/files/localVideoThumbFeature";
 import { probeImageDimensions } from "./features/files/probeImageDimensions";
 import { createHistoryFeature, type HistoryFeature } from "./features/history/historyFeature";
+import { createClientIncidentReporter } from "./features/observability/clientIncidentReporter";
 import { createChatJumpFeature } from "./features/history/chatJumpFeature";
 import { createPinnedMessagesUiFeature } from "./features/history/pinnedMessagesUiFeature";
 import { createChatSelectionStateFeature } from "./features/history/chatSelectionStateFeature";
@@ -95,10 +97,8 @@ import { createContextMenuFeature, type ContextMenuFeature } from "./features/co
 import type { ContextMenuActionsFeature } from "./features/contextMenu/contextMenuActionsFeature";
 import { createContextMenuAdapterActionsFeature } from "./features/contextMenu/contextMenuAdapterActionsFeature";
 import {
-  flushDrafts,
-  flushFileTransfers,
   flushHistoryCache,
-  flushOutbox,
+  flushRuntimeDelivery,
   scheduleSaveDrafts,
   scheduleSaveFileTransfers,
   scheduleSaveHistoryCache,
@@ -289,8 +289,7 @@ export function mountApp(root: HTMLElement) {
   installPresenceLifecycleFeature({
     store,
     flushHistoryCache: () => flushHistoryCache(store),
-    flushFileTransfers: () => flushFileTransfers(store),
-    flushOutbox: () => flushOutbox(store),
+    flushRuntimeDelivery: () => flushRuntimeDelivery(store),
   });
   const deviceCaps = createDeviceCaps();
 
@@ -460,10 +459,15 @@ export function mountApp(root: HTMLElement) {
   const PREVIEW_AUTO_RESTORE_MAX_BYTES = fileTransferBootstrap.previewAutoRestoreMaxBytes;
   const PREVIEW_AUTO_RETRY_MS = fileTransferBootstrap.previewAutoRetryMs;
   const PREVIEW_AUTO_FAIL_RETRY_MS = fileTransferBootstrap.previewAutoFailRetryMs;
+  const clientIncidentReporter = createClientIncidentReporter({
+    store,
+    send: (payload) => gateway.send(payload),
+  });
   virtualHistoryFeature = createVirtualHistoryFeature({ store, chatHost: layout.chatHost, deviceCaps });
   historyFeature = createHistoryFeature({
     store,
     send: (payload) => gateway.send(payload),
+    reportIncident: clientIncidentReporter.report,
     deviceCaps,
     chatHost: layout.chatHost,
     scrollToBottom: (key) => scrollChatToBottom(key),
@@ -576,6 +580,7 @@ export function mountApp(root: HTMLElement) {
   const previewAutoFetchFeature = createPreviewAutoFetchFeature({
     store,
     chatHost: layout.chatHost,
+    reportIncident: clientIncidentReporter.report,
     conversationKey,
     convoSig,
     devicePrefetchAllowed: deviceCaps.prefetchAllowed,
@@ -617,6 +622,10 @@ export function mountApp(root: HTMLElement) {
     localVideoThumbFeature?.maybeSetLocalOutgoingVideoPoster(fileId, file);
   };
 
+  const maybeSetVideoPosterFromBlob = (fileId: string, blob: Blob, meta?: { name?: string | null; mime?: string | null }) => {
+    localVideoThumbFeature?.maybeSetVideoPosterFromBlob(fileId, blob, meta);
+  };
+
   localVideoThumbFeature = createLocalVideoThumbFeature({
     store,
     prefetchAllowed: deviceCaps.prefetchAllowed,
@@ -654,17 +663,6 @@ export function mountApp(root: HTMLElement) {
     closeRightPanel,
   });
   sidebarOverlay.installEventListeners();
-  window.addEventListener("pagehide", () => {
-    flushDrafts(store);
-    flushFileTransfers(store);
-    flushHistoryCache(store);
-  });
-  window.addEventListener("beforeunload", () => {
-    flushDrafts(store);
-    flushFileTransfers(store);
-    flushHistoryCache(store);
-  });
-
   function nextLocalChatMsgId(): number {
     localChatMsgSeq += 1;
     return -localChatMsgSeq;
@@ -714,10 +712,11 @@ export function mountApp(root: HTMLElement) {
     const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
     const st = store.get();
     const badge = layout.chatJumpBadge;
+    const activeConversation = getActiveConversationTarget(st);
     if (badge) {
       let unread = 0;
-      if (st.selected?.kind === "dm") {
-        unread = st.friends.find((f) => f.id === st.selected?.id)?.unread ?? 0;
+      if (activeConversation?.kind === "dm") {
+        unread = st.friends.find((f) => f.id === activeConversation.id)?.unread ?? 0;
       } else {
         unread = computeRoomUnread(key, st);
       }
@@ -815,6 +814,7 @@ export function mountApp(root: HTMLElement) {
     jumpToChatMsgIdx,
     tryOpenFileViewerFromCache,
     enqueueFileGet,
+    beginViewerStream: (fileId, meta) => fileDownloadActions?.beginViewerStream(fileId, meta) ?? null,
     setPendingFileViewer: (next) => {
       pendingFileViewer = next;
     },
@@ -836,6 +836,7 @@ export function mountApp(root: HTMLElement) {
   fileDownload = createFileDownloadFeature({
     store,
     send: (payload) => gateway.send(payload),
+    reportIncident: clientIncidentReporter.report,
     deviceCaps,
     downloadByFileId,
     disableFileHttp,
@@ -862,6 +863,7 @@ export function mountApp(root: HTMLElement) {
     scheduleThumbPollRetry,
     clearThumbPollRetry,
     setFileThumb,
+    maybeSetVideoPosterFromBlob,
     probeImageDimensions,
     pendingFileDownloads: fileDownloadActions!.pendingFileDownloads,
     triggerBrowserDownload: fileDownloadActions!.triggerBrowserDownload,
@@ -930,8 +932,9 @@ export function mountApp(root: HTMLElement) {
     requestMoreHistory,
     retryHistoryForSelected: () => {
       const st = store.get();
-      if (!st.selected) return;
-      historyFeature?.forceRetrySelected(st.selected);
+      const activeConversation = getActiveConversationTarget(st);
+      if (!activeConversation) return;
+      historyFeature?.forceRetrySelected(activeConversation);
     },
     pinnedMessagesUiActions: {
       unpinActiveForSelected: () => pinnedMessagesUiFeature.unpinActiveForSelected(),
@@ -1074,7 +1077,13 @@ export function mountApp(root: HTMLElement) {
     getGatewayUrl,
     handleSearchResultMessage: (msg) => membersChipsFeature.handleSearchResultMessage(msg),
     handleHistoryResultMessage: (msg) => {
-      historyFeature?.handleHistoryResultMessage(msg); prefetchHistoryMediaFromHistoryResult(msg, { getState: () => store.get(), devicePrefetchAllowed: deviceCaps.prefetchAllowed, autoDownloadCachePolicyFeature, enqueueFileGet });
+      historyFeature?.handleHistoryResultMessage(msg);
+      prefetchHistoryMediaFromHistoryResult(msg, {
+        getState: () => store.get(),
+        devicePrefetchAllowed: deviceCaps.prefetchAllowed,
+        autoDownloadCachePolicyFeature,
+        enqueueFileGet,
+      });
     },
     clearPendingHistoryRequests,
     handleCallsMessage: (msg) => callsFeature?.handleMessage(msg) ?? false,
@@ -1085,7 +1094,8 @@ export function mountApp(root: HTMLElement) {
     onAuthed: () => {
       const st = store.get();
       if (st.selfId) void autoDownloadCachePolicyFeature.enforceFileCachePolicy(st.selfId, { force: true });
-      if (st.selected) requestHistory(st.selected, { force: true, deltaLimit: 2000, prefetchBefore: true });
+      const activeConversation = getActiveConversationTarget(st);
+      if (activeConversation) requestHistory(activeConversation, { force: true, deltaLimit: 2000, prefetchBefore: true });
       outboxFeature?.drainOutbox();
     },
     onDisconnected: () => {
@@ -1153,6 +1163,7 @@ export function mountApp(root: HTMLElement) {
   outboxFeature = createOutboxFeature({
     store,
     send: (payload) => gateway.send(payload),
+    reportIncident: clientIncidentReporter.report,
   });
 
   callsFeature = createCallsFeature({
@@ -1176,6 +1187,7 @@ export function mountApp(root: HTMLElement) {
     updateTransferByFileId,
     updateConversationFileMessage,
     removeConversationFileMessage,
+    reportIncident: clientIncidentReporter.report,
     onFileIdResolved: (fileId, file) => {
       try {
         maybeSetLocalOutgoingVideoPoster(fileId, file);
@@ -1408,7 +1420,8 @@ export function mountApp(root: HTMLElement) {
     const st = store.get();
     const editing = st.editing;
     if (!editing) return;
-    const selKey = st.selected ? conversationKey(st.selected) : "";
+    const activeConversation = getActiveConversationTarget(st);
+    const selKey = activeConversation ? conversationKey(activeConversation) : "";
     const restore = editing.key && editing.key === selKey ? editing.prevDraft || "" : "";
     store.set((prev) => ({ ...prev, editing: null, input: restore }));
     try {
@@ -1597,8 +1610,9 @@ export function mountApp(root: HTMLElement) {
     inputWrap: layout.inputWrap,
     openFileSendModal: (files: File[]) => {
       const st = store.get();
-      if (!st.selected) return;
-      fileSendModalFeature?.openFileSendModal(files, st.selected);
+      const activeConversation = getActiveConversationTarget(st);
+      if (!activeConversation) return;
+      fileSendModalFeature?.openFileSendModal(files, activeConversation);
     },
   });
   const composerAttachButtonFeature = createComposerAttachButtonFeature({

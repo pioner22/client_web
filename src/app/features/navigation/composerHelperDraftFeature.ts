@@ -1,5 +1,5 @@
-import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { fileBadge } from "../../../helpers/files/fileBadge";
+import { getConversationViewportKey } from "../../../helpers/navigation/mainConversationState";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage, MessageHelperDraft } from "../../../stores/types";
 
@@ -77,8 +77,7 @@ export function createComposerHelperDraftFeature(deps: ComposerHelperDraftFeatur
   };
 
   const resolveComposerHelperDraft = (st: AppState): ComposerHelperDraftResolution => {
-    const sel = st.selected;
-    const key = sel ? conversationKey(sel) : "";
+    const key = getConversationViewportKey(st);
     if (!key) return null;
     const editing = Boolean(st.editing && st.editing.key === key);
     if (editing) return null;

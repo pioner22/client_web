@@ -120,3 +120,84 @@ test("lazyImportRecovery: triggers one controlled reload for stale lazy chunk fa
     await helper.cleanup();
   }
 });
+
+test("lazyImportRecovery: does not force reload while PWA stability hold is active", async () => {
+  const helper = await loadHelper();
+  const prev = {
+    window: globalThis.window,
+    sessionStorage: globalThis.sessionStorage,
+    localStorage: globalThis.localStorage,
+    CustomEvent: globalThis.CustomEvent,
+  };
+  const session = new Map();
+  const local = new Map();
+  const replaced = [];
+  class CustomEventStub extends Event {
+    constructor(type, init = {}) {
+      super(type);
+      this.detail = init.detail;
+    }
+  }
+  globalThis.CustomEvent = CustomEventStub;
+  globalThis.sessionStorage = {
+    getItem(key) {
+      return session.has(key) ? session.get(key) : null;
+    },
+    setItem(key, value) {
+      session.set(String(key), String(value));
+    },
+    removeItem(key) {
+      session.delete(String(key));
+    },
+  };
+  globalThis.localStorage = {
+    getItem(key) {
+      return local.has(key) ? local.get(key) : null;
+    },
+    setItem(key, value) {
+      local.set(String(key), String(value));
+    },
+    removeItem(key) {
+      local.delete(String(key));
+    },
+  };
+  local.set(
+    "yagodka_pwa_stability_hold_v1",
+    JSON.stringify({ kind: "media_preview_failed", ts: Date.now(), until: Date.now() + 60_000 })
+  );
+  globalThis.window = {
+    localStorage: globalThis.localStorage,
+    sessionStorage: globalThis.sessionStorage,
+    location: {
+      href: "https://yagodka.org/web/",
+      replace(url) {
+        replaced.push(String(url));
+      },
+      reload() {
+        replaced.push("reload");
+      },
+    },
+    dispatchEvent() {
+      return true;
+    },
+  };
+
+  try {
+    const recovered = helper.recoverFromLazyImportError(
+      new Error("Failed to fetch dynamically imported module: https://yagodka.org/web/assets/app-chat-host-deferred-old.js"),
+      "chat_surface_media"
+    );
+    assert.equal(recovered, false);
+    assert.deepEqual(replaced, []);
+  } finally {
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.sessionStorage === undefined) delete globalThis.sessionStorage;
+    else globalThis.sessionStorage = prev.sessionStorage;
+    if (prev.localStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = prev.localStorage;
+    if (prev.CustomEvent === undefined) delete globalThis.CustomEvent;
+    else globalThis.CustomEvent = prev.CustomEvent;
+    await helper.cleanup();
+  }
+});

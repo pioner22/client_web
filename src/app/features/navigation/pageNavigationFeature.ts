@@ -1,4 +1,11 @@
 import { createChatSearchCounts } from "../../../helpers/chat/chatSearch";
+import {
+  applyPageState,
+  applyPageTargetState,
+  applyRightPanelTarget,
+} from "../../../helpers/navigation/viewState";
+import { getActiveConversationTarget, isMainConversationSurface } from "../../../helpers/navigation/mainConversationState";
+import { setMobileSidebarTabValue } from "../../../helpers/sidebar/sidebarState";
 import type { Store } from "../../../stores/store";
 import type { AppState, MobileSidebarTab, PageKind, TargetRef } from "../../../stores/types";
 
@@ -48,30 +55,28 @@ export function createPageNavigationFeature(deps: PageNavigationFeatureDeps): Pa
     if (prevPage === "group_create" && page !== "group_create") resetGroupCreateMembers();
     if (prevPage === "board_create" && page !== "board_create") resetBoardCreateMembers();
     if (page !== "main") closeEmojiPopover();
-    store.set((prev) => ({
-      ...prev,
-      page,
-      ...(page !== "user" ? { userViewId: null } : {}),
-      ...(page !== "group" ? { groupViewId: null } : {}),
-      ...(page !== "board" ? { boardViewId: null } : {}),
-      ...(page !== "main" ? { rightPanel: null } : {}),
-      ...(page !== "main" ? { mobileSidebarTab: "menu" as MobileSidebarTab } : {}),
-      ...(page !== "main"
-        ? {
-            chatSearchOpen: false,
-            chatSearchResultsOpen: false,
-            chatSearchQuery: "",
-            chatSearchDate: "",
-            chatSearchFilter: "all",
-            chatSearchHits: [],
-            chatSearchPos: 0,
-            chatSearchCounts: createChatSearchCounts(),
-          }
-        : {}),
-    }));
+    store.set((prev) => {
+      const next = applyPageState(prev, page);
+      const withTab = page !== "main" ? setMobileSidebarTabValue(next, "menu") : next;
+      return {
+        ...withTab,
+        ...(page !== "main"
+          ? {
+              chatSearchOpen: false,
+              chatSearchResultsOpen: false,
+              chatSearchQuery: "",
+              chatSearchDate: "",
+              chatSearchFilter: "all",
+              chatSearchHits: [],
+              chatSearchPos: 0,
+              chatSearchCounts: createChatSearchCounts(),
+            }
+          : {}),
+      };
+    });
     const st = store.get();
     const keepSidebar = Boolean(
-      (mobileSidebarMq.matches || floatingSidebarMq.matches) && st.page === "main" && !st.selected && !st.modal
+      (mobileSidebarMq.matches || floatingSidebarMq.matches) && isMainConversationSurface(st) && !getActiveConversationTarget(st)
     );
     if (st.page !== "main" || !keepSidebar) {
       closeMobileSidebar();
@@ -86,7 +91,7 @@ export function createPageNavigationFeature(deps: PageNavigationFeatureDeps): Pa
     const uid = String(id || "").trim();
     if (!uid) return;
     setPage("user");
-    store.set({ userViewId: uid, status: `Профиль: ${uid}` });
+    store.set((prev) => ({ ...applyPageTargetState(prev, { kind: "dm", id: uid }), status: `Профиль: ${uid}` }));
     const st = store.get();
     if (st.authed && st.conn === "connected") {
       send({ type: "profile_get", id: uid });
@@ -97,7 +102,7 @@ export function createPageNavigationFeature(deps: PageNavigationFeatureDeps): Pa
     const gid = String(id || "").trim();
     if (!gid) return;
     setPage("group");
-    store.set({ groupViewId: gid, status: `Чат: ${gid}` });
+    store.set((prev) => ({ ...applyPageTargetState(prev, { kind: "group", id: gid }), status: `Чат: ${gid}` }));
     const st = store.get();
     if (st.authed && st.conn === "connected") {
       send({ type: "group_info", group_id: gid });
@@ -108,7 +113,7 @@ export function createPageNavigationFeature(deps: PageNavigationFeatureDeps): Pa
     const bid = String(id || "").trim();
     if (!bid) return;
     setPage("board");
-    store.set({ boardViewId: bid, status: `Доска: ${bid}` });
+    store.set((prev) => ({ ...applyPageTargetState(prev, { kind: "board", id: bid }), status: `Доска: ${bid}` }));
     const st = store.get();
     if (st.authed && st.conn === "connected") {
       send({ type: "board_info", board_id: bid });
@@ -119,7 +124,7 @@ export function createPageNavigationFeature(deps: PageNavigationFeatureDeps): Pa
     const kind = target.kind;
     const id = String(target.id || "").trim();
     if (!id) return;
-    store.set({ rightPanel: { kind, id } });
+    store.set((prev) => applyRightPanelTarget(prev, { kind, id }));
     const st = store.get();
     if (st.authed && st.conn === "connected") {
       if (kind === "dm") send({ type: "profile_get", id });
@@ -129,7 +134,7 @@ export function createPageNavigationFeature(deps: PageNavigationFeatureDeps): Pa
   };
 
   const closeRightPanel = () => {
-    store.set({ rightPanel: null });
+    store.set((prev) => applyRightPanelTarget(prev, null));
   };
 
   const onFooterClick = (e: Event) => {

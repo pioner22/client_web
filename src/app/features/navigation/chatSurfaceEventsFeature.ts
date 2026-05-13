@@ -1,6 +1,8 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { messageSelectionKey } from "../../../helpers/chat/chatSelection";
 import type { ChatSearchFilter } from "../../../helpers/chat/chatSearch";
+import { getActiveConversationKey, getActiveConversationTarget, hasActiveConversationSelection, isMainConversationSurface } from "../../../helpers/navigation/mainConversationState";
+import { isRightPanelActiveForSelected } from "../../../helpers/navigation/rightPanelState";
 import type { Layout } from "../../../components/layout/types";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage, MessageHelperDraft, TargetRef } from "../../../stores/types";
@@ -184,7 +186,7 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
           return;
         }
         const st = store.get();
-        const key = st.selected ? conversationKey(st.selected) : "";
+        const key = getActiveConversationKey(st);
         if (!key) return;
         const idxRaw = String(msgSelectBtn.getAttribute("data-msg-idx") || "").trim();
         const idx = Number.isFinite(Number(idxRaw)) ? Math.trunc(Number(idxRaw)) : -1;
@@ -228,7 +230,7 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
       }
 
       const stForSelection = store.get();
-      const selectionKey = stForSelection.selected ? conversationKey(stForSelection.selected) : "";
+      const selectionKey = getActiveConversationKey(stForSelection);
       const selectionActive =
         Boolean(selectionKey) &&
         Boolean(stForSelection.chatSelection && stForSelection.chatSelection.key === selectionKey) &&
@@ -293,19 +295,20 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
       const chatProfileBtn = target?.closest("button[data-action='chat-profile-open']") as HTMLButtonElement | null;
       if (chatProfileBtn) {
         const st = store.get();
-        if (!st.selected) return;
+        const activeConversation = getActiveConversationTarget(st);
+        if (!activeConversation) return;
         e.preventDefault();
         const mobileUi = isMobileLikeUi();
-        if (!mobileUi && st.page === "main") {
-          const active = Boolean(st.rightPanel && st.rightPanel.kind === st.selected.kind && st.rightPanel.id === st.selected.id);
+        if (!mobileUi && isMainConversationSurface(st)) {
+          const active = isRightPanelActiveForSelected(st);
           if (active) closeRightPanel();
-          else openRightPanel(st.selected);
-        } else if (st.selected.kind === "dm") {
-          openUserPage(st.selected.id);
-        } else if (st.selected.kind === "group") {
-          openGroupPage(st.selected.id);
-        } else if (st.selected.kind === "board") {
-          openBoardPage(st.selected.id);
+          else openRightPanel(activeConversation);
+        } else if (activeConversation.kind === "dm") {
+          openUserPage(activeConversation.id);
+        } else if (activeConversation.kind === "group") {
+          openGroupPage(activeConversation.id);
+        } else if (activeConversation.kind === "board") {
+          openBoardPage(activeConversation.id);
         }
         return;
       }
@@ -366,7 +369,7 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
       const row = target.closest("[data-msg-idx]") as HTMLElement | null;
       if (!row) return;
       const idx = Math.trunc(Number(row.getAttribute("data-msg-idx") || ""));
-      const key = st.selected ? conversationKey(st.selected) : "";
+      const key = getActiveConversationKey(st);
       if (!key || !Number.isFinite(idx) || idx < 0) return;
       const conv = st.conversations[key] || null;
       const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;

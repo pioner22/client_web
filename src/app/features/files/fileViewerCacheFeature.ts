@@ -1,5 +1,6 @@
 import { getCachedFileBlob } from "../../../helpers/files/fileBlobCache";
 import { isVideoLikeFile } from "../../../helpers/files/mediaKind";
+import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
 import type { FileViewerModalParams, FileViewerModalState } from "./fileViewerFeature";
@@ -90,8 +91,7 @@ export function createFileViewerCacheFeature(deps: FileViewerCacheFeatureDeps): 
       })();
 
       return {
-        ...prev,
-        fileTransfers: nextTransfers,
+        ...applyFileTransferMutation(prev, nextTransfers),
         modal: buildModalState({
           fileId,
           url,

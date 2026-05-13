@@ -203,3 +203,37 @@ test("handleServerMessage: roster запрашивает avatar_get если ava
     await cleanup();
   }
 });
+
+test("handleServerMessage: avatar_set_result с ошибкой откатывает локальный preview и перезапрашивает серверный аватар", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = mkStorage();
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+    localStorage.setItem("yagodka_avatar:dm:111-111-111", "data:image/png;base64,AA==");
+    localStorage.setItem("yagodka_avatar_rev:dm:111-111-111", "7");
+
+    const sent = [];
+    const gateway = { send: (m) => sent.push(m) };
+    const { getState, patch } = createPatchHarness({
+      selfId: "111-111-111",
+      profiles: {
+        "111-111-111": { id: "111-111-111", avatar_rev: 7, avatar_mime: "image/png" },
+      },
+      avatarsRev: 3,
+    });
+
+    handleServerMessage({ type: "avatar_set_result", ok: false, reason: "too_large" }, getState(), gateway, patch);
+
+    const st = getState();
+    assert.equal(st.status, "Не удалось обновить аватар: too_large");
+    assert.equal(st.avatarsRev, 4);
+    assert.equal(localStorage.getItem("yagodka_avatar:dm:111-111-111"), null);
+    assert.equal(localStorage.getItem("yagodka_avatar_rev:dm:111-111-111"), null);
+    assert.deepEqual(sent, [{ type: "avatar_get", id: "111-111-111" }]);
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
+    await cleanup();
+  }
+});

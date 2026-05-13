@@ -1,5 +1,8 @@
 import { createChatSearchCounts } from "../../../helpers/chat/chatSearch";
 import { clearStoredSessionToken, getStoredSessionToken, storeAuthId } from "../../../helpers/auth/session";
+import { resetNavigationState } from "../../../helpers/navigation/viewState";
+import { resetRuntimeDeliveryState } from "../../../helpers/runtime/deliverySync";
+import { resetSidebarState } from "../../../helpers/sidebar/sidebarState";
 import { clearOutboxForUser } from "../../../helpers/pwa/outboxSync";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
@@ -107,7 +110,7 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
     }
 
     store.set((prev) => ({
-      ...prev,
+      ...resetRuntimeDeliveryState(resetSidebarState(resetNavigationState(prev, { page: "main" }))),
       authed: false,
       selfId: null,
       friends: [],
@@ -123,19 +126,20 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
       pendingGroupJoinRequests: [],
       pendingBoardInvites: [],
       fileOffersIn: [],
-      fileTransfers: [],
       fileThumbs: {},
       groups: [],
       boards: [],
-      selected: null,
       conversations: {},
+      historySync: {},
+      rosterSync: { loaded: false, source: "empty", reconcilePending: false, lastServerAt: null, lastPresenceAt: null },
+      profileSync: {},
       historyLoaded: {},
+      historyPreviewOnly: {},
       historyCursor: {},
       historyHasMore: {},
       historyLoading: {},
+      historyLoadingSlots: {},
       historyVirtualStart: {},
-      outbox: {},
-      drafts: {},
       input: "",
       editing: null,
       boardComposerOpen: false,
@@ -154,7 +158,6 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
       sessionDevices: [],
       sessionDevicesStatus: null,
       toast: null,
-      page: "main",
       modal: { kind: "logout" },
       authMode: rememberedId ? "login" : "register",
       authRememberedId: rememberedId,

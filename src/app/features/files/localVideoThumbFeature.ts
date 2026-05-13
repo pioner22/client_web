@@ -32,6 +32,11 @@ export interface LocalVideoThumbFeature {
   clearThumbPollRetry: (fileId: string) => void;
   scheduleThumbPollRetry: (fileId: string) => void;
   maybeSetLocalOutgoingVideoPoster: (fileId: string, file: File) => void;
+  maybeSetVideoPosterFromBlob: (
+    fileId: string,
+    blob: Blob,
+    meta?: { name?: string | null; mime?: string | null }
+  ) => void;
 }
 
 type FileThumbEntry = {
@@ -214,7 +219,7 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
   };
 
   const renderLocalVideoPosterJpeg = async (
-    file: File,
+    file: Blob,
     opts: { maxSide?: number; timeoutMs?: number } = {}
   ): Promise<{ blob: Blob; w: number; h: number; mediaW: number; mediaH: number } | null> => {
     const maxSide = Math.max(64, Math.min(2048, Math.trunc(Number(opts.maxSide ?? LOCAL_VIDEO_POSTER_MAX_SIDE) || LOCAL_VIDEO_POSTER_MAX_SIDE)));
@@ -331,15 +336,29 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
     }
   };
 
-  const maybeSetLocalOutgoingVideoPoster = (fileId: string, file: File) => {
+  const maybeSetVideoPosterFromBlob = (
+    fileId: string,
+    file: Blob,
+    meta?: { name?: string | null; mime?: string | null }
+  ) => {
     const fid = String(fileId || "").trim();
     if (!fid) return;
     if (!file) return;
     const bytes = Number(file.size || 0) || 0;
     if (!bytes || bytes <= 0 || bytes > LOCAL_VIDEO_POSTER_MAX_BYTES) return;
-    const name = String(file.name || "").trim();
-    const mime = typeof file.type === "string" ? String(file.type).trim() : "";
-    if (!isVideoLikeFile(name, mime || null)) return;
+    const fileName =
+      typeof meta?.name === "string" && meta.name.trim()
+        ? meta.name.trim()
+        : typeof File !== "undefined" && file instanceof File
+          ? String(file.name || "").trim()
+          : "video";
+    const mime =
+      typeof meta?.mime === "string" && meta.mime.trim()
+        ? meta.mime.trim()
+        : typeof file.type === "string"
+          ? String(file.type).trim()
+          : "";
+    if (!isVideoLikeFile(fileName, mime || null)) return;
     const st = store.get();
     if (st.fileThumbs?.[fid]?.url) return;
     if (localVideoPosterInFlight.has(fid)) return;
@@ -365,9 +384,9 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
         if (!url) return;
         setFileThumb(fid, url, "image/jpeg", { w: rendered.w, h: rendered.h, mediaW: rendered.mediaW, mediaH: rendered.mediaH });
         try {
-          if (latest.selfId && shouldCachePreview(name || "видео", "image/jpeg", rendered.blob.size || 0)) {
+          if (latest.selfId && shouldCachePreview(fileName || "видео", "image/jpeg", rendered.blob.size || 0)) {
             void putCachedFileBlob(latest.selfId, thumbCacheId(fid), rendered.blob, {
-              name: name || "thumb.jpg",
+              name: fileName || "thumb.jpg",
               mime: "image/jpeg",
               size: rendered.blob.size || 0,
               w: rendered.w,
@@ -388,11 +407,16 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
     })();
   };
 
+  const maybeSetLocalOutgoingVideoPoster = (fileId: string, file: File) => {
+    maybeSetVideoPosterFromBlob(fileId, file, { name: file?.name || null, mime: file?.type || null });
+  };
+
   return {
     clearFileThumb,
     setFileThumb,
     clearThumbPollRetry,
     scheduleThumbPollRetry,
     maybeSetLocalOutgoingVideoPoster,
+    maybeSetVideoPosterFromBlob,
   };
 }

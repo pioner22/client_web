@@ -4,8 +4,8 @@ import { scheduleChromeColorSync } from "../ui/chromeColors";
 const STORAGE_KEY = "yagodka_skin";
 const LINK_ID = "yagodka-skin-css";
 const SKIN_ID_RE = /^[a-z0-9_-]{1,32}$/;
-export const DEFAULT_SKIN_ID = "telegram-exact";
-const DEFAULT_SKIN_TITLE = "Telegram (точный)";
+export const DEFAULT_SKIN_ID = "yagodka-modern";
+const DEFAULT_SKIN_TITLE = "Yagodka Modern";
 
 export function normalizeSkinId(input: unknown): string {
   const raw = String(input ?? "").trim().toLowerCase();

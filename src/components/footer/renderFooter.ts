@@ -1,10 +1,11 @@
 import { el } from "../../helpers/dom/el";
+import { buildAppShellProjection } from "../../helpers/navigation/appShellProjection";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState } from "../../stores/types";
 
 export function renderFooter(target: HTMLElement, state: AppState) {
   const mobileUi = isMobileLikeUi();
-  const profileAreaOpen = state.page === "profile" || state.page === "sessions";
+  const shell = buildAppShellProjection(state);
   target.classList.toggle("hidden", mobileUi);
   if (mobileUi) {
     target.replaceChildren();
@@ -19,15 +20,15 @@ export function renderFooter(target: HTMLElement, state: AppState) {
       "aria-selected": String(state.page === "main"),
       "data-action": "nav-main",
     },
-    ["Сообщения"]
+    ["Контакты"]
   );
   const tabProfile = el(
     "button",
     {
-      class: profileAreaOpen ? "footer-tab footer-tab-active" : "footer-tab",
+      class: shell.profileAreaOpen ? "footer-tab footer-tab-active" : "footer-tab",
       type: "button",
       role: "tab",
-      "aria-selected": String(profileAreaOpen),
+      "aria-selected": String(shell.profileAreaOpen),
       "data-action": "nav-profile",
     },
     ["Профиль"]
@@ -35,10 +36,10 @@ export function renderFooter(target: HTMLElement, state: AppState) {
   const tabFiles = el(
     "button",
     {
-      class: state.page === "files" ? "footer-tab footer-tab-active" : "footer-tab",
+      class: shell.isFilesPage ? "footer-tab footer-tab-active" : "footer-tab",
       type: "button",
       role: "tab",
-      "aria-selected": String(state.page === "files"),
+      "aria-selected": String(shell.isFilesPage),
       "data-action": "nav-files",
     },
     ["Файлы"]

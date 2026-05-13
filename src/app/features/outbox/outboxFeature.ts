@@ -1,5 +1,7 @@
 import { requestOutboxSnapshot, syncOutboxToServiceWorker } from "../../../helpers/pwa/outboxSync";
 import { updateOutboxEntry, type OutboxMap } from "../../../helpers/chat/outbox";
+import { applyOutboxMutation, applyOutboxSnapshot } from "../../../helpers/runtime/deliverySync";
+import { planOutboxDrain, shouldReconcileOutboxFromWorker } from "../../../helpers/runtime/deliveryCoordinator";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage, OutboxEntry } from "../../../stores/types";
 import { scheduleSaveOutbox, setOutboxSwReadyForUser } from "../persistence/localPersistenceTimers";
@@ -12,6 +14,7 @@ const OUTBOX_DRAIN_MAX = 12;
 export interface OutboxFeatureDeps {
   store: Store<AppState>;
   send: (payload: any) => boolean;
+  reportIncident?: (kind: string, detail?: Record<string, unknown> | null, opts?: { key?: string; dedupeMs?: number }) => boolean;
 }
 
 export interface OutboxFeature {
@@ -46,7 +49,7 @@ function mergeOutboxSnapshot(prevOutbox: AppState["outbox"], snapshot: OutboxEnt
 }
 
 export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
-  const { store, send } = deps;
+  const { store, send, reportIncident } = deps;
   let disposed = false;
 
   let outboxSyncPendingForUser: string | null = null;
@@ -77,6 +80,21 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
     }, delay);
   }
 
+  function reportWorkerSyncResult(userId: string, result: Awaited<ReturnType<typeof syncOutboxToServiceWorker>>): void {
+    if (result.ok || !result.pending) return;
+    reportIncident?.(
+      "delivery_outbox_worker_sync_failed",
+      {
+        user_id: userId,
+        status: result.status,
+        registered: result.registered,
+        pending: result.pending,
+        reason: result.error || result.status,
+      },
+      { key: `delivery_outbox_worker_sync_failed:${userId}:${result.status}`, dedupeMs: 60_000 }
+    );
+  }
+
   async function syncFromServiceWorker(userId: string) {
     const uid = String(userId || "").trim();
     if (!uid) {
@@ -84,6 +102,10 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
       return;
     }
     if (outboxSyncPendingForUser === uid) return;
+    if (!shouldReconcileOutboxFromWorker(store.get(), uid)) {
+      drainOutbox();
+      return;
+    }
     outboxSyncPendingForUser = uid;
     try {
       const snapshot = await requestOutboxSnapshot(uid);
@@ -125,7 +147,8 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
               }),
             };
           }
-          return convChanged ? { ...prev, outbox: mergedOutbox, conversations } : { ...prev, outbox: mergedOutbox };
+          const next = convChanged ? { ...prev, conversations } : prev;
+          return applyOutboxSnapshot(next, mergedOutbox, { source: "cache", reconcilePending: true });
         });
         scheduleSaveOutbox(store);
       }
@@ -135,7 +158,7 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
       setOutboxSwReadyForUser(uid);
       outboxSyncPendingForUser = null;
       try {
-        void syncOutboxToServiceWorker(uid, store.get().outbox);
+        void syncOutboxToServiceWorker(uid, store.get().outbox).then((result) => reportWorkerSyncResult(uid, result));
       } catch {
         // ignore
       }
@@ -146,92 +169,27 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
   function drainOutbox(limit = OUTBOX_DRAIN_MAX) {
     if (disposed) return;
     const st = store.get();
-    const entries = Object.entries(st.outbox || {});
-    if (!entries.length) {
+    if (!Object.keys(st.outbox || {}).length) {
       clearOutboxScheduleTimer();
       return;
     }
-
     const nowMs = Date.now();
-    let nextScheduleAt = 0;
-    const flat: Array<{
-      key: string;
-      localId: string;
-      to?: string;
-      room?: string;
-      text: string;
-      ts: number;
-      lastAttemptAt: number;
-      whenOnline?: boolean;
-      silent?: boolean;
-      scheduleAt?: number;
-    }> = [];
-    for (const [k, list] of entries) {
-      const arr = Array.isArray(list) ? list : [];
-      for (const e of arr) {
-        const lid = typeof e?.localId === "string" ? e.localId.trim() : "";
-        if (!lid) continue;
-        const text = typeof e?.text === "string" ? e.text : "";
-        if (!text) continue;
-        const status = e?.status;
-        if (status === "sent") continue;
-        const to = typeof e?.to === "string" && e.to.trim() ? e.to.trim() : undefined;
-        const room = typeof e?.room === "string" && e.room.trim() ? e.room.trim() : undefined;
-        if (!to && !room) continue;
-        const ts = Number.isFinite(e?.ts) ? Number(e.ts) : 0;
-        const lastAttemptAtRaw = e?.lastAttemptAt;
-        const lastAttemptAt =
-          typeof lastAttemptAtRaw === "number" && Number.isFinite(lastAttemptAtRaw)
-            ? Math.max(0, Math.trunc(lastAttemptAtRaw))
-            : 0;
-        const whenOnline = Boolean(e?.whenOnline);
-        const silent = Boolean(e?.silent);
-        const scheduleAtRaw = e?.scheduleAt;
-        const scheduleAt =
-          typeof scheduleAtRaw === "number" && Number.isFinite(scheduleAtRaw) && scheduleAtRaw > 0 ? Math.trunc(scheduleAtRaw) : 0;
-        if (scheduleAt && scheduleAt > nowMs + OUTBOX_SCHEDULE_GRACE_MS) {
-          if (!nextScheduleAt || scheduleAt < nextScheduleAt) nextScheduleAt = scheduleAt;
-          continue;
-        }
-        flat.push({
-          key: k,
-          localId: lid,
-          to,
-          room,
-          text,
-          ts,
-          lastAttemptAt,
-          ...(whenOnline ? { whenOnline: true } : {}),
-          ...(silent ? { silent: true } : {}),
-          ...(scheduleAt ? { scheduleAt } : {}),
-        });
-      }
-    }
-    if (nextScheduleAt) armOutboxScheduleTimer(nextScheduleAt);
+    const plan = planOutboxDrain(st, {
+      nowMs,
+      scheduleGraceMs: OUTBOX_SCHEDULE_GRACE_MS,
+      retryMinMs: OUTBOX_RETRY_MIN_MS,
+      maxEntries: limit,
+    });
+    const nextAt =
+      plan.nextScheduleAt !== null && plan.retryAt !== null
+        ? Math.min(plan.nextScheduleAt, plan.retryAt)
+        : plan.nextScheduleAt ?? plan.retryAt ?? 0;
+    if (nextAt) armOutboxScheduleTimer(nextAt);
     else clearOutboxScheduleTimer();
-    if (!flat.length) return;
-    if (st.conn !== "connected") return;
-    if (!st.authed || !st.selfId) return;
-    if (!st.netLeader) {
-      const retryAt = Date.now() + 2500;
-      const nextAt = nextScheduleAt ? Math.min(nextScheduleAt, retryAt) : retryAt;
-      armOutboxScheduleTimer(nextAt);
-      return;
-    }
-    flat.sort((a, b) => a.ts - b.ts);
-
-    const onlineById = new Map<string, boolean>();
-    for (const f of st.friends || []) {
-      const id = String(f?.id || "").trim();
-      if (!id) continue;
-      onlineById.set(id, Boolean(f?.online));
-    }
+    if (!plan.drainable.length) return;
 
     const sent: Array<{ key: string; localId: string }> = [];
-    for (const it of flat) {
-      if (sent.length >= limit) break;
-      if (it.lastAttemptAt && nowMs - it.lastAttemptAt < OUTBOX_RETRY_MIN_MS) continue;
-      if (it.whenOnline && it.to && !onlineById.get(it.to)) continue;
+    for (const it of plan.drainable) {
       const ok = send(
         it.to
           ? { type: "send", to: it.to, text: it.text, ...(it.silent ? { silent: true } : {}) }
@@ -262,7 +220,7 @@ export function createOutboxFeature(deps: OutboxFeatureDeps): OutboxFeature {
           }
         }
       }
-      return { ...prev, outbox, conversations, status: "Отправляем сообщения из очереди…" };
+      return { ...applyOutboxMutation({ ...prev, conversations, status: "Отправляем сообщения из очереди…" }, outbox) };
     });
     scheduleSaveOutbox(store);
   }

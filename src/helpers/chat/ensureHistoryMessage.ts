@@ -1,5 +1,6 @@
 import type { Store } from "../../stores/store";
 import type { AppState, ChatMessage } from "../../stores/types";
+import { getConversationHistorySyncState } from "./historySync";
 
 export type EnsureHistoryMessageStatus = "found" | "cancelled" | "timeout" | "not_found" | "no_conn";
 
@@ -51,14 +52,12 @@ function oldestServerMessageId(messages: ChatMessage[]): number | null {
 
 function historySig(st: AppState, key: string): HistorySig {
   const msgs = st.conversations?.[key] || [];
-  const cursorRaw = (st.historyCursor as any)?.[key];
-  const hasMoreRaw = (st.historyHasMore as any)?.[key];
-  const hasMore = typeof hasMoreRaw === "boolean" ? hasMoreRaw : null;
+  const sync = getConversationHistorySyncState(st, key);
   return {
     len: msgs.length,
     oldest: oldestServerMessageId(msgs),
-    cursor: normalizeServerId(cursorRaw),
-    hasMore,
+    cursor: normalizeServerId(sync.cursor),
+    hasMore: typeof sync.hasMore === "boolean" ? sync.hasMore : null,
   };
 }
 
@@ -140,7 +139,7 @@ export async function ensureChatMessageLoadedById(opts: {
     const idx = findMsgIdxById(conv, msgId);
     if (idx >= 0) return { status: "found", idx };
 
-    const cursor = normalizeServerId((st.historyCursor as any)?.[chatKey]);
+    const cursor = normalizeServerId(getConversationHistorySyncState(st, chatKey).cursor);
     const oldest = oldestServerMessageId(conv);
     const beforeId = cursor ?? oldest ?? 0;
 

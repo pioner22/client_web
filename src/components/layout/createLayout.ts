@@ -247,10 +247,11 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     boardEditorBtn,
     emojiBtn,
   ]);
-  const composerField = el("div", { class: "composer-field" }, [composerActionsLeft, input]);
+  const composerActionsMedia = el("div", { class: "composer-actions composer-actions-media" }, [videoNoteBtn, voiceBtn]);
+  const composerField = el("div", { class: "composer-field" }, [composerActionsLeft, input, composerActionsMedia]);
   const composerRow = el("div", { class: "composer-row" }, [
     composerField,
-    el("div", { class: "composer-actions composer-actions-right" }, [videoNoteBtn, voiceBtn, sendBtn]),
+    el("div", { class: "composer-actions composer-actions-right" }, [sendBtn]),
   ]);
   const inputWrap = el("div", { class: "input-wrap" }, [chatSelectionBar, editBar, helperBar, boardEditorWrap, composerRow, composerMeta]);
 

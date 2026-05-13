@@ -1,4 +1,5 @@
 import { el } from "../../helpers/dom/el";
+import { canUseDesktopBiometricUnlock } from "../../helpers/auth/session";
 import { applyLegacyIdMask } from "../../helpers/id/legacyIdMask";
 import { focusElement } from "../../helpers/ui/focus";
 import type { AuthMode, ConnStatus, SkinInfo } from "../../stores/types";
@@ -6,6 +7,7 @@ import type { AuthMode, ConnStatus, SkinInfo } from "../../stores/types";
 export interface AuthModalActions {
   onLogin: () => void;
   onRegister: () => void;
+  onTouchId?: () => void;
   onModeChange: (mode: "register" | "login") => void;
   onUseDifferentAccount: () => void;
   onSkinChange: (skinId: string) => void;
@@ -111,6 +113,12 @@ function createPill(className: string, text: string): HTMLElement {
   return el("div", { class: `auth-pill ${className}` }, [text]);
 }
 
+function createTouchIdButton(actions: AuthModalActions): HTMLButtonElement {
+  const btn = el("button", { class: "btn btn-secondary auth-touchid-btn", type: "button" }, ["Touch ID"]) as HTMLButtonElement;
+  btn.addEventListener("click", () => actions.onTouchId?.());
+  return btn;
+}
+
 export function renderAuthModal(
   mode: AuthMode,
   rememberedId: string | null,
@@ -143,6 +151,7 @@ export function renderAuthModal(
   const rawStatus = String(status ?? "").trim();
   const visibleNotice = resolveNotice(rawMessage, rawStatus, connected, mode);
   const showSkinPicker = mode !== "auto" && (mode === "register" || !hasRememberedId);
+  const showTouchId = mode !== "register" && rememberedIdValue && canUseDesktopBiometricUnlock() && Boolean(actions.onTouchId);
 
   function wrapWithIdEditAction(input: HTMLInputElement, hasRemembered: boolean): HTMLElement {
     if (!hasRemembered) return input;
@@ -206,25 +215,16 @@ export function renderAuthModal(
   ]) as HTMLButtonElement;
 
   const hero = el("section", { class: "auth-entry-hero", "aria-label": "Ягодка" }, [
-    el("div", { class: "auth-hero-orb", "aria-hidden": "true" }, [
-      el("img", { class: "auth-logo", src: "./icons/icon.svg", alt: "" }, []),
+    el("div", { class: "auth-hero-brand-block" }, [
+      el("div", { class: "auth-hero-orb", "aria-hidden": "true" }, [
+        el("img", { class: "auth-logo", src: "./icons/icon.svg", alt: "" }, []),
+      ]),
+      el("div", { class: "auth-hero-wordmark" }, ["Ягодка"]),
     ]),
-    el("div", { class: "auth-hero-kicker" }, ["Ягодка"]),
-    el("div", { class: "auth-hero-title" }, [copy.heroTitle]),
-    el("div", { class: "auth-hero-copy" }, [copy.heroCopy]),
-    el("div", { class: "auth-hero-stack" }, [
-      el("div", { class: `auth-hero-step${conn === "connected" ? " is-done" : " is-active"}` }, [
-        el("span", { class: "auth-hero-step-mark" }, ["1"]),
-        el("span", { class: "auth-hero-step-text" }, [conn === "connected" ? "Связь с сервером готова" : "Устанавливаем связь"]),
-      ]),
-      el("div", { class: `auth-hero-step${mode === "auto" ? " is-active" : ""}` }, [
-        el("span", { class: "auth-hero-step-mark" }, ["2"]),
-        el("span", { class: "auth-hero-step-text" }, [mode === "auto" ? "Проверяем сохранённую сессию" : "Вы выбираете вход или регистрацию"]),
-      ]),
-      el("div", { class: "auth-hero-step" }, [
-        el("span", { class: "auth-hero-step-mark" }, ["3"]),
-        el("span", { class: "auth-hero-step-text" }, ["Открываем чаты и доски"]),
-      ]),
+    el("div", { class: "auth-hero-message" }, [
+      el("div", { class: "auth-hero-kicker" }, [copy.eyebrow]),
+      el("div", { class: "auth-hero-title" }, [copy.heroTitle]),
+      el("div", { class: "auth-hero-copy" }, [copy.heroCopy]),
     ]),
   ]);
 
@@ -283,6 +283,7 @@ export function renderAuthModal(
   if (mode === "auto") {
     const useManualLogin = el("button", { class: "btn btn-primary auth-primary-cta", type: "button" }, [copy.primaryLabel]) as HTMLButtonElement;
     const useOtherAccount = el("button", { class: "btn btn-secondary", type: "button" }, ["Другой аккаунт"]) as HTMLButtonElement;
+    const touchIdBtn = showTouchId ? createTouchIdButton(actions) : null;
     useManualLogin.addEventListener("click", () => actions.onModeChange(rememberedIdValue ? "login" : "register"));
     useOtherAccount.addEventListener("click", () => actions.onUseDifferentAccount());
     body.append(
@@ -304,7 +305,11 @@ export function renderAuthModal(
         ]),
       ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
-      el("div", { class: "modal-actions modal-actions-compose auth-inline-actions" }, [useManualLogin, useOtherAccount])
+      el("div", { class: "modal-actions modal-actions-compose auth-inline-actions" }, [
+        ...(touchIdBtn ? [touchIdBtn] : []),
+        useManualLogin,
+        useOtherAccount,
+      ])
     );
   } else if (mode === "register") {
     const pw1Input = el("input", {
@@ -400,12 +405,13 @@ export function renderAuthModal(
       hasRememberedId
         ? (() => {
             const switchBtn = el("button", { class: "btn btn-secondary", type: "button" }, ["Другой аккаунт"]) as HTMLButtonElement;
+            const touchIdBtn = showTouchId ? createTouchIdButton(actions) : null;
             switchBtn.addEventListener("click", () => actions.onUseDifferentAccount());
             return el("div", { class: "auth-session-card" }, [
               el("div", { class: "auth-session-label" }, ["Продолжить как"]),
               el("div", { class: "auth-session-id" }, [rememberedIdValue]),
-              el("div", { class: "auth-session-copy" }, ["Введите пароль для этого аккаунта или выберите другой ID."]),
-              el("div", { class: "auth-session-actions" }, [switchBtn]),
+              el("div", { class: "auth-session-copy" }, [showTouchId ? "Войдите по Touch ID или используйте пароль." : "Введите пароль для этого аккаунта или выберите другой ID."]),
+              el("div", { class: "auth-session-actions" }, [...(touchIdBtn ? [touchIdBtn] : []), switchBtn]),
             ]);
           })()
         : null;

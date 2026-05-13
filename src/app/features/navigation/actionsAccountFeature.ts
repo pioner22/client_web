@@ -6,6 +6,7 @@ type AuthUiActions = Pick<
   | "onAuthLogout"
   | "onAuthLogin"
   | "onAuthRegister"
+  | "onAuthTouchId"
   | "onAuthModeChange"
   | "onAuthUseDifferentAccount"
   | "onCloseModal"

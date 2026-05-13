@@ -29,6 +29,8 @@ export type ChatVisualPreviewOptions = {
 
 export const CHAT_MEDIA_PREVIEW_SCALE = 0.33;
 export const CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX = 420;
+export const CHAT_IMAGE_PREVIEW_FALLBACK_ASPECT_RATIO = 4 / 3;
+export const CHAT_VIDEO_PREVIEW_FALLBACK_ASPECT_RATIO = 16 / 9;
 
 export function resolvePreviewBaseWidthPx(info: FileAttachmentInfo): number | null {
   const w = info.thumbW || info.mediaW || CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX;
@@ -47,4 +49,11 @@ function normalizePreviewFileName(value: string): string {
 export function isVideoNoteName(name: string): boolean {
   const n = normalizePreviewFileName(name);
   return n.startsWith("video_note") || n.startsWith("video-note") || n.includes("_video_note");
+}
+
+export function resolveFallbackPreviewAspectRatio(info: FileAttachmentInfo): string | null {
+  if (info.isVideo && isVideoNoteName(info.name)) return "1 / 1";
+  if (info.isVideo) return String(CHAT_VIDEO_PREVIEW_FALLBACK_ASPECT_RATIO);
+  if (info.isImage) return String(CHAT_IMAGE_PREVIEW_FALLBACK_ASPECT_RATIO);
+  return null;
 }

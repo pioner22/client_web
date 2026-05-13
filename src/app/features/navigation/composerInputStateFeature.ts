@@ -1,5 +1,6 @@
-import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { updateDraftMap } from "../../../helpers/chat/drafts";
+import { getConversationViewportKey } from "../../../helpers/navigation/mainConversationState";
+import { applyDraftMapMutation } from "../../../helpers/runtime/deliverySync";
 import { scheduleSaveDrafts } from "../persistence/localPersistenceTimers";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
@@ -49,10 +50,10 @@ export function createComposerInputStateFeature(deps: ComposerInputStateFeatureD
     if (value === lastCommittedInput) return;
     lastCommittedInput = value;
     store.set((prev) => {
-      const key = prev.selected ? conversationKey(prev.selected) : "";
+      const key = getConversationViewportKey(prev);
       const isEditing = Boolean(prev.editing && key && prev.editing.key === key);
       const drafts = key && !isEditing ? updateDraftMap(prev.drafts, key, value) : prev.drafts;
-      return { ...prev, input: value, drafts };
+      return { ...applyDraftMapMutation(prev, drafts), input: value };
     });
     scheduleSaveDrafts(store);
   };

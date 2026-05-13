@@ -74,7 +74,7 @@ export function attentionHintForPeer(state: AppState, id: string): string | null
   if ((state.pendingIn || []).includes(peer)) return "Запрос авторизации";
   if ((state.pendingOut || []).includes(peer)) return "Ожидаем авторизацию";
   if ((state.fileOffersIn || []).some((x) => String(x?.from || "").trim() === peer)) return "Входящий файл";
-  if ((state.pendingGroupInvites || []).some((x) => String(x?.from || "").trim() === peer)) return "Инвайт в чат";
+  if ((state.pendingGroupInvites || []).some((x) => String(x?.from || "").trim() === peer)) return "Приглашение в группу";
   if ((state.pendingBoardInvites || []).some((x) => String(x?.from || "").trim() === peer)) return "Инвайт в доску";
   if ((state.pendingGroupJoinRequests || []).some((x) => String(x?.from || "").trim() === peer)) return "Запрос вступления";
   return null;
@@ -140,10 +140,7 @@ export function pickPreviewReactionEmoji(state: AppState, msg: ChatMessage | nul
 export function shouldSuppressRowClick(btn: HTMLElement): boolean {
   const now = Date.now();
   const localUntil = Number(btn.getAttribute("data-ctx-suppress-until") || 0);
-  if (Number.isFinite(localUntil) && localUntil > now) return true;
-  if (typeof document === "undefined" || !document.documentElement) return false;
-  const rootUntil = Number(document.documentElement.dataset.sidebarClickSuppressUntil || 0);
-  return Number.isFinite(rootUntil) && rootUntil > now;
+  return Number.isFinite(localUntil) && localUntil > now;
 }
 
 export function isImageName(name: string, mime?: string | null): boolean {

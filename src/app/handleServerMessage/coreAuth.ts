@@ -10,6 +10,8 @@ import {
   storeSessionToken,
 } from "../../helpers/auth/session";
 import { buildClientInfoTags } from "../../helpers/device/clientTags";
+import { resetNavigationState } from "../../helpers/navigation/viewState";
+import { resetSidebarState } from "../../helpers/sidebar/sidebarState";
 import { clearOutboxForUser } from "../../helpers/pwa/outboxSync";
 import { loadLastReadMarkers } from "../../helpers/ui/lastReadMarkers";
 
@@ -44,8 +46,10 @@ export function handleCoreAuthMessage(
     // только для текущей вкладки (sessionStorage) и просим войти вручную, если нужно.
     blockSessionAutoAuth();
     patch((prev) => ({
-      ...prev,
+      ...resetSidebarState(resetNavigationState(prev, { page: "main" })),
       authed: false,
+      rosterSync: { loaded: false, source: "empty", reconcilePending: false, lastServerAt: null, lastPresenceAt: null },
+      profileSync: {},
       authMode: getStoredAuthId() ? "login" : "register",
       sessionDevices: [],
       sessionDevicesStatus: null,
@@ -108,6 +112,9 @@ export function handleCoreAuthMessage(
       if (uid) void clearOutboxForUser(uid);
       clearStoredSessionToken();
       patch({
+        ...resetSidebarState(resetNavigationState(state, { page: "main" })),
+        rosterSync: { loaded: false, source: "empty", reconcilePending: false, lastServerAt: null, lastPresenceAt: null },
+        profileSync: {},
         authMode: getStoredAuthId() ? "login" : "register",
         sessionDevices: [],
         sessionDevicesStatus: null,

@@ -3,6 +3,8 @@ import { updateDraftMap } from "../../../helpers/chat/drafts";
 import { upsertConversation } from "../../../helpers/chat/upsertConversation";
 import { addOutboxEntry, makeOutboxLocalId } from "../../../helpers/chat/outbox";
 import { getStoredSessionToken, isSessionAutoAuthBlocked } from "../../../helpers/auth/session";
+import { getActiveConversationTarget } from "../../../helpers/navigation/mainConversationState";
+import { applyDraftMapMutation, applyOutboxMutation } from "../../../helpers/runtime/deliverySync";
 import { nowTs } from "../../../helpers/time";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage, MessageHelperDraft, TargetRef } from "../../../stores/types";
@@ -55,7 +57,7 @@ export function createSendChatFeature(deps: SendChatFeatureDeps): SendChatFeatur
     const st = store.get();
     const rawText = typeof opts?.text === "string" ? opts.text : String(input.value || "");
     const text = rawText.trimEnd();
-    const sel = opts?.target ?? st.selected;
+    const sel = opts?.target ?? getActiveConversationTarget(st);
     const key = sel ? conversationKey(sel) : "";
     const editing = st.editing && key && st.editing.key === key ? st.editing : null;
     const replyDraft =
@@ -201,7 +203,7 @@ export function createSendChatFeature(deps: SendChatFeatureDeps): SendChatFeatur
         attempts: sent ? 1 : 0,
         lastAttemptAt: sent ? nowMs : 0,
       });
-      return { ...next, outbox };
+      return applyOutboxMutation(next, outbox);
     });
     scheduleSaveOutbox();
 
@@ -212,7 +214,7 @@ export function createSendChatFeature(deps: SendChatFeatureDeps): SendChatFeatur
       scheduleBoardEditorPreview();
       store.set((prev) => {
         const drafts = updateDraftMap(prev.drafts, convKey, "");
-        return { ...prev, input: "", drafts, replyDraft: null, forwardDraft: null };
+        return { ...applyDraftMapMutation(prev, drafts), input: "", replyDraft: null, forwardDraft: null };
       });
       scheduleSaveDrafts();
     }

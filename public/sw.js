@@ -387,13 +387,14 @@ async function handleStreamFetch(event) {
   cleanupStreams();
   const name = safeHeaderFilename(url.searchParams.get("name") || "file");
   const mime = String(url.searchParams.get("mime") || "").trim();
+  const inline = String(url.searchParams.get("inline") || "").trim() === "1";
   const sizeRaw = url.searchParams.get("size");
   const size = Number(sizeRaw || 0);
   const headers = new Headers();
   headers.set("Content-Type", mime || "application/octet-stream");
   headers.set("Cache-Control", "no-store");
   if (Number.isFinite(size) && size > 0) headers.set("Content-Length", String(Math.round(size)));
-  if (name) headers.set("Content-Disposition", `attachment; filename="${name}"`);
+  if (name) headers.set("Content-Disposition", `${inline ? "inline" : "attachment"}; filename="${name}"`);
   const stream = new ReadableStream({
     start(controller) {
       streams.set(streamId, { controller, fileId, createdAt: Date.now() });

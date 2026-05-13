@@ -1,6 +1,7 @@
-import type { ChatAttachment, ChatMessage, ChatMessageRef, MessageReactions } from "../../stores/types";
+import type { ChatAttachment, ChatMessage, ChatMessageRef, ConversationHistorySyncState, MessageReactions } from "../../stores/types";
 import type { StorageLike } from "./drafts";
 import { APP_MSG_MAX_LEN } from "../../config/app";
+import { buildCacheHydratedHistorySyncMap, createConversationHistorySyncState } from "./historySync";
 
 const HISTORY_CACHE_VERSION = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -26,6 +27,7 @@ export type HistoryCache = {
   historyCursor: Record<string, number>;
   historyHasMore: Record<string, boolean>;
   historyLoaded: Record<string, boolean>;
+  historySync: Record<string, ConversationHistorySyncState>;
 };
 
 type HistoryCacheLimits = {
@@ -324,16 +326,16 @@ function sanitizeLoadedKeys(raw: unknown): string[] {
 
 export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | null): HistoryCache {
   const key = storageKey(userId);
-  if (!key) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
+  if (!key) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
   const st = storage ?? defaultStorage();
-  if (!st) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
+  if (!st) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
   const limits = cacheLimits();
   try {
     const raw = st.getItem(key);
-    if (!raw) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
+    if (!raw) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
     const parsed = JSON.parse(raw) as HistoryCachePayload;
-    if (!parsed || typeof parsed !== "object") return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
-    if (parsed.v !== HISTORY_CACHE_VERSION) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
+    if (!parsed || typeof parsed !== "object") return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
+    if (parsed.v !== HISTORY_CACHE_VERSION) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
     const updated = Number(parsed.updated ?? 0);
     if (!Number.isFinite(updated) || Date.now() - updated > limits.maxAgeMs) {
       try {
@@ -341,7 +343,7 @@ export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | 
       } catch {
         // ignore
       }
-      return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
+      return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
     }
     const conversations = sanitizeConversationMap(parsed.conversations, limits);
     const loadedKeys = sanitizeLoadedKeys(parsed.loaded);
@@ -351,9 +353,10 @@ export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | 
     const allowed = new Set(Object.keys(historyLoaded));
     const historyCursor = sanitizeCursorMap(parsed.cursors, allowed);
     const historyHasMore = sanitizeHasMoreMap(parsed.hasMore, allowed);
-    return { conversations, historyCursor, historyHasMore, historyLoaded };
+    const historySync = buildCacheHydratedHistorySyncMap(historyLoaded, historyCursor, historyHasMore);
+    return { conversations, historyCursor, historyHasMore, historyLoaded, historySync };
   } catch {
-    return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {} };
+    return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
   }
 }
 
@@ -428,6 +431,7 @@ export function saveHistoryCacheForUser(
     historyCursor: Record<string, number>;
     historyHasMore: Record<string, boolean>;
     historyLoaded: Record<string, boolean>;
+    historySync?: Record<string, ConversationHistorySyncState>;
   },
   storage?: StorageLike | null
 ): void {
@@ -437,8 +441,37 @@ export function saveHistoryCacheForUser(
   if (!st) return;
   const baseLimits = cacheLimits();
   try {
+    const canonicalCursor: Record<string, number> = payload.historySync ? {} : { ...(payload.historyCursor || {}) };
+    const canonicalHasMore: Record<string, boolean> = payload.historySync ? {} : { ...(payload.historyHasMore || {}) };
+    const canonicalLoaded: Record<string, boolean> = payload.historySync ? {} : { ...(payload.historyLoaded || {}) };
+    if (payload.historySync) {
+      for (const [syncKey, raw] of Object.entries(payload.historySync)) {
+        const sync = createConversationHistorySyncState(raw);
+        if (sync.loaded) canonicalLoaded[syncKey] = true;
+        if (sync.cursor) canonicalCursor[syncKey] = sync.cursor;
+        if (typeof sync.hasMore === "boolean") canonicalHasMore[syncKey] = sync.hasMore;
+      }
+    }
+    for (const [legacyKey, value] of Object.entries(payload.historyLoaded || {})) {
+      if (value) canonicalLoaded[legacyKey] = true;
+      else delete canonicalLoaded[legacyKey];
+    }
+    for (const [legacyKey, value] of Object.entries(payload.historyCursor || {})) {
+      if (typeof value === "number" && Number.isFinite(value) && value > 0) canonicalCursor[legacyKey] = Math.floor(value);
+      else delete canonicalCursor[legacyKey];
+    }
+    for (const [legacyKey, value] of Object.entries(payload.historyHasMore || {})) {
+      if (typeof value === "boolean") canonicalHasMore[legacyKey] = value;
+      else delete canonicalHasMore[legacyKey];
+    }
+    const canonicalPayload = {
+      conversations: payload.conversations,
+      historyCursor: canonicalCursor,
+      historyHasMore: canonicalHasMore,
+      historyLoaded: canonicalLoaded,
+    };
     let limits = { maxConversations: baseLimits.maxConversations, maxMessages: baseLimits.maxMessages };
-    let encoded = buildEncodedHistoryCache(payload, limits);
+    let encoded = buildEncodedHistoryCache(canonicalPayload, limits);
     if (!encoded) {
       st.removeItem(key);
       return;
@@ -463,7 +496,7 @@ export function saveHistoryCacheForUser(
         maxConversations: Math.max(40, Math.floor(limits.maxConversations * 0.65)),
         maxMessages: Math.max(200, Math.floor(limits.maxMessages * 0.6)),
       };
-      encoded = buildEncodedHistoryCache(payload, limits);
+      encoded = buildEncodedHistoryCache(canonicalPayload, limits);
       if (!encoded) return;
       json = JSON.stringify(encoded);
       try {

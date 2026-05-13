@@ -9,7 +9,7 @@ let latestSidebarDesktopTabsCtx: RenderSidebarDesktopTabsCtx | null = null;
 let sidebarDesktopTabsLoadFailed = false;
 
 function deferredTabLabel(kind: RenderSidebarDesktopTabsCtx["kind"]): string {
-  return kind === "boards" ? "доски" : "контакты";
+  return kind === "boards" ? "каналы" : "контакты";
 }
 
 function renderSidebarDesktopTabsPlaceholder(ctx: RenderSidebarDesktopTabsCtx, message: string) {

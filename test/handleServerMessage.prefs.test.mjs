@@ -51,6 +51,9 @@ test("handleServerMessage: prefs обновляет muted/blocked/blockedBy", as
       muted: [],
       blocked: [],
       blockedBy: [],
+      chatFolders: [],
+      sidebarFolderId: "all",
+      sidebarSync: { loaded: false, source: "empty", reconcilePending: false, lastServerAt: null, lastLocalAt: null },
       status: "",
     });
 
@@ -75,3 +78,44 @@ test("handleServerMessage: prefs обновляет muted/blocked/blockedBy", as
   }
 });
 
+test("handleServerMessage: prefs переводит sidebar folders в loaded/server snapshot", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const { getState, patch } = createPatchHarness({
+      selfId: "111-111-111",
+      muted: [],
+      blocked: [],
+      blockedBy: [],
+      chatFolders: [],
+      sidebarFolderId: "all",
+      sidebarSync: { loaded: false, source: "empty", reconcilePending: false, lastServerAt: null, lastLocalAt: null },
+      status: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "prefs",
+        muted: [],
+        blocked: [],
+        blocked_by: [],
+        chat_folders: {
+          v: 1,
+          active: "f_team",
+          folders: [{ id: "f_team", title: "Команда", include: ["dm:222-222-222"], exclude: [] }],
+        },
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.sidebarFolderId, "f_team");
+    assert.equal(st.chatFolders.length, 1);
+    assert.equal(st.sidebarSync.loaded, true);
+    assert.equal(st.sidebarSync.source, "server");
+    assert.equal(st.sidebarSync.reconcilePending, false);
+  } finally {
+    await cleanup();
+  }
+});

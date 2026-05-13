@@ -3,6 +3,13 @@ import { upsertConversation } from "../../../helpers/chat/upsertConversation";
 import { arrayBufferToBase64 } from "../../../helpers/files/base64";
 import { liftFileHttpTokenToBearer, rememberFileHttpBearer } from "../../../helpers/files/fileHttpAuth";
 import { guessMimeTypeByName } from "../../../helpers/files/mimeGuess";
+import {
+  computeDeliveryRetryDelayMs,
+  getDeliveryRetryPolicy,
+  parseDeliveryRetryAfterMs,
+  shouldFallbackUploadHttpToLegacy,
+} from "../../../helpers/runtime/deliveryCoordinator";
+import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
 import { nowTs } from "../../../helpers/time";
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry, TargetRef } from "../../../stores/types";
@@ -32,6 +39,7 @@ export interface FileUploadFeatureDeps {
   updateConversationFileMessage: (key: string, localId: string, apply: (msg: any) => any) => void;
   removeConversationFileMessage: (key: string, localId: string) => void;
   onFileIdResolved?: (fileId: string, file: File) => void;
+  reportIncident?: (kind: string, detail?: Record<string, unknown> | null, opts?: { key?: string; dedupeMs?: number }) => boolean;
 }
 
 export interface FileUploadFeature {
@@ -72,6 +80,7 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
     updateConversationFileMessage,
     removeConversationFileMessage,
     onFileIdResolved,
+    reportIncident,
   } = deps;
 
   const uploadQueue: UploadState[] = [];
@@ -180,30 +189,13 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
       return;
     }
     const waitMs = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, Math.max(0, Math.trunc(ms))));
-    const shouldFallbackToLegacy = (code: string, status: number | null) => {
-      if (code === "upload_http_404" || code === "upload_http_405") return true;
-      if (code === "upload_offset_conflict" || code === "upload_offset_query_failed") return true;
-      if (typeof status === "number" && Number.isFinite(status) && status >= 500 && status < 600) return true;
-      return false;
-    };
-    const parseRetryAfterMs = (value: string | null): number => {
-      const raw = String(value || "").trim();
-      if (!raw) return 0;
-      const num = Number(raw);
-      if (Number.isFinite(num) && num > 0) return Math.round(num * 1000);
-      const dt = Date.parse(raw);
-      if (Number.isFinite(dt) && dt > 0) return Math.max(0, dt - Date.now());
-      return 0;
-    };
+    const retryPolicy = getDeliveryRetryPolicy("file_upload_http");
 
     let handedOffToLegacy = false;
     let lastHttpStatus: number | null = null;
     try {
       const size = upload.file.size || 0;
       const chunkSize = 256 * 1024;
-      const MAX_RETRIES = 4;
-      const baseDelayMs = 400;
-      const maxDelayMs = 5000;
       const httpAuth = liftFileHttpTokenToBearer(url);
       const httpUrl = httpAuth.url || url;
       const httpHeaders = httpAuth.headers;
@@ -256,20 +248,23 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
               throw new Error("upload_offset_conflict");
             }
             if (res.status === 429 || res.status === 503) {
-              if (attempt >= MAX_RETRIES) throw new Error(`upload_http_${res.status}`);
-              const retryAfterMs = parseRetryAfterMs(res.headers.get("Retry-After"));
-              const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
-              const jitter = Math.round(backoff * (0.15 + Math.random() * 0.15));
+              if (attempt >= retryPolicy.maxRetries) throw new Error(`upload_http_${res.status}`);
+              const retryAfterMs = parseDeliveryRetryAfterMs(res.headers.get("Retry-After"));
+              const retryDelayMs = computeDeliveryRetryDelayMs(attempt, retryPolicy, {
+                retryAfterMs,
+                jitterRatio: 0.15 + Math.random() * 0.15,
+              });
               attempt += 1;
-              await waitMs(Math.max(retryAfterMs, backoff + jitter));
+              await waitMs(retryDelayMs);
               continue;
             }
             if (!res.ok) {
-              if (res.status >= 500 && res.status < 600 && attempt < MAX_RETRIES) {
-                const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
-                const jitter = Math.round(backoff * (0.15 + Math.random() * 0.15));
+              if (res.status >= 500 && res.status < 600 && attempt < retryPolicy.maxRetries) {
+                const retryDelayMs = computeDeliveryRetryDelayMs(attempt, retryPolicy, {
+                  jitterRatio: 0.15 + Math.random() * 0.15,
+                });
                 attempt += 1;
-                await waitMs(backoff + jitter);
+                await waitMs(retryDelayMs);
                 continue;
               }
               throw new Error(`upload_http_${res.status}`);
@@ -284,12 +279,16 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
             progressed = true;
           } catch (err) {
             if (upload.aborted) break;
-            if (attempt >= MAX_RETRIES) throw err;
+            const msg = err instanceof Error ? String(err.message || "") : String(err || "");
+            if (shouldFallbackUploadHttpToLegacy(msg, lastHttpStatus)) throw err;
+            if (attempt >= retryPolicy.maxRetries) throw err;
             attempt += 1;
             await resyncOffset();
-            const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
-            const jitter = Math.round(backoff * (0.15 + Math.random() * 0.15));
-            await waitMs(backoff + jitter);
+            await waitMs(
+              computeDeliveryRetryDelayMs(attempt, retryPolicy, {
+                jitterRatio: 0.15 + Math.random() * 0.15,
+              })
+            );
           }
         }
         const pct = size > 0 ? Math.min(100, Math.round((upload.bytesSent / size) * 100)) : 0;
@@ -306,7 +305,7 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
     } catch (err) {
       const msg = err instanceof Error ? String(err.message || "") : String(err || "");
       const fallback = msg || (lastHttpStatus ? `upload_http_${lastHttpStatus}` : "upload_http_failed");
-      const canFallback = !upload.aborted && shouldFallbackToLegacy(fallback, lastHttpStatus) && (upload.file.size || 0) > 0;
+      const canFallback = !upload.aborted && shouldFallbackUploadHttpToLegacy(fallback, lastHttpStatus) && (upload.file.size || 0) > 0;
       if (canFallback) {
         if (!isFileHttpDisabled()) disableFileHttp(fallback);
         handedOffToLegacy = true;
@@ -317,6 +316,21 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
         await uploadFileChunks(upload);
         return;
       }
+      reportIncident?.(
+        "file_upload_failed",
+        {
+          file_id: fileId,
+          local_id: upload.localId,
+          name: upload.file.name || null,
+          mime: upload.file.type || null,
+          size: upload.file.size || 0,
+          reason: fallback || "upload_failed",
+          http_status: lastHttpStatus,
+          can_fallback: canFallback,
+          transport: "http",
+        },
+        { key: `file_upload_failed:${fileId || upload.localId}:${fallback || "upload_failed"}`, dedupeMs: 60_000 }
+      );
       updateTransferByLocalId(upload.localId, (entry) => ({ ...entry, status: "error", error: fallback || "upload_failed" }));
       store.set({ status: `Ошибка загрузки: ${upload.file.name || "файл"} (${fallback || "upload_failed"})` });
     } finally {
@@ -420,7 +434,10 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
 
     store.set((prev) => {
       const withMsg = upsertConversation(prev, key, outMsg);
-      return { ...withMsg, fileTransfers: [entry, ...withMsg.fileTransfers], status: `Файл предложен: ${entry.name}` };
+      return {
+        ...applyFileTransferMutation(withMsg, [entry, ...withMsg.fileTransfers]),
+        status: `Файл предложен: ${entry.name}`,
+      };
     });
     queueUpload(localId, file, target, captionText);
   }

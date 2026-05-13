@@ -1,8 +1,11 @@
 import { APP_VERSION } from "../../../config/app";
 import { buildClientInfoTags } from "../../../helpers/device/clientTags";
 import { storeActiveBuildId } from "../../../helpers/pwa/buildIdStore";
+import { getPwaStabilityHoldRemainingMs, readPwaStabilityHold } from "../../../helpers/pwa/stabilityHold";
 import { activatePwaUpdate, hasPwaUpdate } from "../../../helpers/pwa/registerServiceWorker";
+import { isServiceWorkerRuntimeAvailable } from "../../../helpers/pwa/serviceWorkerRuntime";
 import { shouldReloadForBuild } from "../../../helpers/pwa/shouldReloadForBuild";
+import { hasActiveFileTransferEntries } from "../../../helpers/runtime/deliveryCoordinator";
 import { isIOS, isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
@@ -44,6 +47,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const PWA_AUTO_APPLY_LOG_LIMIT = 24;
   let pwaPendingBuildId = "";
   let pwaAutoApplySuppressed = false;
+  let pwaBootReconcileStarted = false;
 
   const getStorage = (kind: "session" | "local"): Storage | null => {
     try {
@@ -98,6 +102,34 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const clearPwaAutoApplyGuard = () => {
     writePwaAutoApplyGuard(null);
     pwaAutoApplySuppressed = false;
+  };
+
+  const setPendingPwaBuild = (buildId: string, status?: string) => {
+    const id = String(buildId || "").trim();
+    if (!id) return;
+    if (pwaPendingBuildId !== id) {
+      pwaPendingBuildId = id;
+      pwaAutoApplySuppressed = false;
+    }
+    store.set((prev) => ({
+      ...prev,
+      updateLatest: id,
+      pwaUpdateAvailable: true,
+      status: status || prev.status || "Обновление веб-клиента…",
+    }));
+  };
+
+  const adoptActiveBuild = (buildId: string) => {
+    const id = String(buildId || "").trim();
+    if (!id) return;
+    storeActiveBuildId(id);
+    if (store.get().clientVersion !== id) {
+      store.set({ clientVersion: id });
+    }
+    const st = store.get();
+    if (st.conn === "connected" && st.authed) {
+      send({ type: "client_info", client: "web", version: id, ...buildClientInfoTags() });
+    }
   };
 
   const logPwaUpdate = (event: string, detail?: string) => {
@@ -402,7 +434,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
 
   async function forcePwaUpdate() {
     if (pwaForceInFlight) return;
-    if (!("serviceWorker" in navigator)) {
+    if (!isServiceWorkerRuntimeAvailable()) {
       store.set({ status: "PWA обновление недоступно в этом браузере" });
       return;
     }
@@ -458,9 +490,44 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     }
   }
 
+  async function reconcilePwaBootState(): Promise<void> {
+    if (pwaBootReconcileStarted) return;
+    pwaBootReconcileStarted = true;
+    if (!isServiceWorkerRuntimeAvailable()) return;
+    let reg: ServiceWorkerRegistration | null = null;
+    try {
+      reg = (await navigator.serviceWorker.getRegistration()) ?? null;
+    } catch {
+      reg = null;
+    }
+    if (!reg) {
+      reg = await waitForServiceWorkerReady(1200);
+    }
+    const swBuildId = await requestPwaBuildId(reg, 1200);
+    const netBuildId = await fetchSwBuildId();
+    const liveBuildId = String(netBuildId || swBuildId || "").trim();
+    if (!liveBuildId) return;
+    const liveNeedsReload = shouldReloadForBuild(APP_VERSION, liveBuildId);
+    if (!liveNeedsReload) {
+      adoptActiveBuild(liveBuildId);
+      store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, pwaUpdateAvailable: false } : prev));
+      clearPwaAutoApplyGuard();
+      return;
+    }
+    setPendingPwaBuild(liveBuildId, "Получено обновление веб-клиента (применится автоматически)");
+    if (!swBuildId || swBuildId !== liveBuildId) {
+      logPwaUpdate("bootstrap_reconcile_stale", `${swBuildId || "none"}->${liveBuildId}`);
+      void forcePwaUpdate();
+      return;
+    }
+    logPwaUpdate("bootstrap_reconcile_pending", liveBuildId);
+    scheduleAutoApplyPwaUpdate(1200);
+  }
+
   function isSafeToAutoApplyUpdate(st: AppState): boolean {
     if (typeof document === "undefined") return false;
-    const hasActiveTransfer = (st.fileTransfers || []).some((t) => t.status === "uploading" || t.status === "downloading");
+    if (getPwaStabilityHoldRemainingMs() > 0) return false;
+    const hasActiveTransfer = hasActiveFileTransferEntries(st.fileTransfers || []);
     if (hasActiveTransfer) return false;
     if (Object.values(st.historyLoading || {}).some(Boolean)) return false;
     if (hasPendingHistoryActivityForUpdate()) return false;
@@ -497,6 +564,13 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       if (!st.pwaUpdateAvailable) return;
       if (pwaAutoApplySuppressed) return;
       if (!isSafeToAutoApplyUpdate(st)) {
+        const remainingHoldMs = getPwaStabilityHoldRemainingMs();
+        if (remainingHoldMs > 0) {
+          const hold = readPwaStabilityHold();
+          logPwaUpdate("auto_hold", `${hold?.kind || "unknown"}:${remainingHoldMs}`);
+          scheduleAutoApplyPwaUpdate(Math.min(Math.max(remainingHoldMs + 1200, 4_000), 60_000));
+          return;
+        }
         scheduleAutoApplyPwaUpdate();
         return;
       }
@@ -519,35 +593,20 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     if (!buildId) return;
     const hasController = typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
     const hasWaiting = hasPwaUpdate();
-    const storedVersion = store.get().clientVersion;
     const needReload = shouldReloadForBuild(APP_VERSION, buildId);
     logPwaUpdate("build", `${buildId}${needReload ? "" : " ok"}`);
-    if (hasController && !hasWaiting) {
-      storeActiveBuildId(buildId);
-    }
-    if (!needReload) clearPwaAutoApplyGuard();
-    if (!needReload && hasController && !hasWaiting) {
-      store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, pwaUpdateAvailable: false } : prev));
-    }
-    if (storedVersion === buildId) return;
-    store.set({ clientVersion: buildId });
-    const st = store.get();
-    if (st.conn === "connected" && st.authed) {
-      send({ type: "client_info", client: "web", version: buildId, ...buildClientInfoTags() });
-    }
-    // Если SW уже обновился до новой semver, а JS ещё старый — тихо перезапускаем приложение.
     if (needReload) {
-      if (pwaPendingBuildId !== buildId) {
-        pwaPendingBuildId = buildId;
-        pwaAutoApplySuppressed = false;
-      }
-      store.set((prev) => ({
-        ...prev,
-        pwaUpdateAvailable: true,
-        status: prev.status || "Обновление веб-клиента…",
-      }));
+      setPendingPwaBuild(buildId);
       scheduleAutoApplyPwaUpdate();
+      return;
     }
+    clearPwaAutoApplyGuard();
+    if (hasController && !hasWaiting) {
+      adoptActiveBuild(buildId);
+      store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, pwaUpdateAvailable: false } : prev));
+      return;
+    }
+    adoptActiveBuild(buildId);
   };
 
   const onPwaSwError = (ev: Event) => {
@@ -564,12 +623,21 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     scheduleAutoApplyPwaUpdate();
   };
 
+  const onPwaStabilityHold = () => {
+    const remaining = getPwaStabilityHoldRemainingMs();
+    if (remaining <= 0) return;
+    if (!store.get().pwaUpdateAvailable) return;
+    scheduleAutoApplyPwaUpdate(Math.min(Math.max(remaining + 1200, 4_000), 60_000));
+  };
+
   function installEventListeners() {
     if (listenersInstalled) return;
     listenersInstalled = true;
     window.addEventListener("yagodka:pwa-build", onPwaBuild);
     window.addEventListener("yagodka:pwa-sw-error", onPwaSwError);
     window.addEventListener("yagodka:pwa-update", onPwaUpdate);
+    window.addEventListener("yagodka:pwa-stability-hold", onPwaStabilityHold);
+    void reconcilePwaBootState().catch(() => {});
   }
 
   function dispose() {
@@ -579,6 +647,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       window.removeEventListener("yagodka:pwa-build", onPwaBuild);
       window.removeEventListener("yagodka:pwa-sw-error", onPwaSwError);
       window.removeEventListener("yagodka:pwa-update", onPwaUpdate);
+      window.removeEventListener("yagodka:pwa-stability-hold", onPwaStabilityHold);
     } catch {
       // ignore
     }
@@ -601,4 +670,3 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     scheduleAutoApplyPwaUpdate,
   };
 }
-

@@ -1,6 +1,7 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { getChatHistoryViewportRuntime } from "../../../helpers/chat/historyViewportRuntime";
 import { createChatStickyBottomState, isChatHostNearBottom, isChatStickyBottomActive } from "../../../helpers/chat/stickyBottom";
+import { getActiveConversationKey, getActiveConversationTarget } from "../../../helpers/navigation/mainConversationState";
 import type { Layout } from "../../../components/layout/types";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
@@ -69,10 +70,10 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
 
   const recordVisibleRead = () => {
     const st = store.get();
-    if (st.page !== "main") return;
-    if (!st.selected) return;
+    const activeConversation = getActiveConversationTarget(st);
+    if (!activeConversation) return;
     if (st.chatSearchOpen && st.chatSearchQuery.trim()) return;
-    const key = conversationKey(st.selected);
+    const key = getActiveConversationKey(st);
     if (!key) return;
     const msgIdx = findLastVisibleMessageIndex(layout.chatHost);
     if (msgIdx === null) return;
@@ -91,7 +92,7 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
     if (key.startsWith("dm:")) {
       const msgId = Number(msg.id ?? 0);
       if (!Number.isFinite(msgId) || msgId <= 0) return;
-      const peerId = key.slice("dm:".length);
+      const peerId = activeConversation.kind === "dm" ? activeConversation.id : key.slice("dm:".length);
       if (!peerId) return;
       maybeSendMessageRead(peerId, msgId);
     }

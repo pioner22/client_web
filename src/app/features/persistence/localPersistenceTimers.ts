@@ -5,6 +5,7 @@ import { saveOutboxForUser } from "../../../helpers/chat/outbox";
 import { savePinnedMessagesForUser } from "../../../helpers/chat/pinnedMessages";
 import { saveFileTransfersForUser } from "../../../helpers/files/fileTransferHistory";
 import { syncOutboxToServiceWorker } from "../../../helpers/pwa/outboxSync";
+import { shouldPersistRuntimeDeliveryDomain, shouldSyncOutboxToWorker } from "../../../helpers/runtime/deliveryCoordinator";
 import type { Store } from "../../../stores/store";
 import type { AppState, ChatMessage } from "../../../stores/types";
 
@@ -28,7 +29,7 @@ export function scheduleSaveDrafts(store: Store<AppState>) {
     draftsSaveTimer = null;
     try {
       const st = store.get();
-      if (!st.authed || !st.selfId) return;
+      if (!shouldPersistRuntimeDeliveryDomain(st, "drafts") || !st.selfId) return;
       saveDraftsForUser(st.selfId, st.drafts);
     } catch {
       // ignore
@@ -43,7 +44,7 @@ export function flushDrafts(store: Store<AppState>) {
   }
   try {
     const st = store.get();
-    if (!st.authed || !st.selfId) return;
+    if (!shouldPersistRuntimeDeliveryDomain(st, "drafts") || !st.selfId) return;
     saveDraftsForUser(st.selfId, st.drafts);
   } catch {
     // ignore
@@ -59,9 +60,9 @@ export function scheduleSaveOutbox(store: Store<AppState>) {
     outboxSaveTimer = null;
     try {
       const st = store.get();
-      if (!st.selfId) return;
+      if (!shouldPersistRuntimeDeliveryDomain(st, "outbox") || !st.selfId) return;
       saveOutboxForUser(st.selfId, st.outbox);
-      if (outboxSwReadyForUser === st.selfId) {
+      if (shouldSyncOutboxToWorker(st, outboxSwReadyForUser)) {
         void syncOutboxToServiceWorker(st.selfId, st.outbox);
       }
     } catch {
@@ -77,9 +78,9 @@ export function flushOutbox(store: Store<AppState>) {
   }
   try {
     const st = store.get();
-    if (!st.selfId) return;
+    if (!shouldPersistRuntimeDeliveryDomain(st, "outbox") || !st.selfId) return;
     saveOutboxForUser(st.selfId, st.outbox);
-    if (outboxSwReadyForUser === st.selfId) {
+    if (shouldSyncOutboxToWorker(st, outboxSwReadyForUser)) {
       void syncOutboxToServiceWorker(st.selfId, st.outbox);
     }
   } catch {
@@ -99,6 +100,7 @@ export function scheduleSaveHistoryCache(store: Store<AppState>) {
       if (!st.authed || !st.selfId) return;
       saveHistoryCacheForUser(st.selfId, {
         conversations: st.conversations,
+        historySync: st.historySync,
         historyCursor: st.historyCursor,
         historyHasMore: st.historyHasMore,
         historyLoaded: st.historyLoaded,
@@ -119,6 +121,7 @@ export function flushHistoryCache(store: Store<AppState>) {
     if (!st.authed || !st.selfId) return;
     saveHistoryCacheForUser(st.selfId, {
       conversations: st.conversations,
+      historySync: st.historySync,
       historyCursor: st.historyCursor,
       historyHasMore: st.historyHasMore,
       historyLoaded: st.historyLoaded,
@@ -182,7 +185,7 @@ export function scheduleSaveFileTransfers(store: Store<AppState>) {
     fileTransfersSaveTimer = null;
     try {
       const st = store.get();
-      if (!st.authed || !st.selfId) return;
+      if (!shouldPersistRuntimeDeliveryDomain(st, "fileTransfers") || !st.selfId) return;
       saveFileTransfersForUser(st.selfId, st.fileTransfers);
     } catch {
       // ignore
@@ -197,9 +200,21 @@ export function flushFileTransfers(store: Store<AppState>) {
   }
   try {
     const st = store.get();
-    if (!st.authed || !st.selfId) return;
+    if (!shouldPersistRuntimeDeliveryDomain(st, "fileTransfers") || !st.selfId) return;
     saveFileTransfersForUser(st.selfId, st.fileTransfers);
   } catch {
     // ignore
   }
+}
+
+export function flushRuntimeDelivery(
+  store: Store<AppState>,
+  opts?: { drafts?: boolean; outbox?: boolean; fileTransfers?: boolean }
+) {
+  const flushDraftsEnabled = opts?.drafts !== false;
+  const flushOutboxEnabled = opts?.outbox !== false;
+  const flushFileTransfersEnabled = opts?.fileTransfers !== false;
+  if (flushDraftsEnabled) flushDrafts(store);
+  if (flushOutboxEnabled) flushOutbox(store);
+  if (flushFileTransfersEnabled) flushFileTransfers(store);
 }

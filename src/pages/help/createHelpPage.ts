@@ -18,8 +18,8 @@ const HELP_ROWS: Array<{ key: string; label: string }> = [
   { key: "F2", label: "профиль" },
   { key: "F3", label: "поиск" },
   { key: "Ctrl+U", label: "обновление" },
-  { key: "F5", label: "создать чат" },
-  { key: "F6", label: "создать доску" },
+  { key: "F5", label: "создать группу" },
+  { key: "F6", label: "создать канал" },
   { key: "F7", label: "файлы" },
   { key: "Enter", label: "отправить сообщение" },
   { key: "Shift+Enter", label: "новая строка" },
@@ -27,6 +27,15 @@ const HELP_ROWS: Array<{ key: string; label: string }> = [
 ];
 
 const CHANGELOG_PAGE_SIZE = 5;
+
+function hasDesktopUpdateBridge(): boolean {
+  try {
+    const bridge = (globalThis as typeof globalThis & { yagodkaDesktop?: YagodkaDesktopBridge }).yagodkaDesktop;
+    return Boolean(bridge?.updates);
+  } catch {
+    return false;
+  }
+}
 
 function renderChangelogEntry(entry: ChangelogEntry, currentVersion: string): HTMLElement {
   const isCurrent = entry.version === currentVersion;
@@ -89,13 +98,13 @@ export function createHelpPage(): HelpPage {
       ]),
       el("li", {}, [
         mobileUi
-          ? "Создать чат/доску: «Меню» → «Создать чат/доску» → заполните форму → «Создать»."
-          : "Создать чат/доску: F5/F6 → заполните форму → Enter.",
+          ? "Создать группу/канал: «Меню» → «Создать группу/канал» → заполните форму → «Создать»."
+          : "Создать группу/канал: F5/F6 → заполните форму → Enter.",
       ]),
       el("li", {}, [
         mobileUi
-          ? "Добавить участников: откройте чат/доску → меню (долгий тап) → «Добавить участников» → вставьте список ID/@handle через пробел/запятую."
-          : "Добавить участников: откройте чат/доску → меню (ПКМ) → «Добавить участников» → вставьте список ID/@handle через пробел/запятую.",
+          ? "Добавить участников: откройте группу/канал → меню (долгий тап) → «Добавить участников» → вставьте список ID/@handle через пробел/запятую."
+          : "Добавить участников: откройте группу/канал → меню (ПКМ) → «Добавить участников» → вставьте список ID/@handle через пробел/запятую.",
       ]),
       el("li", {}, [mobileUi ? "Отправка: кнопка отправки справа внизу." : "Отправка: Enter — отправить, Shift+Enter — новая строка."]),
       el("li", {}, ["Файлы/фото: кнопка скрепки (＋) внизу."]),
@@ -111,13 +120,29 @@ export function createHelpPage(): HelpPage {
     ]),
     el("div", { class: "info-sub" }, ["После установки интерфейс работает полноэкранно (учитываем вырез/чёлку и safe‑area)."]),
   ]);
+  const desktopUpdates = hasDesktopUpdateBridge()
+    ? el("div", { class: "info-section desktop-update-section" }, [
+        el("div", { class: "info-h" }, ["Desktop"]),
+        el("div", { class: "info-actions" }, [
+          el(
+            "button",
+            {
+              class: "btn btn-secondary",
+              type: "button",
+              "data-action": "desktop-update-check",
+            },
+            ["Проверить обновления"]
+          ),
+        ]),
+      ])
+    : null;
 
   const hkTitle = mobileUi ? null : el("div", { class: "info-h help-hotkeys-title" }, ["Горячие клавиши"]);
   const mobileNav = mobileUi
     ? el("div", { class: "info-section" }, [
         el("div", { class: "info-h" }, ["Навигация"]),
         el("ul", { class: "info-list" }, [
-          el("li", {}, ["Вкладки снизу: «Контакты», «Чаты», «Доски»."]),
+          el("li", {}, ["Вкладки снизу: «Контакты», «Группы», «Каналы»."]),
           el("li", {}, ["Свайп влево/вправо по списку — переключение вкладок (как в Telegram)."]),
           el("li", {}, ["«Меню» — поиск, профиль, файлы, создание, справка."]),
           el("li", {}, ["Долгий тап по контакту/сообщению — меню действий."]),
@@ -149,6 +174,7 @@ export function createHelpPage(): HelpPage {
     quickStart,
     ...(mobileNav ? [mobileNav] : []),
     install,
+    ...(desktopUpdates ? [desktopUpdates] : []),
     ...(hkTitle && rows ? [hkTitle, rows] : []),
     changelogSection,
     ...(hint ? [hint] : []),

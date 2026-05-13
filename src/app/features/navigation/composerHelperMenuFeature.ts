@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, ContextMenuItem } from "../../../stores/types";
+import { getActiveConversationTarget } from "../../../helpers/navigation/mainConversationState";
 import type { ComposerHelperDraftResolution } from "./composerHelperDraftFeature";
 
 export interface ComposerHelperMenuFeatureDeps {
@@ -37,7 +38,7 @@ export function createComposerHelperMenuFeature(deps: ComposerHelperMenuFeatureD
           x,
           y,
           title: helper.kind === "forward" ? "Переслано" : "Ответ",
-          target: { kind: "composer_helper", id: st.selected?.id || helper.key },
+          target: { kind: "composer_helper", id: getActiveConversationTarget(st)?.id || helper.key },
           items,
         },
       },

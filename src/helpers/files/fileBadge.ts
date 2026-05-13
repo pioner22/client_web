@@ -29,6 +29,9 @@ function kindOf(name: string, mime?: string | null): FileBadgeKind {
   const mediaKind = resolveMediaKind(name, mime);
   if (mediaKind !== "file") return mediaKind;
 
+  const mt = String(mime || "").trim().toLowerCase();
+  if (mt === "application/pdf" || mt.endsWith("+pdf")) return "pdf";
+
   const ext = extOf(name);
   if (!ext) return "other";
   if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "heic", "heif"].includes(ext)) return "image";

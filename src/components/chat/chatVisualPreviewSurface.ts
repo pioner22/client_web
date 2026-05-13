@@ -2,7 +2,12 @@ import { el } from "../../helpers/dom/el";
 import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
 import { getCachedLocalMediaAspectRatio } from "../../helpers/chat/localMediaAspectCache";
 import type { FileTransferEntry } from "../../stores/types";
-import { type ChatVisualPreviewOptions, type FileAttachmentInfo, isVideoNoteName } from "./chatVisualPreviewShared";
+import {
+  type ChatVisualPreviewOptions,
+  type FileAttachmentInfo,
+  isVideoNoteName,
+  resolveFallbackPreviewAspectRatio,
+} from "./chatVisualPreviewShared";
 
 type RenderDeferredVisualPreviewSurfaceCtx = {
   mount: HTMLButtonElement;
@@ -77,7 +82,7 @@ export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   const btn = el("button", attrs, btnChildren) as HTMLButtonElement;
   if (!fixedAspect) {
     const ratio = resolveKnownPreviewAspectRatio(info);
-    if (ratio) btn.style.aspectRatio = String(ratio);
+    btn.style.aspectRatio = ratio ? String(ratio) : (resolveFallbackPreviewAspectRatio(info) ?? "");
   }
   return btn;
 }
@@ -92,7 +97,8 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   const INLINE_VIDEO_MAX_BYTES = 8 * 1024 * 1024;
   const canInlineVideo = Boolean(!fixedAspect && info.url && !mobileUi && bytes > 0 && bytes <= INLINE_VIDEO_MAX_BYTES);
   const previewUrl = fixedAspect ? info.thumbUrl : canInlineVideo ? info.url : info.thumbUrl;
-  if (!previewUrl && !info.fileId) return null;
+  const hasPendingLocalVideo = Boolean(info.transfer?.localId && info.transfer.status !== "complete");
+  if (!previewUrl && !info.fileId && !hasPendingLocalVideo) return null;
   const hasVisual = Boolean(previewUrl);
   const classes = hasVisual
     ? ["chat-file-preview", "chat-file-preview-video"]
@@ -152,7 +158,7 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
       btn.style.aspectRatio = "1 / 1";
     } else {
       const ratio = resolveKnownPreviewAspectRatio(info);
-      if (ratio) btn.style.aspectRatio = String(ratio);
+      btn.style.aspectRatio = ratio ? String(ratio) : (resolveFallbackPreviewAspectRatio(info) ?? "");
     }
   }
   return btn;

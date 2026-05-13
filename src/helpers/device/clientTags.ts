@@ -1,6 +1,10 @@
+import { getCapacitorPlatform, isCapacitorNativeRuntime } from "../runtime/nativeRuntime";
+import { getCurrentAndroidAppVersionInfo } from "../runtime/androidAppVersion";
+import { APP_VERSION } from "../../config/app";
+import { loadStoredBuildIdForCurrentVersion } from "../pwa/buildIdStore";
+
 const DEVICE_ID_KEY = "yagodka_device_id";
 const INSTANCE_ID_KEY = "yagodka_instance_id_v1";
-const BUILD_ID_KEY = "yagodka_active_build_id_v1";
 
 function randomId(): string {
   try {
@@ -45,6 +49,7 @@ export function getOrCreateDeviceId(): string {
 }
 
 function detectDisplayMode(): string {
+  if (isCapacitorNativeRuntime()) return "native";
   try {
     if ((navigator as any)?.standalone) return "standalone";
   } catch {
@@ -87,8 +92,18 @@ export function buildClientInfoTags(): Record<string, unknown> {
     display_mode: detectDisplayMode(),
     os: detectOs(),
   };
+  const nativePlatform = getCapacitorPlatform();
+  if (nativePlatform) {
+    out.native_platform = nativePlatform;
+    out.client_surface = nativePlatform === "android" ? "android" : "native";
+    if (nativePlatform === "android") {
+      const appVersion = getCurrentAndroidAppVersionInfo();
+      if (appVersion.versionName) out.app_version_name = appVersion.versionName;
+      if (appVersion.versionCode !== null) out.app_version_code = appVersion.versionCode;
+    }
+  }
   try {
-    const bid = String(localStorage.getItem(BUILD_ID_KEY) || "").trim();
+    const bid = String(loadStoredBuildIdForCurrentVersion(APP_VERSION) || "").trim();
     if (bid) out.build_id = bid.slice(0, 80);
   } catch {
     // ignore

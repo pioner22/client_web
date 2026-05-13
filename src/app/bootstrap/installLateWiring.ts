@@ -9,6 +9,7 @@ import { autosizeInput } from "../../helpers/ui/autosizeInput";
 import { createLazyNavigationDeferredRuntime } from "./lazyNavigationDeferredRuntime";
 import { createLazyRoomModerationActionsRuntime } from "./lazyRoomModerationActionsRuntime";
 import { createLazyPwaUpdateRuntime } from "./lazyPwaUpdateRuntime";
+import { createDesktopUpdateFeature } from "../features/desktop/desktopUpdateFeature";
 import { createFileActionsFeature } from "../features/files/fileActionsFeature";
 import { installEditingEndSyncFeature } from "../features/history/editingEndSyncFeature";
 import { createAuthUiActionsFeature } from "../features/auth/authUiActionsFeature";
@@ -17,7 +18,7 @@ import { createActionsUiOpenersFeature } from "../features/navigation/actionsUiO
 import { installMainRenderSubscriptionFeature } from "../features/navigation/mainRenderSubscriptionFeature";
 import { createPageSetDispatchFeature } from "../features/navigation/pageSetDispatchFeature";
 import { installHistoryCachePersistFeature } from "../features/persistence/historyCachePersistFeature";
-import { flushDrafts, flushOutbox, scheduleSaveHistoryCache } from "../features/persistence/localPersistenceTimers";
+import { flushRuntimeDelivery, scheduleSaveHistoryCache } from "../features/persistence/localPersistenceTimers";
 import { applyRestartStateSnapshot } from "../features/persistence/restartStateRestoreFeature";
 import { createRestartStateFeature } from "../features/persistence/restartStateFeature";
 import { createUserLocalStateHydrationFeature } from "../features/persistence/userLocalStateHydrationFeature";
@@ -142,13 +143,22 @@ export function installLateWiring(deps: any) {
   }
 
   const restartStateFeature = createRestartStateFeature();
+  const desktopUpdateFeature = createDesktopUpdateFeature({
+    store,
+    showToast,
+    flushBeforeInstall: () => {
+      flushRuntimeDelivery(store);
+      restartStateFeature.save(store.get());
+    },
+  });
+  desktopUpdateFeature.bind();
+  desktopUpdateFeature.start();
 
   const pwaUpdateRuntime = createLazyPwaUpdateRuntime({
     store,
     send: (payload) => gateway.send(payload),
     flushBeforeReload: () => {
-      flushDrafts(store);
-      flushOutbox(store);
+      flushRuntimeDelivery(store);
       restartStateFeature.save(store.get());
     },
     getLastUserInputAt,
@@ -280,6 +290,7 @@ export function installLateWiring(deps: any) {
     logout,
     authLoginFromDom: () => authFeature?.authLoginFromDom(),
     authRegisterFromDom: () => authFeature?.authRegisterFromDom(),
+    authTouchIdFromDom: () => authFeature?.authTouchIdFromDom(),
     closeModal,
     forceUpdateReload,
     applyPwaUpdateNow: () => applyPwaUpdateNow({ mode: "manual" }),

@@ -1,5 +1,6 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
+import { hasActiveConversationSelection } from "../../../helpers/navigation/mainConversationState";
 import { resolveEscapeInteractionAction } from "../navigation/interactionPolicy";
 
 export interface HotkeysFeatureDeps {
@@ -119,7 +120,7 @@ export function createHotkeysFeature(deps: HotkeysFeatureDeps): HotkeysFeature {
     }
 
     if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
-      if (st.page === "main" && !st.modal && st.selected) {
+      if (hasActiveConversationSelection(st)) {
         e.preventDefault();
         onOpenChatSearch();
       }

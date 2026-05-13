@@ -1,6 +1,10 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { createChatSearchCounts } from "../../../helpers/chat/chatSearch";
 import { updateDraftMap } from "../../../helpers/chat/drafts";
+import { getConversationViewportKey, getConversationViewportTarget } from "../../../helpers/navigation/mainConversationState";
+import { applyDraftMapMutation } from "../../../helpers/runtime/deliverySync";
+import { syncRightPanelWithSelected } from "../../../helpers/navigation/rightPanelState";
+import { sanitizeTargetRef } from "../../../helpers/navigation/viewState";
 import { shouldAutofocusComposer } from "../../../helpers/ui/autofocusPolicy";
 import type { Store } from "../../../stores/store";
 import type { AppState, TargetRef } from "../../../stores/types";
@@ -66,7 +70,8 @@ export function createChatTargetSelectionFeature(
     closeEmojiPopover();
     const composerHadFocus = document.activeElement === input;
     const prev = store.get();
-    if (prev.page === "main" && prev.selected && prev.selected.kind === target.kind && prev.selected.id === target.id) {
+    const prevTarget = getConversationViewportTarget(prev);
+    if (prev.page === "main" && prevTarget && prevTarget.kind === target.kind && prevTarget.id === target.id) {
       closeMobileSidebar();
       if (
         shouldAutofocusComposer({
@@ -80,7 +85,7 @@ export function createChatTargetSelectionFeature(
       }
       return;
     }
-    const prevKey = prev.selected ? conversationKey(prev.selected) : "";
+    const prevKey = getConversationViewportKey(prev);
     const nextKey = conversationKey(target);
     if (nextKey) {
       const cached = (prev.conversations?.[nextKey] || []).length > 0;
@@ -93,7 +98,7 @@ export function createChatTargetSelectionFeature(
     const nextText = nextDrafts[nextKey] ?? "";
     store.set((p) => {
       const trimmed = nextKey ? applyConversationLimits(p, nextKey) : null;
-      const nextRightPanel = p.rightPanel ? { kind: target.kind, id: target.id } : p.rightPanel;
+      const nextRightPanel = syncRightPanelWithSelected(p, target);
       const nextReplyDraft = p.replyDraft && p.replyDraft.key === nextKey ? p.replyDraft : null;
       const nextForwardDraft =
         p.forwardDraft && nextKey
@@ -102,11 +107,10 @@ export function createChatTargetSelectionFeature(
             : { ...p.forwardDraft, key: nextKey }
           : null;
       return {
-        ...p,
+        ...applyDraftMapMutation(p, nextDrafts),
         selected: target,
         page: "main",
         rightPanel: nextRightPanel,
-        drafts: nextDrafts,
         input: nextText,
         editing: leavingEdit ? null : p.editing,
         replyDraft: nextReplyDraft,
@@ -160,16 +164,16 @@ export function createChatTargetSelectionFeature(
 
   const clearSelectedTarget = () => {
     const prev = store.get();
-    if (!prev.selected) return;
-    const prevKey = conversationKey(prev.selected);
+    const prevTarget = sanitizeTargetRef(prev.selected);
+    if (!prevTarget) return;
+    const prevKey = conversationKey(prevTarget);
     const prevText = input.value || "";
     const nextDrafts = prevKey ? updateDraftMap(prev.drafts, prevKey, prevText) : prev.drafts;
     store.set((p) => ({
-      ...p,
+      ...applyDraftMapMutation(p, nextDrafts),
       selected: null,
       page: "main",
       rightPanel: null,
-      drafts: nextDrafts,
       input: "",
       editing: null,
       replyDraft: null,

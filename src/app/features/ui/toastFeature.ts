@@ -28,6 +28,18 @@ export interface ToastFeature {
   installEventListeners: () => void;
 }
 
+function normalizeToastMessage(message: string): string {
+  const clean = String(message || "").replace(/\s+/g, " ").trim();
+  if (clean.length <= 160) return clean;
+  return `${clean.slice(0, 157).trim()}…`;
+}
+
+function normalizeToastPlacement(opts: ShowToastOptions | undefined, actionsCount: number): "bottom" | "center" | undefined {
+  void opts;
+  void actionsCount;
+  return undefined;
+}
+
 export function createToastFeature(deps: ToastFeatureDeps): ToastFeature {
   const { store, toastHost } = deps;
   let toastTimer: number | null = null;
@@ -44,7 +56,7 @@ export function createToastFeature(deps: ToastFeatureDeps): ToastFeature {
   };
 
   const showToast = (message: string, opts?: ShowToastOptions) => {
-    const msg = String(message || "").trim();
+    const msg = normalizeToastMessage(message);
     if (!msg) return;
     if (toastTimer !== null) {
       window.clearTimeout(toastTimer);
@@ -67,11 +79,14 @@ export function createToastFeature(deps: ToastFeatureDeps): ToastFeature {
       actions.push({ id: "undo", label: "Отмена" });
       toastActionHandlers.set("undo", opts.undo);
     }
-    actions.push({ id: "dismiss", label: "×" });
-    toastActionHandlers.set("dismiss", () => {});
 
-    const toast = { message: msg, kind: opts?.kind || "info", actions, placement: opts?.placement };
-    store.set({ toast });
+    const toast = {
+      message: msg,
+      kind: opts?.kind || "info",
+      actions,
+      placement: normalizeToastPlacement(opts, actions.length),
+    };
+    store.set({ status: msg, toast });
 
     const ms = Number(opts?.timeoutMs) > 0 ? Number(opts?.timeoutMs) : defaultToastTimeoutMs(toast);
     toastTimer = window.setTimeout(() => {
@@ -87,6 +102,7 @@ export function createToastFeature(deps: ToastFeatureDeps): ToastFeature {
     ) as HTMLButtonElement | null;
     if (!btn) return;
     e.preventDefault();
+    e.stopPropagation();
     const id = String(btn.getAttribute("data-toast-id") || "");
     const handler = toastActionHandlers.get(id);
     clearToast();
@@ -101,6 +117,7 @@ export function createToastFeature(deps: ToastFeatureDeps): ToastFeature {
     if (listenersInstalled) return;
     listenersInstalled = true;
     toastHost.addEventListener("click", onToastClick);
+    document.addEventListener("click", onToastClick, true);
   };
 
   return {

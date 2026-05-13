@@ -49,14 +49,27 @@ function moveFocus(root: HTMLElement, dir: 1 | -1) {
   }
 }
 
+function composerAvoidRect(): DOMRect | null {
+  try {
+    return (document.querySelector(".input-wrap") as HTMLElement | null)?.getBoundingClientRect() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function clampIntoViewport(root: HTMLElement) {
   const rect = root.getBoundingClientRect();
   const pad = 8;
+  const composerRect = composerAvoidRect();
+  const bottomLimit =
+    composerRect && composerRect.width > 0 && composerRect.height > 0 && composerRect.top > 0
+      ? Math.min(window.innerHeight - pad, composerRect.top - pad)
+      : window.innerHeight - pad;
   let dx = 0;
   let dy = 0;
   if (rect.right > window.innerWidth - pad) dx = (window.innerWidth - pad) - rect.right;
   if (rect.left < pad) dx = pad - rect.left;
-  if (rect.bottom > window.innerHeight - pad) dy = (window.innerHeight - pad) - rect.bottom;
+  if (rect.bottom > bottomLimit) dy = bottomLimit - rect.bottom;
   if (rect.top < pad) dy = pad - rect.top;
   if (!dx && !dy) return;
   const left = Number.parseFloat(root.style.left || "0") || 0;
@@ -65,14 +78,30 @@ function clampIntoViewport(root: HTMLElement) {
   root.style.top = `${Math.max(pad, top + dy)}px`;
 }
 
+function applyPopoverGeometry(root: HTMLElement) {
+  const composerRect = composerAvoidRect();
+  const pad = 8;
+  const bottomLimit =
+    composerRect && composerRect.width > 0 && composerRect.height > 0 && composerRect.top > 0
+      ? Math.min(window.innerHeight - pad, composerRect.top - pad)
+      : window.innerHeight - pad;
+  const available = Math.max(160, bottomLimit - pad);
+  root.style.maxHeight = `${Math.min(available, Math.round(window.innerHeight * 0.7))}px`;
+  root.style.setProperty("--ctx-list-max-h", `${Math.max(120, available - 24)}px`);
+}
+
 export function renderContextMenu(payload: ContextMenuPayload, actions: ContextMenuActions): HTMLElement {
   const sheet = shouldRenderAsSheet();
+  const targetKind = String(payload.target?.kind || "menu").replace(/[^a-z0-9_-]/gi, "");
+  const titleText = String(payload.title || "").trim();
+  const showTitle = Boolean(titleText && titleText !== "Меню");
   const root = el("div", {
-    class: sheet ? "ctx-menu ctx-menu-sheet" : "ctx-menu",
-    role: sheet ? "dialog" : "menu",
+    class: sheet ? `ctx-menu ctx-menu-sheet ctx-menu-${targetKind}` : `ctx-menu ctx-menu-${targetKind}`,
+    role: "menu",
     tabindex: "-1",
-    "aria-label": payload.title || "Меню",
-    ...(sheet ? { "aria-modal": "true" } : {}),
+    "aria-label": titleText || "Контекстное меню",
+    "data-target-kind": targetKind,
+    "data-menu-layout": sheet ? "compact-sheet" : "popover",
   });
   if (!sheet) {
     root.style.left = `${payload.x}px`;
@@ -81,25 +110,21 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
 
   if (sheet) root.append(el("div", { class: "ctx-handle", "aria-hidden": "true" }));
 
-  const title = el("div", { class: "ctx-title" }, [payload.title]);
-  const closeBtn =
-    sheet
-      ? (() => {
-          const btn = el(
-            "button",
-            {
-              class: "btn btn-secondary ctx-close",
-              type: "button",
-              "aria-label": "Закрыть меню",
-              title: "Закрыть меню",
-            },
-            ["Закрыть"]
-          ) as HTMLButtonElement;
-          btn.addEventListener("click", () => actions.onClose());
-          return btn;
-        })()
-      : null;
-  const header = sheet ? el("div", { class: "ctx-header" }, [title, ...(closeBtn ? [closeBtn] : [])]) : title;
+  const title = showTitle ? el("div", { class: "ctx-title" }, [titleText]) : null;
+  const closeBtn = sheet
+    ? (el(
+        "button",
+        {
+          class: "btn ctx-close",
+          type: "button",
+          title: "Закрыть",
+          "aria-label": "Закрыть",
+        },
+        ["×"]
+      ) as HTMLButtonElement)
+    : null;
+  closeBtn?.addEventListener("click", () => actions.onClose());
+  const header = sheet ? el("div", { class: "ctx-header" }, [...(title ? [title] : []), ...(closeBtn ? [closeBtn] : [])]) : title;
 
   const reactionBar =
     payload.reactionBar && Array.isArray(payload.reactionBar.emojis) && payload.reactionBar.emojis.length
@@ -140,6 +165,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     if (it.separator) {
       return el("div", { class: "ctx-sep", role: "separator", "aria-hidden": "true" });
     }
+    const idSafe = String(it.id || "").replace(/[^a-z0-9:_-]/gi, "");
     const clsBase = it.danger ? "ctx-item ctx-danger" : "ctx-item";
     const cls = it.subLabel ? `${clsBase} ctx-item-multiline` : clsBase;
     const icon = it.icon ? el("span", { class: "ctx-icon", "aria-hidden": "true" }, [it.icon]) : null;
@@ -150,7 +176,14 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     const meta = it.meta ? el("span", { class: "ctx-meta" }, [it.meta]) : null;
     const btn = el(
       "button",
-      { class: cls, type: "button", ...(sheet ? {} : { role: "menuitem" }), ...(it.disabled ? { disabled: "true" } : {}) },
+      {
+        class: cls,
+        type: "button",
+        "data-item-id": idSafe || undefined,
+        ...(it.danger ? { "data-danger": "true" } : {}),
+        ...(sheet ? {} : { role: "menuitem" }),
+        ...(it.disabled ? { disabled: "true" } : {}),
+      },
       [...(icon ? [icon] : []), main, ...(meta ? [meta] : [])]
     ) as HTMLButtonElement;
     btn.addEventListener("click", () => {
@@ -160,7 +193,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     return btn;
   });
 
-  root.append(header, ...(reactionBar ? [reactionBar] : []), el("div", { class: "ctx-list" }, nodes));
+  root.append(...(header ? [header] : []), ...(reactionBar ? [reactionBar] : []), el("div", { class: "ctx-list" }, nodes));
 
   root.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -191,8 +224,15 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
   });
 
   queueMicrotask(() => {
-    if (!sheet) clampIntoViewport(root);
-    focusFirstEnabled(root);
+    if (!sheet) {
+      applyPopoverGeometry(root);
+      clampIntoViewport(root);
+    }
+    try {
+      root.focus({ preventScroll: true });
+    } catch {
+      root.focus();
+    }
   });
 
   return root;

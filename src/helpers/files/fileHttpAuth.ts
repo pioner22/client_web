@@ -1,3 +1,6 @@
+import { getPublicBaseUrl } from "../../config/env";
+import { isCapacitorNativeRuntime } from "../runtime/nativeRuntime";
+
 export interface FileHttpAuthResult {
   url: string;
   headers: Record<string, string>;
@@ -6,11 +9,38 @@ export interface FileHttpAuthResult {
 const FILE_HTTP_BEARER_MAX = 512;
 const fileHttpBearerByUrl = new Map<string, string>();
 
+function isFileBase(rawBase: string): boolean {
+  try {
+    return new URL(rawBase).protocol === "file:";
+  } catch {
+    return false;
+  }
+}
+
+function isNativeLoopbackBase(rawBase: string): boolean {
+  if (!isCapacitorNativeRuntime()) return false;
+  try {
+    const parsed = new URL(rawBase);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const host = String(parsed.hostname || "").trim().toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+function readLocationHref(): string {
+  try {
+    return typeof globalThis.location?.href === "string" ? globalThis.location.href.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 function resolveBase(base?: string | null): string {
-  const raw =
-    base ||
-    (typeof location !== "undefined" && typeof location.href === "string" && location.href ? location.href : "http://localhost/");
-  return String(raw || "http://localhost/").trim() || "http://localhost/";
+  const candidate = String(base ?? "").trim() || readLocationHref();
+  if (candidate && !isFileBase(candidate) && !isNativeLoopbackBase(candidate)) return candidate;
+  return getPublicBaseUrl() || "http://localhost/";
 }
 
 function trimToken(raw: string | null | undefined): string {

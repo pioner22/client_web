@@ -1,127 +1,39 @@
 import { setCachedMediaAspectRatio } from "../../../helpers/chat/mediaAspectCache";
-import { sameFileViewerContext } from "../../../helpers/chat/fileViewerScope";
+import { shouldApplyPendingFileViewerResult } from "../../../helpers/chat/fileViewerScope";
 import { base64ToBytes } from "../../../helpers/files/base64";
 import { liftFileHttpTokenToBearer, rememberFileHttpBearer } from "../../../helpers/files/fileHttpAuth";
 import { resumableHttpDownload } from "../../../helpers/files/fileHttpDownload";
 import { putCachedFileBlob } from "../../../helpers/files/fileBlobCache";
 import { guessMimeTypeByName } from "../../../helpers/files/mimeGuess";
-import type { Store } from "../../../stores/store";
-import type { AppState, FileTransferEntry } from "../../../stores/types";
+import { getDeliveryRetryPolicy } from "../../../helpers/runtime/deliveryCoordinator";
+import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
 import {
   createFileHttpDownloadRuntime,
   type FileHttpDownloadPriority,
   type FileHttpDownloadQueueMeta,
 } from "./fileHttpDownloadRuntime";
-import type { PendingFileViewer, FileViewerModalState } from "./fileViewerFeature";
+import {
+  getSilentFileUrlPlan,
+  shouldHydrateSilentFullBlob,
+  type AutoDownloadKind,
+  type FileDownloadFeature,
+  type FileDownloadFeatureDeps,
+} from "./fileDownloadTypes";
 
-export interface DownloadState {
-  fileId: string;
-  name: string;
-  size: number;
-  from: string;
-  room?: string | null;
-  mime?: string | null;
-  etag?: string | null;
-  chunks: ArrayBuffer[];
-  received: number;
-  lastProgress: number;
-  streamId?: string | null;
-  streaming?: boolean;
-}
-
-type DeviceCapsLike = {
-  constrained: boolean;
-  slowNetwork: boolean;
-  prefetchAllowed: boolean;
-};
-
-type AutoDownloadKind = "image" | "video" | "audio" | "file";
-
-type HttpFileUrlInfoLike = {
-  url: string;
-};
-
-export interface FileDownloadFeatureDeps {
-  store: Store<AppState>;
-  send: (payload: any) => void;
-  deviceCaps: DeviceCapsLike;
-  downloadByFileId: Map<string, DownloadState>;
-  disableFileHttp: (reason: string) => void;
-
-  nextTransferId: () => string;
-  updateTransferByFileId: (fileId: string, apply: (entry: FileTransferEntry) => FileTransferEntry) => void;
-
-  resolveFileMeta: (fileId: string) => { name: string; size: number; mime: string | null };
-  shouldCacheFile: (name: string, mime: string | null | undefined, size: number) => boolean;
-  shouldCachePreview: (name: string, mime: string | null | undefined, size: number) => boolean;
-  enforceFileCachePolicy: (userId: string, opts?: { force?: boolean }) => Promise<void>;
-  thumbCacheId: (fileId: string) => string;
-  canAutoDownloadFullFile: (userId: string | null, kind: AutoDownloadKind, size: number) => boolean;
-  resolveAutoDownloadKind: (name: string, mime: string | null | undefined, hint?: string | null) => AutoDownloadKind;
-
-  isSilentFileGet: (fileId: string) => boolean;
-  clearSilentFileGet: (fileId: string) => void;
-  clearFileAcceptRetry: (fileId: string) => void;
-  clearFileGetNotFoundRetry: (fileId: string) => void;
-  scheduleFileGetNotFoundRetry: (
-    fileId: string,
-    opts?: { priority?: "high" | "prefetch"; silent?: boolean; attempts?: number }
-  ) => boolean;
-  finishFileGet: (fileId: string) => void;
-  touchFileGetTimeout: (fileId: string) => void;
-  dropFileGetQueue: (fileId: string) => void;
-
-  tryResolveHttpFileUrlWaiter: (msg: any) => boolean;
-  requestFreshHttpDownloadUrl: (fileId: string) => Promise<HttpFileUrlInfoLike>;
-  rejectHttpFileUrlWaiter: (fileId: string, reason: string) => void;
-
-  scheduleThumbPollRetry: (fileId: string) => void;
-  clearThumbPollRetry: (fileId: string) => void;
-  setFileThumb: (
-    fileId: string,
-    url: string,
-    mime: string | null,
-    dims?: { w?: number | null; h?: number | null; mediaW?: number | null; mediaH?: number | null }
-  ) => void;
-  probeImageDimensions: (blob: Blob) => Promise<{ w: number | null; h: number | null }>;
-
-  pendingFileDownloads: Map<string, { name: string }>;
-  triggerBrowserDownload: (url: string, name: string) => void;
-
-  takePendingFileViewer: (fileId: string) => PendingFileViewer | null;
-  clearPendingFileViewer: (fileId: string) => void;
-  buildFileViewerModalState: (params: {
-    fileId?: string | null;
-    url: string;
-    name: string;
-    size: number;
-    mime: string | null;
-    caption: string | null;
-    chatKey: string | null;
-    msgIdx: number | null;
-  }) => FileViewerModalState;
-
-  postStreamChunk: (streamId: string, bytes: Uint8Array) => boolean;
-  postStreamEnd: (streamId: string) => void;
-  postStreamError: (streamId: string, reason: string) => void;
-
-  clearCachedPreviewAttempt: (userId: string, fileId: string) => void;
-  clearPreviewPrefetchAttempt: (userId: string, fileId: string) => void;
-
-  isUploadActive: (fileId: string) => boolean;
-  abortUploadByFileId: (fileId: string) => void;
-}
-
-export interface FileDownloadFeature {
-  handleMessage: (msg: any) => boolean;
-  abortHttpDownload: (fileId: string, reason?: string, opts?: { quiet?: boolean }) => void;
-  reset: () => void;
-}
+export {
+  getSilentFileUrlPlan,
+  shouldHydrateSilentFullBlob,
+  type AutoDownloadKind,
+  type DownloadState,
+  type FileDownloadFeature,
+  type FileDownloadFeatureDeps,
+} from "./fileDownloadTypes";
 
 export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDownloadFeature {
   const {
     store,
     send,
+    reportIncident,
     deviceCaps,
     downloadByFileId,
     disableFileHttp,
@@ -148,6 +60,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     scheduleThumbPollRetry,
     clearThumbPollRetry,
     setFileThumb,
+    maybeSetVideoPosterFromBlob,
     probeImageDimensions,
     pendingFileDownloads,
     triggerBrowserDownload,
@@ -196,7 +109,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const { fileId: fid, priority, meta, controller, resetToken: token } = params;
     void (async () => {
       try {
-        const baseDelayMs = deviceCaps.slowNetwork ? 900 : deviceCaps.constrained ? 650 : 400;
+        const retryPolicy = getDeliveryRetryPolicy("file_download_http", deviceCaps);
         const download = downloadByFileId.get(fid);
         if (!download) throw new Error("missing_download_state");
 
@@ -205,9 +118,9 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
           offset: download.received,
           etag: download.etag ?? null,
           expectedSize: meta.size || 0,
-          maxRetries: 6,
-          baseDelayMs,
-          maxDelayMs: 8000,
+          maxRetries: retryPolicy.maxRetries,
+          baseDelayMs: retryPolicy.baseDelayMs,
+          maxDelayMs: retryPolicy.maxDelayMs,
           maxUrlRefresh: 2,
           signal: controller.signal,
           refreshUrl: async () => (await requestFreshHttpDownloadUrl(fid)).url,
@@ -321,6 +234,14 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         } catch {
           // ignore
         }
+        try {
+          const st = store.get();
+          if (!st.fileThumbs?.[fid]?.url && resolveAutoDownloadKind(meta.name || "файл", finalMime, null) === "video") {
+            maybeSetVideoPosterFromBlob(fid, blob, { name: meta.name || "видео", mime: finalMime || null });
+          }
+        } catch {
+          // ignore
+        }
         const pending = pendingFileDownloads.get(fid);
         if (pending) {
           pendingFileDownloads.delete(fid);
@@ -332,7 +253,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
           const viewerSize = pv.size || meta.size || blob.size || 0;
           const viewerMime = finalMime || pv.mime || null;
           const currentModal = store.get().modal;
-          if (!sameFileViewerContext(currentModal, { fileId: fid, chatKey: pv.chatKey, msgIdx: pv.msgIdx })) {
+          if (shouldApplyPendingFileViewerResult(currentModal, { fileId: fid, chatKey: pv.chatKey, msgIdx: pv.msgIdx })) {
             store.set({
               modal: buildFileViewerModalState({
                 fileId: fid,
@@ -395,6 +316,25 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         finishFileGet(fid);
         pendingFileDownloads.delete(fid);
         clearPendingFileViewer(fid);
+        reportIncident?.(
+          "file_download_failed",
+          {
+            file_id: fid,
+            name: meta.name || null,
+            mime: meta.mime || null,
+            size: meta.size || 0,
+            reason: errMsg || "download_failed",
+            user_requested: userRequested,
+            silent,
+            can_fallback: canFallback,
+            priority,
+            queued_ms: Math.max(0, Date.now() - meta.queuedAtMs),
+          },
+          {
+            key: `file_download_failed:${fid}:${errMsg || "download_failed"}`,
+            dedupeMs: 60_000,
+          }
+        );
         const download = downloadByFileId.get(fid);
         if (download?.streamId) postStreamError(download.streamId, "http_download_failed");
         downloadByFileId.delete(fid);
@@ -492,8 +432,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         });
       }
       return {
-        ...prev,
-        fileTransfers: transfers,
+        ...applyFileTransferMutation(prev, transfers),
         fileOffersIn: prev.fileOffersIn.filter((entry) => entry.id !== fileId),
         ...(silent ? {} : { status: `Скачивание: ${name}` }),
       };
@@ -561,7 +500,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       mime: mime || null,
     });
 
-    if (silent && thumbUrl) {
+    const scheduleSilentThumbFetch = (opts: { clearOnFinish: boolean; kind: AutoDownloadKind }) => {
       void (async () => {
         try {
           const thumbAuth = liftFileHttpTokenToBearer(thumbUrl);
@@ -618,34 +557,47 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
             reason: errMsg || "thumb_fetch_failed",
             type: err instanceof Error ? String(err.name || "") : null,
           });
-          scheduleThumbPollRetry(fileId);
+          if (opts.kind === "video") scheduleThumbPollRetry(fileId);
         } finally {
-          clearSilentFileGet(fileId);
-          finishFileGet(fileId);
+          if (opts.clearOnFinish) {
+            clearSilentFileGet(fileId);
+            finishFileGet(fileId);
+          }
         }
       })();
-      return true;
-    }
+    };
 
-    if (silent && !thumbUrl) {
+    if (silent) {
       try {
         const st = store.get();
         const kind = resolveAutoDownloadKind(name, mime, null);
-        if (kind === "video") {
+        const allowFullDownload = shouldHydrateSilentFullBlob({
+          kind,
+          name,
+          mime,
+          size,
+          userId: st.selfId || null,
+          shouldCachePreview,
+          canAutoDownloadFullFile,
+        });
+        const plan = getSilentFileUrlPlan({
+          hasUrl: Boolean(url),
+          hasThumbUrl: Boolean(thumbUrl),
+          kind,
+          allowFullDownload,
+        });
+        if (plan.fetchThumb) {
+          scheduleSilentThumbFetch({ clearOnFinish: !plan.fetchFull, kind });
+        }
+        if (plan.scheduleThumbPoll) {
           scheduleThumbPollRetry(fileId);
+        }
+        if (plan.finishWithoutNetwork) {
           clearSilentFileGet(fileId);
           finishFileGet(fileId);
           return true;
         }
-        const canDownload =
-          kind === "image"
-            ? shouldCachePreview(name || "файл", mime, size) || canAutoDownloadFullFile(st.selfId || null, kind, size)
-            : canAutoDownloadFullFile(st.selfId || null, kind, size);
-        if (!canDownload) {
-          clearSilentFileGet(fileId);
-          finishFileGet(fileId);
-          return true;
-        }
+        if (!plan.fetchFull) return true;
       } catch {
         // ignore
       }
@@ -788,6 +740,14 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       } catch {
         // ignore
       }
+      try {
+        const st = store.get();
+        if (!st.fileThumbs?.[fileId]?.url && resolveAutoDownloadKind(download.name || "файл", finalMime, null) === "video") {
+          maybeSetVideoPosterFromBlob(fileId, blob, { name: download.name || "видео", mime: finalMime || null });
+        }
+      } catch {
+        // ignore
+      }
       const pending = pendingFileDownloads.get(fileId);
       if (pending) {
         pendingFileDownloads.delete(fileId);
@@ -799,7 +759,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         const viewerSize = pv.size || download.size || blob.size || 0;
         const viewerMime = finalMime || pv.mime || null;
         const currentModal = store.get().modal;
-        if (!sameFileViewerContext(currentModal, { fileId, chatKey: pv.chatKey, msgIdx: pv.msgIdx })) {
+        if (shouldApplyPendingFileViewerResult(currentModal, { fileId, chatKey: pv.chatKey, msgIdx: pv.msgIdx })) {
           store.set({
             modal: buildFileViewerModalState({
               fileId,

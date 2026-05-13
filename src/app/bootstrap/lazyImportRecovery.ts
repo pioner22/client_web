@@ -1,3 +1,5 @@
+import { isPwaStabilityHoldActive } from "../../helpers/pwa/stabilityHold";
+
 const LAZY_IMPORT_RECOVER_KEY = "yagodka_lazy_import_recover_v1";
 
 function lazyImportErrorText(err: unknown): string {
@@ -27,6 +29,8 @@ export function recoverFromLazyImportError(err: unknown, scope = "lazy_import"):
   } catch {
     // ignore
   }
+
+  if (isPwaStabilityHoldActive()) return false;
 
   let alreadyRecovered = false;
   try {

@@ -1,6 +1,7 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { ensureChatMessageLoadedById } from "../../../helpers/chat/ensureHistoryMessage";
 import { resolveVirtualStartForIndex } from "../../../helpers/chat/historyViewportCoordinator";
+import { getActiveConversationKey } from "../../../helpers/navigation/mainConversationState";
 import { formatTime } from "../../../helpers/time";
 import type { ContextMenuItem } from "../../../stores/types";
 import type { ChatSearchFilter } from "../../../helpers/chat/chatSearch";
@@ -37,7 +38,7 @@ export function createChatSurfaceDeferredActions(deps: ChatSurfaceDeferredDeps) 
     const st = store.get();
     const row = actionEl.closest("[data-msg-idx]") as HTMLElement | null;
     const idx = row ? Math.trunc(Number(row.getAttribute("data-msg-idx") || "")) : -1;
-    const key = st.selected ? conversationKey(st.selected) : "";
+    const key = getActiveConversationKey(st);
     const conv = key ? st.conversations[key] : null;
     const msg = conv && idx >= 0 && idx < conv.length ? conv[idx] : null;
     const msgId = msg && typeof msg.id === "number" && Number.isFinite(msg.id) ? msg.id : null;
@@ -113,28 +114,14 @@ export function createChatSurfaceDeferredActions(deps: ChatSurfaceDeferredDeps) 
     }
 
     if (action === "chat-pinned-hide") {
-      const st = store.get();
-      if (st.modal) return;
-      const key = st.selected ? conversationKey(st.selected) : "";
-      const ids = key ? st.pinnedMessages[key] : null;
-      if (!key || !Array.isArray(ids) || !ids.length) return;
-      store.set({
-        modal: {
-          kind: "confirm",
-          title: "Скрыть закреплённые сообщения",
-          message: "Скрыть панель закреплённого сообщения? Она останется скрытой до нового закрепа.",
-          confirmLabel: "Скрыть",
-          cancelLabel: "Отмена",
-          action: { kind: "pinned_bar_hide", chatKey: key },
-        },
-      });
+      if (pinnedMessagesUiActions.unpinActiveForSelected()) showToast("Сообщение откреплено", { kind: "success" });
       return;
     }
 
     if (action === "chat-pinned-list") {
       const st = store.get();
       if (st.modal) return;
-      const key = st.selected ? conversationKey(st.selected) : "";
+      const key = getActiveConversationKey(st);
       const ids = key ? st.pinnedMessages[key] : null;
       if (!key || !Array.isArray(ids) || !ids.length) return;
       const conv = st.conversations[key] || [];
@@ -199,7 +186,7 @@ export function createChatSurfaceDeferredActions(deps: ChatSurfaceDeferredDeps) 
     if (action === "chat-pinned-jump") {
       if (pinnedMessagesUiActions.jumpToActiveForSelected()) return;
       const st = store.get();
-      const key = st.selected ? conversationKey(st.selected) : "";
+      const key = getActiveConversationKey(st);
       const ids = key ? st.pinnedMessages[key] : null;
       if (!key || !Array.isArray(ids) || !ids.length) return;
       const activeRaw = st.pinnedMessageActive?.[key];
@@ -241,7 +228,7 @@ export function createChatSurfaceDeferredActions(deps: ChatSurfaceDeferredDeps) 
           if (cancelled) return true;
           if (seq !== pinnedJumpSeq) return true;
           const snap = store.get();
-          const snapKey = snap.selected ? conversationKey(snap.selected) : "";
+          const snapKey = getActiveConversationKey(snap);
           return snapKey !== key;
         };
         const res = await ensureChatMessageLoadedById({

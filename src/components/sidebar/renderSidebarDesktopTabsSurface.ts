@@ -92,7 +92,7 @@ function renderBoardsSurface(ctx: RenderSidebarDesktopTabsCtx) {
 
   const fixedRows: HTMLElement[] = [];
   if (pinnedBoardRows.length) fixedRows.push(...pinnedBoardRows);
-  fixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Доски"]));
+  fixedRows.push(el("div", { class: "pane-section" }, [hasSidebarQuery ? "Результаты" : "Каналы"]));
 
   const archiveBlock = boardArchiveOpen
     ? [
@@ -102,7 +102,7 @@ function renderBoardsSurface(ctx: RenderSidebarDesktopTabsCtx) {
       ]
     : [];
   const rows = archiveBlock.length ? [...archiveBlock, ...boardRows] : boardRows;
-  const boardList = buildChatlist(fixedRows, rows, hasSidebarQuery ? "(ничего не найдено)" : "(пока нет досок)", {
+  const boardList = buildChatlist(fixedRows, rows, hasSidebarQuery ? "(ничего не найдено)" : "(пока нет каналов)", {
     virtual: !boardArchiveOpen,
   });
   mountDesktop([boardList]);
@@ -115,7 +115,6 @@ function renderContactsSurface(ctx: RenderSidebarDesktopTabsCtx) {
     pinnedContactEntries,
     unknownAttnRows,
     activeContacts,
-    archivedContacts,
     buildChatlist,
     markCompactAvatarRows,
     buildContactRows,
@@ -124,14 +123,10 @@ function renderContactsSurface(ctx: RenderSidebarDesktopTabsCtx) {
   } = ctx;
 
   const pinnedContactRowsCompact = buildContactRows(pinnedContactEntries, { sort: false });
-  const contactRowsAll = buildContactRows([...activeContacts, ...archivedContacts]);
+  const contactRowsAll = buildContactRows(activeContacts);
   const { ids: topPeerIds, rows: topPeerRows } = buildTopPeerContactRows(activeContacts);
   const activeContactRows = buildContactRows(activeContacts.filter((friend) => !topPeerIds.has(friend.id)));
-  const archivedContactRows = buildContactRows(archivedContacts);
-  const archiveBlock =
-    archiveOpen && archivedContactRows.length
-      ? [el("div", { class: "pane-section pane-section-archive" }, [`Архив (${archivedContactRows.length})`]), ...archivedContactRows]
-      : [];
+  const archiveBlock: HTMLElement[] = [];
 
   if (hasSidebarQuery) {
     const allRows = markCompactAvatarRows([...unknownAttnRows, ...contactRowsAll]);
