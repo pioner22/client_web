@@ -1,6 +1,7 @@
 import type { Store } from "../../../stores/store";
 import type { AppState } from "../../../stores/types";
 import { rememberFileHttpBearer } from "../../../helpers/files/fileHttpAuth";
+import { registerPwaReloadBlocker } from "../../../helpers/pwa/reloadSafety";
 import { canDrainFilePrefetch, canDrainFileRuntime, resolveFileGetEnqueuePolicy } from "./fileRuntimePolicy";
 
 type FileGetPriority = "high" | "prefetch";
@@ -58,6 +59,7 @@ export interface FileGetFeature {
   isSilent: (fileId: string) => boolean;
   markSilent: (fileId: string) => void;
   clearSilent: (fileId: string) => void;
+  hasPendingActivityForUpdate: () => boolean;
   reset: () => void;
 }
 
@@ -116,8 +118,22 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     inflight: fileGetInFlight.size,
     inflight_prefetch: fileGetPrefetchInFlight.size,
     waiters: httpFileUrlWaiters.size,
+    accept_retry: fileAcceptRetries.size,
     not_found_retry: fileGetNotFoundRetries.size,
   });
+
+  const hasPendingActivityForUpdate = (): boolean =>
+    Boolean(
+      fileGetQueueHigh.length ||
+        fileGetQueuePrefetch.length ||
+        fileGetQueueMeta.size ||
+        fileGetInFlight.size ||
+        fileGetPrefetchInFlight.size ||
+        httpFileUrlWaiters.size ||
+        fileAcceptRetries.size ||
+        fileGetNotFoundRetries.size
+    );
+  registerPwaReloadBlocker("file_get", hasPendingActivityForUpdate);
 
   const isFileGetQueued = (fileId: string): boolean =>
     fileGetQueueMeta.has(fileId) || fileGetQueueHigh.includes(fileId) || fileGetQueuePrefetch.includes(fileId);
@@ -652,6 +668,7 @@ export function createFileGetFeature(deps: FileGetFeatureDeps): FileGetFeature {
     isSilent,
     markSilent,
     clearSilent,
+    hasPendingActivityForUpdate,
     reset,
   };
 }

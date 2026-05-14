@@ -2,6 +2,7 @@ import { APP_VERSION } from "../../../config/app";
 import { buildClientInfoTags } from "../../../helpers/device/clientTags";
 import { storeActiveBuildId } from "../../../helpers/pwa/buildIdStore";
 import { getPwaStabilityHoldRemainingMs, readPwaStabilityHold } from "../../../helpers/pwa/stabilityHold";
+import { hasPwaReloadBlockers } from "../../../helpers/pwa/reloadSafety";
 import { activatePwaUpdate, hasPwaUpdate } from "../../../helpers/pwa/registerServiceWorker";
 import { isServiceWorkerRuntimeAvailable } from "../../../helpers/pwa/serviceWorkerRuntime";
 import { shouldReloadForBuild } from "../../../helpers/pwa/shouldReloadForBuild";
@@ -19,6 +20,7 @@ export interface PwaUpdateFeatureDeps {
   getLastUserInputAt: () => number;
   hasPendingHistoryActivityForUpdate: () => boolean;
   hasPendingPreviewActivityForUpdate: () => boolean;
+  hasPendingFileActivityForUpdate: () => boolean;
 }
 
 export interface PwaUpdateFeature {
@@ -33,8 +35,15 @@ export interface PwaUpdateFeature {
 type PwaAutoApplyGuard = { buildId: string; tries: number; ts: number };
 
 export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFeature {
-  const { store, send, flushBeforeReload, getLastUserInputAt, hasPendingHistoryActivityForUpdate, hasPendingPreviewActivityForUpdate } =
-    deps;
+  const {
+    store,
+    send,
+    flushBeforeReload,
+    getLastUserInputAt,
+    hasPendingHistoryActivityForUpdate,
+    hasPendingPreviewActivityForUpdate,
+    hasPendingFileActivityForUpdate,
+  } = deps;
 
   let listenersInstalled = false;
   let pwaAutoApplyTimer: number | null = null;
@@ -529,6 +538,8 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     if (getPwaStabilityHoldRemainingMs() > 0) return false;
     const hasActiveTransfer = hasActiveFileTransferEntries(st.fileTransfers || []);
     if (hasActiveTransfer) return false;
+    if (hasPwaReloadBlockers()) return false;
+    if (hasPendingFileActivityForUpdate()) return false;
     if (Object.values(st.historyLoading || {}).some(Boolean)) return false;
     if (hasPendingHistoryActivityForUpdate()) return false;
     if (hasPendingPreviewActivityForUpdate()) return false;

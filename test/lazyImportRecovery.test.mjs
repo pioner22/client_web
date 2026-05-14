@@ -28,9 +28,14 @@ async function loadHelper() {
     if (typeof mod.recoverFromLazyImportError !== "function") {
       throw new Error("recoverFromLazyImportError export missing");
     }
+    if (typeof mod.__registerPwaReloadBlockerForTest !== "function") {
+      throw new Error("lazyImportRecovery test reload blocker hook missing");
+    }
     return {
       isLikelyStaleLazyImportError: mod.isLikelyStaleLazyImportError,
       recoverFromLazyImportError: mod.recoverFromLazyImportError,
+      registerPwaReloadBlocker: mod.__registerPwaReloadBlockerForTest,
+      clearPwaReloadBlockers: mod.__clearPwaReloadBlockersForTest,
       cleanup: () => rm(tempDir, { recursive: true, force: true }),
     };
   } catch (e) {
@@ -196,6 +201,66 @@ test("lazyImportRecovery: does not force reload while PWA stability hold is acti
     else globalThis.sessionStorage = prev.sessionStorage;
     if (prev.localStorage === undefined) delete globalThis.localStorage;
     else globalThis.localStorage = prev.localStorage;
+    if (prev.CustomEvent === undefined) delete globalThis.CustomEvent;
+    else globalThis.CustomEvent = prev.CustomEvent;
+    await helper.cleanup();
+  }
+});
+
+test("lazyImportRecovery: does not force reload while reload blockers are active", async () => {
+  const helper = await loadHelper();
+  const prev = {
+    window: globalThis.window,
+    sessionStorage: globalThis.sessionStorage,
+    CustomEvent: globalThis.CustomEvent,
+  };
+  const session = new Map();
+  const replaced = [];
+  class CustomEventStub extends Event {
+    constructor(type, init = {}) {
+      super(type);
+      this.detail = init.detail;
+    }
+  }
+  globalThis.CustomEvent = CustomEventStub;
+  globalThis.sessionStorage = {
+    getItem(key) {
+      return session.has(key) ? session.get(key) : null;
+    },
+    setItem(key, value) {
+      session.set(String(key), String(value));
+    },
+  };
+  globalThis.window = {
+    location: {
+      href: "https://yagodka.org/web/",
+      replace(url) {
+        replaced.push(String(url));
+      },
+      reload() {
+        replaced.push("reload");
+      },
+    },
+    dispatchEvent() {
+      return true;
+    },
+  };
+
+  try {
+    helper.registerPwaReloadBlocker("file_get", () => true);
+    const recovered = helper.recoverFromLazyImportError(
+      new Error("Failed to fetch dynamically imported module: https://yagodka.org/web/assets/chat-media-surface-old.js"),
+      "chat_surface_media"
+    );
+    assert.equal(recovered, false);
+    assert.deepEqual(replaced, []);
+    assert.equal(session.get("yagodka_lazy_import_recover_v1"), undefined);
+  } finally {
+    helper.clearPwaReloadBlockers();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.sessionStorage === undefined) delete globalThis.sessionStorage;
+    else globalThis.sessionStorage = prev.sessionStorage;
     if (prev.CustomEvent === undefined) delete globalThis.CustomEvent;
     else globalThis.CustomEvent = prev.CustomEvent;
     await helper.cleanup();

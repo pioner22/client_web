@@ -3,6 +3,7 @@ import { upsertConversation } from "../../../helpers/chat/upsertConversation";
 import { arrayBufferToBase64 } from "../../../helpers/files/base64";
 import { liftFileHttpTokenToBearer, rememberFileHttpBearer } from "../../../helpers/files/fileHttpAuth";
 import { guessMimeTypeByName } from "../../../helpers/files/mimeGuess";
+import { registerPwaReloadBlocker } from "../../../helpers/pwa/reloadSafety";
 import {
   computeDeliveryRetryDelayMs,
   getDeliveryRetryPolicy,
@@ -45,6 +46,7 @@ export interface FileUploadFeatureDeps {
 export interface FileUploadFeature {
   sendFile: (file: File | null, target: TargetRef | null, caption?: string) => void;
   handleMessage: (msg: any) => boolean;
+  hasPendingActivityForUpdate: () => boolean;
   isUploadActive: (fileId: string) => boolean;
   abortUploadByFileId: (fileId: string) => void;
 }
@@ -86,6 +88,15 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
   const uploadQueue: UploadState[] = [];
   const uploadInFlightByLocalId = new Map<string, UploadState>();
   const uploadByFileId = new Map<string, UploadState>();
+
+  function hasPendingActivityForUpdate(): boolean {
+    return Boolean(
+      uploadQueue.some((upload) => !upload.aborted) ||
+        Array.from(uploadInFlightByLocalId.values()).some((upload) => !upload.aborted) ||
+        Array.from(uploadByFileId.values()).some((upload) => !upload.aborted)
+    );
+  }
+  registerPwaReloadBlocker("file_upload", hasPendingActivityForUpdate);
 
   function queueUpload(localId: string, file: File, target: TargetRef, caption?: string) {
     uploadQueue.push({
@@ -581,6 +592,7 @@ export function createFileUploadFeature(deps: FileUploadFeatureDeps): FileUpload
   return {
     sendFile,
     handleMessage,
+    hasPendingActivityForUpdate,
     isUploadActive,
     abortUploadByFileId,
   };

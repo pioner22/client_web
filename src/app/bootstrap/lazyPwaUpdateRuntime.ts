@@ -15,6 +15,7 @@ type LazyPwaUpdateRuntimeDeps = {
   getLastUserInputAt: () => number;
   hasPendingHistoryActivityForUpdate: () => boolean;
   hasPendingPreviewActivityForUpdate: () => boolean;
+  hasPendingFileActivityForUpdate: () => boolean;
 };
 
 export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
@@ -80,6 +81,7 @@ export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
             getLastUserInputAt: deps.getLastUserInputAt,
             hasPendingHistoryActivityForUpdate: deps.hasPendingHistoryActivityForUpdate,
             hasPendingPreviewActivityForUpdate: deps.hasPendingPreviewActivityForUpdate,
+            hasPendingFileActivityForUpdate: deps.hasPendingFileActivityForUpdate,
           });
           feature.installEventListeners();
           runtimeLoaded = true;

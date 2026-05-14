@@ -39,6 +39,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     disableFileHttp,
     nextTransferId,
     updateTransferByFileId,
+    scheduleSaveFileTransfers,
     resolveFileMeta,
     shouldCacheFile,
     shouldCachePreview,
@@ -781,6 +782,40 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     return true;
   }
 
+  function markFileTransferError(fileId: string, detail: string): void {
+    const fid = String(fileId || "").trim();
+    if (!fid) return;
+    const fallback = resolveFileMeta(fid);
+    const existing = store.get().fileTransfers.find((t) => String(t.id || "").trim() === fid) ?? null;
+    const name = existing?.name || fallback.name || "файл";
+    const size = existing?.size || fallback.size || 0;
+    const mime = existing?.mime || fallback.mime || null;
+    const direction = existing?.direction || "in";
+    const peer = existing?.peer || "—";
+    const room = typeof existing?.room === "string" ? existing.room : null;
+    store.set((prev) => {
+      const idx = prev.fileTransfers.findIndex((t) => String(t.id || "").trim() === fid);
+      if (idx >= 0) {
+        const next = prev.fileTransfers.map((entry, entryIdx) =>
+          entryIdx === idx
+            ? { ...entry, name, size, mime, status: "error" as const, progress: 0, error: detail, url: null }
+            : entry
+        );
+        return applyFileTransferMutation(prev, next);
+      }
+      return applyFileTransferMutation(prev, [
+        {
+          localId: nextTransferId(), id: fid, name, size, mime, direction, peer, room,
+          status: "error",
+          progress: 0,
+          error: detail,
+        },
+        ...prev.fileTransfers,
+      ]);
+    });
+    scheduleSaveFileTransfers();
+  }
+
   function handleFileError(msg: any): boolean {
     const fileId = String(msg?.file_id ?? "").trim();
     const reason = String(msg?.reason ?? "ошибка");
@@ -818,7 +853,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
           if (!silent) {
             store.set({ status: uploadActive ? "Загрузка продолжается…" : "Ожидаем файл от отправителя" });
           }
-          if (uploadActive || scheduled || silent) return true;
+          if (uploadActive || scheduled) return true;
         }
       }
       clearSilentFileGet(fileId);
@@ -827,7 +862,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       if (download?.streamId) postStreamError(download.streamId, detail);
       if (download) downloadByFileId.delete(fileId);
       clearFileAcceptRetry(fileId);
-      updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "error", error: detail }));
+      markFileTransferError(fileId, detail);
     }
     if (!silent) store.set({ status: `Ошибка файла: ${detail}` });
     return true;

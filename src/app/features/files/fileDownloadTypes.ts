@@ -76,6 +76,7 @@ export interface FileDownloadFeatureDeps {
 
   nextTransferId: () => string;
   updateTransferByFileId: (fileId: string, apply: (entry: FileTransferEntry) => FileTransferEntry) => void;
+  scheduleSaveFileTransfers: () => void;
 
   resolveFileMeta: (fileId: string) => { name: string; size: number; mime: string | null };
   shouldCacheFile: (name: string, mime: string | null | undefined, size: number) => boolean;

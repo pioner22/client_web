@@ -69,9 +69,11 @@ export function prefetchHistoryMediaFromHistoryResult(
 
     const fileThumbs = st.fileThumbs || {};
     const transferUrls = new Set<string>();
+    const transferErrors = new Set<string>();
     for (const t of st.fileTransfers || []) {
       const id = normalizeId(t?.id);
       if (!id) continue;
+      if ((t as any)?.status === "error") transferErrors.add(id);
       if (typeof (t as any)?.url === "string" && String((t as any).url).trim()) transferUrls.add(id);
     }
 
@@ -85,6 +87,7 @@ export function prefetchHistoryMediaFromHistoryResult(
       if (kind !== "file") continue;
       const fileId = normalizeId((att as any).file_id ?? (att as any).fileId ?? (att as any).id);
       if (!fileId) continue;
+      if (transferErrors.has(fileId)) continue;
       if (transferUrls.has(fileId)) continue;
 
       const name = String((att as any).name ?? "файл");

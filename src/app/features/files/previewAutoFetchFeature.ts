@@ -1,6 +1,7 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, FileTransferEntry } from "../../../stores/types";
 import { getConversationHistorySyncState } from "../../../helpers/chat/historySync";
+import { registerPwaReloadBlocker } from "../../../helpers/pwa/reloadSafety";
 import { canDrainFilePrefetch, canDrainFileRuntime, isFileRuntimeDocumentVisible } from "./fileRuntimePolicy";
 
 type AutoDownloadKind = "image" | "video" | "audio" | "file";
@@ -100,6 +101,10 @@ export function hasTrustedRuntimeUrl(url: string | null | undefined, previewOnly
   if (!value) return false;
   if (!previewOnly) return true;
   return value.startsWith("blob:");
+}
+
+export function isTerminalPreviewTransferError(entry: FileTransferEntry | null | undefined): boolean {
+  return Boolean(entry && entry.status === "error");
 }
 
 function ensurePreviewPlaceholder(node: HTMLButtonElement): void {
@@ -278,6 +283,14 @@ export function createPreviewAutoFetchFeature(
       const trustedThumbUrl = hasTrustedRuntimeUrl(thumb?.url, previewOnly);
       const shouldDeferPreviewOnlyHydration = previewOnly && !trustedTransferUrl && !trustedThumbUrl;
 
+      if (isTerminalPreviewTransferError(existing)) {
+        node.classList.add("chat-file-preview-empty");
+        ensurePreviewPlaceholder(node);
+        if (img instanceof HTMLImageElement) img.remove();
+        if (video instanceof HTMLVideoElement) video.remove();
+        continue;
+      }
+
       if (shouldDeferPreviewOnlyHydration) {
         node.classList.add("chat-file-preview-empty");
         ensurePreviewPlaceholder(node);
@@ -405,6 +418,7 @@ export function createPreviewAutoFetchFeature(
       if (!fileId) continue;
       const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId);
       const trustedTransferUrl = hasTrustedRuntimeUrl(existing?.url, previewOnly);
+      if (isTerminalPreviewTransferError(existing)) continue;
       if (existing?.status === "downloading") continue;
       if (previewOnly && !trustedTransferUrl) {
         if (existing?.url) {
@@ -561,7 +575,7 @@ export function createPreviewAutoFetchFeature(
         const shouldAttemptRestore = isMedia && (shouldHydrateFull || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
         if (!shouldAttemptRestore) continue;
         const already = st.fileTransfers.find((t) => String(t.id || "").trim() === fid && Boolean(t.url));
-        if (already) continue;
+        if (already || isTerminalPreviewTransferError(st.fileTransfers.find((t) => String(t.id || "").trim() === fid) ?? null)) continue;
         const hasThumb = Boolean(st.fileThumbs?.[fid]?.url);
         if ((kind === "image" || kind === "video") && hasThumb && !shouldHydrateFull) continue;
 
@@ -671,7 +685,9 @@ export function createPreviewAutoFetchFeature(
     }
   };
 
-  const hasPendingActivityForUpdate = () => previewWarmupInFlight || previewAutoFetchRaf !== null;
+  const hasPendingActivityForUpdate = () =>
+    previewWarmupInFlight || previewWarmupTimer !== null || previewAutoFetchRaf !== null;
+  registerPwaReloadBlocker("preview_auto_fetch", hasPendingActivityForUpdate);
 
   return {
     scheduleWarmupCachedPreviews,

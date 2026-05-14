@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.801",
+    date: "2026-05-14",
+    improved: [
+      "История медиа стала спокойнее при старых вложениях: клиент запоминает terminal `not_found` для фоновой догрузки и больше не гоняет повторные preview-запросы к отсутствующим фото.",
+      "Автопрогрев history_result и visible preview теперь уважают terminal error state fileTransfers, поэтому пустые media-shell остаются плейсхолдерами без повторной сетевой загрузки.",
+    ],
+    fixed: [
+      "PWA/Web больше не должны снова и снова пытаться загрузить несуществующие картинки из истории после исчерпания `not_found` retry-window.",
+    ],
+  },
+  {
     version: "0.1.799",
     date: "2026-05-13",
     improved: [

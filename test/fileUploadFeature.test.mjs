@@ -235,6 +235,34 @@ test("fileUploadFeature: sends offer, resolves file id and uploads through HTTP 
   }
 });
 
+test("fileUploadFeature: reports pending upload activity for PWA reload safety", async () => {
+  const restore = installBrowserStubs();
+  const helper = await loadFeature();
+  try {
+    const { feature, store, sent } = createHarness(helper.createFileUploadFeature);
+    const file = new File([new Uint8Array([1, 2, 3])], "photo.jpg", { type: "image/jpeg" });
+
+    assert.equal(feature.hasPendingActivityForUpdate(), false);
+    feature.sendFile(file, { kind: "dm", id: "222-222-222" }, "");
+
+    assert.equal(feature.hasPendingActivityForUpdate(), true);
+    assert.equal(sent[0].type, "file_offer");
+
+    feature.handleMessage({
+      type: "file_offer_result",
+      ok: false,
+      local_id: "local-1",
+      reason: "not_authorized",
+    });
+
+    assert.equal(feature.hasPendingActivityForUpdate(), false);
+    assert.equal(store.get().fileTransfers[0].status, "error");
+  } finally {
+    await helper.cleanup();
+    restore();
+  }
+});
+
 test("fileUploadFeature: falls back from failed HTTP upload to legacy chunks", async () => {
   const restore = installBrowserStubs();
   const helper = await loadFeature();

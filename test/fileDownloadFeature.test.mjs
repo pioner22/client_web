@@ -1,0 +1,131 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { build } from "esbuild";
+
+async function loadFeature() {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "yagodka-web-test-"));
+  const outfile = path.join(tempDir, "bundle.mjs");
+  try {
+    await build({
+      entryPoints: [path.resolve("src/app/features/files/fileDownloadFeature.ts")],
+      outfile,
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      target: "node20",
+      sourcemap: false,
+      logLevel: "silent",
+    });
+    const mod = await import(pathToFileURL(outfile).href);
+    if (typeof mod.createFileDownloadFeature !== "function") throw new Error("createFileDownloadFeature export missing");
+    return { createFileDownloadFeature: mod.createFileDownloadFeature, cleanup: () => rm(tempDir, { recursive: true, force: true }) };
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+test("fileDownloadFeature: exhausted silent not_found records terminal history state", async () => {
+  const helper = await loadFeature();
+  try {
+    const state = {
+      authed: true,
+      conn: "connected",
+      netLeader: true,
+      selfId: "u1",
+      status: "",
+      fileTransfers: [],
+      fileThumbs: {},
+    };
+    const calls = { retry: 0, clearSilent: 0, save: 0 };
+    const store = {
+      get: () => state,
+      set: (patch) => {
+        const next = typeof patch === "function" ? patch(state) : { ...state, ...patch };
+        Object.assign(state, next);
+      },
+      subscribe: () => {},
+    };
+    const noop = () => {};
+    const feature = helper.createFileDownloadFeature({
+      store,
+      send: noop,
+      deviceCaps: { constrained: false, slowNetwork: false, prefetchAllowed: true },
+      downloadByFileId: new Map(),
+      disableFileHttp: noop,
+      nextTransferId: () => "ft-missing",
+      updateTransferByFileId: noop,
+      scheduleSaveFileTransfers: () => {
+        calls.save += 1;
+      },
+      resolveFileMeta: () => ({ name: "missing.jpg", size: 2048, mime: "image/jpeg" }),
+      shouldCacheFile: () => false,
+      shouldCachePreview: () => false,
+      enforceFileCachePolicy: async () => {},
+      thumbCacheId: (fileId) => `thumb:${fileId}`,
+      canAutoDownloadFullFile: () => false,
+      resolveAutoDownloadKind: () => "image",
+      isSilentFileGet: () => true,
+      clearSilentFileGet: () => {
+        calls.clearSilent += 1;
+      },
+      clearFileAcceptRetry: noop,
+      clearFileGetNotFoundRetry: noop,
+      scheduleFileGetNotFoundRetry: () => {
+        calls.retry += 1;
+        return false;
+      },
+      finishFileGet: noop,
+      touchFileGetTimeout: noop,
+      dropFileGetQueue: noop,
+      tryResolveHttpFileUrlWaiter: () => false,
+      requestFreshHttpDownloadUrl: async () => ({ url: "https://example.invalid/file" }),
+      rejectHttpFileUrlWaiter: noop,
+      scheduleThumbPollRetry: noop,
+      clearThumbPollRetry: noop,
+      setFileThumb: noop,
+      maybeSetVideoPosterFromBlob: noop,
+      probeImageDimensions: async () => ({ w: null, h: null }),
+      pendingFileDownloads: new Map(),
+      triggerBrowserDownload: noop,
+      takePendingFileViewer: () => null,
+      clearPendingFileViewer: noop,
+      buildFileViewerModalState: () => ({ kind: "file_viewer" }),
+      postStreamChunk: () => true,
+      postStreamEnd: noop,
+      postStreamError: noop,
+      clearCachedPreviewAttempt: noop,
+      clearPreviewPrefetchAttempt: noop,
+      isUploadActive: () => false,
+      abortUploadByFileId: noop,
+    });
+
+    assert.equal(feature.handleMessage({ type: "file_error", file_id: "missing-img", reason: "not_found" }), true);
+    assert.equal(calls.retry, 1);
+    assert.equal(calls.clearSilent, 1);
+    assert.equal(calls.save, 1);
+    assert.equal(state.status, "");
+    assert.deepEqual(state.fileTransfers, [
+      {
+        localId: "ft-missing",
+        id: "missing-img",
+        name: "missing.jpg",
+        size: 2048,
+        mime: "image/jpeg",
+        direction: "in",
+        peer: "—",
+        room: null,
+        status: "error",
+        progress: 0,
+        error: "not_found",
+      },
+    ]);
+  } finally {
+    await helper.cleanup();
+  }
+});

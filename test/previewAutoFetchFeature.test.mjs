@@ -22,12 +22,13 @@ async function loadFeature() {
       logLevel: "silent",
     });
     const mod = await import(pathToFileURL(outfile).href);
-    if (typeof mod.resolveVisiblePreviewFetchPlan !== "function") {
-      throw new Error("resolveVisiblePreviewFetchPlan export missing");
+    for (const key of ["resolveVisiblePreviewFetchPlan", "isTerminalPreviewTransferError"]) {
+      if (typeof mod[key] !== "function") throw new Error(`${key} export missing`);
     }
     return {
       resolveVisiblePreviewFetchPlan: mod.resolveVisiblePreviewFetchPlan,
       hasTrustedRuntimeUrl: mod.hasTrustedRuntimeUrl,
+      isTerminalPreviewTransferError: mod.isTerminalPreviewTransferError,
       cleanup: () => rm(tempDir, { recursive: true, force: true }),
     };
   } catch (error) {
@@ -67,6 +68,9 @@ test("previewAutoFetchFeature: visible media uses high-priority hydration even w
     assert.equal(helper.hasTrustedRuntimeUrl("blob:test", false), true);
     assert.equal(helper.hasTrustedRuntimeUrl("https://yagodka.org/files/fid", true), false);
     assert.equal(helper.hasTrustedRuntimeUrl("blob:test", true), true);
+    assert.equal(helper.isTerminalPreviewTransferError({ status: "error" }), true);
+    assert.equal(helper.isTerminalPreviewTransferError({ status: "downloading" }), false);
+    assert.equal(helper.isTerminalPreviewTransferError(null), false);
   } finally {
     await helper.cleanup();
   }

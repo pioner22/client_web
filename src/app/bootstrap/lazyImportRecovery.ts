@@ -1,6 +1,17 @@
 import { isPwaStabilityHoldActive } from "../../helpers/pwa/stabilityHold";
+import {
+  clearPwaReloadBlockersForTest,
+  getPwaReloadBlockerKeys,
+  hasPwaReloadBlockers,
+  registerPwaReloadBlocker,
+} from "../../helpers/pwa/reloadSafety";
 
 const LAZY_IMPORT_RECOVER_KEY = "yagodka_lazy_import_recover_v1";
+
+export {
+  clearPwaReloadBlockersForTest as __clearPwaReloadBlockersForTest,
+  registerPwaReloadBlocker as __registerPwaReloadBlockerForTest,
+};
 
 function lazyImportErrorText(err: unknown): string {
   const name = typeof (err as any)?.name === "string" ? String((err as any).name).trim() : "";
@@ -31,6 +42,18 @@ export function recoverFromLazyImportError(err: unknown, scope = "lazy_import"):
   }
 
   if (isPwaStabilityHoldActive()) return false;
+  if (hasPwaReloadBlockers()) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("yagodka:pwa-sw-error", {
+          detail: { error: `lazy_import_deferred:${scope}:${getPwaReloadBlockerKeys().join(",") || "reload_blocked"}` },
+        })
+      );
+    } catch {
+      // ignore
+    }
+    return false;
+  }
 
   let alreadyRecovered = false;
   try {

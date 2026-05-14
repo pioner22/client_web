@@ -203,3 +203,52 @@ test("history media prefetch: thumb-only entry is skipped when full hydration is
     await cleanup();
   }
 });
+
+test("history media prefetch: terminal error transfers are not requeued", async () => {
+  const prevDocument = globalThis.document;
+  globalThis.document = { visibilityState: "visible" };
+  const { prefetchHistoryMediaFromHistoryResult, cleanup } = await loadHelpers();
+  try {
+    const enqueued = [];
+    prefetchHistoryMediaFromHistoryResult(
+      {
+        peer: "222-222-222",
+        rows: [
+          {
+            id: 12,
+            attachment: {
+              kind: "file",
+              file_id: "missing-img",
+              name: "missing.jpg",
+              mime: "image/jpeg",
+              size: 2048,
+            },
+          },
+        ],
+      },
+      {
+        getState: () => ({
+          authed: true,
+          conn: "connected",
+          selfId: "u1",
+          netLeader: true,
+          selected: { kind: "dm", id: "222-222-222" },
+          fileThumbs: {},
+          fileTransfers: [{ id: "missing-img", status: "error" }],
+        }),
+        devicePrefetchAllowed: true,
+        autoDownloadCachePolicyFeature: {
+          resolveAutoDownloadKind: () => "image",
+          canAutoDownloadFullFile: () => true,
+          shouldCachePreview: () => true,
+        },
+        enqueueFileGet: (fileId, opts) => enqueued.push({ fileId, opts }),
+      }
+    );
+    assert.deepEqual(enqueued, []);
+  } finally {
+    if (prevDocument === undefined) delete globalThis.document;
+    else globalThis.document = prevDocument;
+    await cleanup();
+  }
+});

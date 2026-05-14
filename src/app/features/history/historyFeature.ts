@@ -6,6 +6,7 @@ import { loadHistoryCachePrefs } from "../../../helpers/chat/historyCachePrefs";
 import { countHistoryMessagesForConvo, getHistoryConvoMeta, getHistoryLatestMessages, getHistoryMessagesBefore } from "../../../helpers/chat/historyIdb";
 import { historyViewportRecentlyCompensated, shiftVirtualStartForPrepend } from "../../../helpers/chat/historyViewportCoordinator";
 import { mergeMessages, prependedCount } from "../../../helpers/chat/mergeMessages";
+import { registerPwaReloadBlocker } from "../../../helpers/pwa/reloadSafety";
 
 type DeviceCapsLike = {
   constrained: boolean;
@@ -1411,12 +1412,18 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     Boolean(
       historyRequested.size ||
         historyDeltaRequested.size ||
+        historyPreviewRequested.size ||
+        historyPreviewQueue.length ||
+        historyPreviewTimer !== null ||
         historyPrefetchRequested.size ||
         historyWarmupInFlight.size ||
         historyWarmupQueue.length ||
+        historyWarmupTimer !== null ||
         historyBackfillInFlight.size ||
-        historyBackfillQueue.length
+        historyBackfillQueue.length ||
+        historyBackfillTimer !== null
     );
+  registerPwaReloadBlocker("history", hasPendingActivityForUpdate);
 
   const onDisconnect: HistoryFeature["onDisconnect"] = () => {
     clearPendingRequests();

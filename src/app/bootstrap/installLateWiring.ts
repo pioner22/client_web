@@ -124,6 +124,7 @@ export function installLateWiring(deps: any) {
     scheduleChatJumpVisibility,
     requestHistory,
     previewAutoFetchFeature,
+    hasPendingFileActivityForUpdate,
     scheduleHistoryWarmup,
     maybeAutoFillHistoryViewport,
     maybeAutoRetryHistory,
@@ -164,6 +165,8 @@ export function installLateWiring(deps: any) {
     getLastUserInputAt,
     hasPendingHistoryActivityForUpdate: () => historyFeature?.hasPendingActivityForUpdate() ?? false,
     hasPendingPreviewActivityForUpdate: () => previewAutoFetchFeature.hasPendingActivityForUpdate(),
+    hasPendingFileActivityForUpdate: () =>
+      typeof hasPendingFileActivityForUpdate === "function" ? hasPendingFileActivityForUpdate() : false,
   });
   pwaUpdateRuntime.startDeferredBoot();
 
