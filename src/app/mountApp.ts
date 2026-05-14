@@ -814,6 +814,7 @@ export function mountApp(root: HTMLElement) {
     jumpToChatMsgIdx,
     tryOpenFileViewerFromCache,
     enqueueFileGet,
+    acceptFileOffer: (fileId) => fileOffers?.accept(fileId, null, { closeModal: false }),
     beginViewerStream: (fileId, meta) => fileDownloadActions?.beginViewerStream(fileId, meta) ?? null,
     setPendingFileViewer: (next) => {
       pendingFileViewer = next;

@@ -136,3 +136,73 @@ test("fileViewerFeature: iOS standalone media opens via inline stream instead of
     await helper.cleanup();
   }
 });
+
+test("fileViewerFeature: explicit visual open accepts pending file offer before file_get", async () => {
+  const helper = await loadFeature();
+  try {
+    const accepted = [];
+    const enqueued = [];
+    const pending = [];
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "f-offer",
+              name: "photo.jpg",
+              size: 123,
+              mime: "image/jpeg",
+            },
+          },
+        ],
+      },
+      fileOffersIn: [{ id: "f-offer", from: "222", name: "photo.jpg", size: 123, mime: "image/jpeg" }],
+      fileTransfers: [],
+      fileThumbs: {},
+      modal: null,
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") Object.assign(storeState, patch);
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        return false;
+      },
+      enqueueFileGet(fileId) {
+        enqueued.push(String(fileId));
+      },
+      acceptFileOffer(fileId) {
+        accepted.push(String(fileId));
+      },
+      setPendingFileViewer(state) {
+        pending.push(state);
+      },
+    });
+
+    const opened = await feature.openFromMessageIndex("dm:222", 0);
+
+    assert.equal(opened, true);
+    assert.deepEqual(accepted, ["f-offer"]);
+    assert.deepEqual(enqueued, ["f-offer"]);
+    assert.equal(pending[0]?.fileId, "f-offer");
+  } finally {
+    await helper.cleanup();
+  }
+});

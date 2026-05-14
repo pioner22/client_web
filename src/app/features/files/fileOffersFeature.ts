@@ -3,6 +3,7 @@ import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync
 import { isTerminalFileTransferStatus } from "../../../helpers/runtime/deliveryCoordinator";
 import { isViewingDmPeer, isViewingRoomId } from "../../../helpers/navigation/mainConversationState";
 import { upsertConversation } from "../../../helpers/chat/upsertConversation";
+import { resolveMediaKind } from "../../../helpers/files/mediaKind";
 import { nowTs } from "../../../helpers/time";
 import type { Store } from "../../../stores/store";
 import type { AppState, FileOfferIn } from "../../../stores/types";
@@ -40,6 +41,11 @@ export interface FileOffersFeature {
   accept: (fileId: string, offerOverride?: FileOfferIn | null, opts?: { silent?: boolean; closeModal?: boolean }) => void;
   reject: (fileId: string) => void;
   clearCompleted: () => void;
+}
+
+export function shouldAutoAcceptFileOffer(name: string, mime: string | null | undefined): boolean {
+  const kind = resolveMediaKind(name, mime, null);
+  return kind !== "image" && kind !== "video";
 }
 
 export function createFileOffersFeature(deps: FileOffersFeatureDeps): FileOffersFeature {
@@ -230,12 +236,13 @@ export function createFileOffersFeature(deps: FileOffersFeatureDeps): FileOffers
         maybeSendMessageRead(offer.from, upToId);
       }
     }
-    // Modern UX: auto-accept incoming offers so they don't stick as "Входящий файл" and can download in background.
+    // Auto-accept non-visual files only. Photo/video chat cards are click-to-load so
+    // stale media does not start background downloads in PWA chat/history.
     try {
       const hasTransfer = stNow.fileTransfers.some((t) => t.direction === "in" && String(t.id || "").trim() === fileId);
       const snap = tabNotifier.getSnapshot();
       const focused = typeof document.hasFocus === "function" ? document.hasFocus() : false;
-      const canAutoAccept = focused || (snap.leader && !snap.anyFocused);
+      const canAutoAccept = shouldAutoAcceptFileOffer(offer.name, offer.mime ?? null) && (focused || (snap.leader && !snap.anyFocused));
       if (!hasTransfer && canAutoAccept && stNow.conn === "connected" && stNow.authed) {
         accept(fileId, offer, { silent: true, closeModal: false });
       }

@@ -62,6 +62,7 @@ export interface FileViewerFeatureDeps {
     }
   ) => Promise<boolean>;
   enqueueFileGet: (fileId: string, opts?: { priority?: "high" | "prefetch"; silent?: boolean }) => void;
+  acceptFileOffer?: (fileId: string) => void;
   beginViewerStream?: (fileId: string, meta?: { name?: string; size?: number; mime?: string | null }) => string | null;
   setPendingFileViewer: (state: PendingFileViewer) => void;
 }
@@ -99,6 +100,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     jumpToChatMsgIdx,
     tryOpenFileViewerFromCache,
     enqueueFileGet,
+    acceptFileOffer,
     beginViewerStream,
     setPendingFileViewer,
   } = deps;
@@ -113,7 +115,6 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     }
   };
 
-  const VIEWER_PREFETCH_MAX_BYTES = 24 * 1024 * 1024;
   const shouldUseInlineViewerStream = (fileId: string, name: string, mime: string | null, kindHint: "image" | "video" | null): boolean => {
     if (!beginViewerStream) return false;
     if (!fileId) return false;
@@ -179,6 +180,9 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
   }) => {
     const fileId = String(params.fileId || "").trim();
     if (!fileId) return;
+    if (store.get().fileOffersIn.some((offer) => String(offer.id || "").trim() === fileId)) {
+      acceptFileOffer?.(fileId);
+    }
     setPendingFileViewer({
       fileId,
       name: params.name,
@@ -201,40 +205,10 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
   };
 
   const maybePrefetchNeighbors = (chatKeyRaw: string, centerIdxRaw: number) => {
-    const chatKey = String(chatKeyRaw || "").trim();
-    const centerIdx = Number.isFinite(centerIdxRaw) ? Math.trunc(centerIdxRaw) : -1;
-    if (!chatKey || centerIdx < 0) return;
-    const st = store.get();
-    if (st.conn !== "connected" || !st.authed) return;
-    const msgs = st.conversations[chatKey] || [];
-    if (!msgs.length) return;
-    const scope = resolveViewerSourceScope(msgs, centerIdx);
-    const neighborIndices = scope ? [scope.prevIdx, scope.nextIdx] : [];
-    for (const neighborIdx of neighborIndices) {
-      if (neighborIdx === null) continue;
-      const msg = msgs[neighborIdx];
-      const att = msg?.attachment;
-      if (!att || att.kind !== "file") continue;
-      const fileId = typeof att.fileId === "string" ? att.fileId.trim() : "";
-      if (!fileId) continue;
-      const entry = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId) || null;
-      if (entry?.url) continue;
-      const name = String(att.name || entry?.name || "файл");
-      const size = Number(att.size || entry?.size || 0) || 0;
-      const mime = (att.mime ?? entry?.mime) || null;
-      if (!isImageLikeFile(name, mime)) continue;
-      if (size > 0 && size > VIEWER_PREFETCH_MAX_BYTES) continue;
-      enqueueFileGet(fileId, { priority: "prefetch", silent: true });
-      debugHook("file.viewer.prefetch", {
-        chatKey,
-        centerIdx,
-        neighborIdx,
-        fileId,
-        size,
-        mime: mime ? String(mime).slice(0, 80) : null,
-        name: name ? String(name).slice(0, 80) : null,
-      });
-    }
+    void chatKeyRaw;
+    void centerIdxRaw;
+    // Viewer navigation is also click-to-load: opening one photo must not silently
+    // prefetch neighboring visual media from stale chat history.
   };
 
   function buildModalState(params: FileViewerModalParams): FileViewerModalState {

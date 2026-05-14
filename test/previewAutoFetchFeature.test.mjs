@@ -37,7 +37,7 @@ async function loadFeature() {
   }
 }
 
-test("previewAutoFetchFeature: visible media uses high-priority hydration even when background prefetch is blocked", async () => {
+test("previewAutoFetchFeature: visual previews restore cache but do not auto-start chat media downloads", async () => {
   const helper = await loadFeature();
   try {
     assert.deepEqual(
@@ -46,7 +46,7 @@ test("previewAutoFetchFeature: visible media uses high-priority hydration even w
         devicePrefetchAllowed: false,
         shouldBackgroundPrefetch: false,
       }),
-      { prefetch: false, priority: "high" }
+      { prefetch: false, priority: "prefetch" }
     );
     assert.deepEqual(
       helper.resolveVisiblePreviewFetchPlan({
@@ -54,7 +54,7 @@ test("previewAutoFetchFeature: visible media uses high-priority hydration even w
         devicePrefetchAllowed: true,
         shouldBackgroundPrefetch: true,
       }),
-      { prefetch: true, priority: "high" }
+      { prefetch: false, priority: "prefetch" }
     );
     assert.deepEqual(
       helper.resolveVisiblePreviewFetchPlan({

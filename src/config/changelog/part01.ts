@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.802",
+    date: "2026-05-14",
+    improved: [
+      "PWA/Web chat media теперь ведёт себя спокойнее: фото и видео в чате остаются click-to-load и не стартуют silent background `file_get` только из-за видимого placeholder.",
+      "History media prefetch больше не запускает сетевую догрузку старых image/video строк; cached preview restore сохраняется, а отсутствующие вложения остаются стабильными плейсхолдерами.",
+    ],
+    fixed: [
+      "Входящие фото/видео file_offer больше не auto-accept в активной PWA-вкладке, поэтому чат не начинает сам скачивать медиа без явного открытия пользователем.",
+    ],
+  },
+  {
     version: "0.1.801",
     date: "2026-05-14",
     improved: [

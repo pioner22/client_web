@@ -57,24 +57,11 @@ export function prefetchHistoryMediaFromHistoryResult(
     const rows = Array.isArray(msg?.rows) ? msg.rows : [];
     if (!rows.length) return;
 
-    const shouldHydrateFull = (name: string, mime: string | null, size: number, kind: AutoDownloadKind): boolean => {
-      if (kind === "image" || kind === "video") {
-        return (
-          deps.autoDownloadCachePolicyFeature.shouldCachePreview(name, mime, size) ||
-          deps.autoDownloadCachePolicyFeature.canAutoDownloadFullFile(st.selfId || null, kind, size)
-        );
-      }
-      return deps.autoDownloadCachePolicyFeature.canAutoDownloadFullFile(st.selfId || null, kind, size);
-    };
-
-    const fileThumbs = st.fileThumbs || {};
-    const transferUrls = new Set<string>();
     const transferErrors = new Set<string>();
     for (const t of st.fileTransfers || []) {
       const id = normalizeId(t?.id);
       if (!id) continue;
       if ((t as any)?.status === "error") transferErrors.add(id);
-      if (typeof (t as any)?.url === "string" && String((t as any).url).trim()) transferUrls.add(id);
     }
 
     const maxPerResult = isSelected ? 18 : 8;
@@ -88,18 +75,15 @@ export function prefetchHistoryMediaFromHistoryResult(
       const fileId = normalizeId((att as any).file_id ?? (att as any).fileId ?? (att as any).id);
       if (!fileId) continue;
       if (transferErrors.has(fileId)) continue;
-      if (transferUrls.has(fileId)) continue;
 
       const name = String((att as any).name ?? "файл");
       const mimeRaw = (att as any).mime;
       const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw).trim() : null;
-      const size = Number((att as any).size ?? 0) || 0;
       const autoKind = deps.autoDownloadCachePolicyFeature.resolveAutoDownloadKind(name, mime, null);
+      // Visual chat media is now click-to-load. History_result may restore already
+      // cached previews elsewhere, but must not start background file_get for old
+      // photo/video rows that can be stale or missing on the server.
       if (autoKind !== "image" && autoKind !== "video") continue;
-      const fullHydration = shouldHydrateFull(name, mime, size, autoKind);
-      if (fileThumbs[fileId]?.url && !fullHydration) continue;
-
-      deps.enqueueFileGet(fileId, { priority: "prefetch", silent: true });
       queued += 1;
     }
   } catch {

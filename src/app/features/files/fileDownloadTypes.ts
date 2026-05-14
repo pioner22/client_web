@@ -38,9 +38,9 @@ export function shouldHydrateSilentFullBlob(params: {
   shouldCachePreview: (name: string, mime: string | null | undefined, size: number) => boolean;
   canAutoDownloadFullFile: (userId: string | null, kind: AutoDownloadKind, size: number) => boolean;
 }): boolean {
-  const { kind, name, mime, size, userId, shouldCachePreview, canAutoDownloadFullFile } = params;
+  const { kind, size, userId, canAutoDownloadFullFile } = params;
   if (kind === "image" || kind === "video") {
-    return shouldCachePreview(name || "файл", mime, size) || canAutoDownloadFullFile(userId, kind, size);
+    return canAutoDownloadFullFile(userId, kind, size);
   }
   return canAutoDownloadFullFile(userId, kind, size);
 }

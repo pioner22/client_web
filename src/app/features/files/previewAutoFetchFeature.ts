@@ -84,16 +84,12 @@ export function resolveVisiblePreviewFetchPlan(params: {
   shouldBackgroundPrefetch: boolean;
 }): { prefetch: boolean; priority: "high" | "prefetch" } {
   const fileKind = params.fileKind;
-  const canBackgroundPrefetch = Boolean(params.devicePrefetchAllowed && params.shouldBackgroundPrefetch);
   if (fileKind === "audio") {
     return { prefetch: false, priority: "high" };
   }
-  if (canBackgroundPrefetch) {
-    // Visible media must still hydrate even if another runtime is leader or saveData changes later.
-    // Keep background/full-hydration intent, but use a user-visible high-priority request.
-    return { prefetch: true, priority: "high" };
-  }
-  return { prefetch: false, priority: "high" };
+  // Image/video previews are click-to-load in chat. The preview runtime may restore
+  // cached thumbs/blobs, but it must not start background file_get for visual media.
+  return { prefetch: false, priority: "prefetch" };
 }
 
 export function hasTrustedRuntimeUrl(url: string | null | undefined, previewOnly: boolean): boolean {
@@ -518,8 +514,7 @@ export function createPreviewAutoFetchFeature(
     for (const t of restoreTasks) {
       const needsFullRestore = t.kind === "audio" || Boolean(t.restorePreview);
       if (needsFullRestore ? restoredFullIds.has(t.fileId) : restoredThumbIds.has(t.fileId) || restoredFullIds.has(t.fileId)) continue;
-      const isVisibleMedia = t.kind === "image" || t.kind === "video";
-      if (t.priority !== "high" && !t.prefetch && !isVisibleMedia) continue;
+      if (t.priority !== "high" && !t.prefetch) continue;
       const k = `${st.selfId}:${t.fileId}`;
       const lastAttempt = previewPrefetchAttempted.get(k) || 0;
       if (lastAttempt && now - lastAttempt < t.retryWindowMs) continue;
@@ -570,8 +565,9 @@ export function createPreviewAutoFetchFeature(
         const isMedia = autoDownloadCachePolicyFeature.isMediaLikeFile(name, mime);
         const kind = autoDownloadCachePolicyFeature.resolveAutoDownloadKind(name, mime, null);
         if (kind === "file") continue;
+        const isVisualMedia = kind === "image" || kind === "video";
         const shouldHydrateFull = devicePrefetchAllowed && shouldHydrateFullPreview(name, mime, size, kind);
-        const shouldPrefetch = shouldHydrateFull;
+        const shouldPrefetch = !isVisualMedia && shouldHydrateFull;
         const shouldAttemptRestore = isMedia && (shouldHydrateFull || !mime || size <= 0 || size <= previewAutoRestoreMaxBytes);
         if (!shouldAttemptRestore) continue;
         const already = st.fileTransfers.find((t) => String(t.id || "").trim() === fid && Boolean(t.url));

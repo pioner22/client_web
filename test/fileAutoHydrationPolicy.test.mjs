@@ -46,7 +46,7 @@ async function loadHelpers() {
   }
 }
 
-test("file auto hydration: thumb-only image still plans full blob warmup when preview caching allows it", async () => {
+test("file auto hydration: preview caching alone does not full-download visual media", async () => {
   const { shouldHydrateSilentFullBlob, getSilentFileUrlPlan, cleanup } = await loadHelpers();
   try {
     const allowFullDownload = shouldHydrateSilentFullBlob({
@@ -64,10 +64,10 @@ test("file auto hydration: thumb-only image still plans full blob warmup when pr
       kind: "image",
       allowFullDownload,
     });
-    assert.equal(allowFullDownload, true);
+    assert.equal(allowFullDownload, false);
     assert.deepEqual(plan, {
       fetchThumb: true,
-      fetchFull: true,
+      fetchFull: false,
       scheduleThumbPoll: false,
       finishWithoutNetwork: false,
     });
@@ -106,7 +106,7 @@ test("file auto hydration: silent video without thumb keeps full download and th
   }
 });
 
-test("history media prefetch: existing thumb does not block full hydration when cache policy allows it", async () => {
+test("history media prefetch: visual media is not auto-queued without user action", async () => {
   const prevDocument = globalThis.document;
   globalThis.document = { visibilityState: "visible" };
   const { prefetchHistoryMediaFromHistoryResult, cleanup } = await loadHelpers();
@@ -147,7 +147,7 @@ test("history media prefetch: existing thumb does not block full hydration when 
         enqueueFileGet: (fileId, opts) => enqueued.push({ fileId, opts }),
       }
     );
-    assert.deepEqual(enqueued, [{ fileId: "f-1", opts: { priority: "prefetch", silent: true } }]);
+    assert.deepEqual(enqueued, []);
   } finally {
     if (prevDocument === undefined) delete globalThis.document;
     else globalThis.document = prevDocument;
