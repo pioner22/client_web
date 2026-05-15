@@ -43,6 +43,14 @@ test("mainConversationState: active selection only exists on main surface withou
     assert.equal(helper.isMainConversationSurface({ page: "main", modal: null }), true);
     assert.equal(helper.isMainConversationSurface({ page: "files", modal: null }), false);
     assert.equal(
+      helper.hasActiveConversationSelection({
+        page: "main",
+        modal: { kind: "file_viewer", chatKey: "dm:u-1", msgIdx: 0, fileId: "f-1", openedAtMs: 1000 },
+        selected: { kind: "dm", id: "u-1" },
+      }),
+      false
+    );
+    assert.equal(
       helper.hasConversationViewportSelection({
         page: "main",
         modal: { kind: "context_menu", payload: { target: { kind: "sidebar_tools", id: "tools" }, x: 0, y: 0 } },
@@ -57,6 +65,14 @@ test("mainConversationState: active selection only exists on main surface withou
         selected: { kind: "group", id: "g-1" },
       }),
       { kind: "group", id: "g-1" }
+    );
+    assert.deepEqual(
+      helper.getConversationViewportTarget({
+        page: "main",
+        modal: { kind: "file_viewer", chatKey: "dm:u-1", msgIdx: 0, fileId: "f-1", openedAtMs: 1000 },
+        selected: { kind: "dm", id: "u-1" },
+      }),
+      { kind: "dm", id: "u-1" }
     );
   } finally {
     await helper.cleanup();

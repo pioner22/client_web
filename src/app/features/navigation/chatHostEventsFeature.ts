@@ -26,6 +26,11 @@ export interface ChatHostEventsFeature {
   install: () => void;
 }
 
+export function shouldIgnoreChatHostScrollSideEffects(state: Pick<AppState, "modal">): boolean {
+  const kind = state.modal?.kind ?? null;
+  return kind === "file_viewer" || kind === "call";
+}
+
 export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): ChatHostEventsFeature {
   const {
     store,
@@ -123,6 +128,7 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
   };
 
   const markUserChatScroll = () => {
+    if (shouldIgnoreChatHostScrollSideEffects(store.get())) return;
     const now = Date.now();
     lastChatUserScrollAt = now;
     const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
@@ -153,6 +159,7 @@ export function createChatHostEventsFeature(deps: ChatHostEventsFeatureDeps): Ch
         const scrollTop = layout.chatHost.scrollTop;
         const scrollingUp = scrollTop < lastChatScrollTop;
         lastChatScrollTop = scrollTop;
+        if (shouldIgnoreChatHostScrollSideEffects(store.get())) return;
         const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
         const now = Date.now();
         const userScrollRecent = now - lastChatUserScrollAt < 2000;

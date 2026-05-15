@@ -375,3 +375,62 @@ test("renderChat: сохраняет scrollTop если replaceChildren сбра
     await helper.cleanup();
   }
 });
+
+test("renderChat: file_viewer overlay сохраняет историю выбранного чата", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
+      const chatSearchFooter = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
+      chatSearchFooter.className = "chat-search-footer";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
+
+      chatHost.setAttribute("data-chat-key", "dm:123-456-789");
+      chatHost.scrollTop = 420;
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+      const state = {
+        page: "main",
+        modal: { kind: "file_viewer", chatKey: "dm:123-456-789", msgIdx: 0, fileId: "f-1", openedAtMs: 1000 },
+        selected: { kind: "dm", id: "123-456-789" },
+        conversations: {
+          "dm:123-456-789": [
+            { kind: "in", from: "123-456-789", to: "854-432-319", room: null, text: "фото", ts: 1700000000, id: 1 },
+          ],
+        },
+        historyHasMore: { "dm:123-456-789": false },
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [],
+        fileOffersIn: [],
+        groups: [],
+        boards: [],
+      };
+
+      helper.renderChat(layout, state);
+
+      const lines = findFirst(chatHost, (n) => n && typeof n.className === "string" && n.className.split(/\s+/).includes("chat-lines"));
+      assert.ok(lines, "chat lines should stay rendered behind file viewer overlay");
+      assert.equal(chatHost.scrollTop, 420, "expected scrollTop preserved while file viewer overlay is open");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});

@@ -25,7 +25,7 @@ import {
 } from "../../helpers/chat/virtualHistory";
 import { CHAT_SEARCH_FILTERS } from "../../helpers/chat/chatSearch";
 import { createChatStickyBottomState, isChatStickyBottomActive } from "../../helpers/chat/stickyBottom";
-import { getActiveConversationTarget } from "../../helpers/navigation/mainConversationState";
+import { getConversationViewportTarget } from "../../helpers/navigation/mainConversationState";
 import { isRightPanelActiveForSelected } from "../../helpers/navigation/rightPanelState";
 import { resolveUnreadDivider } from "./historyLayoutModel";
 import { buildHistoryRenderSurface } from "./historyRenderSurface";
@@ -133,7 +133,7 @@ function patchChatTransferProgress(scrollHost: HTMLElement, transfers: AppState[
 }
 
 export function renderChat(layout: Layout, state: AppState) {
-  const activeConversation = getActiveConversationTarget(state);
+  const activeConversation = getConversationViewportTarget(state);
   const mobileUi = isMobileLikeUi();
   const boardUi = Boolean(activeConversation && activeConversation.kind === "board");
   const scrollHost = layout.chatHost;

@@ -12,12 +12,17 @@ function isMainPage(page: unknown): boolean {
   return page === undefined || page === null || page === "main";
 }
 
+function isConversationViewportModal(modal: AppState["modal"] | null | undefined): boolean {
+  if (!modal) return true;
+  return modal.kind === "context_menu" || modal.kind === "file_viewer" || modal.kind === "call";
+}
+
 export function isMainConversationSurface(state: Pick<AppState, "page" | "modal">): boolean {
   return Boolean(isMainPage(state.page) && !state.modal);
 }
 
 export function isConversationViewportSurface(state: Pick<AppState, "page" | "modal">): boolean {
-  return Boolean(isMainPage(state.page) && (!state.modal || state.modal.kind === "context_menu"));
+  return Boolean(isMainPage(state.page) && isConversationViewportModal(state.modal));
 }
 
 export function getActiveConversationTarget(state: MainConversationSurfaceState): TargetRef | null {
