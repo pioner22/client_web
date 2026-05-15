@@ -927,6 +927,27 @@
   animation: skel-shimmer 1.15s ease-in-out infinite;
 }
 
+.chat-file-preview-missing,
+.chat-file-preview-missing:hover {
+  cursor: default;
+  border-color: color-mix(in srgb, var(--line), transparent 10%);
+  box-shadow: none;
+  transform: none;
+}
+
+.chat-file-preview-missing.chat-file-preview-empty {
+  animation: none;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel2), transparent 0%), color-mix(in srgb, var(--panel2), transparent 6%));
+}
+
+.chat-file-preview-missing .chat-file-placeholder {
+  background-image: none;
+  animation: none;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .prompt {
   color: var(--prompt-color);
   padding-bottom: var(--sp-2);

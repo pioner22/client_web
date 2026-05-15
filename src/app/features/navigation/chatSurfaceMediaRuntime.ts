@@ -66,6 +66,10 @@ export function createLazyChatSurfaceMediaRuntime(deps: ChatSurfaceDeferredDeps)
 
     const viewBtn = target?.closest("button[data-action='open-file-viewer']") as HTMLButtonElement | null;
     if (viewBtn) {
+      if (viewBtn.disabled || viewBtn.getAttribute("data-media-missing") === "1") {
+        stopEvent(event);
+        return true;
+      }
       const url = String(viewBtn.getAttribute("data-url") || "").trim();
       const fileId = String(viewBtn.getAttribute("data-file-id") || "").trim();
       if (url || fileId) {

@@ -1,4 +1,5 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
+import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../../helpers/files/fileMissingState";
 import { isVideoLikeFile } from "../../../helpers/files/mediaKind";
 import { requestVoiceAutoplay } from "../../../helpers/media/audioSession";
 import { getActiveConversationKey } from "../../../helpers/navigation/mainConversationState";
@@ -175,6 +176,11 @@ export function createChatSurfaceMediaActions(deps: ChatSurfaceDeferredDeps) {
         if (opened) return;
 
         const latest = store.get();
+        const missing = latest.fileTransfers.find((transfer) => String(transfer.id || "").trim() === fileId) ?? null;
+        if (isTerminalMissingVisualTransfer(missing, { name, mime, kindHint })) {
+          store.set({ status: MISSING_FILE_STATUS });
+          return;
+        }
         if (latest.conn !== "connected") {
           store.set({ status: "Нет соединения" });
           return;

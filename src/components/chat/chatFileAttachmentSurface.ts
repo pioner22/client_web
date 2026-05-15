@@ -1,5 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { fileBadge, type FileBadgeKind } from "../../helpers/files/fileBadge";
+import { isTerminalMissingVisualTransfer } from "../../helpers/files/fileMissingState";
 import { isPdfLikeFile } from "../../helpers/files/mediaKind";
 import type { FileAttachmentInfo } from "./chatVisualPreviewShared";
 
@@ -43,6 +44,7 @@ export function resolveChatFileSurfaceInfo(info: FileAttachmentInfo): ChatFileSu
   const badge = fileBadge(info.name, info.mime);
   const isPdf = badge.kind === "pdf" || isPdfLikeFile(info.name, info.mime);
   const transferStatus = info.transfer?.status || "";
+  const terminalMissingVisual = isTerminalMissingVisualTransfer(info.transfer, { name: info.name, mime: info.mime });
   const hasUrl = Boolean(info.url);
   const openable = Boolean((isPdf || badge.kind === "doc") && (info.fileId || info.url));
   let stateTone: ChatFileSurfaceInfo["stateTone"] = "idle";
@@ -67,8 +69,9 @@ export function resolveChatFileSurfaceInfo(info: FileAttachmentInfo): ChatFileSu
     stateLabel = "Отправлено";
   } else if (transferStatus === "error") {
     stateTone = "error";
-    stateLabel = "Ошибка";
-    downloadLabel = "Повторить";
+    stateLabel = terminalMissingVisual ? "Недоступен" : "Ошибка";
+    downloadLabel = terminalMissingVisual ? "Недоступен" : "Повторить";
+    downloadDisabled = terminalMissingVisual;
   } else if (transferStatus === "rejected") {
     stateTone = "error";
     stateLabel = "Отклонено";

@@ -4,6 +4,7 @@ import { base64ToBytes } from "../../../helpers/files/base64";
 import { liftFileHttpTokenToBearer, rememberFileHttpBearer } from "../../../helpers/files/fileHttpAuth";
 import { resumableHttpDownload } from "../../../helpers/files/fileHttpDownload";
 import { putCachedFileBlob } from "../../../helpers/files/fileBlobCache";
+import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../../helpers/files/fileMissingState";
 import { guessMimeTypeByName } from "../../../helpers/files/mimeGuess";
 import { getDeliveryRetryPolicy } from "../../../helpers/runtime/deliveryCoordinator";
 import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
@@ -822,6 +823,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const peer = String(msg?.peer ?? "").trim();
     const detail = peer ? `${reason} (${peer})` : reason;
     const silent = fileId ? isSilentFileGet(fileId) : false;
+    let terminalMissingVisual = false;
     debugHook("file.error", { fileId, reason: detail, silent, peer: peer || null });
     if (fileId) {
       httpRuntime.abort(fileId, `server:${detail}`);
@@ -863,8 +865,9 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       if (download) downloadByFileId.delete(fileId);
       clearFileAcceptRetry(fileId);
       markFileTransferError(fileId, detail);
+      terminalMissingVisual = isTerminalMissingVisualTransfer(store.get().fileTransfers.find((t) => String(t.id || "").trim() === fileId));
     }
-    if (!silent) store.set({ status: `Ошибка файла: ${detail}` });
+    if (!silent) store.set({ status: terminalMissingVisual ? MISSING_FILE_STATUS : `Ошибка файла: ${detail}` });
     return true;
   }
 

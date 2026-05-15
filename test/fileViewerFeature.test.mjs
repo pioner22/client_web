@@ -206,3 +206,86 @@ test("fileViewerFeature: explicit visual open accepts pending file offer before 
     await helper.cleanup();
   }
 });
+
+test("fileViewerFeature: terminal visual not_found is not re-enqueued from chat open", async () => {
+  const helper = await loadFeature();
+  try {
+    const enqueued = [];
+    const pending = [];
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "missing-img",
+              name: "photo.jpg",
+              size: 123,
+              mime: "image/jpeg",
+            },
+          },
+        ],
+      },
+      fileOffersIn: [],
+      fileTransfers: [
+        {
+          localId: "ft-missing",
+          id: "missing-img",
+          name: "photo.jpg",
+          size: 123,
+          mime: "image/jpeg",
+          direction: "in",
+          peer: "222",
+          status: "error",
+          progress: 0,
+          error: "not_found",
+        },
+      ],
+      fileThumbs: {},
+      modal: null,
+      status: "",
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") Object.assign(storeState, patch);
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        return false;
+      },
+      enqueueFileGet(fileId) {
+        enqueued.push(String(fileId));
+      },
+      acceptFileOffer() {
+        throw new Error("missing media must not accept an offer");
+      },
+      setPendingFileViewer(state) {
+        pending.push(state);
+      },
+    });
+
+    const opened = await feature.openFromMessageIndex("dm:222", 0);
+
+    assert.equal(opened, true);
+    assert.deepEqual(enqueued, []);
+    assert.deepEqual(pending, []);
+    assert.equal(storeState.status, "Файл недоступен");
+  } finally {
+    await helper.cleanup();
+  }
+});

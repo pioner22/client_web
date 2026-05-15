@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.803",
+    date: "2026-05-15",
+    improved: [
+      "PWA/Web chat history теперь показывает terminal `not_found` для фото/видео как `Файл недоступен`, без сырого `Ошибка файла: not_found` в статусе и карточке вложения.",
+      "Viewer/open path больше не переотправляет `file_get` для image/video, у которых уже есть terminal missing transfer; cached preview остаётся плейсхолдером недоступного медиа.",
+    ],
+    fixed: [
+      "Клик по отсутствующему фото/видео больше не ставит pending viewer/download и не запускает повторную загрузку несуществующего файла.",
+    ],
+  },
+  {
     version: "0.1.802",
     date: "2026-05-14",
     improved: [

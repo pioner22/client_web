@@ -234,6 +234,14 @@ function hasClass(node, name) {
   return node && typeof node.className === "string" && node.className.split(/\s+/).includes(name);
 }
 
+function textOf(node) {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (typeof node.textContent === "string") return node.textContent;
+  const kids = Array.isArray(node._children) ? node._children : [];
+  return kids.map((child) => textOf(child)).join("");
+}
+
 test("renderChat: file-attachment рендерит preview первым, иконку и action-кнопку", async () => {
   const helper = await loadRenderChat();
   try {
@@ -1528,6 +1536,105 @@ test("renderChat: video-note keeps square fallback aspect ratio without thumb", 
       const preview = findFirst(chatHost, (n) => hasClass(n, "chat-file-preview-video"));
       assert.ok(preview, "video-note preview should exist");
       assert.equal(preview.style.aspectRatio, "1 / 1");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderChat: terminal missing visual media renders unavailable state without raw not_found", async () => {
+  const helper = await loadRenderChat();
+  try {
+    await withDomStubs(async () => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
+      const chatSearchFooter = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
+      chatSearchFooter.className = "chat-search-footer";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
+      chatHost.clientHeight = 120;
+      chatHost.scrollHeight = 2000;
+
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+      const state = {
+        selected: { kind: "dm", id: "123-456-789" },
+        selfId: "987-654-321",
+        conn: "connected",
+        authed: true,
+        page: "main",
+        mobileNavOpen: false,
+        friends: [{ id: "123-456-789", online: true }],
+        rooms: [],
+        roomOrder: [],
+        archivedChats: [],
+        pinnedChats: [],
+        chatFolders: [],
+        conversationLimits: {},
+        conversations: {
+          "dm:123-456-789": [
+            {
+              id: 13,
+              localId: "msg-missing",
+              ts: Date.now(),
+              from: "123-456-789",
+              kind: "in",
+              text: "",
+              attachment: { kind: "file", fileId: "missing-img", name: "photo.jpg", size: 1234, mime: "image/jpeg" },
+            },
+          ],
+        },
+        historyHasMore: {},
+        historyLoading: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+        fileTransfers: [
+          {
+            localId: "ft-missing",
+            id: "missing-img",
+            name: "photo.jpg",
+            size: 1234,
+            mime: "image/jpeg",
+            direction: "in",
+            peer: "123-456-789",
+            status: "error",
+            progress: 0,
+            error: "not_found",
+          },
+        ],
+        fileOffersIn: [],
+        fileThumbs: {},
+        groups: [],
+        boards: [],
+        profiles: {},
+      };
+
+      helper.renderChat(layout, state);
+      await flushDeferredChatMedia();
+
+      const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
+      assert.ok(fileRow, "file row should exist");
+      const rowText = textOf(fileRow);
+      assert.ok(rowText.includes("Файл недоступен"));
+      assert.ok(rowText.includes("Недоступен"));
+      assert.equal(rowText.includes("Ошибка: not_found"), false);
+
+      const preview = findFirst(fileRow, (n) => hasClass(n, "chat-file-preview"));
+      assert.ok(preview, "preview should exist");
+      assert.ok(hasClass(preview, "chat-file-preview-missing"));
+      assert.equal(preview.getAttribute("disabled"), "true");
+      assert.equal(preview.getAttribute("data-media-missing"), "1");
     });
   } finally {
     await helper.cleanup();

@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
 import { getCachedLocalMediaAspectRatio } from "../../helpers/chat/localMediaAspectCache";
+import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../helpers/files/fileMissingState";
 import type { FileTransferEntry } from "../../stores/types";
 import {
   type ChatVisualPreviewOptions,
@@ -52,21 +53,25 @@ export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   if (!info.isImage) return null;
   const previewUrl = info.thumbUrl || info.url;
   if (!previewUrl && !info.fileId) return null;
+  const terminalMissingVisual = isTerminalMissingVisualTransfer(info.transfer, { name: info.name, mime: info.mime, kindHint: "image" });
   const classes = previewUrl ? ["chat-file-preview"] : ["chat-file-preview", "chat-file-preview-empty"];
   if (opts?.className) classes.push(opts.className);
+  if (terminalMissingVisual && !classes.includes("chat-file-preview-empty")) classes.push("chat-file-preview-empty");
+  if (terminalMissingVisual) classes.push("chat-file-preview-missing");
   const fixedAspect = Boolean(opts?.className && opts.className.split(/\s+/).includes("chat-file-preview-album"));
   const attrs: Record<string, string | undefined> = {
     class: classes.join(" "),
     type: "button",
-    "data-action": "open-file-viewer",
+    "data-action": terminalMissingVisual ? undefined : "open-file-viewer",
     "data-file-kind": "image",
     "data-name": info.name,
     "data-size": String(info.size || 0),
     ...(fixedAspect ? { "data-media-fixed": "1" } : {}),
-    "aria-label": `Открыть: ${info.name}`,
+    ...(terminalMissingVisual ? { disabled: "true", "data-media-missing": "1", title: MISSING_FILE_STATUS } : {}),
+    "aria-label": terminalMissingVisual ? `${MISSING_FILE_STATUS}: ${info.name}` : `Открыть: ${info.name}`,
   };
   if (info.transfer?.localId) attrs["data-local-id"] = info.transfer.localId;
-  const progressOverlay = info.transfer ? renderMediaProgressOverlay(info.transfer) : null;
+  const progressOverlay = info.transfer && !terminalMissingVisual ? renderMediaProgressOverlay(info.transfer) : null;
   if (progressOverlay) attrs["data-media-progress"] = "1";
   if (info.url) attrs["data-url"] = info.url;
   if (info.fileId) attrs["data-file-id"] = info.fileId;
@@ -74,7 +79,9 @@ export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   if (opts?.msgIdx !== undefined) attrs["data-msg-idx"] = String(opts.msgIdx);
   if (opts?.caption) attrs["data-caption"] = opts.caption;
 
-  const child = previewUrl
+  const child = terminalMissingVisual
+    ? el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Недоступно"])
+    : previewUrl
     ? el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" })
     : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
   const btnChildren: HTMLElement[] = [child];
@@ -97,6 +104,7 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   const INLINE_VIDEO_MAX_BYTES = 8 * 1024 * 1024;
   const canInlineVideo = Boolean(!fixedAspect && info.url && !mobileUi && bytes > 0 && bytes <= INLINE_VIDEO_MAX_BYTES);
   const previewUrl = fixedAspect ? info.thumbUrl : canInlineVideo ? info.url : info.thumbUrl;
+  const terminalMissingVisual = isTerminalMissingVisualTransfer(info.transfer, { name: info.name, mime: info.mime, kindHint: "video" });
   const hasPendingLocalVideo = Boolean(info.transfer?.localId && info.transfer.status !== "complete");
   if (!previewUrl && !info.fileId && !hasPendingLocalVideo) return null;
   const hasVisual = Boolean(previewUrl);
@@ -105,17 +113,20 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
     : ["chat-file-preview", "chat-file-preview-video", "chat-file-preview-empty"];
   if (opts?.className) classes.push(opts.className);
   if (videoNote) classes.push("chat-file-preview-video-note");
+  if (terminalMissingVisual && !classes.includes("chat-file-preview-empty")) classes.push("chat-file-preview-empty");
+  if (terminalMissingVisual) classes.push("chat-file-preview-missing");
   const attrs: Record<string, string | undefined> = {
     class: classes.join(" "),
     type: "button",
-    "data-action": "open-file-viewer",
+    "data-action": terminalMissingVisual ? undefined : "open-file-viewer",
     ...(fixedAspect ? { "data-media-fixed": "1" } : {}),
-    ...(canInlineVideo ? { "data-video-state": "paused" } : {}),
-    ...(progressOverlay ? { "data-media-progress": "1" } : {}),
+    ...(canInlineVideo && !terminalMissingVisual ? { "data-video-state": "paused" } : {}),
+    ...(progressOverlay && !terminalMissingVisual ? { "data-media-progress": "1" } : {}),
+    ...(terminalMissingVisual ? { disabled: "true", "data-media-missing": "1", title: MISSING_FILE_STATUS } : {}),
     "data-file-kind": "video",
     "data-name": info.name,
     "data-size": String(info.size || 0),
-    "aria-label": `Открыть: ${info.name}`,
+    "aria-label": terminalMissingVisual ? `${MISSING_FILE_STATUS}: ${info.name}` : `Открыть: ${info.name}`,
   };
   if (info.transfer?.localId) attrs["data-local-id"] = info.transfer.localId;
   if (info.url) attrs["data-url"] = info.url;
@@ -125,7 +136,9 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   if (opts?.caption) attrs["data-caption"] = opts.caption;
 
   const children: HTMLElement[] = [
-    canInlineVideo
+    terminalMissingVisual
+      ? (el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Недоступно"]) as HTMLDivElement)
+      : canInlineVideo
       ? (() => {
           const video = el("video", {
             class: "chat-file-video",
@@ -144,7 +157,9 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
         ? (el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" }) as HTMLImageElement)
         : (el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Видео"]) as HTMLDivElement),
   ];
-  if (canInlineVideo) {
+  if (terminalMissingVisual) {
+    // Terminal missing media stays as a disabled placeholder.
+  } else if (canInlineVideo) {
     if (!progressOverlay) {
       children.push(el("span", { class: "chat-file-video-toggle", "data-action": "media-toggle", "aria-hidden": "true" }, [""]));
     }
@@ -181,12 +196,15 @@ function syncPreviewMount(mount: HTMLButtonElement, finalNode: HTMLButtonElement
     "data-media-fixed",
     "data-video-state",
     "data-media-progress",
+    "data-media-missing",
     "data-url",
     "data-file-id",
     "data-mime",
     "data-msg-idx",
     "data-caption",
     "data-local-id",
+    "disabled",
+    "title",
     "aria-label",
   ];
   for (const name of attrNames) {
@@ -202,6 +220,11 @@ function syncPreviewMount(mount: HTMLButtonElement, finalNode: HTMLButtonElement
     mount.setAttribute(name, value);
   }
   mount.replaceChildren(...getMountChildren(finalNode));
+  try {
+    mount.disabled = finalNode.disabled;
+  } catch {
+    // ignore stub limitations
+  }
   (mount.style as any).aspectRatio = (finalNode.style as any).aspectRatio || (mount.style as any).aspectRatio || "";
 }
 

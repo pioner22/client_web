@@ -1,5 +1,6 @@
 import { conversationKey } from "../../../helpers/chat/conversationKey";
 import { resolveViewerSourceScope } from "../../../helpers/chat/fileViewerScope";
+import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../../helpers/files/fileMissingState";
 import { isImageLikeFile, isPdfLikeFile, isVideoLikeFile } from "../../../helpers/files/mediaKind";
 import { isIOS, isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
 import type { Store } from "../../../stores/store";
@@ -180,6 +181,12 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
   }) => {
     const fileId = String(params.fileId || "").trim();
     if (!fileId) return;
+    const existing = store.get().fileTransfers.find((t) => String(t.id || "").trim() === fileId) ?? null;
+    if (isTerminalMissingVisualTransfer(existing, { name: params.name, mime: params.mime })) {
+      debugHook("file.viewer.file_get_skip", { fileId, reason: "not_found_terminal", chatKey: params.chatKey, msgIdx: params.msgIdx });
+      store.set({ status: MISSING_FILE_STATUS });
+      return;
+    }
     if (store.get().fileOffersIn.some((offer) => String(offer.id || "").trim() === fileId)) {
       acceptFileOffer?.(fileId);
     }
@@ -297,6 +304,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const captionText = rawCaption && !rawCaption.startsWith("[file]") ? rawCaption : String(fallback?.caption || "").trim();
     const caption = captionText ? captionText : null;
     const url = entry?.url || fallback?.url || null;
+    const terminalMissingVisual = isTerminalMissingVisualTransfer(entry, { name, mime, kindHint });
     if (url) {
       debugHook("file.viewer.open.direct_url", {
         chatKey,
@@ -308,8 +316,14 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       maybePrefetchNeighbors(chatKey, msgIdx);
       return true;
     }
+    if (terminalMissingVisual && !thumbUrl) {
+      debugHook("file.viewer.open.blocked", { chatKey, msgIdx, fileId, reason: "not_found_terminal" });
+      store.set({ status: MISSING_FILE_STATUS });
+      return true;
+    }
     if (
       fileId &&
+      !terminalMissingVisual &&
       shouldUseInlineViewerStream(fileId, name, mime, kindHint) &&
       openInlineViewerStream({
         fileId,
@@ -448,6 +462,12 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     });
     debugHook("file.viewer.recover.cache", { fileId, ok: Boolean(opened) });
     if (opened) return;
+    const existing = st.fileTransfers.find((t) => String(t.id || "").trim() === fileId) ?? null;
+    if (isTerminalMissingVisualTransfer(existing, { name, mime, kindHint })) {
+      debugHook("file.viewer.recover.blocked", { fileId, reason: "not_found_terminal" });
+      store.set({ status: MISSING_FILE_STATUS });
+      return;
+    }
     if (
       shouldUseInlineViewerStream(fileId, name, mime, kindHint) &&
       openInlineViewerStream({

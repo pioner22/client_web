@@ -7,6 +7,7 @@ import { isMessageContinuation } from "../../helpers/chat/messageGrouping";
 import type { AppState, ChatMessage, ChatMessageRef, FileOfferIn, FileTransferEntry } from "../../stores/types";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { fileBadge } from "../../helpers/files/fileBadge";
+import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../helpers/files/fileMissingState";
 import { isAudioLikeFile, isImageLikeFile, isVideoLikeFile, normalizeFileName } from "../../helpers/files/mediaKind";
 import { safeUrl } from "../../helpers/security/safeUrl";
 import { renderRichText } from "../../helpers/chat/richText";
@@ -174,6 +175,7 @@ export function transferStatus(entry: FileTransferEntry): string {
   if (entry.status === "uploaded") return "Файл загружен";
   if (entry.status === "complete") return "Готово";
   if (entry.status === "rejected") return "Отклонено";
+  if (isTerminalMissingVisualTransfer(entry)) return MISSING_FILE_STATUS;
   if (entry.status === "error") return `Ошибка: ${entry.error || "неизвестно"}`;
   return entry.direction === "out" ? "Ожидание подтверждения" : "Ожидание отправителя";
 }

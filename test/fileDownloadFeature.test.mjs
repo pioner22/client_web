@@ -129,3 +129,79 @@ test("fileDownloadFeature: exhausted silent not_found records terminal history s
     await helper.cleanup();
   }
 });
+
+test("fileDownloadFeature: visual not_found reports unavailable media instead of raw error", async () => {
+  const helper = await loadFeature();
+  try {
+    const state = {
+      authed: true,
+      conn: "connected",
+      netLeader: true,
+      selfId: "u1",
+      status: "",
+      fileTransfers: [],
+      fileThumbs: {},
+    };
+    const store = {
+      get: () => state,
+      set: (patch) => {
+        const next = typeof patch === "function" ? patch(state) : { ...state, ...patch };
+        Object.assign(state, next);
+      },
+      subscribe: () => {},
+    };
+    const noop = () => {};
+    const feature = helper.createFileDownloadFeature({
+      store,
+      send: noop,
+      deviceCaps: { constrained: false, slowNetwork: false, prefetchAllowed: true },
+      downloadByFileId: new Map(),
+      disableFileHttp: noop,
+      nextTransferId: () => "ft-missing",
+      updateTransferByFileId: noop,
+      scheduleSaveFileTransfers: noop,
+      resolveFileMeta: () => ({ name: "missing.jpg", size: 2048, mime: "image/jpeg" }),
+      shouldCacheFile: () => false,
+      shouldCachePreview: () => false,
+      enforceFileCachePolicy: async () => {},
+      thumbCacheId: (fileId) => `thumb:${fileId}`,
+      canAutoDownloadFullFile: () => false,
+      resolveAutoDownloadKind: () => "image",
+      isSilentFileGet: () => false,
+      clearSilentFileGet: noop,
+      clearFileAcceptRetry: noop,
+      clearFileGetNotFoundRetry: noop,
+      scheduleFileGetNotFoundRetry: () => false,
+      finishFileGet: noop,
+      touchFileGetTimeout: noop,
+      dropFileGetQueue: noop,
+      tryResolveHttpFileUrlWaiter: () => false,
+      requestFreshHttpDownloadUrl: async () => ({ url: "https://example.invalid/file" }),
+      rejectHttpFileUrlWaiter: noop,
+      scheduleThumbPollRetry: noop,
+      clearThumbPollRetry: noop,
+      setFileThumb: noop,
+      maybeSetVideoPosterFromBlob: noop,
+      probeImageDimensions: async () => ({ w: null, h: null }),
+      pendingFileDownloads: new Map(),
+      triggerBrowserDownload: noop,
+      takePendingFileViewer: () => null,
+      clearPendingFileViewer: noop,
+      buildFileViewerModalState: () => ({ kind: "file_viewer" }),
+      postStreamChunk: () => true,
+      postStreamEnd: noop,
+      postStreamError: noop,
+      clearCachedPreviewAttempt: noop,
+      clearPreviewPrefetchAttempt: noop,
+      isUploadActive: () => false,
+      abortUploadByFileId: noop,
+    });
+
+    assert.equal(feature.handleMessage({ type: "file_error", file_id: "missing-img", reason: "not_found" }), true);
+    assert.equal(state.status, "Файл недоступен");
+    assert.equal(state.fileTransfers[0]?.status, "error");
+    assert.equal(state.fileTransfers[0]?.error, "not_found");
+  } finally {
+    await helper.cleanup();
+  }
+});
