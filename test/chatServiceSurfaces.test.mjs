@@ -189,10 +189,13 @@ test("service surfaces css: pinned/jump/header-status/composer badges are covere
   assert.match(styleSrc, /@import "\.\/service-surfaces\.css";/);
 
   const css = await readFile(path.resolve("src/scss/service-surfaces.css"), "utf8");
+  const mediaCss = await readFile(path.resolve("src/scss/components.part03.css"), "utf8");
   const headerCss = await readFile(path.resolve("src/scss/components.part01.css"), "utf8");
   assert.match(css, /\.chat-pinned-marker\b/);
   assert.match(css, /\.chat-pinned-prev::before/);
   assert.match(css, /\.chat-jump-badge\b/);
+  assert.match(css, /\.chat-jump-label\b/);
+  assert.match(mediaCss, /\.chat-media-state-active\b/);
   assert.match(css, /\.btn\.composer-action\[data-media-perm="denied"\]::after/);
   assert.match(css, /\.toast-host\s*\{[\s\S]*display:\s*none\s*!important;/);
   assert.match(headerCss, /\.hdr-status-actions\b/);
@@ -201,6 +204,12 @@ test("service surfaces css: pinned/jump/header-status/composer badges are covere
   assert.match(css, /contain:\s*layout paint/);
 
   const deferredActions = await readFile(path.resolve("src/app/features/navigation/chatSurfaceDeferredActions.ts"), "utf8");
+  const createLayout = await readFile(path.resolve("src/components/layout/createLayout.ts"), "utf8");
+  const mountApp = await readFile(path.resolve("src/app/mountApp.ts"), "utf8");
+  assert.match(createLayout, /chatJumpLabel/);
+  assert.match(mountApp, /data-jump-unread/);
+  assert.match(mountApp, /К непрочитанным/);
+
   const hideBlock = deferredActions.slice(deferredActions.indexOf('action === "chat-pinned-hide"'), deferredActions.indexOf('action === "chat-pinned-list"'));
   assert.match(hideBlock, /unpinActiveForSelected/);
   assert.doesNotMatch(hideBlock, /kind:\s*"confirm"/);

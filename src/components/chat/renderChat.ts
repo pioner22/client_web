@@ -113,6 +113,8 @@ function patchChatTransferProgress(scrollHost: HTMLElement, transfers: AppState[
         // ignore
       }
     }
+    const stateLabel = node.parentElement?.querySelector?.(".chat-media-state") as HTMLElement | null;
+    if (stateLabel) stateLabel.textContent = label;
   };
   const nodes = scrollHost.querySelectorAll("button.chat-file-preview[data-local-id], button.chat-file-preview[data-file-id]");
   for (const node of Array.from(nodes)) {

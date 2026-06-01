@@ -201,6 +201,12 @@ test("renderHeader: в режиме авто-входа не показывае�
       });
       const btn = findByClass(layout.headerRight, "hdr-auth");
       assert.equal(btn, null, "hdr-auth button should be removed from header");
+      const status = findByClass(layout.headerRight, "hdr-status");
+      assert.ok(status, "hdr-status should be rendered as the status lane");
+      assert.equal(status.getAttribute("role"), "status");
+      assert.equal(status.getAttribute("aria-live"), "polite");
+      assert.equal(layout.headerRight.getAttribute("data-status-empty"), "0");
+      assert.equal(layout.headerRight.getAttribute("data-status-tone"), "info");
     });
   } finally {
     await helper.cleanup();

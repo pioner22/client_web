@@ -712,9 +712,10 @@ export function mountApp(root: HTMLElement) {
     const key = String(layout.chatHost.getAttribute("data-chat-key") || "");
     const st = store.get();
     const badge = layout.chatJumpBadge;
+    const label = layout.chatJumpLabel;
     const activeConversation = getActiveConversationTarget(st);
+    let unread = 0;
     if (badge) {
-      let unread = 0;
       if (activeConversation?.kind === "dm") {
         unread = st.friends.find((f) => f.id === activeConversation.id)?.unread ?? 0;
       } else {
@@ -728,6 +729,18 @@ export function mountApp(root: HTMLElement) {
         badge.classList.add("hidden");
       }
     }
+    if (label) {
+      if (unread > 0) {
+        label.textContent = unread > 999 ? "999+ новых" : `${unread} новых`;
+        label.classList.remove("hidden");
+      } else {
+        label.textContent = "";
+        label.classList.add("hidden");
+      }
+    }
+    btn.setAttribute("aria-label", unread > 0 ? `К непрочитанным: ${unread}` : "Вниз к новым сообщениям");
+    btn.title = unread > 0 ? `К непрочитанным: ${unread}` : "Вниз";
+    btn.setAttribute("data-jump-unread", unread > 0 ? "1" : "0");
     if (!key) {
       btn.classList.add("hidden");
       return;

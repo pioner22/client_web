@@ -943,6 +943,29 @@
   pointer-events: none;
 }
 
+.chat-jump-label {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 74px;
+  min-height: 28px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  background: color-mix(in srgb, var(--surface-color), var(--focus) 10%);
+  border: 1px solid color-mix(in srgb, var(--focus), transparent 45%);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
 .footer-nav {
   display: none;
 }

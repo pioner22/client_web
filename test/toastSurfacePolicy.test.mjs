@@ -26,7 +26,10 @@ test("toast policy: notifications use header status line and never render popup 
   assert.match(renderer, /host\.removeAttribute\("data-toast-placement"\)/);
   assert.doesNotMatch(renderer, /data-toast-placement",\s*"status"/);
   assert.match(header, /hdr-status-action/);
+  assert.match(header, /role:\s*"status"/);
+  assert.match(header, /data-status-tone/);
   assert.match(headerCss, /\.hdr-status-actions\b/);
+  assert.match(headerCss, /\.hdr-right:not\(\[data-status-empty="1"\]\)\s+\.hdr-status::before/);
   assert.match(serviceCss, /\.toast-host\s*\{[\s\S]*display:\s*none\s*!important;[\s\S]*pointer-events:\s*none\s*!important;/);
   assert.match(toastCss, /\.toast-host,\s*\.toast\s*\{[\s\S]*display:\s*none\s*!important;[\s\S]*pointer-events:\s*none\s*!important;/);
   assert.doesNotMatch(toastCss, /toast-dismiss/);

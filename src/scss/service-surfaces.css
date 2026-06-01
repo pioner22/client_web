@@ -204,6 +204,15 @@
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.22);
 }
 
+.chat-jump-label {
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel), var(--focus) 12%);
+  border-color: color-mix(in srgb, var(--focus), transparent 40%);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
 .btn.composer-action[data-media-perm="denied"] {
   color: color-mix(in srgb, var(--btn-text), var(--bad) 22%);
 }

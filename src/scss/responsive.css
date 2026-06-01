@@ -579,6 +579,24 @@
     gap: var(--hdr-action-gap);
   }
 
+  .hdr-right:not([data-status-empty="1"]) {
+    min-height: 30px;
+    padding: 5px 8px;
+    border: 1px solid color-mix(in srgb, var(--line), transparent 48%);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--panel2), transparent 18%);
+  }
+
+  .hdr-right[data-status-empty="1"]:not(:has(.hdr-actions, .hdr-status-actions)) {
+    display: none;
+  }
+
+  .hdr-right .hdr-status {
+    white-space: normal;
+    line-height: 1.25;
+    max-height: 2.5em;
+  }
+
   .hdr {
     padding-bottom: 0;
   }

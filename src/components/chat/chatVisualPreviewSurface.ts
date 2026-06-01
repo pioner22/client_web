@@ -49,6 +49,16 @@ function renderMediaProgressOverlay(transfer: FileTransferEntry): HTMLElement | 
   );
 }
 
+function renderMediaState(label: string, tone: "idle" | "active" | "error"): HTMLElement {
+  return el("span", { class: `chat-media-state chat-media-state-${tone}`, "aria-hidden": "true" }, [label]);
+}
+
+function mediaProgressLabel(transfer?: FileTransferEntry | null): string | null {
+  if (!transfer || (transfer.status !== "uploading" && transfer.status !== "downloading")) return null;
+  const progress = Math.max(0, Math.min(100, Math.round(transfer.progress || 0)));
+  return transfer.status === "uploading" ? `Загрузка ${progress}%` : `Скачивание ${progress}%`;
+}
+
 export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: ChatVisualPreviewOptions): HTMLButtonElement | null {
   if (!info.isImage) return null;
   const previewUrl = info.thumbUrl || info.url;
@@ -73,6 +83,9 @@ export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   if (info.transfer?.localId) attrs["data-local-id"] = info.transfer.localId;
   const progressOverlay = info.transfer && !terminalMissingVisual ? renderMediaProgressOverlay(info.transfer) : null;
   if (progressOverlay) attrs["data-media-progress"] = "1";
+  if (terminalMissingVisual) attrs["data-media-state"] = "missing";
+  else if (progressOverlay) attrs["data-media-state"] = "progress";
+  else if (!previewUrl) attrs["data-media-state"] = "empty";
   if (info.url) attrs["data-url"] = info.url;
   if (info.fileId) attrs["data-file-id"] = info.fileId;
   if (info.mime) attrs["data-mime"] = info.mime;
@@ -85,6 +98,12 @@ export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: ChatVi
     ? el("img", { class: "chat-file-img", src: previewUrl, alt: info.name, loading: "lazy", decoding: "async" })
     : el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Фото"]);
   const btnChildren: HTMLElement[] = [child];
+  if (terminalMissingVisual) btnChildren.push(renderMediaState(MISSING_FILE_STATUS, "error"));
+  else {
+    const progressLabel = mediaProgressLabel(info.transfer);
+    if (progressLabel) btnChildren.push(renderMediaState(progressLabel, "active"));
+    else if (!previewUrl) btnChildren.push(renderMediaState("Загрузить фото", "idle"));
+  }
   if (progressOverlay) btnChildren.push(progressOverlay);
   const btn = el("button", attrs, btnChildren) as HTMLButtonElement;
   if (!fixedAspect) {
@@ -122,6 +141,13 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
     ...(fixedAspect ? { "data-media-fixed": "1" } : {}),
     ...(canInlineVideo && !terminalMissingVisual ? { "data-video-state": "paused" } : {}),
     ...(progressOverlay && !terminalMissingVisual ? { "data-media-progress": "1" } : {}),
+    ...(terminalMissingVisual
+      ? { "data-media-state": "missing" }
+      : progressOverlay
+        ? { "data-media-state": "progress" }
+        : !previewUrl
+          ? { "data-media-state": "empty" }
+          : {}),
     ...(terminalMissingVisual ? { disabled: "true", "data-media-missing": "1", title: MISSING_FILE_STATUS } : {}),
     "data-file-kind": "video",
     "data-name": info.name,
@@ -158,13 +184,18 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
         : (el("div", { class: "chat-file-placeholder", "aria-hidden": "true" }, ["Видео"]) as HTMLDivElement),
   ];
   if (terminalMissingVisual) {
-    // Terminal missing media stays as a disabled placeholder.
+    children.push(renderMediaState(MISSING_FILE_STATUS, "error"));
   } else if (canInlineVideo) {
     if (!progressOverlay) {
       children.push(el("span", { class: "chat-file-video-toggle", "data-action": "media-toggle", "aria-hidden": "true" }, [""]));
     }
   } else if (!progressOverlay) {
     children.push(el("span", { class: "chat-file-video-toggle", "aria-hidden": "true" }, [""]));
+  }
+  if (!terminalMissingVisual) {
+    const progressLabel = mediaProgressLabel(info.transfer);
+    if (progressLabel) children.push(renderMediaState(progressLabel, "active"));
+    else if (!previewUrl) children.push(renderMediaState("Загрузить видео", "idle"));
   }
   if (progressOverlay) children.push(progressOverlay);
   const btn = el("button", attrs, children) as HTMLButtonElement;
@@ -196,6 +227,7 @@ function syncPreviewMount(mount: HTMLButtonElement, finalNode: HTMLButtonElement
     "data-media-fixed",
     "data-video-state",
     "data-media-progress",
+    "data-media-state",
     "data-media-missing",
     "data-url",
     "data-file-id",

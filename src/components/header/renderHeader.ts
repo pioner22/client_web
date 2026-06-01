@@ -45,7 +45,20 @@ export function renderHeader(layout: Layout, state: AppState) {
   const showChatMenu = shell.showChatMenu;
   const showAuthButton = shell.showAuthButton;
   const statusLabel = state.status || "";
-  const statusEl = el("span", { class: "hdr-status" }, [statusLabel]);
+  const statusTone = state.toast?.kind || (state.conn === "connected" ? "info" : state.conn === "connecting" ? "warn" : "error");
+  layout.headerRight.setAttribute("data-status-empty", statusLabel ? "0" : "1");
+  layout.headerRight.setAttribute("data-status-tone", statusTone);
+  const statusEl = el(
+    "span",
+    {
+      class: "hdr-status",
+      role: "status",
+      "aria-live": "polite",
+      "aria-atomic": "true",
+      title: statusLabel || undefined,
+    },
+    [statusLabel]
+  );
   const statusActionButtons = (state.toast?.actions || [])
     .map((action) => ({
       id: String(action?.id || "").trim(),

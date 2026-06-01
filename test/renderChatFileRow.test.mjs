@@ -766,6 +766,8 @@ test("renderChat: исходящий video-note upload сохраняет оди
       assert.equal(previews.length, 1, "во время upload должен быть один video preview");
       assert.ok(hasClass(previews[0], "chat-file-preview-video-note"), "preview должен сохранять video-note marker");
       assert.equal(previews[0].getAttribute("data-local-id"), localId);
+      assert.equal(previews[0].getAttribute("data-media-state"), "progress");
+      assert.ok(textOf(previews[0]).includes("Загрузка 42%"));
       assert.equal(findAll(fileRow, (n) => hasClass(n, "chat-media-progress")).length, 1, "visual upload должен иметь один overlay progress");
       assert.equal(findAll(fileRow, (n) => hasClass(n, "file-progress")).length, 0, "visual upload не должен дублировать progress в file-main");
       assert.ok(findFirst(previews[0], (n) => n && n.tagName === "VIDEO"), "локальный blob должен сразу давать video preview");
@@ -791,6 +793,8 @@ test("renderChat: исходящий video-note upload сохраняет оди
       assert.equal(previews.length, 1, "после fileId preview не должен задваиваться");
       assert.equal(previews[0].getAttribute("data-file-id"), "vid-42");
       assert.equal(previews[0].getAttribute("data-local-id"), localId);
+      assert.equal(previews[0].getAttribute("data-media-state"), "progress");
+      assert.ok(textOf(previews[0]).includes("Загрузка 67%"));
       assert.equal(findAll(fileRow, (n) => hasClass(n, "chat-media-progress")).length, 1);
       assert.equal(findAll(fileRow, (n) => hasClass(n, "file-progress")).length, 0);
     });
@@ -1459,6 +1463,10 @@ test("renderChat: empty media previews keep placeholder shells", async () => {
       assert.ok(videoPreview, "video preview should exist");
       assert.ok(hasClass(imagePreview, "chat-file-preview-empty"));
       assert.ok(hasClass(videoPreview, "chat-file-preview-empty"));
+      assert.equal(imagePreview.getAttribute("data-media-state"), "empty");
+      assert.equal(videoPreview.getAttribute("data-media-state"), "empty");
+      assert.ok(textOf(imagePreview).includes("Загрузить фото"));
+      assert.ok(textOf(videoPreview).includes("Загрузить видео"));
     });
   } finally {
     await helper.cleanup();
@@ -1635,6 +1643,8 @@ test("renderChat: terminal missing visual media renders unavailable state withou
       assert.ok(hasClass(preview, "chat-file-preview-missing"));
       assert.equal(preview.getAttribute("disabled"), "true");
       assert.equal(preview.getAttribute("data-media-missing"), "1");
+      assert.equal(preview.getAttribute("data-media-state"), "missing");
+      assert.ok(textOf(preview).includes("Файл недоступен"));
     });
   } finally {
     await helper.cleanup();

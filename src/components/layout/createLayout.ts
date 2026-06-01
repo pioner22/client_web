@@ -22,11 +22,12 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   const chatSearchFooter = el("div", { class: "chat-search-footer hidden" });
   const chatSelectionBar = el("div", { class: "chat-selection-bar selection-wrapper hidden" });
   const chatJumpIcon = el("span", { class: "chat-jump-icon", "aria-hidden": "true" }, ["↓"]);
+  const chatJumpLabel = el("span", { class: "chat-jump-label hidden", "aria-hidden": "true" }, [""]);
   const chatJumpBadge = el("span", { class: "chat-jump-badge hidden", "aria-hidden": "true" }, [""]);
   const chatJump = el(
     "button",
     { class: "btn chat-jump hidden", type: "button", "data-action": "chat-jump-bottom", "aria-label": "Вниз" },
-    [chatJumpIcon, chatJumpBadge]
+    [chatJumpLabel, chatJumpIcon, chatJumpBadge]
   ) as HTMLButtonElement;
   const chat = el("main", { class: "chat" }, [chatTop, chatSearchResults, chatHost, chatJump]);
 
@@ -286,6 +287,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     chatSelectionBar,
     chatHost,
     chatJump,
+    chatJumpLabel,
     chatJumpBadge,
     rightCol,
     toastHost,
