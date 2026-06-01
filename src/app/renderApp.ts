@@ -31,6 +31,7 @@ import {
 import { applyRightPanelViewState, getRightPanelTitle, shouldShowRightPanel } from "../helpers/navigation/rightPanelState";
 import { getRightPanelTarget } from "../helpers/navigation/viewState";
 import { createLazyCallModalRuntime } from "./bootstrap/lazyCallModalRuntime";
+import { recoverFromLazyImportError } from "./bootstrap/lazyImportRecovery";
 import { applyOverlaySurface, resolveModalPresentation } from "./features/navigation/modalSurface";
 import {
   contextMenuPayloadKey,
@@ -141,10 +142,11 @@ function ensureHelpPageLoaded(forceRetry = false) {
       mountLoadedHelpPageIfActive();
       return page;
     })
-    .catch(() => {
+    .catch((err) => {
       helpPagePromise = null;
       helpPageLoadFailed = true;
-      if (helpLoadingText) helpLoadingText.textContent = "Не удалось загрузить справку";
+      const recovering = recoverFromLazyImportError(err, "page_help");
+      if (helpLoadingText) helpLoadingText.textContent = recovering ? "Обновляем приложение…" : "Не удалось загрузить справку";
       return null;
     });
 }
@@ -192,10 +194,11 @@ function ensureDeferredCenterPageLoaded<T extends DeferredPage>(
       mountLoadedCenterPageIfActive(page, runtime);
       return loadedPage;
     })
-    .catch(() => {
+    .catch((err) => {
       runtime.promise = null;
       runtime.loadFailed = true;
-      if (runtime.loadingText) runtime.loadingText.textContent = "Не удалось загрузить страницу";
+      const recovering = recoverFromLazyImportError(err, `page_${page}`);
+      if (runtime.loadingText) runtime.loadingText.textContent = recovering ? "Обновляем приложение…" : "Не удалось загрузить страницу";
       return null;
     });
 }
@@ -236,10 +239,11 @@ function ensureDeferredRightPanelLoaded<T extends DeferredPage>(
       onReady(loadedPage);
       return loadedPage;
     })
-    .catch(() => {
+    .catch((err) => {
       runtime.promise = null;
       runtime.loadFailed = true;
-      if (runtime.loadingText) runtime.loadingText.textContent = "Не удалось загрузить панель";
+      const recovering = recoverFromLazyImportError(err, "right_panel");
+      if (runtime.loadingText) runtime.loadingText.textContent = recovering ? "Обновляем приложение…" : "Не удалось загрузить панель";
       return null;
     });
 }

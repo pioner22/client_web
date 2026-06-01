@@ -7,6 +7,8 @@ import {
 } from "../../helpers/pwa/reloadSafety";
 
 const LAZY_IMPORT_RECOVER_KEY = "yagodka_lazy_import_recover_v1";
+const LAZY_IMPORT_RECOVER_AT_KEY = "yagodka_lazy_import_recover_at_v1";
+const LAZY_IMPORT_RECOVER_TTL_MS = 60_000;
 
 export {
   clearPwaReloadBlockersForTest as __clearPwaReloadBlockersForTest,
@@ -29,6 +31,51 @@ export function isLikelyStaleLazyImportError(err: unknown): boolean {
     text.includes("importing a module script failed") ||
     text.includes("dynamically imported module")
   );
+}
+
+function sessionGet(key: string): string {
+  try {
+    return String(sessionStorage.getItem(key) || "");
+  } catch {
+    return "";
+  }
+}
+
+function sessionSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
+function sessionRemove(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+function clearLazyImportRecoverFlag(): void {
+  sessionRemove(LAZY_IMPORT_RECOVER_KEY);
+  sessionRemove(LAZY_IMPORT_RECOVER_AT_KEY);
+}
+
+function hasRecentLazyImportRecovery(): boolean {
+  if (sessionGet(LAZY_IMPORT_RECOVER_KEY) !== "1") return false;
+  const updating = sessionGet("yagodka_updating") === "1" || sessionGet("yagodka_force_recover") === "1";
+  if (updating) return true;
+  const ts = Number(sessionGet(LAZY_IMPORT_RECOVER_AT_KEY) || "0");
+  return Number.isFinite(ts) && ts > 0 && Date.now() - ts < LAZY_IMPORT_RECOVER_TTL_MS;
+}
+
+try {
+  if (typeof window !== "undefined") {
+    window.addEventListener("yagodka:booted", clearLazyImportRecoverFlag);
+  }
+} catch {
+  // ignore
 }
 
 export function recoverFromLazyImportError(err: unknown, scope = "lazy_import"): boolean {
@@ -55,21 +102,12 @@ export function recoverFromLazyImportError(err: unknown, scope = "lazy_import"):
     return false;
   }
 
-  let alreadyRecovered = false;
-  try {
-    alreadyRecovered = sessionStorage.getItem(LAZY_IMPORT_RECOVER_KEY) === "1";
-  } catch {
-    alreadyRecovered = false;
-  }
-  if (alreadyRecovered) return false;
+  if (hasRecentLazyImportRecovery()) return false;
 
-  try {
-    sessionStorage.setItem(LAZY_IMPORT_RECOVER_KEY, "1");
-    sessionStorage.setItem("yagodka_updating", "1");
-    sessionStorage.setItem("yagodka_force_recover", "1");
-  } catch {
-    // ignore
-  }
+  sessionSet(LAZY_IMPORT_RECOVER_KEY, "1");
+  sessionSet(LAZY_IMPORT_RECOVER_AT_KEY, String(Date.now()));
+  sessionSet("yagodka_updating", "1");
+  sessionSet("yagodka_force_recover", "1");
 
   try {
     window.location.replace(window.location.href);

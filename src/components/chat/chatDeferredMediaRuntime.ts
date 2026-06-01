@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import type { AppState } from "../../stores/types";
 import type { AlbumItem } from "./renderChatHelpers";
+import { recoverFromLazyImportError } from "../../app/bootstrap/lazyImportRecovery";
 
 type ChatDeferredMediaModule = typeof import("./chatDeferredMediaSurface");
 
@@ -39,6 +40,7 @@ type RenderDeferredAlbumLineCtx = RenderDeferredAlbumLineOptions & {
 let deferredMediaModule: ChatDeferredMediaModule | null = null;
 let deferredMediaPromise: Promise<ChatDeferredMediaModule> | null = null;
 let deferredMediaLoadFailed = false;
+let deferredMediaRecovering = false;
 
 function canRenderMount(mount: HTMLElement | null): mount is HTMLElement {
   if (!mount) return false;
@@ -52,10 +54,12 @@ function ensureDeferredMediaModule() {
     .then((mod: ChatDeferredMediaModule) => {
       deferredMediaModule = mod;
       deferredMediaLoadFailed = false;
+      deferredMediaRecovering = false;
       return mod;
     })
     .catch((err) => {
       deferredMediaLoadFailed = true;
+      deferredMediaRecovering = recoverFromLazyImportError(err, "chat_deferred_media");
       deferredMediaPromise = null;
       throw err;
     })
@@ -110,7 +114,10 @@ export function renderDeferredVoicePlayer(opts: RenderDeferredVoicePlayerOptions
     return mount;
   }
   mount.replaceChildren(
-    renderDeferredVoicePlaceholder(opts, deferredMediaLoadFailed ? "Не удалось загрузить аудио" : "Загрузка аудио...")
+    renderDeferredVoicePlaceholder(
+      opts,
+      deferredMediaRecovering ? "Обновляем приложение..." : deferredMediaLoadFailed ? "Не удалось загрузить аудио" : "Загрузка аудио..."
+    )
   );
   void ensureDeferredMediaModule()
     .then((mod) => {
@@ -119,7 +126,7 @@ export function renderDeferredVoicePlayer(opts: RenderDeferredVoicePlayerOptions
     })
     .catch(() => {
       if (!canRenderMount(mount)) return;
-      mount.replaceChildren(renderDeferredVoicePlaceholder(opts, "Не удалось загрузить аудио"));
+      mount.replaceChildren(renderDeferredVoicePlaceholder(opts, deferredMediaRecovering ? "Обновляем приложение..." : "Не удалось загрузить аудио"));
     });
   return mount;
 }
@@ -134,7 +141,10 @@ export function renderDeferredAlbumLine(options: RenderDeferredAlbumLineOptions)
     return mount;
   }
   mount.replaceChildren(
-    ...renderDeferredAlbumPlaceholder(kind, deferredMediaLoadFailed ? "Не удалось загрузить альбом" : "Загрузка альбома...")
+    ...renderDeferredAlbumPlaceholder(
+      kind,
+      deferredMediaRecovering ? "Обновляем приложение..." : deferredMediaLoadFailed ? "Не удалось загрузить альбом" : "Загрузка альбома..."
+    )
   );
   void ensureDeferredMediaModule()
     .then((mod) => {
@@ -143,7 +153,9 @@ export function renderDeferredAlbumLine(options: RenderDeferredAlbumLineOptions)
     })
     .catch(() => {
       if (!canRenderMount(mount)) return;
-      mount.replaceChildren(...renderDeferredAlbumPlaceholder(kind, "Не удалось загрузить альбом"));
+      mount.replaceChildren(
+        ...renderDeferredAlbumPlaceholder(kind, deferredMediaRecovering ? "Обновляем приложение..." : "Не удалось загрузить альбом")
+      );
     });
   return mount;
 }

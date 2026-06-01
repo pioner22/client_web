@@ -4,6 +4,7 @@ import { applyTheme, resolveInitialTheme } from "./helpers/theme/theme";
 import { installAppViewportHeightVar } from "./helpers/ui/appViewport";
 import { installFancyCaret } from "./helpers/ui/fancyCaret";
 import { installEnvironmentAgent } from "./helpers/ui/environmentAgent";
+import { recoverFromLazyImportError } from "./app/bootstrap/lazyImportRecovery";
 
 const root = document.getElementById("app");
 if (!root) {
@@ -16,11 +17,20 @@ applySkin(storedSkin);
 installAppViewportHeightVar(root);
 installFancyCaret();
 installEnvironmentAgent(root);
-void import("./app/mountApp").then(({ mountApp }) => {
-  mountApp(root);
-  void import("./helpers/pwa/registerServiceWorker")
-    .then(({ registerServiceWorker }) => {
-      registerServiceWorker();
-    })
-    .catch(() => {});
-});
+void import("./app/mountApp")
+  .then(({ mountApp }) => {
+    mountApp(root);
+    void import("./helpers/pwa/registerServiceWorker")
+      .then(({ registerServiceWorker }) => {
+        registerServiceWorker();
+      })
+      .catch(() => {});
+  })
+  .catch((err) => {
+    if (recoverFromLazyImportError(err, "app_mount")) return;
+    try {
+      root.textContent = "Не удалось загрузить приложение";
+    } catch {
+      // ignore
+    }
+  });
