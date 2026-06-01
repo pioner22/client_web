@@ -132,6 +132,13 @@ function putPositiveNumber(map: Record<string, number>, key: string, value: numb
   return { ...map, [key]: value };
 }
 
+function putNonNegativeNumber(map: Record<string, number>, key: string, value: number): Record<string, number> {
+  const n = typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : 0;
+  const nextValue = Math.max(0, n);
+  if (map[key] === nextValue) return map;
+  return { ...map, [key]: nextValue };
+}
+
 export function applyConversationHistorySyncState(
   prev: AppState,
   key: string,
@@ -154,7 +161,13 @@ export function applyConversationHistorySyncState(
   const nextHistoryHasMore = putBooleanTriState(prev.historyHasMore || {}, cleanKey, nextState.hasMore);
   const nextHistoryLoading = putBooleanFlag(prev.historyLoading || {}, cleanKey, nextState.loading);
   const nextHistoryLoadingSlots = putPositiveNumber(prev.historyLoadingSlots || {}, cleanKey, nextState.loadingSlots);
-  const nextHistoryVirtualStart = putPositiveNumber(prev.historyVirtualStart || {}, cleanKey, nextState.virtualStart);
+  const prevHistoryVirtualStart = prev.historyVirtualStart || {};
+  const hasVirtualStartPatch = Object.prototype.hasOwnProperty.call(patch, "virtualStart");
+  const hasPrevVirtualStart = Object.prototype.hasOwnProperty.call(prevHistoryVirtualStart, cleanKey);
+  const nextHistoryVirtualStart =
+    hasVirtualStartPatch || hasPrevVirtualStart
+      ? putNonNegativeNumber(prevHistoryVirtualStart, cleanKey, nextState.virtualStart)
+      : prevHistoryVirtualStart;
 
   return {
     ...prev,

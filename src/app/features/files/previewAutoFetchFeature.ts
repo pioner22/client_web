@@ -87,9 +87,9 @@ export function resolveVisiblePreviewFetchPlan(params: {
   if (fileKind === "audio") {
     return { prefetch: false, priority: "high" };
   }
-  // Image/video previews are click-to-load in chat. The preview runtime may restore
-  // cached thumbs/blobs, but it must not start background file_get for visual media.
-  return { prefetch: false, priority: "prefetch" };
+  // Visible image/video thumbs are part of rendering. The silent file_get path
+  // fetches thumb_url first and only downloads full media when policy allows it.
+  return { prefetch: false, priority: "high" };
 }
 
 export function hasTrustedRuntimeUrl(url: string | null | undefined, previewOnly: boolean): boolean {

@@ -206,6 +206,91 @@ function findFirst(node, predicate) {
   return null;
 }
 
+function findAll(node, predicate, out = []) {
+  if (!node) return out;
+  if (predicate(node)) out.push(node);
+  const kids = Array.isArray(node._children) ? node._children : [];
+  for (const k of kids) {
+    if (k && typeof k === "object") findAll(k, predicate, out);
+  }
+  return out;
+}
+
+function withMobileWindow(run) {
+  const prevWindow = globalThis.window;
+  globalThis.window = {
+    matchMedia() {
+      return {
+        matches: true,
+        addEventListener() {},
+        removeEventListener() {},
+      };
+    },
+  };
+  try {
+    return run();
+  } finally {
+    if (prevWindow === undefined) delete globalThis.window;
+    else globalThis.window = prevWindow;
+  }
+}
+
+function makeChatLayout() {
+  const chat = document.createElement("div");
+  const chatTop = document.createElement("div");
+  const chatSearchResults = document.createElement("div");
+  const chatSearchFooter = document.createElement("div");
+  const chatHost = document.createElement("div");
+  const chatJump = document.createElement("button");
+  const chatSelectionBar = document.createElement("div");
+  chat.className = "chat";
+  chatTop.className = "chat-top";
+  chatSearchResults.className = "chat-search-results";
+  chatSearchFooter.className = "chat-search-footer";
+  chatHost.className = "chat-host";
+  chatJump.className = "btn chat-jump hidden";
+  chatSelectionBar.className = "chat-selection-bar hidden";
+  return { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+}
+
+function virtualizedMessageIndices(chatHost) {
+  return findAll(chatHost, (n) => n && typeof n.getAttribute === "function" && n.getAttribute("data-msg-idx") !== null)
+    .map((n) => Number(n.getAttribute("data-msg-idx")))
+    .filter((n) => Number.isFinite(n));
+}
+
+function makeLongChatState(historyVirtualStart = undefined) {
+  const key = "dm:123-456-789";
+  const messages = Array.from({ length: 260 }, (_, i) => ({
+    kind: i % 2 === 0 ? "in" : "out",
+    from: i % 2 === 0 ? "123-456-789" : "854-432-319",
+    to: i % 2 === 0 ? "854-432-319" : "123-456-789",
+    room: null,
+    text: `m${i}`,
+    ts: 1700000000 + i,
+    id: i + 1,
+  }));
+  return {
+    page: "main",
+    selected: { kind: "dm", id: "123-456-789" },
+    conversations: { [key]: messages },
+    historyLoaded: { [key]: true },
+    historyHasMore: { [key]: false },
+    historyLoading: {},
+    historyVirtualStart: historyVirtualStart === undefined ? {} : { [key]: historyVirtualStart },
+    chatSearchOpen: false,
+    chatSearchQuery: "",
+    chatSearchHits: [],
+    chatSearchPos: 0,
+    pinnedMessages: {},
+    pinnedMessageActive: {},
+    fileTransfers: [],
+    fileOffersIn: [],
+    groups: [],
+    boards: [],
+  };
+}
+
 test("renderChat: закреп/поиск рендерятся в chatTop (не в истории), chatJump живёт вне скролла", async () => {
   const helper = await loadRenderChat();
   try {
@@ -271,6 +356,50 @@ test("renderChat: закреп/поиск рендерятся в chatTop (не 
       assert.ok(lines, "chat lines should be rendered inside chatHost");
 
       assert.equal(chatJump.classList.contains("hidden"), false, "chatJump should be visible when not at bottom");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderChat: mobile virtual history без сохранённого start сразу показывает хвост", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      withMobileWindow(() => {
+        const layout = makeChatLayout();
+        helper.renderChat(layout, makeLongChatState());
+
+        const indices = virtualizedMessageIndices(layout.chatHost);
+        assert.equal(Math.min(...indices), 60);
+        assert.equal(Math.max(...indices), 259);
+        assert.ok(
+          findFirst(layout.chatHost, (n) => n && typeof n.getAttribute === "function" && n.getAttribute("data-virtual-spacer") === "top"),
+          "tail window should keep a top spacer for older messages"
+        );
+      });
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderChat: mobile virtual history сохраняет явный start=0 для верхней позиции", async () => {
+  const helper = await loadRenderChat();
+  try {
+    withDomStubs(() => {
+      withMobileWindow(() => {
+        const layout = makeChatLayout();
+        helper.renderChat(layout, makeLongChatState(0));
+
+        const indices = virtualizedMessageIndices(layout.chatHost);
+        assert.equal(Math.min(...indices), 0);
+        assert.equal(Math.max(...indices), 199);
+        assert.ok(
+          findFirst(layout.chatHost, (n) => n && typeof n.getAttribute === "function" && n.getAttribute("data-virtual-spacer") === "bottom"),
+          "explicit top window should keep a bottom spacer for newer messages"
+        );
+      });
     });
   } finally {
     await helper.cleanup();

@@ -263,7 +263,13 @@ export function renderChat(layout: Layout, state: AppState) {
   const activeRaw = key && state.pinnedMessageActive ? state.pinnedMessageActive[key] : null;
   const selectedKind = activeConversation?.kind ? String(activeConversation.kind) : "";
   const selectedId = activeConversation?.id ? String(activeConversation.id) : "";
-  const historyVirtualStart = historySync ? historySync.virtualStart ?? null : null;
+  const historyVirtualStartMap = state.historyVirtualStart || {};
+  const hasHistoryVirtualStart = Boolean(key && Object.prototype.hasOwnProperty.call(historyVirtualStartMap, key));
+  const rawHistoryVirtualStart = hasHistoryVirtualStart ? historyVirtualStartMap[key] : null;
+  const historyVirtualStart =
+    typeof rawHistoryVirtualStart === "number" && Number.isFinite(rawHistoryVirtualStart)
+      ? Math.max(0, Math.trunc(rawHistoryVirtualStart))
+      : null;
   const lastRead = key && state.lastRead ? state.lastRead[key] ?? null : null;
   const selectionRef = selectionState;
   const renderState = {
@@ -395,7 +401,7 @@ export function renderChat(layout: Layout, state: AppState) {
   const virtualAvgMap = viewportRuntime.virtualAvgHeights;
   const avgHeight = clampVirtualAvg(key ? virtualAvgMap.get(key) : null);
   const maxVirtualStart = getVirtualMaxStart(msgs.length, virtualWindow);
-  const preferredStart = virtualEnabled && shouldStick ? maxVirtualStart : historySync?.virtualStart;
+  const preferredStart = virtualEnabled && shouldStick ? maxVirtualStart : historyVirtualStart;
   const virtualStart = virtualEnabled ? getVirtualStart(msgs.length, preferredStart, virtualWindow) : 0;
   const virtualEnd = virtualEnabled ? getVirtualEnd(msgs.length, virtualStart, virtualWindow) : msgs.length;
   const topSpacerHeight = virtualEnabled ? Math.max(0, virtualStart) * avgHeight : 0;

@@ -428,7 +428,7 @@ export function handleHistoryServerMessage(
       source: "server",
       reconcilePending: false,
       lastServerAt: Date.now(),
-      virtualStart: shouldShiftVirtual && nextVirtualStart !== null ? nextVirtualStart : prevSync.virtualStart,
+      virtualStart: shouldShiftVirtual && nextVirtualStart !== null ? nextVirtualStart : prevVirtualStart,
     });
     return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;
   });

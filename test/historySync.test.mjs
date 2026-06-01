@@ -28,6 +28,7 @@ async function loadHistorySync() {
     return {
       newestServerMessageId: mod.newestServerMessageId,
       getConversationHistorySyncState: mod.getConversationHistorySyncState,
+      applyConversationHistorySyncState: mod.applyConversationHistorySyncState,
       cleanup: () => rm(tempDir, { recursive: true, force: true }),
     };
   } catch (e) {
@@ -49,6 +50,40 @@ test("historySync: newestServerMessageId игнорирует локальные
       ]),
       10
     );
+  } finally {
+    await cleanup();
+  }
+});
+
+test("historySync: absent virtualStart не превращается в top-window, но явный 0 сохраняется", async () => {
+  const { getConversationHistorySyncState, applyConversationHistorySyncState, cleanup } = await loadHistorySync();
+  try {
+    const key = "dm:peer-1";
+    let state = {
+      historySync: {},
+      historyLoaded: {},
+      historyPreviewOnly: {},
+      historyCursor: {},
+      historyHasMore: {},
+      historyLoading: {},
+      historyLoadingSlots: {},
+      historyVirtualStart: {},
+    };
+
+    state = applyConversationHistorySyncState(state, key, { loaded: true, loading: false });
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(state.historyVirtualStart, key),
+      false,
+      "loading/loaded updates must not persist virtualStart=0 implicitly"
+    );
+
+    state = applyConversationHistorySyncState(state, key, { virtualStart: 0 });
+    assert.equal(Object.prototype.hasOwnProperty.call(state.historyVirtualStart, key), true);
+    assert.equal(state.historyVirtualStart[key], 0);
+    assert.equal(getConversationHistorySyncState(state, key).virtualStart, 0);
+
+    state = applyConversationHistorySyncState(state, key, { loading: false });
+    assert.equal(state.historyVirtualStart[key], 0, "explicit top virtual window must survive later sync patches");
   } finally {
     await cleanup();
   }

@@ -37,7 +37,7 @@ async function loadFeature() {
   }
 }
 
-test("previewAutoFetchFeature: visual previews restore cache but do not auto-start chat media downloads", async () => {
+test("previewAutoFetchFeature: visible visual previews request silent thumb hydration", async () => {
   const helper = await loadFeature();
   try {
     assert.deepEqual(
@@ -46,7 +46,7 @@ test("previewAutoFetchFeature: visual previews restore cache but do not auto-sta
         devicePrefetchAllowed: false,
         shouldBackgroundPrefetch: false,
       }),
-      { prefetch: false, priority: "prefetch" }
+      { prefetch: false, priority: "high" }
     );
     assert.deepEqual(
       helper.resolveVisiblePreviewFetchPlan({
@@ -54,7 +54,7 @@ test("previewAutoFetchFeature: visual previews restore cache but do not auto-sta
         devicePrefetchAllowed: true,
         shouldBackgroundPrefetch: true,
       }),
-      { prefetch: false, priority: "prefetch" }
+      { prefetch: false, priority: "high" }
     );
     assert.deepEqual(
       helper.resolveVisiblePreviewFetchPlan({
