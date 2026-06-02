@@ -192,7 +192,6 @@ export function renderAuthModal(
   const root = el("div", { id: "auth-pages", class: `auth-entry-page auth-entry-${mode}` });
   const scrollable = el("div", { class: "scrollable auth-entry-scroll" });
   const layout = el("div", { class: `container modal-auth auth-entry-layout ${mode === "register" ? "page-signUp" : "page-sign"}` });
-  const layoutLogo = el("img", { class: "auth-layout-logo", src: "./icons/icon.svg", alt: "", "aria-hidden": "true" }, []);
   const btnClose = el("button", { class: "btn auth-close", type: "button", title: "Закрыть", "aria-label": "Закрыть" }, [
     "×",
   ]) as HTMLButtonElement;
@@ -389,7 +388,7 @@ export function renderAuthModal(
       : []),
     el("div", { class: "modal-warn auth-entry-warn-reserved", "aria-hidden": "true" })
   );
-  layout.append(layoutLogo, hero, panel);
+  layout.append(hero, panel);
   scrollable.append(layout);
   root.append(scrollable);
 

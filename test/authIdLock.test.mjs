@@ -285,10 +285,6 @@ test("renderAuthModal: modern entry shell keeps hero and focused auth panel", as
         "auth-entry-layout not found"
       );
       assert.ok(
-        findFirst(modal, (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-layout-logo")),
-        "auth-layout-logo not found"
-      );
-      assert.ok(
         findFirst(modal, (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-entry-hero")),
         "auth-entry-hero not found"
       );
