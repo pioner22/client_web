@@ -323,8 +323,8 @@ test("renderAuthModal: login/register keep a stable corporate heading and reserv
 
       const loginNote = findFirst(login, (n) => hasClass(n, "auth-note"));
       const registerNote = findFirst(register, (n) => hasClass(n, "auth-note"));
-      assert.equal(collectText(loginNote), "Введите данные аккаунта или создайте новый профиль для работы.");
-      assert.equal(collectText(registerNote), "Введите данные аккаунта или создайте новый профиль для работы.");
+      assert.equal(collectText(loginNote), "Введите данные аккаунта или создайте новый профиль.");
+      assert.equal(collectText(registerNote), "Введите данные аккаунта или создайте новый профиль.");
 
       const loginNotice = findFirst(login, (n) => hasClass(n, "auth-entry-notice"));
       const registerNotice = findFirst(register, (n) => hasClass(n, "auth-entry-notice"));

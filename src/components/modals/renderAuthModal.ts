@@ -38,7 +38,7 @@ interface EntryCopy {
 }
 
 const AUTH_ENTRY_PANEL_TITLE = "Вход в Ягодку";
-const AUTH_ENTRY_PANEL_SUBTITLE = "Введите данные аккаунта или создайте новый профиль для работы.";
+const AUTH_ENTRY_PANEL_SUBTITLE = "Введите данные аккаунта или создайте новый профиль.";
 const AUTH_ENTRY_HERO_TITLE = "Рабочий мессенджер для команды";
 const AUTH_ENTRY_HERO_COPY = "Общайтесь, отправляйте файлы и возвращайтесь к рабочим чатам без лишних шагов.";
 const AUTH_ENTRY_HELPER = "Для входа нужен ID и пароль. Если создаёте аккаунт, сохраните выданный ID после регистрации.";
