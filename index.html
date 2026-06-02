@@ -19,10 +19,13 @@
   <body>
     <div id="app">
       <div class="boot" aria-live="polite">
-        <img class="boot-logo" src="./icons/icon.svg" alt="" />
-        <div class="boot-brand">Ягодка</div>
-        <div class="boot-sub" id="boot-status">Загрузка…</div>
-        <div class="boot-bar" aria-hidden="true"></div>
+        <div class="boot-frame">
+          <img class="boot-logo" src="./icons/icon.svg" alt="" />
+          <div class="boot-kicker">Corporate Messenger</div>
+          <div class="boot-brand">Yagodka</div>
+          <div class="boot-sub" id="boot-status">Проверяем версию клиента</div>
+          <div class="boot-bar" aria-hidden="true"></div>
+        </div>
       </div>
     </div>
     <style>
@@ -48,89 +51,72 @@
         inset: 0;
         display: grid;
         place-content: center;
-        padding: 20px;
-        gap: 10px;
-        text-align: center;
-        background: var(--body-bg, var(--app-bg, #0b0f14));
-        transition:
-          opacity 240ms ease,
-          transform 240ms ease,
-          filter 240ms ease;
-        will-change: opacity, transform, filter;
+        padding: 24px;
+        text-align: left;
+        background: #0d1117;
+        transition: opacity 180ms ease;
+        will-change: opacity;
       }
       .boot.boot-out {
         opacity: 0;
-        transform: scale(1.02);
-        filter: blur(10px);
         pointer-events: none;
       }
+      .boot-frame {
+        width: min(360px, calc(100vw - 48px));
+        display: grid;
+        gap: 10px;
+        padding: 24px;
+        border: 1px solid rgba(230, 237, 243, 0.14);
+        border-radius: 8px;
+        background: #111827;
+        box-shadow: 0 24px 52px rgba(0, 0, 0, 0.32);
+      }
       .boot-logo {
-        width: 72px;
-        height: 72px;
-        margin: 0 auto 2px;
-        opacity: 0.94;
-        filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.25));
-        animation: boot-pulse 1.8s ease-in-out infinite;
+        width: 48px;
+        height: 48px;
+        opacity: 0.96;
+      }
+      .boot-kicker {
+        margin-top: 6px;
+        color: #93a4b8;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
       }
       .boot-brand {
+        color: #f8fafc;
         font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        font-size: 18px;
+        letter-spacing: 0;
+        font-size: 24px;
+        line-height: 1.1;
       }
       .boot-sub {
-        opacity: 0.72;
+        min-height: 20px;
+        color: #a8b3c4;
         font-size: 14px;
+        line-height: 1.4;
       }
       .boot-bar {
-        width: min(280px, 72vw);
-        height: 2px;
-        background: rgba(255, 255, 255, 0.14);
-        border-radius: 999px;
-        overflow: hidden;
+        width: 100%;
+        height: 3px;
+        margin-top: 4px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, #2563eb 0 34%, rgba(148, 163, 184, 0.28) 34% 100%);
         position: relative;
-      }
-      .boot-bar::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        transform: translateX(-60%);
-        background: linear-gradient(90deg, transparent, rgba(236, 72, 153, 0.85), transparent);
-        animation: boot-slide 1.1s ease-in-out infinite;
-      }
-      @keyframes boot-pulse {
-        0%,
-        100% {
-          transform: translateY(0) scale(1);
-          opacity: 0.94;
-        }
-        50% {
-          transform: translateY(-2px) scale(1.01);
-          opacity: 1;
-        }
-      }
-      @keyframes boot-slide {
-        0% {
-          transform: translateX(-60%);
-        }
-        50% {
-          transform: translateX(60%);
-        }
-        100% {
-          transform: translateX(160%);
-        }
       }
       @media (prefers-reduced-motion: reduce) {
         .boot {
           transition: none;
         }
-        .boot-bar::before {
-          animation: none;
-          opacity: 0.55;
-          transform: none;
+      }
+      @media (max-width: 420px) {
+        .boot {
+          padding: 16px;
         }
-        .boot-logo {
-          animation: none;
+        .boot-frame {
+          width: min(100%, calc(100vw - 32px));
+          padding: 18px;
         }
       }
     </style>

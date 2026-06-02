@@ -187,9 +187,51 @@ test("requiredUpdateGate: blocks mount and reloads before entering stale app", a
     assert.equal(result.reason, "update_required");
     assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), "0.1.810-abcdef123456");
     assert.equal(sessionStorage.getItem("yagodka_updating"), "1");
-    assert.equal(sessionStorage.getItem("yagodka_force_recover"), "1");
+    assert.equal(sessionStorage.getItem("yagodka_force_recover"), null);
     assert.equal(root.children.length, 1);
     assert.match(replaced[0], /^https:\/\/yagodka\.org\/web\/\?room=1&__yg_update=\d+$/);
+  });
+  await gate.cleanup();
+});
+
+test("requiredUpdateGate: current boot removes one-shot update/reset query params", async () => {
+  const gate = await loadGate("0.1.810");
+  await withBrowserStubs(async () => {
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    const replaced = [];
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        localStorage,
+        sessionStorage,
+        history: {
+          state: { ok: true },
+          replaceState(state, title, url) {
+            replaced.push({ state, title, url: String(url) });
+          },
+        },
+        location: { href: "https://yagodka.org/web/?__pwa_reset=1780405479877&__yg_update=42&room=1" },
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: { createElement: makeElement, title: "Yagodka" },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+    globalThis.fetch = async () => ({ ok: true, text: async () => 'const BUILD_ID = "0.1.810-abcdef123456";' });
+
+    const root = makeElement("div");
+    const result = await gate.runRequiredUpdateGate(root);
+    assert.equal(result.blocked, false);
+    assert.equal(replaced.length, 1);
+    assert.equal(replaced[0].url, "https://yagodka.org/web/?room=1");
   });
   await gate.cleanup();
 });

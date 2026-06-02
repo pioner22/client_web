@@ -101,6 +101,19 @@ function clearGuard(): void {
   }
 }
 
+function cleanupUpdateQueryParams(): void {
+  try {
+    const url = new URL(window.location.href);
+    const before = url.toString();
+    url.searchParams.delete("__yg_update");
+    url.searchParams.delete("__pwa_reset");
+    if (url.toString() === before) return;
+    window.history?.replaceState?.(window.history.state, document.title, url.toString());
+  } catch {
+    // ignore
+  }
+}
+
 function activeBuildIdForGate(): string {
   try {
     const raw = String(window.localStorage.getItem("yagodka_active_build_id_v1") || "").trim();
@@ -259,7 +272,6 @@ function markReloading(liveBuildId: string): void {
   try {
     storage("session")?.setItem(UPDATE_GATE_RELOADING_KEY, liveBuildId);
     storage("session")?.setItem("yagodka_updating", "1");
-    storage("session")?.setItem("yagodka_force_recover", "1");
   } catch {
     // ignore
   }
@@ -306,6 +318,7 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
       // ignore
     }
     clearGuard();
+    cleanupUpdateQueryParams();
     return { blocked: false, liveBuildId, reason: "current" };
   }
 
@@ -330,4 +343,3 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
   );
   return { blocked: true, liveBuildId, reason: "reload_failed" };
 }
-

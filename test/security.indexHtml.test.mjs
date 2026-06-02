@@ -22,3 +22,15 @@ test("security: index.html без inline <script> (CSP script-src 'self')", asyn
   assert.equal(inline.length, 0, `Найдены inline <script> в index.html: ${JSON.stringify(inline)}`);
 });
 
+test("entry boot screen: strict corporate surface without animated layout shifts", async () => {
+  const html = await readFile(path.resolve("index.html"), "utf8");
+
+  assert.match(html, /Corporate Messenger/);
+  assert.match(html, /Проверяем версию клиента/);
+  assert.match(html, /\.boot-frame\s*{[^}]*border-radius:\s*8px;/s);
+  assert.match(html, /\.boot\.boot-out\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
+  assert.doesNotMatch(html, /@keyframes\s+boot-/);
+  assert.doesNotMatch(html, /animation:\s*boot-/);
+  assert.doesNotMatch(html, /filter:\s*blur/);
+  assert.doesNotMatch(html, /transform:\s*scale/);
+});

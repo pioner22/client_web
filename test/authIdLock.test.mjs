@@ -288,7 +288,7 @@ test("renderAuthModal: modern entry shell keeps hero and focused auth panel", as
         findFirst(modal, (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-entry-panel")),
         "auth-entry-panel not found"
       );
-      assert.match(collectText(modal), /Создайте аккаунт за один шаг/);
+      assert.match(collectText(modal), /Создать рабочий аккаунт/);
     });
   } finally {
     await helper.cleanup();
@@ -323,7 +323,7 @@ test("renderAuthModal: auto-resume screen keeps manual and different-account act
         }
       );
 
-      assert.match(collectText(modal), /Возвращаем вас в Ягодку/);
+      assert.match(collectText(modal), /Проверяем рабочую сессию/);
       const manualBtn = findFirst(
         modal,
         (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Войти вручную/.test(collectText(n))

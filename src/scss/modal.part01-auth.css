@@ -364,7 +364,7 @@
   align-items: center;
   gap: 10px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   color: var(--text);
 }
 
@@ -376,10 +376,7 @@
 }
 
 .auth-brand-text {
-  background-image: linear-gradient(90deg, var(--focus), color-mix(in srgb, var(--focus), #ffffff 16%));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--text);
 }
 
 .auth-subtitle {
@@ -556,39 +553,26 @@
 #auth-pages.auth-entry-page {
   --auth-card-width: 1080px;
   --auth-panel-width: 430px;
-  --auth-accent-warm: color-mix(in srgb, var(--focus), #ff8b4a 26%);
-  --auth-accent-cool: color-mix(in srgb, var(--focus), #56d8ff 18%);
+  --auth-accent-warm: #2563eb;
+  --auth-accent-cool: #0f766e;
+  --auth-entry-bg: color-mix(in srgb, var(--surface-color), #f4f7fb 8%);
+  --auth-entry-hero-bg: color-mix(in srgb, var(--panel2), #111827 28%);
+  --auth-entry-panel-bg: color-mix(in srgb, var(--panel), #ffffff 3%);
   min-height: 100%;
-  background:
-    radial-gradient(900px 520px at 8% 4%, color-mix(in srgb, var(--auth-accent-warm), transparent 72%), transparent 68%),
-    radial-gradient(720px 420px at 96% 12%, color-mix(in srgb, var(--auth-accent-cool), transparent 76%), transparent 62%),
-    linear-gradient(145deg, color-mix(in srgb, var(--surface-color), #ffffff 4%), var(--surface-color) 46%, color-mix(in srgb, var(--panel2), #000000 8%));
+  background: var(--auth-entry-bg);
 }
 
 #auth-pages.auth-entry-page::before,
 #auth-pages.auth-entry-page::after {
-  content: "";
-  position: fixed;
-  pointer-events: none;
-  border-radius: 999px;
-  filter: blur(2px);
-  opacity: 0.54;
+  display: none;
 }
 
 #auth-pages.auth-entry-page::before {
-  width: 34vw;
-  height: 34vw;
-  left: -11vw;
-  bottom: -14vw;
-  background: radial-gradient(circle, color-mix(in srgb, var(--auth-accent-warm), transparent 58%), transparent 68%);
+  display: none;
 }
 
 #auth-pages.auth-entry-page::after {
-  width: 22vw;
-  height: 22vw;
-  right: -7vw;
-  top: 12vh;
-  background: radial-gradient(circle, color-mix(in srgb, var(--auth-accent-cool), transparent 64%), transparent 72%);
+  display: none;
 }
 
 #auth-pages.auth-entry-page > .auth-entry-scroll {
@@ -610,13 +594,12 @@
   position: relative;
   z-index: 1;
   padding: clamp(14px, 2vw, 18px);
-  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 54%);
-  border-radius: 34px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--panel), transparent 4%), color-mix(in srgb, var(--panel2), transparent 14%));
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 28%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel), transparent 0%);
   box-shadow:
-    0 30px 90px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 24px 56px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
 }
 
@@ -633,23 +616,15 @@
   justify-content: space-between;
   gap: 16px;
   padding: clamp(24px, 4vw, 46px);
-  border-radius: 26px;
+  border-radius: 8px;
   overflow: hidden;
-  background:
-    radial-gradient(520px 360px at 18% 16%, rgba(255, 255, 255, 0.2), transparent 62%),
-    radial-gradient(620px 460px at 92% 18%, color-mix(in srgb, var(--auth-accent-cool), transparent 70%), transparent 62%),
-    linear-gradient(150deg, color-mix(in srgb, var(--auth-accent-warm), #000000 14%), color-mix(in srgb, var(--focus), #000000 20%) 48%, color-mix(in srgb, var(--panel2), #000000 30%));
-  color: #fff;
+  background: var(--auth-entry-hero-bg);
+  color: color-mix(in srgb, var(--text), #ffffff 18%);
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 36%);
 }
 
 .auth-entry-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(110deg, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px 90px),
-    linear-gradient(0deg, rgba(0, 0, 0, 0.42), transparent 46%);
-  opacity: 0.74;
+  display: none;
 }
 
 .auth-entry-hero > * {
@@ -670,24 +645,24 @@
   height: 108px;
   display: grid;
   place-items: center;
-  border-radius: 30px;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel), #ffffff 8%);
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 25%);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .auth-hero-orb .auth-logo {
   width: 78px;
   height: 78px;
   object-fit: contain;
-  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.24));
+  filter: none;
 }
 
 .auth-hero-wordmark {
   max-width: 100%;
-  font-size: clamp(30px, 4vw, 46px);
+  font-size: 40px;
   line-height: 1;
   letter-spacing: 0;
   font-weight: 900;
@@ -704,18 +679,18 @@
   width: max-content;
   max-width: 100%;
   padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--auth-accent-cool), transparent 84%);
+  border: 1px solid color-mix(in srgb, var(--auth-accent-cool), transparent 52%);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .auth-hero-title {
   max-width: 100%;
-  font-size: clamp(24px, 3.4vw, 40px);
+  font-size: 34px;
   line-height: 1.08;
   letter-spacing: 0;
   font-weight: 900;
@@ -723,8 +698,8 @@
 
 .auth-hero-copy {
   max-width: 46ch;
-  color: rgba(255, 255, 255, 0.82);
-  font-size: clamp(14px, 1.6vw, 16px);
+  color: color-mix(in srgb, var(--text), var(--modal-line-color) 24%);
+  font-size: 15px;
   line-height: 1.55;
 }
 
@@ -740,11 +715,9 @@
   gap: 8px;
   min-height: 104px;
   padding: 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel), transparent 0%);
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 36%);
 }
 
 .auth-hero-step-mark {
@@ -752,11 +725,11 @@
   height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--auth-accent-cool), transparent 82%);
+  color: var(--text);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .auth-hero-step.is-active .auth-hero-step-mark,
@@ -777,10 +750,8 @@
   flex-direction: column;
   gap: 18px;
   padding: clamp(20px, 3.4vw, 34px);
-  border-radius: 26px;
-  background:
-    radial-gradient(360px 220px at 0% 0%, color-mix(in srgb, var(--focus), transparent 90%), transparent 58%),
-    color-mix(in srgb, var(--panel), transparent 0%);
+  border-radius: 8px;
+  background: var(--auth-entry-panel-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -798,10 +769,10 @@
 }
 
 .auth-entry-panel .auth-subtitle {
-  font-size: clamp(25px, 3vw, 34px);
+  font-size: 30px;
   line-height: 1.03;
-  letter-spacing: -0.045em;
-  font-weight: 900;
+  letter-spacing: 0;
+  font-weight: 800;
 }
 
 .auth-entry-panel .auth-note {
@@ -821,10 +792,10 @@
   align-items: center;
   min-height: 30px;
   padding: 0 11px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.045em;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .auth-entry-panel .modal-tabs {
@@ -833,21 +804,20 @@
   margin: 0;
   border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 50%);
   background: color-mix(in srgb, var(--panel2), transparent 8%);
-  border-radius: 18px;
+  border-radius: 8px;
   padding: 4px;
 }
 
 .auth-entry-panel .modal-tabs .btn {
   min-height: 42px;
-  border-radius: 14px;
-  font-weight: 800;
+  border-radius: 6px;
+  font-weight: 700;
 }
 
 .auth-entry-panel .modal-tabs .btn.btn-active {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--focus), #ffffff 8%), color-mix(in srgb, var(--focus), #000000 8%));
+  background: color-mix(in srgb, var(--auth-accent-warm), #000000 4%);
   color: #fff;
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--focus), transparent 74%);
+  box-shadow: none;
 }
 
 .auth-entry-panel .input-wrapper,
@@ -874,15 +844,15 @@
 
 .auth-entry-panel .modal-label {
   font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.065em;
+  font-weight: 800;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--text), var(--modal-line-color) 38%);
 }
 
 .auth-entry-panel .modal-input {
   min-height: 52px;
-  border-radius: 16px;
+  border-radius: 8px;
   border-color: color-mix(in srgb, var(--modal-border-color), transparent 38%);
   background: color-mix(in srgb, var(--panel2), transparent 16%);
   font-size: 16px;
@@ -903,8 +873,8 @@
 .auth-entry-panel .auth-primary-cta {
   width: 100%;
   min-height: 52px;
-  border-radius: 16px;
-  font-weight: 900;
+  border-radius: 8px;
+  font-weight: 800;
 }
 
 .auth-entry-panel .auth-session-actions .btn {
@@ -923,9 +893,8 @@
 }
 
 .auth-entry-panel .auth-primary-cta {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--focus), #ffffff 10%), color-mix(in srgb, var(--focus), #000000 8%));
-  box-shadow: 0 18px 36px color-mix(in srgb, var(--focus), transparent 76%);
+  background: color-mix(in srgb, var(--auth-accent-warm), #000000 4%);
+  box-shadow: none;
 }
 
 .auth-entry-panel .auth-section-lead,
@@ -937,30 +906,26 @@
 
 .auth-entry-panel .auth-session-card {
   padding: 16px;
-  border-radius: 20px;
+  border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--focus), transparent 62%);
-  background:
-    radial-gradient(260px 160px at 0% 0%, color-mix(in srgb, var(--focus), transparent 86%), transparent 64%),
-    color-mix(in srgb, var(--panel2), transparent 10%);
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
 }
 
 .auth-entry-panel .auth-session-id {
-  font-size: clamp(23px, 5vw, 32px);
-  letter-spacing: -0.04em;
+  font-size: 28px;
+  letter-spacing: 0;
 }
 
 .auth-entry-panel .auth-entry-notice {
   width: 100%;
   margin: 0;
-  border-radius: 18px;
+  border-radius: 8px;
   border-color: color-mix(in srgb, var(--focus), transparent 62%);
-  background:
-    radial-gradient(220px 120px at 0% 0%, color-mix(in srgb, var(--focus), transparent 86%), transparent 70%),
-    color-mix(in srgb, var(--panel2), transparent 10%);
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
 }
 
 .auth-entry-panel .auth-progress-card {
-  border-radius: 20px;
+  border-radius: 8px;
   padding: 16px;
   background: color-mix(in srgb, var(--panel2), transparent 10%);
 }
@@ -977,11 +942,9 @@
 
 .auth-welcome-screen {
   width: min(440px, calc(100vw - 32px));
-  border-radius: 30px;
+  border-radius: 8px;
   padding: clamp(24px, 6vw, 38px);
-  background:
-    radial-gradient(320px 180px at 50% 0%, color-mix(in srgb, var(--focus), transparent 82%), transparent 68%),
-    color-mix(in srgb, var(--panel), transparent 0%);
+  background: color-mix(in srgb, var(--panel), transparent 0%);
 }
 
 .auth-welcome-screen .screen-logo-wrap {
@@ -990,11 +953,10 @@
   display: grid;
   place-items: center;
   margin: 0 auto;
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.24), transparent 34%),
-    linear-gradient(135deg, color-mix(in srgb, var(--focus), #fff 8%), color-mix(in srgb, var(--focus), #000 18%));
-  box-shadow: 0 22px 48px color-mix(in srgb, var(--focus), transparent 78%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel2), transparent 0%);
+  border: 1px solid color-mix(in srgb, var(--modal-border-color), transparent 32%);
+  box-shadow: none;
 }
 
 .auth-welcome-screen .screen-logo {
@@ -1009,7 +971,7 @@
 }
 
 .auth-welcome-screen .screen-title {
-  font-size: clamp(24px, 5vw, 32px);
+  font-size: 30px;
   line-height: 1.05;
   letter-spacing: 0;
   font-weight: 900;
@@ -1024,9 +986,7 @@
 @media (max-width: 860px) {
   #auth-pages.auth-entry-page {
     min-height: 100dvh;
-    background:
-      radial-gradient(380px 220px at 10% 0%, color-mix(in srgb, var(--auth-accent-warm), transparent 82%), transparent 72%),
-      color-mix(in srgb, var(--surface-color), var(--panel2) 16%);
+    background: color-mix(in srgb, var(--surface-color), var(--panel2) 16%);
   }
 
   #auth-pages.auth-entry-page::before,
@@ -1068,9 +1028,7 @@
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    background:
-      radial-gradient(300px 140px at 50% -28px, color-mix(in srgb, var(--focus), transparent 88%), transparent 74%),
-      color-mix(in srgb, var(--panel), transparent 0%);
+    background: color-mix(in srgb, var(--panel), transparent 0%);
   }
 
   .auth-panel-top,
@@ -1108,9 +1066,9 @@
   }
 
   .auth-entry-panel .auth-subtitle {
-    font-size: clamp(22px, 6.4vw, 28px);
+    font-size: 26px;
     line-height: 1;
-    letter-spacing: -0.04em;
+    letter-spacing: 0;
   }
 
   .auth-entry-panel .auth-note {
@@ -1124,12 +1082,12 @@
 
   .auth-entry-panel .modal-tabs {
     padding: 3px;
-    border-radius: 14px;
+    border-radius: 8px;
   }
 
   .auth-entry-panel .modal-tabs .btn {
     min-height: 34px;
-    border-radius: 11px;
+    border-radius: 6px;
     font-size: 13px;
   }
 
@@ -1144,12 +1102,12 @@
 
   .auth-entry-panel .modal-label {
     font-size: 10px;
-    letter-spacing: 0.055em;
+    letter-spacing: 0;
   }
 
   .auth-entry-panel .modal-input {
     min-height: 44px;
-    border-radius: 13px;
+    border-radius: 8px;
     font-size: 16px;
   }
 
@@ -1160,7 +1118,7 @@
   .auth-entry-panel .modal-actions .btn,
   .auth-entry-panel .auth-primary-cta {
     min-height: 46px;
-    border-radius: 13px;
+    border-radius: 8px;
   }
 
   .auth-entry-panel .auth-section-lead,
@@ -1176,7 +1134,7 @@
 
   .auth-entry-panel .auth-entry-notice {
     padding: 9px 11px;
-    border-radius: 13px;
+    border-radius: 8px;
     font-size: 12px;
     line-height: 1.32;
   }
@@ -1185,7 +1143,7 @@
   .auth-entry-panel .auth-progress-card {
     gap: 5px;
     padding: 10px 11px;
-    border-radius: 15px;
+    border-radius: 8px;
   }
 
   .auth-entry-panel .auth-session-label,
@@ -1194,12 +1152,12 @@
   }
 
   .auth-entry-panel .auth-session-id {
-    font-size: clamp(19px, 6vw, 24px);
+    font-size: 22px;
   }
 
   .auth-entry-panel .auth-session-actions .btn {
     min-height: 38px;
-    border-radius: 12px;
+    border-radius: 8px;
     font-size: 12px;
   }
 
@@ -1211,7 +1169,7 @@
 
   .auth-entry-panel .auth-inline-actions .btn {
     min-height: 42px;
-    border-radius: 12px;
+    border-radius: 8px;
     padding-inline: 12px;
   }
 
@@ -1222,14 +1180,14 @@
 
   .auth-welcome-screen {
     width: min(360px, calc(100vw - 24px));
-    border-radius: 22px;
+    border-radius: 8px;
     padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
   }
 
   .auth-welcome-screen .screen-logo-wrap {
     width: 58px;
     height: 58px;
-    border-radius: 18px;
+    border-radius: 8px;
   }
 
   .auth-welcome-screen .screen-logo {
@@ -1238,7 +1196,7 @@
   }
 
   .auth-welcome-screen .screen-title {
-    font-size: clamp(21px, 6vw, 26px);
+    font-size: 24px;
   }
 
   .auth-welcome-screen .screen-sub {

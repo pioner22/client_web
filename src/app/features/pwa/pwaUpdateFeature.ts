@@ -141,6 +141,8 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     }
   };
 
+  const currentClientBuildId = (): string => String(store.get().clientVersion || APP_VERSION || "").trim();
+
   const logPwaUpdate = (event: string, detail?: string) => {
     const storage = getStorage("local");
     if (!storage) return;
@@ -184,7 +186,6 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   function forceUpdateReload(reason?: string) {
     try {
       sessionStorage.setItem("yagodka_updating", "1");
-      sessionStorage.setItem("yagodka_force_recover", "1");
     } catch {
       // ignore
     }
@@ -331,7 +332,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       // ignore
     }
     try {
-      sessionStorage.setItem("yagodka_force_recover", "1");
+      sessionStorage.setItem("yagodka_updating", "1");
       const u = new URL(window.location.href);
       u.searchParams.set("__pwa_reset", String(Date.now()));
       window.location.replace(u.toString());
@@ -345,14 +346,15 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   async function applyPwaUpdateNow(opts?: { mode?: PwaUpdateMode; buildId?: string }) {
     const mode: PwaUpdateMode = opts?.mode === "manual" ? "manual" : "auto";
     const updateLatest = String(store.get().updateLatest ?? "").trim();
+    const currentBuildId = currentClientBuildId();
     let buildId = String(opts?.buildId ?? pwaPendingBuildId ?? updateLatest ?? store.get().clientVersion ?? "").trim();
     let buildIdSource = opts?.buildId ? "opts" : pwaPendingBuildId ? "pending" : updateLatest ? "latest" : "client";
-    if (updateLatest && buildIdSource !== "opts" && shouldReloadForBuild(APP_VERSION, updateLatest) && !shouldReloadForBuild(APP_VERSION, buildId)) {
+    if (updateLatest && buildIdSource !== "opts" && shouldReloadForBuild(currentBuildId, updateLatest) && !shouldReloadForBuild(currentBuildId, buildId)) {
       buildId = updateLatest;
       buildIdSource = "latest";
     }
-    let hasNewBuild = shouldReloadForBuild(APP_VERSION, buildId);
-    const latestNeedsReload = updateLatest && shouldReloadForBuild(APP_VERSION, updateLatest);
+    let hasNewBuild = shouldReloadForBuild(currentBuildId, buildId);
+    const latestNeedsReload = updateLatest && shouldReloadForBuild(currentBuildId, updateLatest);
     if (!hasNewBuild && latestNeedsReload && mode === "manual") {
       buildId = updateLatest;
       buildIdSource = "latest";
@@ -476,14 +478,15 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       const netBuildId = await fetchSwBuildId();
       let buildId = swBuildId || netBuildId;
       const latest = String(store.get().updateLatest ?? "").trim();
-      const latestNeedsReload = latest ? shouldReloadForBuild(APP_VERSION, latest) : false;
-      const netNeedsReload = netBuildId ? shouldReloadForBuild(APP_VERSION, netBuildId) : false;
+      const currentBuildId = currentClientBuildId();
+      const latestNeedsReload = latest ? shouldReloadForBuild(currentBuildId, latest) : false;
+      const netNeedsReload = netBuildId ? shouldReloadForBuild(currentBuildId, netBuildId) : false;
       if ((latestNeedsReload || netNeedsReload) && netBuildId && (!swBuildId || shouldReloadForBuild(swBuildId, netBuildId))) {
         store.set({ status: "Найдена новая сборка, но Service Worker не обновляется. Сбрасываем кэш PWA…" });
         await resetPwaCachesAndServiceWorkers(`stuck:${swBuildId || "none"}->${netBuildId}`);
         return;
       }
-      let buildNeedsReload = buildId ? shouldReloadForBuild(APP_VERSION, buildId) : false;
+      let buildNeedsReload = buildId ? shouldReloadForBuild(currentBuildId, buildId) : false;
       if (latestNeedsReload && !buildNeedsReload) {
         buildId = latest;
         buildNeedsReload = true;
@@ -516,7 +519,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     const netBuildId = await fetchSwBuildId();
     const liveBuildId = String(netBuildId || swBuildId || "").trim();
     if (!liveBuildId) return;
-    const liveNeedsReload = shouldReloadForBuild(APP_VERSION, liveBuildId);
+    const liveNeedsReload = shouldReloadForBuild(currentClientBuildId(), liveBuildId);
     if (!liveNeedsReload) {
       adoptActiveBuild(liveBuildId);
       store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, pwaUpdateAvailable: false } : prev));
@@ -604,7 +607,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     if (!buildId) return;
     const hasController = typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
     const hasWaiting = hasPwaUpdate();
-    const needReload = shouldReloadForBuild(APP_VERSION, buildId);
+    const needReload = shouldReloadForBuild(currentClientBuildId(), buildId);
     logPwaUpdate("build", `${buildId}${needReload ? "" : " ok"}`);
     if (needReload) {
       setPendingPwaBuild(buildId);
