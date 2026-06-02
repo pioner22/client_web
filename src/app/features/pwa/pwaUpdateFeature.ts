@@ -278,7 +278,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       const res = await fetch(url, { cache: "no-store", ...(controller ? { signal: controller.signal } : {}) });
       if (!res.ok) return "";
       const text = await res.text();
-      const m = text.match(/BUILD_ID\\s*=\\s*\"([^\"]+)\"/);
+      const m = text.match(/\bBUILD_ID\s*=\s*["']([^"']+)["']/);
       return m ? m[1].trim() : "";
     } catch {
       return "";

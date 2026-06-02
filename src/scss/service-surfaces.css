@@ -391,6 +391,53 @@
   }
 }
 
+.required-update-gate {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.required-update-gate__spinner {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 4px;
+  border: 3px solid color-mix(in srgb, var(--text), transparent 84%);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: required-update-gate-spin 0.9s linear infinite;
+}
+
+.required-update-gate__title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.required-update-gate__text {
+  width: min(420px, calc(100vw - 48px));
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.required-update-gate__btn {
+  justify-self: center;
+  margin-top: 4px;
+}
+
+@keyframes required-update-gate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 840px) {
   .chat-pinned {
     gap: 8px;

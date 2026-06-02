@@ -1,0 +1,202 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { build } from "esbuild";
+
+async function loadGate(appVersion = "0.1.809") {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "yagodka-web-test-"));
+  const outfile = path.join(tempDir, "bundle.mjs");
+  try {
+    await build({
+      entryPoints: [path.resolve("src/app/bootstrap/requiredUpdateGate.ts")],
+      outfile,
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      target: "node20",
+      sourcemap: false,
+      logLevel: "silent",
+      define: {
+        __APP_VERSION__: JSON.stringify(appVersion),
+        __ANDROID_APP_VERSION_NAME__: JSON.stringify("1.0.20"),
+        __ANDROID_APP_VERSION_CODE__: "21",
+        "import.meta.env.DEV": "false",
+      },
+    });
+    const mod = await import(pathToFileURL(outfile).href);
+    if (typeof mod.runRequiredUpdateGate !== "function") throw new Error("runRequiredUpdateGate export missing");
+    return {
+      parseBuildIdFromServiceWorker: mod.parseBuildIdFromServiceWorker,
+      isRequiredUpdateNeeded: mod.isRequiredUpdateNeeded,
+      runRequiredUpdateGate: mod.runRequiredUpdateGate,
+      cleanup: () => rm(tempDir, { recursive: true, force: true }),
+    };
+  } catch (e) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw e;
+  }
+}
+
+function makeStorage(initial = []) {
+  const data = new Map(initial);
+  return {
+    getItem(key) {
+      return data.has(String(key)) ? data.get(String(key)) : null;
+    },
+    setItem(key, value) {
+      data.set(String(key), String(value));
+    },
+    removeItem(key) {
+      data.delete(String(key));
+    },
+    dump() {
+      return new Map(data);
+    },
+  };
+}
+
+function makeElement(tag = "div") {
+  return {
+    tag,
+    className: "",
+    textContent: "",
+    type: "",
+    children: [],
+    attrs: {},
+    setAttribute(key, value) {
+      this.attrs[String(key)] = String(value);
+    },
+    addEventListener() {},
+    append(...items) {
+      this.children.push(...items);
+    },
+    replaceChildren(...items) {
+      this.children = [...items];
+    },
+  };
+}
+
+async function withBrowserStubs(fn) {
+  const prev = {
+    window: Object.getOwnPropertyDescriptor(globalThis, "window"),
+    document: Object.getOwnPropertyDescriptor(globalThis, "document"),
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+    localStorage: Object.getOwnPropertyDescriptor(globalThis, "localStorage"),
+    sessionStorage: Object.getOwnPropertyDescriptor(globalThis, "sessionStorage"),
+    fetch: globalThis.fetch,
+  };
+  try {
+    return await fn();
+  } finally {
+    if (prev.window) Object.defineProperty(globalThis, "window", prev.window);
+    else delete globalThis.window;
+    if (prev.document) Object.defineProperty(globalThis, "document", prev.document);
+    else delete globalThis.document;
+    if (prev.navigator) Object.defineProperty(globalThis, "navigator", prev.navigator);
+    else delete globalThis.navigator;
+    if (prev.localStorage) Object.defineProperty(globalThis, "localStorage", prev.localStorage);
+    else delete globalThis.localStorage;
+    if (prev.sessionStorage) Object.defineProperty(globalThis, "sessionStorage", prev.sessionStorage);
+    else delete globalThis.sessionStorage;
+    globalThis.fetch = prev.fetch;
+  }
+}
+
+test("requiredUpdateGate: parses BUILD_ID and compares only known full build hashes", async () => {
+  const gate = await loadGate("0.1.810");
+  try {
+    assert.equal(gate.parseBuildIdFromServiceWorker('const BUILD_ID = "0.1.810-abcdef123456";'), "0.1.810-abcdef123456");
+    assert.equal(gate.isRequiredUpdateNeeded("0.1.809-a3f3e6e46bee", "0.1.810-abcdef123456"), true);
+    assert.equal(gate.isRequiredUpdateNeeded("0.1.810", "0.1.810-abcdef123456"), false);
+    assert.equal(gate.isRequiredUpdateNeeded("0.1.810-111111111111", "0.1.810-abcdef123456"), true);
+  } finally {
+    await gate.cleanup();
+  }
+});
+
+test("requiredUpdateGate: current version stores live build and lets app mount", async () => {
+  const gate = await loadGate("0.1.810");
+  await withBrowserStubs(async () => {
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        localStorage,
+        sessionStorage,
+        location: { href: "https://yagodka.org/web/" },
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", { value: { createElement: makeElement }, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+    globalThis.fetch = async () => ({ ok: true, text: async () => 'const BUILD_ID = "0.1.810-abcdef123456";' });
+
+    const root = makeElement("div");
+    const result = await gate.runRequiredUpdateGate(root);
+    assert.deepEqual(result, { blocked: false, liveBuildId: "0.1.810-abcdef123456", reason: "current" });
+    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), "0.1.810-abcdef123456");
+    assert.equal(root.children.length, 0);
+  });
+  await gate.cleanup();
+});
+
+test("requiredUpdateGate: blocks mount and reloads before entering stale app", async () => {
+  const gate = await loadGate("0.1.809");
+  await withBrowserStubs(async () => {
+    const localStorage = makeStorage([["yagodka_active_build_id_v1", "0.1.809-a3f3e6e46bee"]]);
+    const sessionStorage = makeStorage();
+    const replaced = [];
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        localStorage,
+        sessionStorage,
+        location: {
+          href: "https://yagodka.org/web/?room=1",
+          replace(url) {
+            replaced.push(String(url));
+          },
+          reload() {
+            replaced.push("reload");
+          },
+        },
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", { value: { createElement: makeElement }, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+    globalThis.fetch = async () => ({ ok: true, text: async () => 'const BUILD_ID = "0.1.810-abcdef123456";' });
+
+    const root = makeElement("div");
+    const result = await gate.runRequiredUpdateGate(root);
+    assert.equal(result.blocked, true);
+    assert.equal(result.liveBuildId, "0.1.810-abcdef123456");
+    assert.equal(result.reason, "update_required");
+    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), "0.1.810-abcdef123456");
+    assert.equal(sessionStorage.getItem("yagodka_updating"), "1");
+    assert.equal(sessionStorage.getItem("yagodka_force_recover"), "1");
+    assert.equal(root.children.length, 1);
+    assert.match(replaced[0], /^https:\/\/yagodka\.org\/web\/\?room=1&__yg_update=\d+$/);
+  });
+  await gate.cleanup();
+});
+
+test("requiredUpdateGate: index waits for the gate before importing mountApp", async () => {
+  const src = await readFile(path.resolve("src/index.ts"), "utf8");
+  assert.match(src, /runRequiredUpdateGate\(appRoot\)/);
+  assert.match(src, /if \(result\.blocked\) return;/);
+  assert.match(src, /mountRuntime\(\)/);
+});
