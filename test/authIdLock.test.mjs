@@ -292,8 +292,9 @@ test("renderAuthModal: modern entry shell keeps hero and focused auth panel", as
         findFirst(modal, (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-entry-panel")),
         "auth-entry-panel not found"
       );
-      assert.match(collectText(modal), /Yagodka Corporate Messenger/);
-      assert.match(collectText(modal), /Создать рабочий аккаунт/);
+      assert.match(collectText(modal), /Вход в Ягодку/);
+      assert.match(collectText(modal), /Введите данные аккаунта или создайте новый профиль/);
+      assert.doesNotMatch(collectText(modal), /сервер|версия клиента|сессия|устройство/i);
     });
   } finally {
     await helper.cleanup();
@@ -317,8 +318,13 @@ test("renderAuthModal: login/register keep a stable corporate heading and reserv
       const register = helper.renderAuthModal("register", null, undefined, skins, "telegram-exact", actions);
       const loginTitle = findFirst(login, (n) => hasClass(n, "auth-subtitle"));
       const registerTitle = findFirst(register, (n) => hasClass(n, "auth-subtitle"));
-      assert.equal(collectText(loginTitle), "Yagodka Corporate Messenger");
-      assert.equal(collectText(registerTitle), "Yagodka Corporate Messenger");
+      assert.equal(collectText(loginTitle), "Вход в Ягодку");
+      assert.equal(collectText(registerTitle), "Вход в Ягодку");
+
+      const loginNote = findFirst(login, (n) => hasClass(n, "auth-note"));
+      const registerNote = findFirst(register, (n) => hasClass(n, "auth-note"));
+      assert.equal(collectText(loginNote), "Введите данные аккаунта или создайте новый профиль для работы.");
+      assert.equal(collectText(registerNote), "Введите данные аккаунта или создайте новый профиль для работы.");
 
       const loginNotice = findFirst(login, (n) => hasClass(n, "auth-entry-notice"));
       const registerNotice = findFirst(register, (n) => hasClass(n, "auth-entry-notice"));
@@ -331,6 +337,12 @@ test("renderAuthModal: login/register keep a stable corporate heading and reserv
       const failedNotice = findFirst(failed, (n) => hasClass(n, "auth-entry-notice"));
       assert.equal(collectText(failedNotice), "Введите пароль");
       assert.equal(hasClass(failedNotice, "auth-entry-notice-empty"), false);
+
+      const loginForm = findFirst(login, (n) => hasClass(n, "auth-entry-form-fixed"));
+      const registerForm = findFirst(register, (n) => hasClass(n, "auth-entry-form-fixed"));
+      assert.ok(loginForm, "login fixed form not found");
+      assert.ok(registerForm, "register fixed form not found");
+      assert.equal((loginForm._children || []).filter(Boolean).length, (registerForm._children || []).filter(Boolean).length);
     });
   } finally {
     await helper.cleanup();
@@ -365,10 +377,11 @@ test("renderAuthModal: auto-resume screen keeps manual and different-account act
         }
       );
 
-      assert.match(collectText(modal), /Проверяем рабочую сессию/);
+      assert.match(collectText(modal), /Вход в Ягодку/);
+      assert.doesNotMatch(collectText(modal), /Автовход|Подключение|Сессия|Готовим защищённый канал/i);
       const manualBtn = findFirst(
         modal,
-        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Войти вручную/.test(collectText(n))
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Ввести пароль/.test(collectText(n))
       );
       const switchBtn = findFirst(
         modal,
@@ -421,11 +434,10 @@ test("renderAuthModal: без rememberedId поле ID остаётся реда
   }
 });
 
-test("renderAuthModal: quick-login карточка для rememberedId даёт действие «Другой аккаунт»", async () => {
+test("renderAuthModal: rememberedId остаётся в статичной форме без quick-login карточки", async () => {
   const helper = await loadRenderAuthModal();
   try {
     withDomStubs(() => {
-      let switched = 0;
       const modal = helper.renderAuthModal(
         "login",
         "854-432-319",
@@ -436,9 +448,7 @@ test("renderAuthModal: quick-login карточка для rememberedId даёт
           onLogin: () => {},
           onRegister: () => {},
           onModeChange: () => {},
-          onUseDifferentAccount: () => {
-            switched += 1;
-          },
+          onUseDifferentAccount: () => {},
           onSkinChange: () => {},
           onClose: () => {},
         }
@@ -448,24 +458,16 @@ test("renderAuthModal: quick-login карточка для rememberedId даёт
         modal,
         (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-session-card")
       );
-      assert.ok(sessionCard, "auth-session-card not found");
-      assert.match(collectText(sessionCard), /854-432-319/);
+      assert.equal(sessionCard, null, "quick-login card must not resize the auth surface");
 
       const hiddenManual = findFirst(
         modal,
         (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-manual-id-hidden")
       );
-      assert.ok(hiddenManual, "hidden manual ID block not found");
+      assert.equal(hiddenManual, null, "manual ID block must stay visible and stable");
 
-      const switchBtn = findFirst(
-        sessionCard,
-        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Другой аккаунт/.test(collectText(n))
-      );
-      assert.ok(switchBtn, "switch account button not found");
-      const clicks = switchBtn._listeners.get("click") || [];
-      assert.equal(clicks.length, 1);
-      clicks[0]({ type: "click" });
-      assert.equal(switched, 1);
+      const idInput = findFirst(modal, (n) => typeof n?.getAttribute === "function" && n.getAttribute("id") === "auth-id");
+      assert.equal(idInput?.getAttribute("value"), "854-432-319");
     });
   } finally {
     await helper.cleanup();

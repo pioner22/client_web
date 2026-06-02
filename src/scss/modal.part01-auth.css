@@ -581,6 +581,12 @@
   display: none;
 }
 
+#auth-pages.auth-entry-page,
+#auth-pages.auth-entry-page * {
+  animation: none;
+  transition: none;
+}
+
 #auth-pages.auth-entry-page > .auth-entry-scroll {
   max-width: none;
   width: 100%;
@@ -681,7 +687,9 @@
   display: grid;
   gap: 12px;
   max-width: 54ch;
+  min-height: 178px;
   align-self: end;
+  align-content: end;
 }
 
 .auth-hero-kicker {
@@ -699,6 +707,7 @@
 
 .auth-hero-title {
   max-width: 100%;
+  min-height: 74px;
   font-size: 34px;
   line-height: 1.08;
   letter-spacing: 0;
@@ -707,6 +716,7 @@
 
 .auth-hero-copy {
   max-width: 46ch;
+  min-height: 48px;
   color: color-mix(in srgb, var(--text), var(--modal-line-color) 24%);
   font-size: 15px;
   line-height: 1.55;
@@ -777,7 +787,7 @@
 .auth-panel-heading {
   display: grid;
   gap: 8px;
-  min-height: 76px;
+  min-height: 86px;
   align-content: start;
 }
 
@@ -790,6 +800,7 @@
 
 .auth-entry-panel .auth-note {
   max-width: none;
+  min-height: 42px;
   margin: 0;
   color: color-mix(in srgb, var(--text), var(--modal-line-color) 44%);
   font-size: 14px;
@@ -850,9 +861,23 @@
   background: transparent;
 }
 
+.auth-entry-panel .auth-entry-form-fixed {
+  grid-template-rows: 78px 78px 44px 52px;
+  min-height: 294px;
+  align-content: start;
+}
+
+.auth-entry-panel .auth-entry-form-auto {
+  grid-template-rows: 44px 52px;
+  min-height: 110px;
+  align-content: start;
+}
+
 .auth-field-stack {
   display: grid;
   gap: 8px;
+  min-height: 78px;
+  align-content: start;
 }
 
 .auth-entry-panel .modal-label {
@@ -878,6 +903,7 @@
 
 .auth-entry-panel .modal-actions {
   width: 100%;
+  min-height: 52px;
   margin: 2px 0 0;
   justify-content: stretch;
 }
@@ -912,6 +938,9 @@
 
 .auth-entry-panel .auth-section-lead,
 .auth-entry-panel .modal-help {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
   color: color-mix(in srgb, var(--text), var(--modal-line-color) 48%);
   font-size: 13px;
   line-height: 1.48;
@@ -933,6 +962,10 @@
   width: 100%;
   margin: 0;
   min-height: 50px;
+  max-height: 50px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
   border-radius: 8px;
   border-color: color-mix(in srgb, var(--focus), transparent 62%);
   background: color-mix(in srgb, var(--panel2), transparent 10%);
@@ -1091,7 +1124,7 @@
 
   .auth-panel-heading {
     gap: 4px;
-    min-height: 56px;
+    min-height: 64px;
   }
 
   .auth-entry-panel .auth-subtitle {
@@ -1125,8 +1158,19 @@
     gap: 9px;
   }
 
+  .auth-entry-panel .auth-entry-form-fixed {
+    grid-template-rows: 62px 62px 46px;
+    min-height: 188px;
+  }
+
+  .auth-entry-panel .auth-entry-form-auto {
+    grid-template-rows: 42px 42px;
+    min-height: 90px;
+  }
+
   .auth-field-stack {
     gap: 4px;
+    min-height: 62px;
   }
 
   .auth-entry-panel .modal-label {
@@ -1155,6 +1199,7 @@
   .auth-entry-panel .auth-session-copy,
   .auth-entry-panel .auth-extra-help {
     display: none;
+    min-height: 0;
   }
 
   .auth-entry-panel .auth-progress-list {

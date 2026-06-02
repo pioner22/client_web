@@ -29,31 +29,19 @@ type RenderAuthModalExtendedArgs = [
 ];
 
 interface EntryCopy {
-  eyebrow: string;
-  title: string;
-  subtitle: string;
+  panelTitle: string;
+  panelSubtitle: string;
   heroTitle: string;
   heroCopy: string;
   primaryLabel: string;
   helper: string;
 }
 
-const CORPORATE_ENTRY_TITLE = "Yagodka Corporate Messenger";
-const CORPORATE_ENTRY_SUBTITLE = "Корпоративный веб-клиент для командной переписки, файлов и рабочих каналов.";
-const CORPORATE_HERO_TITLE = "Строгий контур доступа к рабочему мессенджеру.";
-const CORPORATE_HERO_COPY = "Один стабильный экран для входа и регистрации: без перестройки макета, скачков шрифта и визуального шума.";
-
-function connLabel(conn: ConnStatus): string {
-  if (conn === "connected") return "Сервер готов";
-  if (conn === "connecting") return "Подключаемся";
-  return "Нет связи";
-}
-
-function modeLabel(mode: AuthMode, hasRememberedId: boolean): string {
-  if (mode === "auto") return "Автовход";
-  if (mode === "register") return "Новый аккаунт";
-  return hasRememberedId ? "Быстрый вход" : "Вход";
-}
+const AUTH_ENTRY_PANEL_TITLE = "Вход в Ягодку";
+const AUTH_ENTRY_PANEL_SUBTITLE = "Введите данные аккаунта или создайте новый профиль для работы.";
+const AUTH_ENTRY_HERO_TITLE = "Рабочий мессенджер для команды";
+const AUTH_ENTRY_HERO_COPY = "Общайтесь, отправляйте файлы и возвращайтесь к рабочим чатам без лишних шагов.";
+const AUTH_ENTRY_HELPER = "Для входа нужен ID и пароль. Если создаёте аккаунт, сохраните выданный ID после регистрации.";
 
 function isQuietStatus(status: string, connected: boolean, mode: AuthMode): boolean {
   if (!status) return true;
@@ -66,56 +54,44 @@ function isQuietStatus(status: string, connected: boolean, mode: AuthMode): bool
 function resolveNotice(message: string, status: string, connected: boolean, mode: AuthMode): string {
   if (message) return message;
   if (isQuietStatus(status, connected, mode)) return "";
+  if (/code=|errno=|websocket|gateway|build_id|service worker/i.test(status)) {
+    return "Не удалось подключиться. Проверьте интернет и попробуйте снова.";
+  }
+  if (/нет соединения|нет связи/i.test(status)) {
+    return "Нет связи. Проверьте интернет и попробуйте снова.";
+  }
   return status;
 }
 
-function resolveCopy(mode: AuthMode, hasRememberedId: boolean): EntryCopy {
+function resolveCopy(mode: AuthMode): EntryCopy {
   if (mode === "auto") {
     return {
-      eyebrow: "Корпоративный доступ",
-      title: "Проверяем рабочую сессию",
-      subtitle: "Подтверждаем устройство, версию клиента и доступ к рабочему пространству.",
-      heroTitle: CORPORATE_ENTRY_TITLE,
-      heroCopy: "Закрытый веб-клиент для командной переписки, файлов и рабочих каналов с контролируемым входом.",
-      primaryLabel: "Войти вручную",
-      helper: "Ручной вход доступен, если автоматическая сессия требует подтверждения.",
+      panelTitle: AUTH_ENTRY_PANEL_TITLE,
+      panelSubtitle: AUTH_ENTRY_PANEL_SUBTITLE,
+      heroTitle: AUTH_ENTRY_HERO_TITLE,
+      heroCopy: AUTH_ENTRY_HERO_COPY,
+      primaryLabel: "Ввести пароль",
+      helper: AUTH_ENTRY_HELPER,
     };
   }
   if (mode === "register") {
     return {
-      eyebrow: "Регистрация сотрудника",
-      title: CORPORATE_ENTRY_TITLE,
-      subtitle: CORPORATE_ENTRY_SUBTITLE,
-      heroTitle: CORPORATE_HERO_TITLE,
-      heroCopy: CORPORATE_HERO_COPY,
+      panelTitle: AUTH_ENTRY_PANEL_TITLE,
+      panelSubtitle: AUTH_ENTRY_PANEL_SUBTITLE,
+      heroTitle: AUTH_ENTRY_HERO_TITLE,
+      heroCopy: AUTH_ENTRY_HERO_COPY,
       primaryLabel: "Зарегистрироваться",
-      helper: "Создать рабочий аккаунт можно в этом же окне. После регистрации сохраните выданный ID для входа на других устройствах.",
-    };
-  }
-  if (hasRememberedId) {
-    return {
-      eyebrow: "Проверенное устройство",
-      title: CORPORATE_ENTRY_TITLE,
-      subtitle: CORPORATE_ENTRY_SUBTITLE,
-      heroTitle: CORPORATE_HERO_TITLE,
-      heroCopy: CORPORATE_HERO_COPY,
-      primaryLabel: "Войти",
-      helper: "Войти в рабочий аккаунт можно по сохранённому ID. Для другого профиля переключитесь на ввод нового ID.",
+      helper: AUTH_ENTRY_HELPER,
     };
   }
   return {
-    eyebrow: "Рабочий вход",
-    title: CORPORATE_ENTRY_TITLE,
-    subtitle: CORPORATE_ENTRY_SUBTITLE,
-    heroTitle: CORPORATE_HERO_TITLE,
-    heroCopy: CORPORATE_HERO_COPY,
+    panelTitle: AUTH_ENTRY_PANEL_TITLE,
+    panelSubtitle: AUTH_ENTRY_PANEL_SUBTITLE,
+    heroTitle: AUTH_ENTRY_HERO_TITLE,
+    heroCopy: AUTH_ENTRY_HERO_COPY,
     primaryLabel: "Войти",
-    helper: "Войти в Yagodka можно по служебному ID в формате 123-456-789 или как @логин.",
+    helper: AUTH_ENTRY_HELPER,
   };
-}
-
-function createPill(className: string, text: string): HTMLElement {
-  return el("div", { class: `auth-pill ${className}` }, [text]);
 }
 
 function createTouchIdButton(actions: AuthModalActions): HTMLButtonElement {
@@ -151,13 +127,13 @@ export function renderAuthModal(
   const rememberedIdValue = String(rememberedId ?? "").trim();
   const connected = conn === "connected";
   const hasRememberedId = mode === "login" && Boolean(rememberedIdValue);
-  const copy = resolveCopy(mode, hasRememberedId);
+  const copy = resolveCopy(mode);
   const rawMessage = String(message ?? "").trim();
   const rawStatus = String(status ?? "").trim();
   const visibleNotice = resolveNotice(rawMessage, rawStatus, connected, mode);
   const noticeClass = `auth-entry-notice${visibleNotice ? "" : " auth-entry-notice-empty"}`;
   const showSkinPicker = false;
-  const showTouchId = mode !== "register" && rememberedIdValue && canUseDesktopBiometricUnlock() && Boolean(actions.onTouchId);
+  const showTouchId = mode === "login" && Boolean(rememberedIdValue) && canUseDesktopBiometricUnlock() && Boolean(actions.onTouchId);
 
   function wrapWithIdEditAction(input: HTMLInputElement, hasRemembered: boolean): HTMLElement {
     if (!hasRemembered) return input;
@@ -228,7 +204,7 @@ export function renderAuthModal(
       el("div", { class: "auth-hero-wordmark" }, ["Ягодка"]),
     ]),
     el("div", { class: "auth-hero-message" }, [
-      el("div", { class: "auth-hero-kicker" }, [copy.eyebrow]),
+      el("div", { class: "auth-hero-kicker" }, ["Ягодка"]),
       el("div", { class: "auth-hero-title" }, [copy.heroTitle]),
       el("div", { class: "auth-hero-copy" }, [copy.heroCopy]),
     ]),
@@ -248,14 +224,9 @@ export function renderAuthModal(
 
   const panel = el("section", { class: "auth-entry-panel" }, [
     el("div", { class: "auth-panel-top" }, [brand, btnClose]),
-    el("div", { class: "auth-chip-row" }, [
-      createPill("auth-status-chip", copy.eyebrow),
-      createPill(`auth-conn-chip auth-conn-chip-${conn}`, connLabel(conn)),
-      createPill("auth-mode-chip", modeLabel(mode, hasRememberedId)),
-    ]),
     el("div", { class: "auth-panel-heading" }, [
-      el("div", { class: "auth-subtitle" }, [copy.title]),
-      el("div", { class: "auth-note" }, [copy.subtitle]),
+      el("div", { class: "auth-subtitle" }, [copy.panelTitle]),
+      el("div", { class: "auth-note" }, [copy.panelSubtitle]),
     ]),
     ...(mode === "auto" ? [] : [tabs]),
     el("div", { class: noticeClass, ...(visibleNotice ? {} : { "aria-hidden": "true" }) }, [visibleNotice]),
@@ -278,41 +249,22 @@ export function renderAuthModal(
       : (el(
           "button",
           { class: "btn btn-primary auth-primary-cta", type: "submit", form: formId, ...(connected ? {} : { disabled: "true" }) },
-          [connected ? copy.primaryLabel : "Ждём соединение"]
+          [connected ? copy.primaryLabel : "Проверьте интернет"]
         ) as HTMLButtonElement);
 
   const body =
     mode === "auto"
       ? el("div", { class: "modal-body input-wrapper auth-entry-form auth-entry-form-auto" })
-      : (el("form", { class: "modal-body input-wrapper auth-entry-form", id: formId, autocomplete: "off", method: "post" }) as HTMLFormElement);
+      : (el("form", { class: "modal-body input-wrapper auth-entry-form auth-entry-form-fixed", id: formId, autocomplete: "off", method: "post" }) as HTMLFormElement);
 
   if (mode === "auto") {
     const useManualLogin = el("button", { class: "btn btn-primary auth-primary-cta", type: "button" }, [copy.primaryLabel]) as HTMLButtonElement;
     const useOtherAccount = el("button", { class: "btn btn-secondary", type: "button" }, ["Другой аккаунт"]) as HTMLButtonElement;
-    const touchIdBtn = showTouchId ? createTouchIdButton(actions) : null;
     useManualLogin.addEventListener("click", () => actions.onModeChange(rememberedIdValue ? "login" : "register"));
     useOtherAccount.addEventListener("click", () => actions.onUseDifferentAccount());
     body.append(
-      el("div", { class: "auth-progress-card" }, [
-        el("div", { class: "auth-progress-title" }, ["Автовход"]),
-        el("div", { class: "auth-progress-list" }, [
-          el("div", { class: `auth-progress-step${connected ? " is-done" : " is-active"}` }, [
-            el("span", { class: "auth-progress-step-title" }, ["Подключение"]),
-            el("span", { class: "auth-progress-step-copy" }, [connected ? "Связь с сервером установлена." : "Готовим защищённый канал."]),
-          ]),
-          el("div", { class: `auth-progress-step${connected ? " is-active" : ""}` }, [
-            el("span", { class: "auth-progress-step-title" }, ["Сессия"]),
-            el("span", { class: "auth-progress-step-copy" }, ["Проверяем, можно ли открыть чаты без пароля."]),
-          ]),
-          el("div", { class: "auth-progress-step" }, [
-            el("span", { class: "auth-progress-step-title" }, ["Готово"]),
-            el("span", { class: "auth-progress-step-copy" }, ["После подтверждения сразу покажем рабочее пространство."]),
-          ]),
-        ]),
-      ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
       el("div", { class: "modal-actions modal-actions-compose auth-inline-actions" }, [
-        ...(touchIdBtn ? [touchIdBtn] : []),
         useManualLogin,
         useOtherAccount,
       ])
@@ -403,34 +355,23 @@ export function renderAuthModal(
       spellcheck: "false",
       enterkeyhint: "done",
     }) as HTMLInputElement;
-    const manualIdBlock = el("div", { class: `auth-field-stack auth-manual-id${hasRememberedId ? " auth-manual-id-hidden" : ""}` }, [
+    const touchIdBtn = showTouchId ? createTouchIdButton(actions) : null;
+    const manualIdBlock = el("div", { class: "auth-field-stack auth-manual-id" }, [
       el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин"]),
       wrapWithIdEditAction(idInput, hasRememberedId),
     ]);
-    const sessionCard =
-      hasRememberedId
-        ? (() => {
-            const switchBtn = el("button", { class: "btn btn-secondary", type: "button" }, ["Другой аккаунт"]) as HTMLButtonElement;
-            const touchIdBtn = showTouchId ? createTouchIdButton(actions) : null;
-            switchBtn.addEventListener("click", () => actions.onUseDifferentAccount());
-            return el("div", { class: "auth-session-card" }, [
-              el("div", { class: "auth-session-label" }, ["Продолжить как"]),
-              el("div", { class: "auth-session-id" }, [rememberedIdValue]),
-              el("div", { class: "auth-session-copy" }, [showTouchId ? "Войдите по Touch ID или используйте пароль." : "Введите пароль для этого аккаунта или выберите другой ID."]),
-              el("div", { class: "auth-session-actions" }, [...(touchIdBtn ? [touchIdBtn] : []), switchBtn]),
-            ]);
-          })()
-        : null;
 
     body.append(
-      ...(sessionCard ? [sessionCard] : []),
       manualIdBlock,
       el("div", { class: "auth-field-stack" }, [
         el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль"]),
         wrapWithPasswordToggle(pwInput),
       ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
-      el("div", { class: "modal-actions" }, primaryButton ? [primaryButton] : [])
+      el("div", { class: `modal-actions${touchIdBtn ? " auth-inline-actions" : ""}` }, [
+        ...(touchIdBtn ? [touchIdBtn] : []),
+        ...(primaryButton ? [primaryButton] : []),
+      ])
     );
   }
 

@@ -290,9 +290,12 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.auth-welcome-screen\s+\.screen-brand\s*{[^}]*letter-spacing:\s*0;/s);
   assert.match(css, /\.auth-entry-panel\b/);
   assert.match(css, /\.auth-entry-layout\s*{[^}]*height:\s*clamp\(560px,/s);
-  assert.match(css, /\.auth-panel-heading\s*{[^}]*min-height:\s*76px;/s);
+  assert.match(css, /#auth-pages\.auth-entry-page,\s*#auth-pages\.auth-entry-page\s+\*\s*{[^}]*transition:\s*none;/s);
+  assert.match(css, /\.auth-panel-heading\s*{[^}]*min-height:\s*86px;/s);
+  assert.match(css, /\.auth-entry-panel\s+\.auth-entry-form-fixed\s*{[^}]*grid-template-rows:\s*78px 78px 44px 52px;/s);
+  assert.match(css, /\.auth-field-stack\s*{[^}]*min-height:\s*78px;/s);
   assert.match(css, /\.auth-entry-notice-empty\s*{[^}]*visibility:\s*hidden;/s);
-  assert.match(css, /\.auth-entry-panel\s+\.auth-entry-notice\s*{[^}]*min-height:\s*50px;/s);
+  assert.match(css, /\.auth-entry-panel\s+\.auth-entry-notice\s*{[^}]*min-height:\s*50px;[^}]*max-height:\s*50px;/s);
   assert.match(css, /#auth-pages\.auth-entry-page\s+>\s+\.auth-entry-scroll\s*{[^}]*overflow:\s*hidden;/s);
   assert.match(css, /\.auth-entry-panel\s*{[^}]*overflow:\s*hidden;/s);
   assert.match(css, /\.overlay\.overlay-auth:not\(\.hidden\)\s*{[^}]*animation:\s*none;/s);
@@ -322,8 +325,12 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(authSrc, /auth-hero-brand-block/);
   assert.match(authSrc, /auth-hero-wordmark/);
   assert.match(authSrc, /auth-hero-message/);
-  assert.match(authSrc, /CORPORATE_ENTRY_TITLE/);
+  assert.match(authSrc, /AUTH_ENTRY_PANEL_TITLE/);
+  assert.match(authSrc, /AUTH_ENTRY_HELPER/);
   assert.match(authSrc, /auth-entry-notice-empty/);
   assert.match(authSrc, /copy\.heroTitle/);
   assert.match(authSrc, /copy\.heroCopy/);
+  assert.doesNotMatch(authSrc, /auth-chip-row/);
+  assert.doesNotMatch(authSrc, /auth-progress-card/);
+  assert.doesNotMatch(authSrc, /auth-session-card/);
 });
