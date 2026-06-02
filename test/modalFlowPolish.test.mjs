@@ -282,6 +282,8 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.modal-screen-status\s+\.screen-sub\b/);
   assert.match(css, /\.auth-session-card\b/);
   assert.match(css, /\.auth-entry-layout\b/);
+  assert.match(css, /--auth-entry-surface:/);
+  assert.match(css, /\.auth-layout-logo\s*{[^}]*opacity:\s*0\.08;/s);
   assert.match(css, /\.auth-entry-hero\b/);
   assert.match(css, /\.auth-hero-brand-block\b/);
   assert.match(css, /\.auth-hero-orb\s*{[^}]*position:\s*relative;/s);
@@ -290,6 +292,8 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.auth-welcome-screen\s+\.screen-brand\s*{[^}]*letter-spacing:\s*0;/s);
   assert.match(css, /\.auth-entry-panel\b/);
   assert.match(css, /\.auth-entry-layout\s*{[^}]*height:\s*clamp\(560px,/s);
+  assert.match(css, /\.auth-entry-layout\s*{[^}]*background:\s*[\s\S]*linear-gradient/s);
+  assert.match(css, /\.auth-entry-panel\s*{[^}]*border:\s*1px solid color-mix\(in srgb, var\(--auth-accent-cool\), transparent 72%\);[^}]*background:\s*var\(--auth-entry-panel-bg\);/s);
   assert.match(css, /#auth-pages\.auth-entry-page,\s*#auth-pages\.auth-entry-page\s+\*\s*{[^}]*transition:\s*none;/s);
   assert.match(css, /\.auth-panel-heading\s*{[^}]*min-height:\s*86px;/s);
   assert.match(css, /\.auth-entry-panel\s+\.auth-entry-form-fixed\s*{[^}]*grid-template-rows:\s*78px 78px 44px 52px;/s);
@@ -322,6 +326,7 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.doesNotMatch(logoutFeatureSrc, /modal:\s*\{\s*kind:\s*"logout"\s*\}/);
 
   const authSrc = await readFile(path.resolve("src/components/modals/renderAuthModal.ts"), "utf8");
+  assert.match(authSrc, /auth-layout-logo/);
   assert.match(authSrc, /auth-hero-brand-block/);
   assert.match(authSrc, /auth-hero-wordmark/);
   assert.match(authSrc, /auth-hero-message/);
