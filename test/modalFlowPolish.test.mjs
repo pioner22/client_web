@@ -212,6 +212,8 @@ test("welcome/logout shells: status semantics + dialog Escape close", async () =
       assert.equal(welcomeNode.getAttribute("role"), "status");
       assert.equal(welcomeNode.getAttribute("aria-live"), "polite");
       assert.equal(welcomeNode.getAttribute("aria-busy"), "true");
+      assert.equal(findFirst(welcomeNode, (n) => typeof n?.className === "string" && String(n.className).includes("screen-bar")), null);
+      assert.equal(findFirst(welcomeNode, (n) => typeof n?.className === "string" && String(n.className).includes("screen-steps")), null);
 
       let closed = 0;
       let relogin = 0;
@@ -287,10 +289,14 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.auth-hero-message\b/);
   assert.match(css, /\.auth-welcome-screen\s+\.screen-brand\s*{[^}]*letter-spacing:\s*0;/s);
   assert.match(css, /\.auth-entry-panel\b/);
-  assert.match(css, /\.auth-entry-layout\s*{[^}]*height:\s*clamp\(620px,/s);
-  assert.match(css, /\.auth-panel-heading\s*{[^}]*min-height:\s*84px;/s);
+  assert.match(css, /\.auth-entry-layout\s*{[^}]*height:\s*clamp\(560px,/s);
+  assert.match(css, /\.auth-panel-heading\s*{[^}]*min-height:\s*76px;/s);
   assert.match(css, /\.auth-entry-notice-empty\s*{[^}]*visibility:\s*hidden;/s);
   assert.match(css, /\.auth-entry-panel\s+\.auth-entry-notice\s*{[^}]*min-height:\s*50px;/s);
+  assert.match(css, /#auth-pages\.auth-entry-page\s+>\s+\.auth-entry-scroll\s*{[^}]*overflow:\s*hidden;/s);
+  assert.match(css, /\.auth-entry-panel\s*{[^}]*overflow:\s*hidden;/s);
+  assert.match(css, /\.overlay\.overlay-auth:not\(\.hidden\)\s*{[^}]*animation:\s*none;/s);
+  assert.match(css, /\.modal-screen\s+\.screen-bar\s*{[^}]*display:\s*none;/s);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-hero\s*{[^}]*display:\s*none;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-chip-row\s*{[^}]*display:\s*none;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-progress-list\s*{[^}]*display:\s*none;/);
@@ -307,6 +313,10 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(renderAppSrc, /prevSendScheduleAt/);
   assert.match(renderAppSrc, /hadSendScheduleModal/);
   assert.match(renderAppSrc, /state\.modal\?\.kind === "send_schedule"/);
+
+  const logoutFeatureSrc = await readFile(path.resolve("src/app/features/auth/logoutFeature.ts"), "utf8");
+  assert.match(logoutFeatureSrc, /modal:\s*\{\s*kind:\s*"auth"\s*\}/);
+  assert.doesNotMatch(logoutFeatureSrc, /modal:\s*\{\s*kind:\s*"logout"\s*\}/);
 
   const authSrc = await readFile(path.resolve("src/components/modals/renderAuthModal.ts"), "utf8");
   assert.match(authSrc, /auth-hero-brand-block/);

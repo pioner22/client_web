@@ -156,7 +156,7 @@ export function renderAuthModal(
   const rawStatus = String(status ?? "").trim();
   const visibleNotice = resolveNotice(rawMessage, rawStatus, connected, mode);
   const noticeClass = `auth-entry-notice${visibleNotice ? "" : " auth-entry-notice-empty"}`;
-  const showSkinPicker = mode !== "auto" && (mode === "register" || !hasRememberedId);
+  const showSkinPicker = false;
   const showTouchId = mode !== "register" && rememberedIdValue && canUseDesktopBiometricUnlock() && Boolean(actions.onTouchId);
 
   function wrapWithIdEditAction(input: HTMLInputElement, hasRemembered: boolean): HTMLElement {

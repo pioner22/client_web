@@ -123,7 +123,7 @@ export function createGatewayClientFeature(deps: Deps): GatewayClientFeature {
     const nextStatus = detail ? `${base}: ${detail}` : base;
     deps.store.set((prev) => {
       const clearWelcome = conn === "connected" && prev.modal?.kind === "welcome";
-      const preserveLogoutStatus = prev.modal?.kind === "logout";
+      const preserveLogoutStatus = prev.modal?.kind === "logout" || (prev.modal?.kind === "auth" && prev.status.startsWith("Вы вышли"));
       const status = preserveLogoutStatus ? prev.status : nextStatus;
       if (!clearWelcome && prev.conn === conn && prev.status === status) return prev;
       return {

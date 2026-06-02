@@ -158,10 +158,10 @@ export function createLogoutFeature(deps: LogoutFeatureDeps): LogoutFeature {
       sessionDevices: [],
       sessionDevicesStatus: null,
       toast: null,
-      modal: { kind: "logout" },
+      modal: { kind: "auth" },
       authMode: rememberedId ? "login" : "register",
       authRememberedId: rememberedId,
-      status: "Вы вышли из аккаунта. Можно быстро вернуться или выбрать другой аккаунт.",
+      status: "Вы вышли из аккаунта. Для продолжения войдите снова или выберите другой аккаунт.",
     }));
 
     resetLoadedForUser();

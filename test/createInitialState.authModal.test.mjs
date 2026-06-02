@@ -35,11 +35,11 @@ async function loadCreateInitialState() {
   }
 }
 
-test("createInitialState: показывает welcome-экран", async () => {
+test("createInitialState: сразу показывает экран авторизации без welcome-перехода", async () => {
   const { createInitialState, cleanup } = await loadCreateInitialState();
   try {
     const st = createInitialState();
-    assert.deepEqual(st.modal, { kind: "welcome" });
+    assert.deepEqual(st.modal, { kind: "auth" });
   } finally {
     await cleanup();
   }

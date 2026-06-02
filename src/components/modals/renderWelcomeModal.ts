@@ -8,16 +8,16 @@ export interface WelcomeModalOptions {
 }
 
 function screenTitle(authMode: AuthMode, rememberedId: string): string {
-  if (authMode === "auto") return "Возвращаем вас";
-  if (rememberedId) return "Готовим быстрый вход";
-  return "Добро пожаловать в Ягодку";
+  if (authMode === "auto") return "Проверяем сессию";
+  if (rememberedId) return "Готовим вход";
+  return "Yagodka Corporate Messenger";
 }
 
 function screenSubtitle(authMode: AuthMode, rememberedId: string, status: string): string {
   if (status) return status;
-  if (authMode === "auto") return "Проверяем сохранённую сессию и откроем ваши чаты, если всё в порядке.";
-  if (rememberedId) return "Подключаем устройство и готовим аккуратный вход в сохранённый аккаунт.";
-  return "Подключаем устройство, затем покажем вход или создание аккаунта.";
+  if (authMode === "auto") return "Проверяем сохранённую сессию и откроем рабочее пространство.";
+  if (rememberedId) return "Подключаем устройство к сохранённому рабочему аккаунту.";
+  return "Подключаем устройство и открываем экран авторизации.";
 }
 
 function screenChip(conn: ConnStatus, authMode: AuthMode): string {
@@ -38,14 +38,6 @@ export function renderWelcomeModal(message?: string, options?: WelcomeModalOptio
     "aria-busy": "true",
   });
 
-  const steps = el("div", { class: "screen-steps", "aria-hidden": "true" }, [
-    el("div", { class: `screen-step${conn === "connected" ? " is-done" : " is-active"}` }, ["Связь"]),
-    el("div", { class: `screen-step${authMode === "auto" ? " is-active" : conn === "connected" ? " is-done" : ""}` }, [
-      authMode === "auto" ? "Сессия" : "Вход",
-    ]),
-    el("div", { class: "screen-step" }, ["Чаты"]),
-  ]);
-
   box.append(
     el("div", { class: "screen-logo-wrap", "aria-hidden": "true" }, [
       el("img", { class: "screen-logo", src: "./icons/icon.svg", alt: "" }, []),
@@ -63,12 +55,10 @@ export function renderWelcomeModal(message?: string, options?: WelcomeModalOptio
           el("div", { class: "screen-note-label" }, ["Следующий шаг"]),
           el("div", { class: "screen-note-value" }, [
             authMode === "auto"
-              ? "Если сессия действует, сразу откроем рабочее пространство."
-              : "После подключения покажем понятный экран входа или регистрации.",
+              ? "Открыть рабочее пространство после проверки."
+              : "Показать вход или создание аккаунта.",
           ]),
-        ]),
-    steps,
-    el("div", { class: "screen-bar", "aria-hidden": "true" }, [""])
+        ])
   );
   return box;
 }

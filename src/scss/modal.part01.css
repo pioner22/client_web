@@ -44,11 +44,11 @@
 }
 
 .overlay.overlay-auth:not(.hidden) {
-  animation: overlay-auth-fade 180ms ease;
+  animation: none;
 }
 
 .overlay.overlay-auth:not(.hidden) > .modal {
-  animation: overlay-auth-pop 220ms ease;
+  animation: none;
 }
 
 @keyframes overlay-auth-fade {
@@ -207,22 +207,12 @@
 }
 
 .modal-screen .screen-bar {
-  width: min(280px, 70vw);
-  height: 2px;
-  background: color-mix(in srgb, var(--modal-border-color), transparent 60%);
-  border-radius: 999px;
-  overflow: hidden;
-  position: relative;
-  margin: 2px auto 0;
+  display: none;
 }
 
 .modal-screen .screen-bar::before {
   content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-60%);
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--focus), transparent 20%), transparent);
-  animation: screen-slide 1.2s ease-in-out infinite;
+  animation: none;
 }
 
 @keyframes screen-slide {
