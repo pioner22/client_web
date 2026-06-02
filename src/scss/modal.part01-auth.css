@@ -479,6 +479,7 @@
   width: var(--auth-form-width);
   max-width: 100%;
   margin: 0 auto;
+  min-height: 48px;
   padding: 12px 14px;
   border-radius: var(--r-lg);
   border: 1px solid color-mix(in srgb, var(--focus), transparent 72%);
@@ -488,6 +489,11 @@
   color: color-mix(in srgb, var(--text), var(--modal-line-color) 30%);
   font-size: 13px;
   line-height: 1.45;
+  overflow: hidden;
+}
+
+.auth-entry-notice-empty {
+  visibility: hidden;
 }
 
 .auth-progress-card {
@@ -580,13 +586,16 @@
   width: 100%;
   min-height: 100%;
   display: grid;
-  place-items: center;
+  align-items: center;
+  justify-items: center;
   padding: clamp(18px, 4vw, 54px);
   overflow: auto;
+  scrollbar-gutter: stable both-edges;
 }
 
 .auth-entry-layout {
   width: min(var(--auth-card-width), 100%);
+  height: clamp(620px, calc(var(--app-vh, 100dvh) - 72px), 720px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(360px, var(--auth-panel-width));
   gap: clamp(18px, 3.6vw, 34px);
@@ -604,7 +613,7 @@
 }
 
 #auth-pages .auth-entry-layout.container {
-  min-height: min(720px, calc(100vh - 72px));
+  min-height: 0;
   align-items: stretch;
 }
 
@@ -749,10 +758,13 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-height: 0;
   padding: clamp(20px, 3.4vw, 34px);
   border-radius: 8px;
   background: var(--auth-entry-panel-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .auth-panel-top,
@@ -766,11 +778,13 @@
 .auth-panel-heading {
   display: grid;
   gap: 8px;
+  min-height: 84px;
+  align-content: start;
 }
 
 .auth-entry-panel .auth-subtitle {
   font-size: 30px;
-  line-height: 1.03;
+  line-height: 1.08;
   letter-spacing: 0;
   font-weight: 800;
 }
@@ -919,6 +933,7 @@
 .auth-entry-panel .auth-entry-notice {
   width: 100%;
   margin: 0;
+  min-height: 50px;
   border-radius: 8px;
   border-color: color-mix(in srgb, var(--focus), transparent 62%);
   background: color-mix(in srgb, var(--panel2), transparent 10%);
@@ -936,8 +951,15 @@
 }
 
 .auth-entry-panel .modal-warn {
-  min-height: 0;
+  min-height: 40px;
   margin: 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.auth-entry-panel .auth-entry-warn-reserved {
+  visibility: hidden;
 }
 
 .auth-welcome-screen {
@@ -998,10 +1020,12 @@
     min-height: 100dvh;
     place-items: stretch;
     padding: 0;
+    scrollbar-gutter: auto;
   }
 
   .auth-entry-layout {
     min-height: 100dvh;
+    height: 100dvh;
     width: 100%;
     grid-template-columns: 1fr;
     gap: 0;
@@ -1022,6 +1046,7 @@
 
   .auth-entry-panel {
     min-height: 100dvh;
+    height: 100dvh;
     margin: 0;
     padding: calc(10px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
     gap: 10px;
@@ -1029,6 +1054,7 @@
     border-radius: 0;
     box-shadow: none;
     background: color-mix(in srgb, var(--panel), transparent 0%);
+    overflow: auto;
   }
 
   .auth-panel-top,
@@ -1063,6 +1089,7 @@
 
   .auth-panel-heading {
     gap: 4px;
+    min-height: 56px;
   }
 
   .auth-entry-panel .auth-subtitle {
@@ -1133,6 +1160,7 @@
   }
 
   .auth-entry-panel .auth-entry-notice {
+    min-height: 40px;
     padding: 9px 11px;
     border-radius: 8px;
     font-size: 12px;
@@ -1174,6 +1202,8 @@
   }
 
   .auth-entry-panel .modal-warn {
+    min-height: 32px;
+    padding: 6px 8px;
     font-size: 12px;
     line-height: 1.3;
   }

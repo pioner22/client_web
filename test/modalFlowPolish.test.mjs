@@ -287,6 +287,10 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.auth-hero-message\b/);
   assert.match(css, /\.auth-welcome-screen\s+\.screen-brand\s*{[^}]*letter-spacing:\s*0;/s);
   assert.match(css, /\.auth-entry-panel\b/);
+  assert.match(css, /\.auth-entry-layout\s*{[^}]*height:\s*clamp\(620px,/s);
+  assert.match(css, /\.auth-panel-heading\s*{[^}]*min-height:\s*84px;/s);
+  assert.match(css, /\.auth-entry-notice-empty\s*{[^}]*visibility:\s*hidden;/s);
+  assert.match(css, /\.auth-entry-panel\s+\.auth-entry-notice\s*{[^}]*min-height:\s*50px;/s);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-hero\s*{[^}]*display:\s*none;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-chip-row\s*{[^}]*display:\s*none;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-progress-list\s*{[^}]*display:\s*none;/);
@@ -308,6 +312,8 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(authSrc, /auth-hero-brand-block/);
   assert.match(authSrc, /auth-hero-wordmark/);
   assert.match(authSrc, /auth-hero-message/);
+  assert.match(authSrc, /CORPORATE_ENTRY_TITLE/);
+  assert.match(authSrc, /auth-entry-notice-empty/);
   assert.match(authSrc, /copy\.heroTitle/);
   assert.match(authSrc, /copy\.heroCopy/);
 });

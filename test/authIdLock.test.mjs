@@ -211,6 +211,10 @@ function collectText(node) {
   return out;
 }
 
+function hasClass(node, name) {
+  return typeof node?.className === "string" && String(node.className).split(/\s+/).includes(name);
+}
+
 test("renderAuthModal: rememberedId не блокирует поле ID и показывает кнопку «Сменить ID»", async () => {
   const helper = await loadRenderAuthModal();
   try {
@@ -288,7 +292,45 @@ test("renderAuthModal: modern entry shell keeps hero and focused auth panel", as
         findFirst(modal, (n) => typeof n?.className === "string" && String(n.className).split(/\s+/).includes("auth-entry-panel")),
         "auth-entry-panel not found"
       );
+      assert.match(collectText(modal), /Yagodka Corporate Messenger/);
       assert.match(collectText(modal), /Создать рабочий аккаунт/);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderAuthModal: login/register keep a stable corporate heading and reserved notice slot", async () => {
+  const helper = await loadRenderAuthModal();
+  try {
+    withDomStubs(() => {
+      const actions = {
+        onLogin: () => {},
+        onRegister: () => {},
+        onModeChange: () => {},
+        onUseDifferentAccount: () => {},
+        onSkinChange: () => {},
+        onClose: () => {},
+      };
+      const skins = [{ id: "telegram-exact", title: "Telegram (точный)" }];
+      const login = helper.renderAuthModal("login", null, undefined, skins, "telegram-exact", actions);
+      const register = helper.renderAuthModal("register", null, undefined, skins, "telegram-exact", actions);
+      const loginTitle = findFirst(login, (n) => hasClass(n, "auth-subtitle"));
+      const registerTitle = findFirst(register, (n) => hasClass(n, "auth-subtitle"));
+      assert.equal(collectText(loginTitle), "Yagodka Corporate Messenger");
+      assert.equal(collectText(registerTitle), "Yagodka Corporate Messenger");
+
+      const loginNotice = findFirst(login, (n) => hasClass(n, "auth-entry-notice"));
+      const registerNotice = findFirst(register, (n) => hasClass(n, "auth-entry-notice"));
+      assert.ok(loginNotice, "login notice slot not found");
+      assert.ok(registerNotice, "register notice slot not found");
+      assert.ok(hasClass(loginNotice, "auth-entry-notice-empty"));
+      assert.ok(hasClass(registerNotice, "auth-entry-notice-empty"));
+
+      const failed = helper.renderAuthModal("login", null, "Введите пароль", skins, "telegram-exact", actions);
+      const failedNotice = findFirst(failed, (n) => hasClass(n, "auth-entry-notice"));
+      assert.equal(collectText(failedNotice), "Введите пароль");
+      assert.equal(hasClass(failedNotice, "auth-entry-notice-empty"), false);
     });
   } finally {
     await helper.cleanup();

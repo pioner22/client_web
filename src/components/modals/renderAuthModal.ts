@@ -38,6 +38,11 @@ interface EntryCopy {
   helper: string;
 }
 
+const CORPORATE_ENTRY_TITLE = "Yagodka Corporate Messenger";
+const CORPORATE_ENTRY_SUBTITLE = "Корпоративный веб-клиент для командной переписки, файлов и рабочих каналов.";
+const CORPORATE_HERO_TITLE = "Строгий контур доступа к рабочему мессенджеру.";
+const CORPORATE_HERO_COPY = "Один стабильный экран для входа и регистрации: без перестройки макета, скачков шрифта и визуального шума.";
+
 function connLabel(conn: ConnStatus): string {
   if (conn === "connected") return "Сервер готов";
   if (conn === "connecting") return "Подключаемся";
@@ -70,7 +75,7 @@ function resolveCopy(mode: AuthMode, hasRememberedId: boolean): EntryCopy {
       eyebrow: "Корпоративный доступ",
       title: "Проверяем рабочую сессию",
       subtitle: "Подтверждаем устройство, версию клиента и доступ к рабочему пространству.",
-      heroTitle: "Yagodka Corporate Messenger",
+      heroTitle: CORPORATE_ENTRY_TITLE,
       heroCopy: "Закрытый веб-клиент для командной переписки, файлов и рабочих каналов с контролируемым входом.",
       primaryLabel: "Войти вручную",
       helper: "Ручной вход доступен, если автоматическая сессия требует подтверждения.",
@@ -79,33 +84,33 @@ function resolveCopy(mode: AuthMode, hasRememberedId: boolean): EntryCopy {
   if (mode === "register") {
     return {
       eyebrow: "Регистрация сотрудника",
-      title: "Создать рабочий аккаунт",
-      subtitle: "Задайте пароль. Служебный ID будет выпущен после регистрации.",
-      heroTitle: "Строгий контур входа для рабочего мессенджера.",
-      heroCopy: "Первичная регистрация держит минимальный набор данных и сразу переводит пользователя в защищённый клиент.",
+      title: CORPORATE_ENTRY_TITLE,
+      subtitle: CORPORATE_ENTRY_SUBTITLE,
+      heroTitle: CORPORATE_HERO_TITLE,
+      heroCopy: CORPORATE_HERO_COPY,
       primaryLabel: "Зарегистрироваться",
-      helper: "После регистрации сохраните выданный ID для входа на других устройствах.",
+      helper: "Создать рабочий аккаунт можно в этом же окне. После регистрации сохраните выданный ID для входа на других устройствах.",
     };
   }
   if (hasRememberedId) {
     return {
       eyebrow: "Проверенное устройство",
-      title: "Войти в рабочий аккаунт",
-      subtitle: "ID сохранён на этом устройстве. Введите пароль для продолжения.",
-      heroTitle: "Корпоративный вход без лишней визуальной нагрузки.",
-      heroCopy: "Сохранённый ID ускоряет вход, но доступ к рабочему пространству подтверждается паролем или Touch ID.",
+      title: CORPORATE_ENTRY_TITLE,
+      subtitle: CORPORATE_ENTRY_SUBTITLE,
+      heroTitle: CORPORATE_HERO_TITLE,
+      heroCopy: CORPORATE_HERO_COPY,
       primaryLabel: "Войти",
-      helper: "Для другого профиля переключитесь на ввод нового ID.",
+      helper: "Войти в рабочий аккаунт можно по сохранённому ID. Для другого профиля переключитесь на ввод нового ID.",
     };
   }
   return {
     eyebrow: "Рабочий вход",
-    title: "Войти в Yagodka",
-    subtitle: "Введите служебный ID или @логин и пароль.",
-    heroTitle: "Единая точка доступа к корпоративному мессенджеру.",
-    heroCopy: "Веб-версия открывает чаты, файлы и рабочие каналы после проверки пользователя и версии клиента.",
+    title: CORPORATE_ENTRY_TITLE,
+    subtitle: CORPORATE_ENTRY_SUBTITLE,
+    heroTitle: CORPORATE_HERO_TITLE,
+    heroCopy: CORPORATE_HERO_COPY,
     primaryLabel: "Войти",
-    helper: "ID можно вводить в формате 123-456-789 или как @логин.",
+    helper: "Войти в Yagodka можно по служебному ID в формате 123-456-789 или как @логин.",
   };
 }
 
@@ -150,6 +155,7 @@ export function renderAuthModal(
   const rawMessage = String(message ?? "").trim();
   const rawStatus = String(status ?? "").trim();
   const visibleNotice = resolveNotice(rawMessage, rawStatus, connected, mode);
+  const noticeClass = `auth-entry-notice${visibleNotice ? "" : " auth-entry-notice-empty"}`;
   const showSkinPicker = mode !== "auto" && (mode === "register" || !hasRememberedId);
   const showTouchId = mode !== "register" && rememberedIdValue && canUseDesktopBiometricUnlock() && Boolean(actions.onTouchId);
 
@@ -252,7 +258,7 @@ export function renderAuthModal(
       el("div", { class: "auth-note" }, [copy.subtitle]),
     ]),
     ...(mode === "auto" ? [] : [tabs]),
-    ...(visibleNotice ? [el("div", { class: "auth-entry-notice" }, [visibleNotice])] : []),
+    el("div", { class: noticeClass, ...(visibleNotice ? {} : { "aria-hidden": "true" }) }, [visibleNotice]),
   ]);
 
   const skinLabel = el("label", { class: "modal-label", for: "auth-skin" }, ["Оформление"]);
@@ -439,7 +445,7 @@ export function renderAuthModal(
           ]),
         ]
       : []),
-    rawMessage ? el("div", { class: "modal-warn" }, [rawMessage]) : el("div", { class: "modal-warn" })
+    el("div", { class: "modal-warn auth-entry-warn-reserved", "aria-hidden": "true" })
   );
   layout.append(hero, panel);
   scrollable.append(layout);
