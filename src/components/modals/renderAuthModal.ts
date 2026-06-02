@@ -47,6 +47,7 @@ function isQuietStatus(status: string, connected: boolean, mode: AuthMode): bool
   if (!status) return true;
   if (status === "Связь с сервером установлена" || status === "Вы снова в Ягодке." || status === "Вход выполнен") return true;
   if (connected && status.startsWith("Соединение установлено")) return true;
+  if (/обновлени[ея] веб-клиента|service worker|build_id/i.test(status)) return true;
   if (status.startsWith("Подключение") || status.startsWith("Подключаем")) return mode !== "auto";
   return false;
 }
@@ -55,10 +56,10 @@ function resolveNotice(message: string, status: string, connected: boolean, mode
   if (message) return message;
   if (isQuietStatus(status, connected, mode)) return "";
   if (/code=|errno=|websocket|gateway|build_id|service worker/i.test(status)) {
-    return "Не удалось подключиться. Проверьте интернет и попробуйте снова.";
+    return "Нет связи. Проверьте интернет.";
   }
   if (/нет соединения|нет связи/i.test(status)) {
-    return "Нет связи. Проверьте интернет и попробуйте снова.";
+    return "Нет связи. Проверьте интернет.";
   }
   return status;
 }

@@ -285,6 +285,9 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /--auth-entry-shell:/);
   assert.match(css, /--auth-entry-side:/);
   assert.match(css, /--auth-entry-text:/);
+  assert.match(css, /--auth-mobile-bg:/);
+  assert.match(css, /--auth-mobile-panel:/);
+  assert.match(css, /--auth-mobile-panel-top:/);
   assert.doesNotMatch(css, /\.auth-layout-logo\b/);
   assert.doesNotMatch(css, /--auth-entry-surface/);
   assert.match(css, /\.auth-entry-hero\b/);
@@ -309,6 +312,15 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.overlay\.overlay-auth:not\(\.hidden\)\s*{[^}]*animation:\s*none;/s);
   assert.match(css, /\.modal-screen\s+\.screen-bar\s*{[^}]*display:\s*none;/s);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-hero\s*{[^}]*display:\s*none;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*#auth-pages\.auth-entry-page\s+>\s+\.auth-entry-scroll\s*{[^}]*place-items:\s*center;[^}]*padding:\s*calc\(10px \+ env\(safe-area-inset-top\)\) 12px calc\(12px \+ env\(safe-area-inset-bottom\)\);/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-layout\s*{[^}]*height:\s*auto;[^}]*max-height:\s*calc\(var\(--app-vh,\s*100dvh\) - 22px\);[^}]*max-width:\s*420px;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s*{[^}]*height:\s*auto;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s*{[^}]*border:\s*1px solid var\(--auth-mobile-line\);[^}]*border-radius:\s*8px;[^}]*background:\s*linear-gradient\(180deg,\s*var\(--auth-mobile-panel\) 0%,\s*#ffffff 100%\);/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-panel-top,\s*\.modal-auth\s+\.auth-panel-top\s*{[^}]*background:\s*var\(--auth-mobile-panel-top\);/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-primary-cta\s*{[^}]*background:\s*var\(--auth-mobile-primary\);/);
+  assert.match(css, /#auth-pages\.auth-entry-page\s+\.auth-entry-panel\s+\.btn\.btn-primary\.auth-primary-cta:not\(:disabled\)\s*{[^}]*background:\s*var\(--auth-accent-warm\);/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*#auth-pages\.auth-entry-page\s+\.auth-entry-panel\s+\.btn\.btn-primary\.auth-primary-cta:not\(:disabled\)\s*{[^}]*background:\s*var\(--auth-mobile-primary\);/);
+  assert.match(css, /\.auth-entry-panel\s+\.auth-primary-cta:disabled\s*{[^}]*background:\s*#8da1bb;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-chip-row\s*{[^}]*display:\s*none;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-progress-list\s*{[^}]*display:\s*none;/);
   assert.match(css, /\.modal-screen\s+\.screen-chip\b/);
@@ -336,6 +348,7 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(authSrc, /auth-hero-message/);
   assert.match(authSrc, /AUTH_ENTRY_PANEL_TITLE/);
   assert.match(authSrc, /AUTH_ENTRY_HELPER/);
+  assert.match(authSrc, /обновлени\[ея\] веб-клиента/);
   assert.match(authSrc, /auth-entry-notice-empty/);
   assert.match(authSrc, /copy\.heroTitle/);
   assert.match(authSrc, /copy\.heroCopy/);
