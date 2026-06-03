@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.834",
+    date: "2026-06-03",
+    improved: [
+      "Ранний boot.js теперь распознаёт старый зависший экран `Обновляем приложение / Сбрасываем старый кэш` ещё до запуска app bundle.",
+      "После обнаружения старого update-gate boot layer сам unregister service worker, очищает cache storage и перезапускает Web/PWA через clean recovery URL.",
+    ],
+    fixed: [
+      "Исправлен сценарий, когда уже обновлённый сервер отдаёт свежий Web, но старый cached JS продолжает держать клиента на прежнем экране cache reset.",
+      "Версия Web остаётся видимой после аварийного recovery, чтобы на скрине было понятно, какая сборка реально дошла до устройства.",
+    ],
+  },
+  {
     version: "0.1.833",
     date: "2026-06-03",
     improved: [

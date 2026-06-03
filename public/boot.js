@@ -9,6 +9,8 @@
   var LOOP_RESET_MS = 2 * 60 * 1000;
   var LOOP_MAX = 3;
   var RECOVERY_CLASS = "boot-recovery";
+  var LEGACY_UPDATE_TEXT_RE = /Обновляем приложение[\s\S]{0,240}Сбрасываем старый кэш приложения перед запуском новой версии/i;
+  var LEGACY_UPDATE_CLASS_RE = /(?:^|\s)required-update-gate(?:\s|$)/;
 
   var statusEl = document.getElementById("boot-status");
   var versionEl = document.getElementById("boot-version");
@@ -131,6 +133,31 @@
     }
   }
 
+  function legacyUpdateGateVisible() {
+    try {
+      if (hasBooted()) return false;
+      var text = document.body && document.body.textContent ? String(document.body.textContent) : "";
+      if (LEGACY_UPDATE_TEXT_RE.test(text)) return true;
+      var gate = document.querySelector(".required-update-gate");
+      if (!gate) return false;
+      var className = String(gate.className || "");
+      var gateText = gate.textContent ? String(gate.textContent) : "";
+      return LEGACY_UPDATE_CLASS_RE.test(className) && /Сбрасываем старый кэш приложения/i.test(gateText);
+    } catch {
+      return false;
+    }
+  }
+
+  function recoverLegacyUpdateGate() {
+    if (legacyUpdateGateVisible()) {
+      requiresBootEvent = true;
+      setStatus("Восстанавливаем запуск…");
+      void recover(true);
+      return true;
+    }
+    return false;
+  }
+
   function clearBootFlags() {
     try {
       sessionStorage.removeItem(UPDATING_KEY);
@@ -248,6 +275,10 @@
 
   if (root && "MutationObserver" in window) {
     var mo = new MutationObserver(function () {
+      if (recoverLegacyUpdateGate()) {
+        mo.disconnect();
+        return;
+      }
       if (!hasBooted()) return;
       mo.disconnect();
       clearBootFlags();
@@ -267,6 +298,10 @@
     },
     true
   );
+
+  window.setTimeout(function () {
+    recoverLegacyUpdateGate();
+  }, 1200);
 
   window.setTimeout(function () {
     if (hasBooted()) return;

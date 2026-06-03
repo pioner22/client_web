@@ -421,6 +421,10 @@ test("requiredUpdateGate: boot and service worker recovery are early and bounded
   assert.match(boot, /boot-recovery/);
   assert.match(boot, /boot-recovery__version/);
   assert.match(boot, /yagodka-build-id/);
+  assert.match(boot, /LEGACY_UPDATE_TEXT_RE/);
+  assert.match(boot, /Сбрасываем старый кэш приложения перед запуском новой версии/);
+  assert.match(boot, /recoverLegacyUpdateGate/);
+  assert.match(boot, /MutationObserver/);
   assert.match(boot, /Открыть приложение/);
   assert.match(boot, /Повторить обновление/);
   assert.match(boot, /__boot_recover/);
