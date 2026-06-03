@@ -3,12 +3,15 @@
     --right-column-width: 100vw;
   }
 
-  /* iOS safe-area strip (home indicator zone): match composer bar by default. */
-  html {
+  /* iOS safe-area strip (home indicator zone): match composer bar by default.
+     Apply it to body too, because boot CSS seeds a light canvas before the skin loads. */
+  html,
+  body {
     --safe-area-bg: var(--composer-bg);
     --app-frame-bg: var(--app-bg);
     --app-frame-safe-bg: var(--safe-area-bg);
     --app-host-canvas-bg: var(--safe-area-bg);
+    background: var(--app-frame-bg, var(--app-bg));
     background-color: var(--app-host-canvas-bg, var(--safe-area-bg));
   }
 
@@ -79,10 +82,12 @@
     grid-template-columns: 1fr;
   }
 
-  html.sidebar-mobile-open {
+  html.sidebar-mobile-open,
+  html.sidebar-mobile-open body {
     --safe-area-bg: var(--sidebar-bg);
     --app-frame-safe-bg: var(--sidebar-bg);
     --app-host-canvas-bg: var(--sidebar-bg);
+    background-color: var(--app-host-canvas-bg, var(--sidebar-bg));
   }
 
   .right-col {

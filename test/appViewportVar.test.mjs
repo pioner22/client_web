@@ -325,7 +325,7 @@ test("viewport var: fallback использует screen.height при нуле�
   }
 });
 
-test("viewport var: iOS PWA: включает screen gap в app height и bottom inset", async () => {
+test("viewport var: iOS PWA: держит screen gap отдельно от app height", async () => {
   const helper = await loadInstall();
   const prev = {
     window: globalThis.window,
@@ -367,9 +367,10 @@ test("viewport var: iOS PWA: включает screen gap в app height и bottom
     };
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "844px");
-    assert.equal(style._props.get("--vh"), "8.44px");
+    assert.equal(style._props.get("--app-vh"), "810px");
+    assert.equal(style._props.get("--vh"), "8.1px");
     assert.equal(style._props.get("--app-gap-bottom"), "34px");
+    assert.equal(style._props.get("--app-layout-gap-bottom"), "34px");
     assert.equal(style._props.get("--safe-bottom-pad"), "34px");
     assert.equal(style._props.has("--safe-bottom-raw"), false);
 
@@ -464,8 +465,8 @@ test("viewport var: iOS PWA: большой physical bottom gap не зажим�
     };
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "900px");
-    assert.equal(style._props.get("--vh"), "9px");
+    assert.equal(style._props.get("--app-vh"), "810px");
+    assert.equal(style._props.get("--vh"), "8.1px");
     assert.equal(style._props.get("--app-gap-bottom"), "90px");
     assert.equal(style._props.has("--app-shell-bottom-spill"), false);
     assert.equal(style._props.get("--safe-bottom-pad"), "34px");
@@ -498,7 +499,7 @@ test("viewport var: iOS PWA: большой physical bottom gap не зажим�
   }
 });
 
-test("viewport var: iOS PWA: rounded-screen physical gap до 180px входит в app shell", async () => {
+test("viewport var: iOS PWA: rounded-screen physical gap до 180px не растягивает app height", async () => {
   const helper = await loadInstall();
   const prev = {
     window: globalThis.window,
@@ -571,8 +572,8 @@ test("viewport var: iOS PWA: rounded-screen physical gap до 180px входит
     };
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "956px");
-    assert.equal(style._props.get("--vh"), "9.56px");
+    assert.equal(style._props.get("--app-vh"), "810px");
+    assert.equal(style._props.get("--vh"), "8.1px");
     assert.equal(style._props.get("--app-gap-bottom"), "146px");
     assert.equal(style._props.get("--app-layout-gap-bottom"), "146px");
     assert.equal(style._props.get("--safe-bottom-pad"), "34px");
@@ -649,8 +650,8 @@ test("viewport var: iOS PWA: physical bottom gap не считается кла�
     };
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "956px");
-    assert.equal(style._props.get("--vh"), "9.56px");
+    assert.equal(style._props.get("--app-vh"), "894px");
+    assert.equal(style._props.get("--vh"), "8.94px");
     assert.equal(style._props.get("--app-gap-bottom"), "62px");
     assert.equal(style._props.get("--app-layout-gap-bottom"), "62px");
     assert.equal(style._props.has("--app-shell-bottom-spill"), false);
@@ -757,7 +758,7 @@ test("viewport var: iOS PWA: keyboard keeps debug diagnostics but removes layout
   }
 });
 
-test("viewport var: iOS PWA: fallback safe-area inset тоже входит в app height", async () => {
+test("viewport var: iOS PWA: fallback safe-area inset тоже остаётся отдельным gap", async () => {
   const helper = await loadInstall();
   const prev = {
     window: globalThis.window,
@@ -799,8 +800,8 @@ test("viewport var: iOS PWA: fallback safe-area inset тоже входит в a
     };
 
     const cleanup = helper.fn(root);
-    assert.equal(style._props.get("--app-vh"), "844px");
-    assert.equal(style._props.get("--vh"), "8.44px");
+    assert.equal(style._props.get("--app-vh"), "810px");
+    assert.equal(style._props.get("--vh"), "8.1px");
     assert.equal(style._props.get("--app-gap-bottom"), "34px");
 
     cleanup();

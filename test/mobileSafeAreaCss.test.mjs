@@ -26,6 +26,7 @@ test("mobile safe-area: composer bottom padding avoids extra gap", async () => {
 
 test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () => {
   const css = await readFile(path.resolve("src/scss/base.css"), "utf8");
+  const responsiveCss = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /--safe-bottom-pad:\s*clamp\(\s*0px\s*,\s*env\(safe-area-inset-bottom\)\s*,\s*44px\s*\)\s*;/);
   assert.match(css, /--app-layout-gap-bottom:\s*var\(--app-gap-bottom\)\s*;/);
   assert.match(css, /--app-shell-bottom-spill:\s*0px\s*;/);
@@ -39,6 +40,8 @@ test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () =
   assert.match(css, /html\.app-frame-booting,\s*html\.app-frame-booting body\s*\{[\s\S]*?--app-host-canvas-bg:\s*#eaf5f0;/);
   assert.match(css, /#app\.app-frame::after\s*\{[\s\S]*?background:\s*var\(--app-frame-safe-bg,/);
   assert.match(css, /#app\.app-frame::after\s*\{[\s\S]*?height:\s*var\(--app-frame-bottom-inset\)/);
+  assert.match(responsiveCss, /html,\s*body\s*\{[\s\S]*?--safe-area-bg:\s*var\(--composer-bg\);[\s\S]*?--app-host-canvas-bg:\s*var\(--safe-area-bg\);/);
+  assert.match(responsiveCss, /html\.sidebar-mobile-open,\s*html\.sidebar-mobile-open body\s*\{[\s\S]*?--safe-area-bg:\s*var\(--sidebar-bg\);/);
   assert.doesNotMatch(css, /--safe-bottom-layout-pad:\s*max\(0px,\s*calc\(var\(--safe-bottom-pad\)\s*-\s*var\(--app-gap-bottom/);
 });
 
