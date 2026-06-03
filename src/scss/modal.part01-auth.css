@@ -1169,6 +1169,8 @@
   }
 
   html.has-auth-pages #app {
+    --app-frame-bg: var(--auth-mobile-screen-bg);
+    --app-frame-safe-bg: var(--auth-mobile-screen-bg);
     height: var(--auth-viewport-min);
     min-height: 0;
     max-height: var(--auth-viewport-min);
@@ -1235,6 +1237,30 @@
     scroll-padding-bottom: var(--auth-scroll-bottom-space);
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
+  }
+
+  #auth-pages.auth-entry-page > .auth-entry-scroll::after {
+    content: "AUTH-SCROLL-END";
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 18px;
+    width: max-content;
+    max-width: calc(100vw - 36px);
+    margin: 4px auto 0;
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 999px;
+    background: rgba(24, 126, 96, 0.88);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(11, 18, 28, 0.22);
   }
 
   .auth-entry-update-marker {

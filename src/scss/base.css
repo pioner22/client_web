@@ -137,6 +137,45 @@ body::after {
   z-index: 0;
 }
 
+@media (max-width: 860px) {
+  body[data-viewport-diagnostic="1"]::before,
+  #app.app-frame[data-viewport-diagnostic="1"]::before {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 18px;
+    max-width: calc(100vw - 12px);
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 999px;
+    background: rgba(174, 35, 35, 0.86);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(11, 18, 28, 0.28);
+  }
+
+  body[data-viewport-diagnostic="1"]::before {
+    content: "PHYSICAL-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " safe=" attr(data-app-safe-bottom);
+    position: fixed;
+    right: 4px;
+    bottom: 4px;
+    z-index: 2147483600;
+  }
+
+  #app.app-frame[data-viewport-diagnostic="1"]::before {
+    content: "APP-FRAME-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom);
+    position: absolute;
+    left: 4px;
+    bottom: max(4px, min(24px, var(--app-bottom-inset)));
+    z-index: 30;
+  }
+}
+
 /* iOS Safari/PWA: use -webkit-fill-available only as a fallback for engines without 100dvh.
    On modern iOS (17/18) forcing -webkit-fill-available can cause layout/scroll glitches. */
 @supports (-webkit-touch-callout: none) and (not (height: 100dvh)) {

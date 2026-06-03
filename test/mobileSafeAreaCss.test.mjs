@@ -33,6 +33,17 @@ test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () =
   assert.doesNotMatch(css, /--safe-bottom-layout-pad:\s*max\(0px,\s*calc\(var\(--safe-bottom-pad\)\s*-\s*var\(--app-gap-bottom/);
 });
 
+test("mobile safe-area: diagnostic markers expose every bottom layer", async () => {
+  const baseCss = await readFile(path.resolve("src/scss/base.css"), "utf8");
+  const responsiveCss = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
+  const authCss = await readFile(path.resolve("src/scss/modal.part01-auth.css"), "utf8");
+  assert.match(baseCss, /PHYSICAL-BOTTOM/);
+  assert.match(baseCss, /APP-FRAME-BOTTOM/);
+  assert.match(authCss, /AUTH-SCROLL-END/);
+  assert.match(responsiveCss, /SIDEBAR-SCROLL-END/);
+  assert.match(responsiveCss, /CHAT-COMPOSER-BOTTOM/);
+});
+
 test("mobile safe-area: pages have bottom padding for home indicator", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /\.page\s*\{[\s\S]*?padding-bottom:\s*calc\(\s*var\(--sp-4\)\s*\+\s*var\(--safe-bottom-layout-pad\)\s*\)\s*;/);

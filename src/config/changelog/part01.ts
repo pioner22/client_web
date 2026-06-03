@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.826",
+    date: "2026-06-03",
+    improved: [
+      "iPhone/PWA: app shell теперь владеет полным physical bottom gap до 120px, а не сжимает его до safe-area/44px.",
+      "Mobile debug: добавлены видимые метки PHYSICAL-BOTTOM, APP-FRAME-BOTTOM, AUTH-SCROLL-END, SIDEBAR-SCROLL-END и CHAT-COMPOSER-BOTTOM для точной проверки нижнего каркаса на скринах.",
+    ],
+    fixed: [
+      "Исправлен оставшийся нижний обрубок на rounded iPhone/PWA: auth, sidebar, chat composer и общий app-frame используют один bottom inset от корневого viewport.",
+    ],
+  },
+  {
     version: "0.1.825",
     date: "2026-06-03",
     improved: [

@@ -382,6 +382,86 @@ test("viewport var: iOS PWA: включает screen gap в app height и bottom
   }
 });
 
+test("viewport var: iOS PWA: большой physical bottom gap не зажимается safe-area", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const rootAttrs = new Map();
+    const bodyAttrs = new Map();
+    const makeAttrTarget = (attrs, extra = {}) => ({
+      ...extra,
+      setAttribute(k, v) {
+        attrs.set(String(k), String(v));
+      },
+      removeAttribute(k) {
+        attrs.delete(String(k));
+      },
+    });
+    const root = makeAttrTarget(rootAttrs, { style });
+    const docEl = makeAttrTarget(new Map(), { clientHeight: 810, style, classList: { add() {}, remove() {}, toggle() {} } });
+    const body = makeAttrTarget(bodyAttrs);
+
+    Object.defineProperty(globalThis, "navigator", {
+      value: { userAgent: "iPhone", maxTouchPoints: 0, standalone: true },
+      configurable: true,
+      writable: true,
+    });
+    globalThis.document = { documentElement: docEl, body };
+    globalThis.window = {
+      innerHeight: 810,
+      screen: { height: 900, availHeight: 900 },
+      outerHeight: 900,
+      visualViewport: { height: 808.2, addEventListener() {}, removeEventListener() {} },
+      getComputedStyle() {
+        return { getPropertyValue: () => "34px" };
+      },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "900px");
+    assert.equal(style._props.get("--vh"), "9px");
+    assert.equal(style._props.get("--app-gap-bottom"), "90px");
+    assert.equal(style._props.get("--safe-bottom-pad"), "34px");
+    assert.equal(rootAttrs.get("data-viewport-diagnostic"), "1");
+    assert.equal(rootAttrs.get("data-app-gap-bottom"), "90");
+    assert.equal(bodyAttrs.get("data-app-gap-bottom"), "90");
+
+    cleanup();
+    assert.equal(style._props.has("--app-vh"), false);
+    assert.equal(style._props.has("--app-gap-bottom"), false);
+    assert.equal(rootAttrs.has("data-app-gap-bottom"), false);
+    assert.equal(bodyAttrs.has("data-app-gap-bottom"), false);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+    if (prev.navigator) Object.defineProperty(globalThis, "navigator", prev.navigator);
+    else delete globalThis.navigator;
+  }
+});
+
 test("viewport var: iOS PWA: fallback safe-area inset тоже входит в app height", async () => {
   const helper = await loadInstall();
   const prev = {

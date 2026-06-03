@@ -12,6 +12,13 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   const iosStandalone = isIos && standalone;
   const docEl = typeof document !== "undefined" ? document.documentElement : null;
   const EDITABLE_INTENT_MS = 1200;
+  const diagnosticAttrNames = [
+    "data-viewport-diagnostic",
+    "data-app-vh",
+    "data-app-gap-bottom",
+    "data-app-safe-bottom",
+    "data-app-vv-bottom",
+  ];
 
   const isEditableElement = (el: unknown): boolean => {
     if (!el || typeof el !== "object") return false;
@@ -56,6 +63,27 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     docStyle?.setProperty(name, value);
   };
 
+  const setDiagnosticAttr = (name: string, value: string | null) => {
+    const targets: Array<HTMLElement | null> = [
+      root,
+      docEl as HTMLElement | null,
+      typeof document !== "undefined" ? ((document as any).body as HTMLElement | null) : null,
+    ];
+    for (const target of targets) {
+      try {
+        if (!target || typeof target.setAttribute !== "function") continue;
+        if (value === null) target.removeAttribute?.(name);
+        else target.setAttribute(name, value);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const clearDiagnosticAttrs = () => {
+    for (const name of diagnosticAttrNames) setDiagnosticAttr(name, null);
+  };
+
   const read = (): {
     height: number;
     keyboard: boolean;
@@ -71,7 +99,6 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // can clip fixed bottom bars under browser chrome. Prefer visualViewport when it is smaller.
     const USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX = 2;
     const USE_SCREEN_HEIGHT_SLACK_PX = 120;
-    const MAX_GAP_BOTTOM_PX = 44;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
@@ -100,8 +127,8 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
         return 0;
       }
     })();
-    // iOS PWA: sometimes innerHeight/clientHeight are missing the bottom safe-area, leaving a visible "black strip".
-    // Track the gap so CSS can paint it. Do NOT inflate layout height: it causes scrollbars and layout jumps.
+    // iOS PWA: sometimes innerHeight/clientHeight are missing the physical rounded-screen bottom.
+    // Treat that measured slack as part of the app shell, while keeping keyboard mode tied to visualViewport.
     let gapBottom = 0;
     let screenGap = 0;
     // Only treat screen.height deltas as a "gap" in standalone mode.
@@ -111,11 +138,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       screenGap = diff;
       if (diff >= 6 && diff <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = diff;
     }
-    if (safeBottomRaw > 0 && gapBottom > safeBottomRaw) gapBottom = safeBottomRaw;
     // Fallback: if screen.height is not available (tests/odd environments), reuse safe-area inset as the "gap".
     // On real iOS devices screen.height exists; we avoid treating safe-area as gap when there is no evidence.
     if (iosStandalone && !screenMax && !gapBottom && safeBottomRaw > 0 && safeBottomRaw <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = safeBottomRaw;
-    if (gapBottom > MAX_GAP_BOTTOM_PX) gapBottom = MAX_GAP_BOTTOM_PX;
     const vv = window.visualViewport;
     const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
     const vvTopRaw = (() => {
@@ -213,6 +238,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       setVar("--app-gap-bottom", null);
       setVar("--safe-bottom-pad", null);
       setVar("--safe-bottom-raw", null);
+      clearDiagnosticAttrs();
       return;
     }
 
@@ -257,6 +283,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const gap = keyboard ? 0 : gapBottom;
     if (gap >= 1) setVar("--app-gap-bottom", `${gap}px`);
     else setVar("--app-gap-bottom", null);
+
+    setDiagnosticAttr("data-viewport-diagnostic", "1");
+    setDiagnosticAttr("data-app-vh", `${height}`);
+    setDiagnosticAttr("data-app-gap-bottom", `${gap}`);
+    setDiagnosticAttr("data-app-safe-bottom", `${keyboard ? 0 : Math.max(safeBottomRaw, gapBottom)}`);
+    setDiagnosticAttr("data-app-vv-bottom", `${keyboard ? vvBottom : 0}`);
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;
@@ -341,6 +373,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     setVar("--app-vv-top", null);
     setVar("--app-vv-bottom", null);
     setVar("--app-gap-bottom", null);
+    clearDiagnosticAttrs();
     if (docEl?.classList) docEl.classList.remove("app-vv-offset");
   };
 }
