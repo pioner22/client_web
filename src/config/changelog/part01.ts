@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.836",
+    date: "2026-06-03",
+    improved: [
+      "PWA-каркас на iPhone с округлённым экраном теперь забирает в приложение увеличенный physical bottom gap до 180px, чтобы низ не оставался внешним пустым слоем.",
+    ],
+    fixed: [
+      "Исправлен сценарий, когда на некоторых iPhone после входа или перезахода нижняя часть мессенджера оставалась неиспользованной, потому что viewport-helper отбрасывал слишком большой standalone gap.",
+    ],
+  },
+  {
     version: "0.1.835",
     date: "2026-06-03",
     improved: [

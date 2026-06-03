@@ -141,7 +141,11 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     // On iOS/Safari even a small (few px) mismatch between layout viewport and visual viewport
     // can clip fixed bottom bars under browser chrome. Prefer visualViewport when it is smaller.
     const USE_VISUAL_VIEWPORT_NONKEYBOARD_DIFF_PX = 2;
-    const USE_SCREEN_HEIGHT_SLACK_PX = 120;
+    // Modern rounded iPhones in standalone/PWA mode can report a larger delta
+    // between screen.height and the layout viewport than the classic 34px home
+    // indicator. Own that physical bottom inside the app shell instead of
+    // leaving it as an external unused strip.
+    const USE_SCREEN_HEIGHT_SLACK_PX = 180;
     const inner = Math.round(Number(window.innerHeight) || 0);
     const docEl = typeof document !== "undefined" ? document.documentElement : null;
     const client = docEl && typeof docEl.clientHeight === "number" ? Math.round(Number(docEl.clientHeight) || 0) : 0;
