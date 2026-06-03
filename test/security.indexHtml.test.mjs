@@ -28,6 +28,8 @@ test("entry boot screen: strict corporate surface without animated layout shifts
   assert.match(html, /Corporate Messenger/);
   assert.match(html, /Проверяем версию клиента/);
   assert.match(html, /<meta name="theme-color" content="#eaf5f0" \/>/);
+  assert.match(html, /<meta name="apple-mobile-web-app-status-bar-style" content="default" \/>/);
+  assert.doesNotMatch(html, /apple-mobile-web-app-status-bar-style" content="black-translucent"/);
   assert.match(html, /background:\s*var\(--body-bg,\s*var\(--app-bg,\s*#eaf5f0\)\);/);
   assert.match(html, /\.boot-frame\s*{[^}]*border-radius:\s*8px;/s);
   assert.match(html, /\.boot\.boot-out\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);

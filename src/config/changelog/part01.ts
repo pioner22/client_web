@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.823",
+    date: "2026-06-03",
+    improved: [
+      "Мобильный auth Web/PWA переведён на iPhone-safe scroll-root: нижняя safe-area теперь часть прокручиваемой страницы, а не отдельный fixed-подвал.",
+    ],
+    fixed: [
+      "Убран тёмный нижний обрубок на rounded iPhone/PWA: auth больше не рисует fixed pseudo-footer, корневые слои получают единый фон, а iOS status-bar mode больше не использует black-translucent для экрана входа.",
+    ],
+  },
+  {
     version: "0.1.822",
     date: "2026-06-03",
     improved: [
