@@ -1113,14 +1113,38 @@
 }
 
 @media (max-width: 860px) {
+  .overlay.overlay-auth {
+    background:
+      linear-gradient(
+        180deg,
+        #fbfcfd 0%,
+        #f6faf7 42%,
+        var(--auth-mobile-bg-mid) 100%
+      );
+    place-items: stretch;
+    padding: 0;
+  }
+
+  .overlay.overlay-auth:not(.hidden) > .modal {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   #auth-pages.auth-entry-page {
     min-height: 100dvh;
     background:
       linear-gradient(
-        160deg,
-        var(--auth-mobile-bg-start) 0%,
-        var(--auth-mobile-bg-mid) 48%,
-        var(--auth-mobile-bg-end) 100%
+        180deg,
+        #fbfcfd 0%,
+        #f6faf7 42%,
+        var(--auth-mobile-bg-mid) 100%
       );
   }
 
@@ -1133,19 +1157,28 @@
     min-height: 100dvh;
     align-items: start;
     justify-items: center;
-    padding: calc(clamp(42px, 8vh, 72px) + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+    padding: 0 18px;
     overflow: hidden;
     scrollbar-gutter: auto;
+  }
+
+  #auth-pages.auth-entry-page .tabs-tab,
+  #auth-pages.auth-entry-page .tabs-tab.active,
+  #auth-pages.auth-entry-page .tabs-tab .container {
+    background: transparent;
   }
 
   .auth-entry-layout {
     min-height: 0;
     height: auto;
-    max-height: calc(var(--app-vh, 100dvh) - 54px);
+    max-height: none;
+    min-height: 100dvh;
     width: 100%;
-    max-width: 420px;
+    max-width: none;
     grid-template-columns: 1fr;
     gap: 0;
+    align-items: start;
+    justify-items: center;
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -1162,51 +1195,61 @@
   }
 
   .auth-entry-panel {
+    position: relative;
+    width: min(100%, 386px);
     min-height: 0;
     height: auto;
     margin: 0 auto;
-    padding: 16px;
-    gap: 10px;
-    border: 1px solid var(--auth-mobile-line);
-    border-radius: 22px;
-    box-shadow:
-      0 24px 58px var(--auth-mobile-shadow),
-      0 1px 0 rgba(255, 255, 255, 0.9) inset;
-    background: linear-gradient(180deg, var(--auth-mobile-panel) 0%, #f9fbff 100%);
+    padding: calc(clamp(28px, 7vh, 72px) + env(safe-area-inset-top)) 0 calc(16px + env(safe-area-inset-bottom));
+    gap: 12px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
     overflow: hidden;
   }
 
   .auth-panel-top,
   .modal-auth .auth-panel-top {
-    min-height: 48px;
-    gap: 10px;
-    padding: 7px 9px;
-    border: 1px solid var(--auth-mobile-line);
-    border-radius: 18px;
-    background: linear-gradient(180deg, var(--auth-mobile-panel-top) 0%, #f8fbff 100%);
+    min-height: 92px;
+    justify-content: center;
+    gap: 0;
+    padding: 0 44px 4px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
   .auth-entry-panel .auth-brand {
+    flex-direction: column;
+    justify-content: center;
     gap: 8px;
+    text-align: center;
   }
 
   .auth-entry-panel .auth-brand-icon {
-    width: 30px;
-    height: 30px;
+    width: 58px;
+    height: 58px;
   }
 
   .auth-entry-panel .auth-brand-text {
-    font-size: 15px;
+    font-size: 23px;
+    line-height: 1;
+    font-weight: 900;
   }
 
+  .auth-entry-panel .btn.auth-close,
   .auth-entry-panel .auth-close {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    min-height: 36px;
-    border: 1px solid var(--auth-mobile-line);
-    border-radius: 14px;
-    background: #fff;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
     color: var(--auth-entry-muted);
   }
 
@@ -1215,9 +1258,11 @@
   }
 
   .auth-panel-heading {
-    gap: 5px;
-    min-height: 64px;
-    padding: 0 2px;
+    gap: 6px;
+    min-height: 68px;
+    padding: 0 4px;
+    text-align: center;
+    justify-items: center;
   }
 
   .auth-entry-panel .auth-subtitle {
@@ -1233,15 +1278,17 @@
     -webkit-box-orient: vertical;
     min-height: 34px;
     max-height: 34px;
+    margin: 0 auto;
     font-size: 12.5px;
     line-height: 1.36;
   }
 
   .auth-entry-panel .modal-tabs {
     padding: 4px;
+    border: 0;
     border-radius: 18px;
-    border-color: var(--auth-mobile-line);
-    background: #edf4f2;
+    background: #e8efed;
+    box-shadow: inset 0 0 0 1px rgba(49, 75, 88, 0.08);
   }
 
   .auth-entry-panel .modal-tabs .btn {
@@ -1255,7 +1302,7 @@
 
   .auth-entry-panel .modal-tabs .btn.btn-active {
     background: #ffffff;
-    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.1);
+    box-shadow: 0 6px 16px rgba(33, 55, 74, 0.1);
   }
 
   .auth-entry-panel .modal-body,
@@ -1264,8 +1311,8 @@
   }
 
   .auth-entry-panel .auth-entry-form-fixed {
-    grid-template-rows: 64px 64px 50px;
-    min-height: 194px;
+    grid-template-rows: 66px 66px 52px;
+    min-height: 202px;
   }
 
   .auth-entry-panel .auth-entry-form-auto {
@@ -1275,16 +1322,17 @@
 
   .auth-field-stack {
     gap: 4px;
-    min-height: 64px;
+    min-height: 66px;
   }
 
   .auth-entry-panel .modal-label {
     font-size: 10px;
     letter-spacing: 0;
+    padding-left: 2px;
   }
 
   .auth-entry-panel .modal-input {
-    min-height: 46px;
+    min-height: 48px;
     border-radius: 16px;
     border-color: #cbded8;
     background: var(--auth-mobile-field);
@@ -1300,7 +1348,7 @@
 
   .auth-entry-panel .modal-actions .btn,
   .auth-entry-panel .auth-primary-cta {
-    min-height: 50px;
+    min-height: 52px;
     border-radius: 16px;
   }
 
@@ -1335,14 +1383,17 @@
   }
 
   .auth-entry-panel .auth-entry-notice {
-    min-height: 36px;
-    max-height: 36px;
-    padding: 8px 11px;
-    border-radius: 14px;
-    border-color: #dbeae5;
-    background: #f6fbf9;
+    justify-content: center;
+    min-height: 30px;
+    max-height: 30px;
+    padding: 4px 4px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #576a7b;
     font-size: 12px;
-    line-height: 1.32;
+    line-height: 1.25;
+    text-align: center;
   }
 
   .auth-entry-panel .auth-session-card,
