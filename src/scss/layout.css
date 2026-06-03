@@ -279,8 +279,8 @@ body.has-right-col .right-col {
   -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable both-edges;
   padding-inline: var(--sidebar-list-pad);
-  padding-bottom: max(var(--sp-2), var(--app-bottom-inset));
-  scroll-padding-bottom: max(var(--sp-2), var(--app-bottom-inset));
+  padding-bottom: max(var(--sp-2), var(--app-bottom-live-pad));
+  scroll-padding-bottom: max(var(--sp-2), var(--app-bottom-live-pad));
   /* Prevent browser scroll anchoring from jumping the list during re-renders/context menus. */
   overflow-anchor: none;
   touch-action: pan-y;
@@ -329,8 +329,8 @@ body.has-right-col .right-col {
   padding: var(--composer-pad-y) var(--chat-input-padding);
   --composer-action-gap: calc(var(--composer-gap) * var(--phi-inv));
   --composer-action-size: var(--composer-icon-btn-size);
-  /* Avoid "double padding" feel on iOS: safe-area already provides spacing. */
-  padding-bottom: max(var(--composer-pad-y), var(--app-bottom-inset));
+  /* Avoid a double iOS/PWA chin reserve: the app frame already owns the physical bottom. */
+  padding-bottom: max(var(--composer-pad-y), var(--app-bottom-live-pad));
   border-top: var(--composer-border-width) solid var(--composer-border-color);
   background: var(--composer-bg);
 }

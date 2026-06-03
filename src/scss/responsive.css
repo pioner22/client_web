@@ -196,7 +196,7 @@
     background: var(--sidebar-bg);
     border-top: 1px solid color-mix(in srgb, var(--line), transparent 60%);
     padding-top: var(--sp-2);
-    padding-bottom: max(var(--sp-2), var(--app-bottom-inset));
+    padding-bottom: max(var(--sp-2), var(--app-bottom-live-pad));
     padding-inline: var(--sidebar-list-pad);
     margin-top: 0;
   }
@@ -204,7 +204,7 @@
   body[data-viewport-diagnostic="1"] .sidebar-body::after {
     content: "SIDEBAR-SCROLL-END";
     position: sticky;
-    bottom: max(4px, calc(var(--app-bottom-inset) - 22px));
+    bottom: max(4px, calc(var(--app-bottom-live-pad) - 6px));
     z-index: 4;
     display: flex;
     align-items: center;
@@ -729,7 +729,7 @@
   /* Composer: closer to Telegram pill + stable "bar" feel. */
   .input-wrap {
     /* Mobile: overlay the composer (tweb-like) so chat history can scroll "under" it. */
-    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-inset));
+    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-live-pad));
     position: absolute;
     left: 0;
     right: 0;
@@ -745,7 +745,7 @@
     content: "CHAT-COMPOSER-BOTTOM";
     position: absolute;
     right: 6px;
-    bottom: max(4px, calc(var(--app-bottom-inset) - 20px));
+    bottom: max(4px, calc(var(--app-bottom-live-pad) - 6px));
     z-index: 4;
     display: inline-flex;
     align-items: center;
@@ -792,7 +792,7 @@
 
   /* iOS: blur/transparency can create an extra "dark strip" near the bottom safe-area. Keep the bar solid. */
   html.is-ios .input-wrap {
-    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-inset));
+    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-live-pad));
     padding-top: calc(var(--composer-pad-y) * 0.75);
     background: var(--composer-bg);
     -webkit-backdrop-filter: none;
@@ -812,7 +812,7 @@
   }
 
   html.env-os-android .input-wrap {
-    --composer-bottom-edge-pad: max(8px, var(--safe-bottom-layout-pad));
+    --composer-bottom-edge-pad: max(8px, var(--app-bottom-live-pad));
     background: color-mix(in srgb, var(--composer-bg), var(--panel2) 8%);
     box-shadow:
       0 -1px 0 color-mix(in srgb, var(--line), transparent 58%),
@@ -1231,7 +1231,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --safe-bottom-layout-pad: var(--app-bottom-inset);
+    --safe-bottom-layout-pad: var(--app-bottom-live-pad);
   }
 
   .hdr-label,
@@ -1255,7 +1255,7 @@ html.is-standalone {
   --app-radius: 0px;
   --app-shadow: none;
   --app-overflow: hidden;
-  --safe-bottom-layout-pad: var(--app-bottom-inset);
+  --safe-bottom-layout-pad: var(--app-bottom-live-pad);
 }
 
 html.is-standalone .hdr-label,

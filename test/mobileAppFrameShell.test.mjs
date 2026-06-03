@@ -31,5 +31,5 @@ test("mobile app frame: auth stays inside fixed shell instead of owning viewport
   assert.match(css, /html\.is-ios\.has-auth-pages\s*{[^}]*position:\s*fixed;[^}]*inset:\s*0;/s);
   assert.match(css, /html\.has-auth-pages\s+#app\s*{[^}]*height:\s*var\(--auth-viewport-min\);[^}]*overflow:\s*hidden;/s);
   assert.match(css, /\.overlay\.overlay-auth\s*{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*overflow:\s*hidden;/s);
-  assert.match(css, /#auth-pages\.auth-entry-page\s+>\s+\.auth-entry-scroll\s*{[^}]*height:\s*100%;[^}]*overflow-y:\s*auto;/s);
+  assert.match(css, /#auth-pages\.auth-entry-page\s+>\s+\.auth-entry-scroll\s*{[^}]*height:\s*100%;[^}]*overflow-y:\s*hidden;/s);
 });

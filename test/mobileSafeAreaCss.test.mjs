@@ -20,7 +20,8 @@ test("mobile safe-area: mobile fullscreen overrides win against skins", async ()
 test("mobile safe-area: composer bottom padding avoids extra gap", async () => {
   const css = await readFile(path.resolve("src/scss/layout.css"), "utf8");
   assert.match(css, /\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*max\b/);
-  assert.match(css, /padding-bottom:\s*max\([^;]*--app-bottom-inset/);
+  assert.match(css, /padding-bottom:\s*max\([^;]*--app-bottom-live-pad/);
+  assert.doesNotMatch(css, /\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*max\([^;]*--app-bottom-inset/);
 });
 
 test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () => {
@@ -29,8 +30,9 @@ test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () =
   assert.match(css, /--app-layout-gap-bottom:\s*var\(--app-gap-bottom\)\s*;/);
   assert.match(css, /--app-shell-bottom-spill:\s*0px\s*;/);
   assert.match(css, /--app-bottom-inset:\s*max\(var\(--safe-bottom-pad\),\s*var\(--app-layout-gap-bottom,\s*var\(--app-gap-bottom,\s*0px\)\)\)\s*;/);
+  assert.match(css, /--app-bottom-live-pad:\s*clamp\(8px,\s*calc\(var\(--app-bottom-inset\)\s*-\s*22px\),\s*16px\)\s*;/);
   assert.match(css, /--app-frame-bottom-inset:\s*0px\s*;/);
-  assert.match(css, /--safe-bottom-layout-pad:\s*var\(--app-bottom-inset\)\s*;/);
+  assert.match(css, /--safe-bottom-layout-pad:\s*var\(--app-bottom-live-pad\)\s*;/);
   assert.match(css, /--app-frame-bg:\s*var\(--app-bg\)\s*;/);
   assert.match(css, /--app-host-canvas-bg:\s*var\(--safe-area-bg,\s*var\(--app-frame-bg,\s*var\(--app-bg\)\)\)\s*;/);
   assert.match(css, /background-color:\s*var\(--app-host-canvas-bg,\s*var\(--safe-area-bg,\s*var\(--app-frame-bg,\s*#eaf5f0\)\)\)\s*;/);
@@ -72,7 +74,7 @@ test("mobile safe-area: default skin preserves the shared iOS composer inset", a
   const skinCss = await readFile(path.resolve("public/skins/yagodka-modern.css"), "utf8");
   assert.match(
     skinCss,
-    /html\.is-ios\[data-skin="yagodka-modern"\]\s+\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*var\(--composer-bottom-edge-pad,\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-inset\)\)\)\s*;/
+    /html\.is-ios\[data-skin="yagodka-modern"\]\s+\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*var\(--composer-bottom-edge-pad,\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad,\s*var\(--app-bottom-inset\)\)\)\)\s*;/
   );
   assert.doesNotMatch(skinCss, /html\.is-ios\[data-skin="yagodka-modern"\]\s+\.input-wrap\s*\{[\s\S]*env\(safe-area-inset-bottom\)/);
 });

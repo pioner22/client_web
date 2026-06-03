@@ -15,7 +15,8 @@ test("mobile composer: Telegram-like бар (blur) и более плотный 
 
 test("mobile composer: iOS override lowers composer closer to the bottom edge", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
-  assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-inset\)\)\s*;/);
+  assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\)\s*;/);
+  assert.doesNotMatch(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-inset\)\)\s*;/);
   assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?padding-top:\s*calc\(var\(--composer-pad-y\)\s*\*\s*0\.75\)\s*;/);
   assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?background:\s*var\(--composer-bg\)\s*;/);
 });
@@ -23,7 +24,7 @@ test("mobile composer: iOS override lowers composer closer to the bottom edge", 
 test("mobile composer: Android native shell gets stable bars and touch tabs", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /html\.env-os-android\s+\.hdr\s*\{[\s\S]*?min-height:\s*56px\s*;/);
-  assert.match(css, /html\.env-os-android\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(8px,\s*var\(--safe-bottom-layout-pad\)\)\s*;/);
+  assert.match(css, /html\.env-os-android\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(8px,\s*var\(--app-bottom-live-pad\)\)\s*;/);
   assert.match(css, /html\.env-os-android\s+\.input-wrap\s*\{[\s\S]*?backdrop-filter:\s*blur\(12px\)\s*;/);
   assert.match(css, /html\.env-os-android\s+\.composer-field\s*\{[\s\S]*?border-width:\s*1px\s*;/);
   assert.match(css, /html\.env-os-android\s+\.sidebar-tabs\.sidebar-tabs-mobile\s+\.sidebar-tab\s*\{[\s\S]*?min-height:\s*46px\s*;/);
