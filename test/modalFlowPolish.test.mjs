@@ -354,6 +354,7 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(renderAppSrc, /prevSendScheduleAt/);
   assert.match(renderAppSrc, /hadSendScheduleModal/);
   assert.match(renderAppSrc, /state\.modal\?\.kind === "send_schedule"/);
+  assert.match(renderAppSrc, /scheduleChromeColorSync/);
 
   const logoutFeatureSrc = await readFile(path.resolve("src/app/features/auth/logoutFeature.ts"), "utf8");
   assert.match(logoutFeatureSrc, /modal:\s*\{\s*kind:\s*"auth"\s*\}/);
@@ -373,4 +374,9 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.doesNotMatch(authSrc, /auth-chip-row/);
   assert.doesNotMatch(authSrc, /auth-progress-card/);
   assert.doesNotMatch(authSrc, /auth-session-card/);
+
+  const chromeColorsSrc = await readFile(path.resolve("src/helpers/ui/chromeColors.ts"), "utf8");
+  assert.match(chromeColorsSrc, /AUTH_CHROME_COLOR\s*=\s*"#eaf5f0"/);
+  assert.match(chromeColorsSrc, /classList\.contains\("has-auth-pages"\)/);
+  assert.match(chromeColorsSrc, /readResolvedCssColor\(style,\s*"--safe-area-bg"\)/);
 });

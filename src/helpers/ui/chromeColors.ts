@@ -1,16 +1,43 @@
 let pendingSync = false;
 let lastColor = "";
+const AUTH_CHROME_COLOR = "#eaf5f0";
 
 function readCssVar(style: CSSStyleDeclaration, name: string): string {
   const raw = style.getPropertyValue(name);
   return raw ? raw.trim() : "";
 }
 
+function isChromeColor(value: string): boolean {
+  return /^(#[0-9a-f]{3,8}|rgb\(|rgba\(|hsl\(|hsla\()/i.test(value.trim());
+}
+
+function resolveCssColor(style: CSSStyleDeclaration, value: string, seen = new Set<string>()): string | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (isChromeColor(raw)) return raw;
+  const match = raw.match(/^var\(\s*(--[A-Za-z0-9_-]+)\s*(?:,\s*(.+))?\)$/);
+  if (!match) return null;
+  const name = match[1];
+  if (seen.has(name)) return null;
+  seen.add(name);
+  const direct = readCssVar(style, name);
+  const resolved = resolveCssColor(style, direct, seen);
+  if (resolved) return resolved;
+  return resolveCssColor(style, match[2] || "", seen);
+}
+
+function readResolvedCssColor(style: CSSStyleDeclaration, name: string): string | null {
+  return resolveCssColor(style, readCssVar(style, name));
+}
+
 function resolveChromeColor(style: CSSStyleDeclaration): string | null {
-  const candidates = ["--header-bg", "--app-bg", "--bg", "--sidebar-bg"];
+  if (document.documentElement.classList.contains("has-auth-pages")) {
+    return readResolvedCssColor(style, "--safe-area-bg") || AUTH_CHROME_COLOR;
+  }
+  const candidates = ["--app-bg", "--bg", "--sidebar-bg"];
   for (const name of candidates) {
-    const value = readCssVar(style, name);
-    if (value && value !== "transparent") return value;
+    const value = readResolvedCssColor(style, name);
+    if (value) return value;
   }
   return null;
 }

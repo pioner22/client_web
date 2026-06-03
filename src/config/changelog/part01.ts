@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.821",
+    date: "2026-06-03",
+    improved: [
+      "Web/PWA auth теперь обновляет browser/PWA chrome color под светлый экран входа, чтобы установленная PWA не оставляла старый тёмный цвет вокруг safe-area.",
+    ],
+    fixed: [
+      "Manifest и initial theme-color переведены на светлый auth-safe-area фон: это закрывает случай, когда production уже обновлён, но iPhone/PWA продолжает рисовать чёрный низ вне CSS-области.",
+    ],
+  },
+  {
     version: "0.1.820",
     date: "2026-06-03",
     improved: [

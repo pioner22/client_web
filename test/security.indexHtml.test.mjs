@@ -27,10 +27,19 @@ test("entry boot screen: strict corporate surface without animated layout shifts
 
   assert.match(html, /Corporate Messenger/);
   assert.match(html, /Проверяем версию клиента/);
+  assert.match(html, /<meta name="theme-color" content="#eaf5f0" \/>/);
+  assert.match(html, /background:\s*var\(--body-bg,\s*var\(--app-bg,\s*#eaf5f0\)\);/);
   assert.match(html, /\.boot-frame\s*{[^}]*border-radius:\s*8px;/s);
   assert.match(html, /\.boot\.boot-out\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
   assert.doesNotMatch(html, /@keyframes\s+boot-/);
   assert.doesNotMatch(html, /animation:\s*boot-/);
   assert.doesNotMatch(html, /filter:\s*blur/);
   assert.doesNotMatch(html, /transform:\s*scale/);
+});
+
+test("PWA manifest uses light auth-safe-area launch background", async () => {
+  const manifest = JSON.parse(await readFile(path.resolve("public/manifest.webmanifest"), "utf8"));
+
+  assert.equal(manifest.background_color, "#eaf5f0");
+  assert.equal(manifest.theme_color, "#eaf5f0");
 });

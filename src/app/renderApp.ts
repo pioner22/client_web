@@ -20,6 +20,7 @@ import { el } from "../helpers/dom/el";
 import { resetChatHistoryViewportRuntime } from "../helpers/chat/historyViewportRuntime";
 import { preserveAuthModalInputs } from "../helpers/auth/preserveAuthModalInputs";
 import { focusElement } from "../helpers/ui/focus";
+import { scheduleChromeColorSync } from "../helpers/ui/chromeColors";
 import { isIOS } from "../helpers/ui/iosInputAssistant";
 import { isMobileLikeUi } from "../helpers/ui/mobileLike";
 import { maxBoardScheduleDelayMs } from "../helpers/boards/boardSchedule";
@@ -397,6 +398,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     document.body.classList.toggle("has-right-col", showRightPanel);
     document.body.classList.toggle("has-auth-pages", fullScreenActive);
     document.documentElement.classList.toggle("has-auth-pages", fullScreenActive);
+    scheduleChromeColorSync();
   }
   layout.rightCol.classList.toggle("hidden", !showRightPanel);
   layout.rightCol.setAttribute("aria-hidden", showRightPanel ? "false" : "true");
