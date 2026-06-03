@@ -65,20 +65,28 @@ test("mobile safe-area: pages have bottom padding for home indicator", async () 
   assert.match(css, /\.page\s*\{[\s\S]*?padding-bottom:\s*calc\(\s*var\(--sp-4\)\s*\+\s*var\(--safe-bottom-layout-pad\)\s*\)\s*;/);
 });
 
-test("mobile safe-area: iOS standalone physical bottom does not stretch the fixed app frame", async () => {
+test("mobile safe-area: iOS standalone physical frame keeps app layer on visual viewport", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-vh\);/
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);/
   );
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?max-height:\s*var\(--app-vh\);/
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?max-height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);/
   );
-  assert.doesNotMatch(
+  assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-frame-vh/
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*>\s*\.app\s*\{[\s\S]*?height:\s*var\(--app-vh\);[\s\S]*?max-height:\s*var\(--app-vh\);[\s\S]*?overflow:\s*visible;/
+  );
+  assert.match(
+    css,
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*calc\(max\(var\(--composer-pad-y\),\s*var\(--safe-bottom-pad\)\)\s*\+\s*var\(--app-layout-gap-bottom,\s*0px\)\);[\s\S]*?bottom:\s*calc\(0px\s*-\s*var\(--app-layout-gap-bottom,\s*0px\)\);/
+  );
+  assert.match(
+    css,
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*calc\(0px\s*-\s*var\(--app-layout-gap-bottom,\s*0px\)\);[\s\S]*?padding-bottom:\s*calc\(max\(var\(--sp-2\),\s*var\(--safe-bottom-pad\)\)\s*\+\s*var\(--app-layout-gap-bottom,\s*0px\)\);/
   );
   assert.doesNotMatch(css, /bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill/);
 });

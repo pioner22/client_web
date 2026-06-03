@@ -34,9 +34,9 @@
 
   html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) #app {
     bottom: auto;
-    height: var(--app-vh);
+    height: var(--app-frame-vh, var(--app-vh));
     min-height: 0;
-    max-height: var(--app-vh);
+    max-height: var(--app-frame-vh, var(--app-vh));
   }
 
   html.app-vv-offset #app {
@@ -66,6 +66,19 @@
     overflow: hidden;
     height: 100%;
     min-height: 0;
+  }
+
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) #app > .app {
+    height: var(--app-vh);
+    max-height: var(--app-vh);
+    overflow: visible;
+  }
+
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .grid,
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .chat-col,
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .chat,
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .sidebar {
+    overflow: visible;
   }
 
   :root[data-skin] {
@@ -204,6 +217,17 @@
     padding-bottom: max(var(--sp-2), var(--app-bottom-live-pad));
     padding-inline: var(--sidebar-list-pad);
     margin-top: 0;
+  }
+
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .sidebar-body {
+    margin-bottom: calc(0px - var(--app-layout-gap-bottom, 0px));
+    padding-bottom: calc(max(var(--sp-2), var(--safe-bottom-pad)) + var(--app-layout-gap-bottom, 0px));
+    scroll-padding-bottom: calc(max(var(--sp-2), var(--safe-bottom-pad)) + var(--app-layout-gap-bottom, 0px));
+  }
+
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .sidebar-mobile-bottom {
+    margin-bottom: calc(0px - var(--app-layout-gap-bottom, 0px));
+    padding-bottom: calc(max(var(--sp-2), var(--safe-bottom-pad)) + var(--app-layout-gap-bottom, 0px));
   }
 
   body[data-viewport-diagnostic="1"] .sidebar-body::after {
@@ -802,6 +826,12 @@
     background: var(--composer-bg);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+  }
+
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .input-wrap {
+    --composer-bottom-edge-pad: calc(max(var(--composer-pad-y), var(--safe-bottom-pad)) + var(--app-layout-gap-bottom, 0px));
+    bottom: calc(0px - var(--app-layout-gap-bottom, 0px));
+    background: var(--composer-bg);
   }
 
   html.env-os-android .hdr {

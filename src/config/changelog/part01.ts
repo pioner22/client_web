@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.840",
+    date: "2026-06-03",
+    improved: [
+      "iPhone/PWA: внешний shell снова занимает физический rounded-screen низ, а внутренний рабочий слой остаётся на visual viewport, чтобы composer не уезжал за экран.",
+      "Нижняя safe-area теперь входит в рабочие нижние слои sidebar и composer через общий `--app-layout-gap-bottom`, а не остаётся отдельным пустым canvas-подвалом.",
+    ],
+    fixed: [
+      "После входа/перезахода тёмная нижняя зона больше не должна жить отдельно от списка и панели ввода: sidebar и composer продолжаются в физический PWA-низ.",
+      "Закреплён iOS-контракт для экранов с округлением/home indicator: `#app` покрывает frame, `#app > .app` держит visual viewport, а нижние overlay-слои компенсируют gap отрицательным bottom.",
+    ],
+  },
+  {
     version: "0.1.839",
     date: "2026-06-03",
     improved: [

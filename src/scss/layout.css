@@ -329,7 +329,7 @@ body.has-right-col .right-col {
   padding: var(--composer-pad-y) var(--chat-input-padding);
   --composer-action-gap: calc(var(--composer-gap) * var(--phi-inv));
   --composer-action-size: var(--composer-icon-btn-size);
-  /* Avoid a double iOS/PWA chin reserve: the app frame already owns the physical bottom. */
+  /* Mobile overrides may extend this bar into the physical iOS/PWA bottom inset. */
   padding-bottom: max(var(--composer-pad-y), var(--app-bottom-live-pad));
   border-top: var(--composer-border-width) solid var(--composer-border-color);
   background: var(--composer-bg);

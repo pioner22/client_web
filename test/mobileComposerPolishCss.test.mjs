@@ -21,6 +21,18 @@ test("mobile composer: iOS override lowers composer closer to the bottom edge", 
   assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?background:\s*var\(--composer-bg\)\s*;/);
 });
 
+test("mobile composer: iOS physical bottom extends the bar into the PWA gap", async () => {
+  const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
+  assert.match(
+    css,
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*calc\(max\(var\(--composer-pad-y\),\s*var\(--safe-bottom-pad\)\)\s*\+\s*var\(--app-layout-gap-bottom,\s*0px\)\)\s*;/
+  );
+  assert.match(
+    css,
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?bottom:\s*calc\(0px\s*-\s*var\(--app-layout-gap-bottom,\s*0px\)\)\s*;/
+  );
+});
+
 test("mobile composer: Android native shell gets stable bars and touch tabs", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /html\.env-os-android\s+\.hdr\s*\{[\s\S]*?min-height:\s*56px\s*;/);
