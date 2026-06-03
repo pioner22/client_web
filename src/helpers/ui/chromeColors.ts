@@ -32,9 +32,9 @@ function readResolvedCssColor(style: CSSStyleDeclaration, name: string): string 
 
 function resolveChromeColor(style: CSSStyleDeclaration): string | null {
   if (document.documentElement.classList.contains("has-auth-pages")) {
-    return readResolvedCssColor(style, "--safe-area-bg") || AUTH_CHROME_COLOR;
+    return readResolvedCssColor(style, "--app-host-canvas-bg") || readResolvedCssColor(style, "--safe-area-bg") || AUTH_CHROME_COLOR;
   }
-  const candidates = ["--app-bg", "--bg", "--sidebar-bg"];
+  const candidates = ["--app-host-canvas-bg", "--safe-area-bg", "--app-bg", "--bg", "--sidebar-bg"];
   for (const name of candidates) {
     const value = readResolvedCssColor(style, name);
     if (value) return value;

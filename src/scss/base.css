@@ -10,6 +10,7 @@
   --safe-bottom-layout-pad: var(--app-bottom-inset);
   --app-frame-bg: var(--app-bg);
   --app-frame-safe-bg: var(--safe-area-bg, var(--app-frame-bg));
+  --app-host-canvas-bg: var(--safe-area-bg, var(--app-frame-bg, var(--app-bg)));
 }
 
 html,
@@ -17,6 +18,7 @@ body {
   height: 100%;
   width: 100%;
   background: var(--app-frame-bg, var(--body-bg, var(--app-bg)));
+  background-color: var(--app-host-canvas-bg, var(--safe-area-bg, var(--app-frame-bg, #eaf5f0)));
   color: var(--app-text);
   margin: 0;
   font-family: var(--font-family);
@@ -56,9 +58,11 @@ body {
 html.has-auth-pages,
 body.has-auth-pages {
   background: var(--surface-color);
+  background-color: var(--surface-color);
   --safe-area-bg: var(--surface-color);
   --app-frame-bg: var(--surface-color);
   --app-frame-safe-bg: var(--surface-color);
+  --app-host-canvas-bg: var(--surface-color);
 }
 
 body.has-auth-pages .hdr,
@@ -80,6 +84,7 @@ button {
 #app {
   /* Ensure the app background covers the whole viewport (including safe-area). */
   background: var(--app-frame-bg, var(--app-bg));
+  background-color: var(--app-host-canvas-bg, var(--safe-area-bg, var(--app-frame-bg, #eaf5f0)));
 
   position: relative;
   z-index: 1;
@@ -122,8 +127,9 @@ button {
 }
 
 #app.app-frame-booting {
-  --app-frame-bg: #0d1117;
-  --app-frame-safe-bg: #0d1117;
+  --app-host-canvas-bg: #eaf5f0;
+  --app-frame-bg: var(--app-host-canvas-bg);
+  --app-frame-safe-bg: var(--app-host-canvas-bg);
 }
 
 /* iOS safe-area: the host app height owns the physical bottom.

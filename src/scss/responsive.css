@@ -8,6 +8,8 @@
     --safe-area-bg: var(--composer-bg);
     --app-frame-bg: var(--app-bg);
     --app-frame-safe-bg: var(--safe-area-bg);
+    --app-host-canvas-bg: var(--safe-area-bg);
+    background-color: var(--app-host-canvas-bg, var(--safe-area-bg));
   }
 
   /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
@@ -23,6 +25,7 @@
     padding: 0;
     overflow: hidden;
     background: var(--app-frame-bg, var(--app-bg));
+    background-color: var(--app-host-canvas-bg, var(--safe-area-bg, var(--app-frame-bg)));
   }
 
   html.app-vv-offset #app {
@@ -71,6 +74,7 @@
   html.sidebar-mobile-open {
     --safe-area-bg: var(--sidebar-bg);
     --app-frame-safe-bg: var(--sidebar-bg);
+    --app-host-canvas-bg: var(--sidebar-bg);
   }
 
   .right-col {

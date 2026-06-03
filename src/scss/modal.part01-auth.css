@@ -1142,6 +1142,7 @@
     --auth-safe-bottom: max(34px, var(--app-bottom-inset));
     --auth-scroll-bottom-space: max(18px, var(--auth-safe-bottom));
     --auth-viewport-min: var(--app-vh, 100dvh);
+    --auth-mobile-canvas-bg: #eaf5f0;
     --auth-mobile-screen-bg: linear-gradient(
       180deg,
       #fbfcfd 0%,
@@ -1151,7 +1152,9 @@
     --safe-area-bg: var(--auth-mobile-screen-bg);
     --app-frame-bg: var(--auth-mobile-screen-bg);
     --app-frame-safe-bg: var(--auth-mobile-screen-bg);
+    --app-host-canvas-bg: var(--auth-mobile-canvas-bg);
     background: var(--auth-mobile-screen-bg);
+    background-color: var(--auth-mobile-canvas-bg);
     height: 100%;
     min-height: 0;
     overflow-x: hidden;
@@ -1168,6 +1171,15 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  html.has-auth-pages body.has-auth-pages {
+    --safe-area-bg: var(--auth-mobile-screen-bg);
+    --app-frame-bg: var(--auth-mobile-screen-bg);
+    --app-frame-safe-bg: var(--auth-mobile-screen-bg);
+    --app-host-canvas-bg: var(--auth-mobile-canvas-bg);
+    background: var(--auth-mobile-screen-bg);
+    background-color: var(--auth-mobile-canvas-bg);
+  }
+
   html.has-auth-pages #app {
     --app-frame-bg: var(--auth-mobile-screen-bg);
     --app-frame-safe-bg: var(--auth-mobile-screen-bg);
@@ -1175,11 +1187,13 @@
     min-height: 0;
     max-height: var(--auth-viewport-min);
     background: var(--auth-mobile-screen-bg);
+    background-color: var(--auth-mobile-canvas-bg);
     overflow: hidden;
   }
 
   body.has-auth-pages::after {
     background: var(--auth-mobile-screen-bg);
+    background-color: var(--auth-mobile-canvas-bg);
   }
 
   .overlay.overlay-auth {
@@ -1188,6 +1202,7 @@
     height: 100%;
     min-height: 0;
     background: var(--auth-mobile-screen-bg);
+    background-color: var(--auth-mobile-canvas-bg);
     place-items: stretch;
     padding: 0;
     overflow: hidden;
@@ -1210,6 +1225,7 @@
     height: 100%;
     min-height: 0;
     background: var(--auth-mobile-screen-bg);
+    background-color: var(--auth-mobile-canvas-bg);
     overflow: hidden;
   }
 

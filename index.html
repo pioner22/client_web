@@ -31,10 +31,12 @@
     <style>
       body {
         margin: 0;
-        --app-frame-bg: #0d1117;
-        --app-frame-safe-bg: #0d1117;
+        --app-host-canvas-bg: #eaf5f0;
+        --app-frame-bg: var(--app-host-canvas-bg);
+        --app-frame-safe-bg: var(--app-host-canvas-bg);
         background: var(--app-frame-bg, var(--body-bg, var(--app-bg, #eaf5f0)));
-        color: var(--app-text, #e6edf3);
+        background-color: var(--app-host-canvas-bg);
+        color: var(--app-text, #18211d);
         font:
           500 16px/1.35 ui-sans-serif,
           system-ui,
@@ -50,7 +52,8 @@
         min-height: 0;
         height: 100dvh;
         overflow: hidden;
-        background: var(--app-frame-bg, #0d1117);
+        background: var(--app-frame-bg, #eaf5f0);
+        background-color: var(--app-host-canvas-bg);
         isolation: isolate;
       }
       .boot {
@@ -60,7 +63,8 @@
         place-content: center;
         padding: 24px;
         text-align: left;
-        background: #0d1117;
+        background: var(--app-frame-bg, #eaf5f0);
+        background-color: var(--app-host-canvas-bg);
         z-index: 2;
         transition: opacity 180ms ease;
         will-change: opacity;
@@ -74,10 +78,10 @@
         display: grid;
         gap: 10px;
         padding: 24px;
-        border: 1px solid rgba(230, 237, 243, 0.14);
+        border: 1px solid rgba(37, 52, 45, 0.12);
         border-radius: 8px;
-        background: #111827;
-        box-shadow: 0 24px 52px rgba(0, 0, 0, 0.32);
+        background: #fbfcfd;
+        box-shadow: 0 24px 52px rgba(35, 48, 41, 0.14);
       }
       .boot-logo {
         width: 48px;
@@ -86,14 +90,14 @@
       }
       .boot-kicker {
         margin-top: 6px;
-        color: #93a4b8;
+        color: #66736d;
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0;
         text-transform: uppercase;
       }
       .boot-brand {
-        color: #f8fafc;
+        color: #18211d;
         font-weight: 800;
         letter-spacing: 0;
         font-size: 24px;
@@ -101,7 +105,7 @@
       }
       .boot-sub {
         min-height: 20px;
-        color: #a8b3c4;
+        color: #66736d;
         font-size: 14px;
         line-height: 1.4;
       }

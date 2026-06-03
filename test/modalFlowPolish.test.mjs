@@ -318,9 +318,11 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-hero\s*{[^}]*display:\s*none;/);
   assert.match(css, /\.auth-entry-update-marker\s*{[^}]*position:\s*absolute;[^}]*bottom:\s*14px;[^}]*letter-spacing:\s*0;/s);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*html\.has-auth-pages,\s*body\.has-auth-pages\s*{[^}]*--auth-safe-bottom:\s*max\(34px,\s*var\(--app-bottom-inset\)\);[^}]*--auth-viewport-min:\s*var\(--app-vh,\s*100dvh\);[^}]*--app-frame-bg:\s*var\(--auth-mobile-screen-bg\);[^}]*background:\s*var\(--auth-mobile-screen-bg\);[^}]*overflow-y:\s*hidden;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*html\.has-auth-pages,\s*body\.has-auth-pages\s*{[^}]*--auth-mobile-canvas-bg:\s*#eaf5f0;[^}]*--app-host-canvas-bg:\s*var\(--auth-mobile-canvas-bg\);[^}]*background-color:\s*var\(--auth-mobile-canvas-bg\);/);
+  assert.match(css, /html\.has-auth-pages\s+body\.has-auth-pages\s*{[^}]*--app-host-canvas-bg:\s*var\(--auth-mobile-canvas-bg\);[^}]*background-color:\s*var\(--auth-mobile-canvas-bg\);/s);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*html\.is-ios\.has-auth-pages\s*{[^}]*position:\s*fixed;[^}]*inset:\s*0;/);
   assert.doesNotMatch(css, /html\.is-ios\.has-auth-pages\s*{[^}]*position:\s*static;/s);
-  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*html\.has-auth-pages\s+#app\s*{[^}]*height:\s*var\(--auth-viewport-min\);[^}]*min-height:\s*0;[^}]*background:\s*var\(--auth-mobile-screen-bg\);[^}]*overflow:\s*hidden;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*html\.has-auth-pages\s+#app\s*{[^}]*height:\s*var\(--auth-viewport-min\);[^}]*min-height:\s*0;[^}]*background:\s*var\(--auth-mobile-screen-bg\);[^}]*background-color:\s*var\(--auth-mobile-canvas-bg\);[^}]*overflow:\s*hidden;/);
   assert.doesNotMatch(css, /html\.has-auth-pages\s+#app\s*{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/s);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*body\.has-auth-pages::after\s*{[^}]*background:\s*var\(--auth-mobile-screen-bg\);/);
   assert.doesNotMatch(css, /body\.has-auth-pages::after\s*{[^}]*display:\s*none;/s);
@@ -390,5 +392,10 @@ test("modal flow polish: CSS and source guards present", async () => {
   const chromeColorsSrc = await readFile(path.resolve("src/helpers/ui/chromeColors.ts"), "utf8");
   assert.match(chromeColorsSrc, /AUTH_CHROME_COLOR\s*=\s*"#eaf5f0"/);
   assert.match(chromeColorsSrc, /classList\.contains\("has-auth-pages"\)/);
+  assert.match(chromeColorsSrc, /readResolvedCssColor\(style,\s*"--app-host-canvas-bg"\)/);
   assert.match(chromeColorsSrc, /readResolvedCssColor\(style,\s*"--safe-area-bg"\)/);
+
+  const sidebarOverlaySrc = await readFile(path.resolve("src/app/features/sidebar/sidebarOverlayFeature.ts"), "utf8");
+  assert.match(sidebarOverlaySrc, /scheduleChromeColorSync/);
+  assert.match(sidebarOverlaySrc, /document\.documentElement\.classList\.toggle\("sidebar-mobile-open",\s*shouldOpen\);[\s\S]*scheduleChromeColorSync\(\);/);
 });

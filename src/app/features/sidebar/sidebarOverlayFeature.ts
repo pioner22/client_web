@@ -4,6 +4,7 @@ import { getActiveConversationTarget, isMainConversationSurface } from "../../..
 import { shouldShowRightPanelOverlay } from "../../../helpers/navigation/rightPanelState";
 import { isChatHostNearBottom, isChatStickyBottomActive } from "../../../helpers/chat/stickyBottom";
 import { normalizeMobileSidebarTab, setMobileSidebarTabValue } from "../../../helpers/sidebar/sidebarState";
+import { scheduleChromeColorSync } from "../../../helpers/ui/chromeColors";
 import type { Store } from "../../../stores/store";
 import type { AppState, MobileSidebarTab } from "../../../stores/types";
 
@@ -193,6 +194,7 @@ export function createSidebarOverlayFeature(deps: SidebarOverlayFeatureDeps): Si
       mobileSidebarOpen = shouldOpen;
       sidebar.classList.toggle("sidebar-mobile-open", shouldOpen);
       document.documentElement.classList.toggle("sidebar-mobile-open", shouldOpen);
+      scheduleChromeColorSync();
       syncNavOverlay();
       if (shouldOpen) {
         markSidebarResetScroll();

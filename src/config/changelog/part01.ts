@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.829",
+    date: "2026-06-03",
+    improved: [
+      "iPhone/PWA: добавлен единый host-canvas фон для html/body/#app, meta theme-color и mobile sidebar/auth states, чтобы rounded-screen низ не наследовал старый тёмный launch canvas.",
+      "PWA shell: initial boot screen переведён на светлый auth-safe canvas с отдельным background-color под градиентом, а manifest description обновлён под корпоративный мессенджер.",
+    ],
+    fixed: [
+      "Исправлен остаточный нижний тёмный обрубок, который не реагировал на CSS pseudo-footer: теперь самый внешний root/PWA canvas получает тот же solid фон, что и текущий auth или sidebar экран.",
+    ],
+  },
+  {
     version: "0.1.828",
     date: "2026-06-03",
     improved: [

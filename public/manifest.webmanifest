@@ -1,7 +1,7 @@
 {
   "name": "Yagodka",
   "short_name": "Yagodka",
-  "description": "Yagodka — мессенджер в терминальном стиле.",
+  "description": "Yagodka — корпоративный мессенджер для команды.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
