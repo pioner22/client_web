@@ -1,4 +1,5 @@
 export interface Layout {
+  root?: HTMLElement;
   headerLeft: HTMLElement;
   headerRight: HTMLElement;
   hotkeys: HTMLElement;

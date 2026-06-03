@@ -6,13 +6,15 @@
   /* One bottom contract: iOS/PWA gap is part of layout, not a detached footer. */
   --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-gap-bottom, 0px));
   --safe-bottom-layout-pad: var(--app-bottom-inset);
+  --app-frame-bg: var(--app-bg);
+  --app-frame-safe-bg: var(--safe-area-bg, var(--app-frame-bg));
 }
 
 html,
 body {
   height: 100%;
   width: 100%;
-  background: var(--body-bg, var(--app-bg));
+  background: var(--app-frame-bg, var(--body-bg, var(--app-bg)));
   color: var(--app-text);
   margin: 0;
   font-family: var(--font-family);
@@ -53,6 +55,8 @@ html.has-auth-pages,
 body.has-auth-pages {
   background: var(--surface-color);
   --safe-area-bg: var(--surface-color);
+  --app-frame-bg: var(--surface-color);
+  --app-frame-safe-bg: var(--surface-color);
 }
 
 body.has-auth-pages .hdr,
@@ -73,7 +77,7 @@ button {
 
 #app {
   /* Ensure the app background covers the whole viewport (including safe-area). */
-  background: var(--app-bg);
+  background: var(--app-frame-bg, var(--app-bg));
 
   position: relative;
   z-index: 1;
@@ -94,6 +98,32 @@ button {
   isolation: isolate;
 }
 
+#app.app-frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--app-bottom-inset);
+  background: var(--app-frame-safe-bg, var(--safe-area-bg, var(--sidebar-bg)));
+  pointer-events: none;
+  z-index: 0;
+}
+
+#app.app-frame > .app {
+  position: relative;
+  z-index: 1;
+}
+
+#app.app-frame > .boot {
+  z-index: 3;
+}
+
+#app.app-frame-booting {
+  --app-frame-bg: #0d1117;
+  --app-frame-safe-bg: #0d1117;
+}
+
 /* iOS safe-area: paint bottom inset so rounded screens don't show black corners. */
 body::after {
   content: "";
@@ -102,7 +132,7 @@ body::after {
   right: 0;
   bottom: 0;
   height: var(--app-bottom-inset);
-  background: var(--safe-area-bg, var(--sidebar-bg));
+  background: var(--app-frame-safe-bg, var(--safe-area-bg, var(--sidebar-bg)));
   pointer-events: none;
   z-index: 0;
 }

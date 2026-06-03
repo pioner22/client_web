@@ -3,6 +3,7 @@ import type { Layout } from "./types";
 
 export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean }): Layout {
   const iosStandalone = Boolean(opts?.iosStandalone);
+  root.classList.add("app-frame");
   const headerLeft = el("div", { class: "hdr-left" });
   const headerRight = el("div", { class: "hdr-right" });
   const hotkeys = el("div", { class: "hotkeys" });
@@ -273,6 +274,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   else root.replaceChildren(app);
 
   return {
+    root,
     headerLeft,
     headerRight,
     hotkeys,

@@ -1148,18 +1148,20 @@
       #f6faf7 42%,
       var(--auth-mobile-bg-mid, #eaf5f0) 100%
     );
-    --safe-area-bg: var(--auth-mobile-bottom-bg, #d8eee8);
+    --safe-area-bg: var(--auth-mobile-screen-bg);
+    --app-frame-bg: var(--auth-mobile-screen-bg);
+    --app-frame-safe-bg: var(--auth-mobile-screen-bg);
     background: var(--auth-mobile-screen-bg);
-    min-height: 100vh;
-    min-height: var(--auth-viewport-min);
+    height: 100%;
+    min-height: 0;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: hidden;
     overscroll-behavior-y: none;
   }
 
   html.is-ios.has-auth-pages {
-    position: static;
-    inset: auto;
+    position: fixed;
+    inset: 0;
   }
 
   body.has-auth-pages {
@@ -1167,34 +1169,34 @@
   }
 
   html.has-auth-pages #app {
-    height: auto;
-    min-height: 100vh;
-    min-height: var(--auth-viewport-min);
+    height: var(--auth-viewport-min);
+    min-height: 0;
+    max-height: var(--auth-viewport-min);
     background: var(--auth-mobile-screen-bg);
-    overflow: visible;
+    overflow: hidden;
   }
 
   body.has-auth-pages::after {
-    display: none;
     background: var(--auth-mobile-screen-bg);
   }
 
   .overlay.overlay-auth {
-    min-height: 100vh;
-    min-height: var(--auth-viewport-min);
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    min-height: 0;
     background: var(--auth-mobile-screen-bg);
     place-items: stretch;
     padding: 0;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .overlay.overlay-auth:not(.hidden) > .modal {
     width: 100%;
-    height: auto;
-    min-height: 100vh;
-    min-height: var(--auth-viewport-min);
+    height: 100%;
+    min-height: 0;
     max-height: none;
-    overflow: visible;
+    overflow: hidden;
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -1203,11 +1205,10 @@
   }
 
   #auth-pages.auth-entry-page {
-    height: auto;
-    min-height: 100vh;
-    min-height: var(--auth-viewport-min);
+    height: 100%;
+    min-height: 0;
     background: var(--auth-mobile-screen-bg);
-    overflow: visible;
+    overflow: hidden;
   }
 
   #auth-pages.auth-entry-page::before {
@@ -1223,16 +1224,17 @@
     z-index: 1;
     display: flex;
     flex-direction: column;
-    height: auto;
-    min-height: 100vh;
-    min-height: var(--auth-viewport-min);
+    height: 100%;
+    min-height: 0;
     align-items: center;
     justify-content: stretch;
     padding: 0 18px var(--auth-scroll-bottom-space);
-    overflow: visible;
+    overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-gutter: auto;
     scroll-padding-bottom: var(--auth-scroll-bottom-space);
     touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 
   .auth-entry-update-marker {

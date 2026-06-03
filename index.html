@@ -17,7 +17,7 @@
     <title>Yagodka</title>
   </head>
   <body>
-    <div id="app">
+    <div id="app" class="app-frame app-frame-booting">
       <div class="boot" aria-live="polite">
         <div class="boot-frame">
           <img class="boot-logo" src="./icons/icon.svg" alt="" />
@@ -31,7 +31,9 @@
     <style>
       body {
         margin: 0;
-        background: var(--body-bg, var(--app-bg, #eaf5f0));
+        --app-frame-bg: #0d1117;
+        --app-frame-safe-bg: #0d1117;
+        background: var(--app-frame-bg, var(--body-bg, var(--app-bg, #eaf5f0)));
         color: var(--app-text, #e6edf3);
         font:
           500 16px/1.35 ui-sans-serif,
@@ -43,8 +45,13 @@
           sans-serif;
       }
       #app {
-        position: relative;
-        min-height: 100dvh;
+        position: fixed;
+        inset: 0;
+        min-height: 0;
+        height: 100dvh;
+        overflow: hidden;
+        background: var(--app-frame-bg, #0d1117);
+        isolation: isolate;
       }
       .boot {
         position: absolute;
@@ -54,6 +61,7 @@
         padding: 24px;
         text-align: left;
         background: #0d1117;
+        z-index: 2;
         transition: opacity 180ms ease;
         will-change: opacity;
       }

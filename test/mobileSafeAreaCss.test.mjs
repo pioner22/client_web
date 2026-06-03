@@ -9,8 +9,11 @@ test("mobile safe-area: mobile fullscreen overrides win against skins", async ()
   assert.match(css, /#app\s*\{[\s\S]*?--app-outer-pad:\s*0px;/);
   assert.match(css, /#app\s*\{[\s\S]*?position:\s*fixed;/);
   assert.match(css, /#app\s*\{[\s\S]*?inset:\s*0\s*;/);
+  assert.match(css, /#app\s*\{[\s\S]*?height:\s*var\(--app-vh\)\s*;/);
+  assert.match(css, /#app\s*\{[\s\S]*?overflow:\s*hidden\s*;/);
   assert.match(css, /app-vv-offset\s+#app\s*\{[\s\S]*?top:\s*var\(--app-vv-top,\s*0px\)\s*;/);
   assert.match(css, /app-vv-offset\s+#app\s*\{[\s\S]*?bottom:\s*var\(--app-vv-bottom,\s*0px\)\s*;/);
+  assert.match(css, /app-vv-offset\s+#app\s*\{[\s\S]*?height:\s*auto\s*;/);
   assert.match(css, /#app\s*>\s*\.app\s*\{[\s\S]*?--app-row-footer:\s*auto;/);
 });
 
@@ -25,6 +28,8 @@ test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () =
   assert.match(css, /--safe-bottom-pad:\s*clamp\(\s*0px\s*,\s*env\(safe-area-inset-bottom\)\s*,\s*44px\s*\)\s*;/);
   assert.match(css, /--app-bottom-inset:\s*max\(var\(--safe-bottom-pad\),\s*var\(--app-gap-bottom,\s*0px\)\)\s*;/);
   assert.match(css, /--safe-bottom-layout-pad:\s*var\(--app-bottom-inset\)\s*;/);
+  assert.match(css, /--app-frame-bg:\s*var\(--app-bg\)\s*;/);
+  assert.match(css, /#app\.app-frame::after\s*\{[\s\S]*?background:\s*var\(--app-frame-safe-bg,/);
   assert.doesNotMatch(css, /--safe-bottom-layout-pad:\s*max\(0px,\s*calc\(var\(--safe-bottom-pad\)\s*-\s*var\(--app-gap-bottom/);
 });
 

@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.825",
+    date: "2026-06-03",
+    improved: [
+      "Web/PWA mobile shell переведён на единый app-frame: boot, auth и основной мессенджер теперь живут внутри одного владельца viewport/background/safe-area.",
+    ],
+    fixed: [
+      "Исправлен плавающий нижний дефект после входа/перезахода: auth больше не отключает fixed iOS frame, loading не оставляет самостоятельный тёмный низ, а auth scroll остаётся внутренним слоем приложения.",
+    ],
+  },
+  {
     version: "0.1.824",
     date: "2026-06-03",
     improved: [

@@ -6,15 +6,23 @@
   /* iOS safe-area strip (home indicator zone): match composer bar by default. */
   html {
     --safe-area-bg: var(--composer-bg);
+    --app-frame-bg: var(--app-bg);
+    --app-frame-safe-bg: var(--safe-area-bg);
   }
 
   /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
   html #app {
     --app-outer-pad: 0px;
+    position: fixed;
+    inset: 0;
     width: 100%;
-    min-height: var(--app-vh);
+    height: var(--app-vh);
+    min-height: 0;
+    max-height: var(--app-vh);
     overscroll-behavior: none;
     padding: 0;
+    overflow: hidden;
+    background: var(--app-frame-bg, var(--app-bg));
   }
 
   html.app-vv-offset #app {
@@ -26,6 +34,7 @@
     bottom: var(--app-vv-bottom, 0px);
     height: auto;
     min-height: 0;
+    max-height: none;
   }
 
   html #app > .app {
@@ -41,6 +50,8 @@
     border-radius: 0;
     box-shadow: none;
     overflow: hidden;
+    height: 100%;
+    min-height: 0;
   }
 
   :root[data-skin] {
@@ -59,6 +70,7 @@
 
   html.sidebar-mobile-open {
     --safe-area-bg: var(--sidebar-bg);
+    --app-frame-safe-bg: var(--sidebar-bg);
   }
 
   .right-col {

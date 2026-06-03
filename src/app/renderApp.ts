@@ -398,6 +398,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     document.body.classList.toggle("has-right-col", showRightPanel);
     document.body.classList.toggle("has-auth-pages", fullScreenActive);
     document.documentElement.classList.toggle("has-auth-pages", fullScreenActive);
+    layout.root?.classList.toggle("app-frame-auth", fullScreenActive);
+    layout.root?.classList.toggle("app-frame-main", !fullScreenActive);
     scheduleChromeColorSync();
   }
   layout.rightCol.classList.toggle("hidden", !showRightPanel);
