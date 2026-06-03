@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.841",
+    date: "2026-06-03",
+    improved: [
+      "Boot-layer теперь сам распознаёт stale PWA shell: если cached index ещё старой версии, а live `sw.js` уже новый, запуск не отдаёт пользователю старую визуальную сборку.",
+      "При рассинхроне build id ранний `boot.js` сбрасывает Yagodka Service Worker/cache и перезапускает приложение через чистый `__boot_recover` до проверки нижнего iOS/PWA слоя.",
+    ],
+    fixed: [
+      "Исправлен сценарий, когда после production deploy устройство продолжало показывать Web 0.1.839 и из-за этого новые safe-area правки 0.1.840 невозможно было увидеть на скриншотах.",
+      "Обновление визуальных hotfix-сборок больше не зависит только от фонового auto-apply внутри старого app runtime, который мог ждать фокуса/idle и оставлять пользователя на старом CSS.",
+    ],
+  },
+  {
     version: "0.1.840",
     date: "2026-06-03",
     improved: [

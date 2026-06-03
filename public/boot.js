@@ -11,6 +11,7 @@
   var RECOVERY_CLASS = "boot-recovery";
   var LEGACY_UPDATE_TEXT_RE = /Обновляем приложение[\s\S]{0,240}Сбрасываем старый кэш приложения перед запуском новой версии/i;
   var LEGACY_UPDATE_CLASS_RE = /(?:^|\s)required-update-gate(?:\s|$)/;
+  var STALE_BOOT_BUILD_RE = /^(\d+\.\d+\.\d+)(?:-([a-f0-9]{12}))?$/i;
 
   var statusEl = document.getElementById("boot-status");
   var versionEl = document.getElementById("boot-version");
@@ -44,6 +45,50 @@
       if (fromMeta) return "Web " + fromMeta;
     } catch {}
     return "";
+  }
+
+  function readCurrentBuildId() {
+    try {
+      var meta = document.querySelector('meta[name="yagodka-build-id"]');
+      var fromMeta = meta && meta.getAttribute ? String(meta.getAttribute("content") || "").trim() : "";
+      if (fromMeta) return fromMeta;
+      var fromData = versionEl && versionEl.getAttribute ? String(versionEl.getAttribute("data-build-version") || "").trim() : "";
+      if (fromData) return fromData;
+      var fromText = versionEl && versionEl.textContent ? String(versionEl.textContent).trim() : "";
+      var match = fromText.match(/\b(\d+\.\d+\.\d+(?:-[a-f0-9]{12})?)\b/i);
+      return match ? String(match[1] || "").trim() : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function splitBuildId(id) {
+    var raw = String(id || "").trim();
+    var match = raw.match(STALE_BOOT_BUILD_RE);
+    if (!match) return { version: "", build: "" };
+    return { version: String(match[1] || "").trim(), build: String(match[2] || "").trim().toLowerCase() };
+  }
+
+  function isStaleBuild(currentId, liveId) {
+    var current = splitBuildId(currentId);
+    var live = splitBuildId(liveId);
+    if (!current.version || !live.version) return false;
+    if (current.version !== live.version) return true;
+    if (current.build && live.build && current.build !== live.build) return true;
+    return false;
+  }
+
+  async function fetchLiveBuildId() {
+    if (typeof fetch !== "function") return "";
+    try {
+      var res = await fetch("./sw.js?boot_ts=" + Date.now(), { cache: "no-store" });
+      if (!res || !res.ok) return "";
+      var text = await res.text();
+      var match = String(text || "").match(/\bBUILD_ID\s*=\s*["']([^"']+)["']/);
+      return match ? String(match[1] || "").trim() : "";
+    } catch {
+      return "";
+    }
   }
 
   function cleanUrl(paramName) {
@@ -249,6 +294,39 @@
     navigateClean("__boot_recover");
   }
 
+  async function recoverStaleBootBuild() {
+    var currentBuildId = readCurrentBuildId();
+    if (!currentBuildId) return false;
+    var liveBuildId = await fetchLiveBuildId();
+    if (!isStaleBuild(currentBuildId, liveBuildId)) return false;
+    requiresBootEvent = true;
+    setStatus("Обновляем Web " + liveBuildId + "…");
+    try {
+      sessionStorage.setItem(UPDATING_KEY, "1");
+    } catch {}
+    try {
+      localStorage.removeItem("yagodka_active_build_id_v1");
+    } catch {}
+    try {
+      if ("serviceWorker" in navigator) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(function (r) { return r.unregister(); }));
+      }
+    } catch {}
+    try {
+      if ("caches" in window) {
+        var keys = await caches.keys();
+        var dels = keys
+          .filter(function (k) { return String(k || "").indexOf("yagodka-") === 0; })
+          .map(function (k) { return caches.delete(k); });
+        await Promise.all(dels);
+      }
+    } catch {}
+    if (!allowReload()) return true;
+    navigateClean("__boot_recover");
+    return true;
+  }
+
   try {
     var force = sessionStorage.getItem(FORCE_RECOVER_KEY) === "1";
     var updating = sessionStorage.getItem(UPDATING_KEY) === "1";
@@ -272,6 +350,8 @@
       return;
     }
   } catch {}
+
+  void recoverStaleBootBuild();
 
   if (root && "MutationObserver" in window) {
     var mo = new MutationObserver(function () {
