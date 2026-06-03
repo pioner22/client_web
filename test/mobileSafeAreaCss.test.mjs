@@ -63,3 +63,12 @@ test("mobile safe-area: iOS standalone physical bottom stays inside fixed app fr
   assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?max-height:\s*var\(--app-vh\);/);
   assert.doesNotMatch(css, /bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill/);
 });
+
+test("mobile safe-area: default skin preserves the shared iOS composer inset", async () => {
+  const skinCss = await readFile(path.resolve("public/skins/yagodka-modern.css"), "utf8");
+  assert.match(
+    skinCss,
+    /html\.is-ios\[data-skin="yagodka-modern"\]\s+\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*var\(--composer-bottom-edge-pad,\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-inset\)\)\)\s*;/
+  );
+  assert.doesNotMatch(skinCss, /html\.is-ios\[data-skin="yagodka-modern"\]\s+\.input-wrap\s*\{[\s\S]*env\(safe-area-inset-bottom\)/);
+});

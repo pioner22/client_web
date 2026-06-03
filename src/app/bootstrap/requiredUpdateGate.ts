@@ -23,6 +23,7 @@ const UPDATE_GATE_MAX_TOTAL_RELOADS = UPDATE_GATE_MAX_DIRECT_RELOADS + UPDATE_GA
 const UPDATE_GATE_GUARD_TTL_MS = 10 * 60 * 1000;
 const UPDATE_GATE_BYPASS_TTL_MS = 10 * 60 * 1000;
 const UPDATE_GATE_FETCH_TIMEOUT_MS = 2500;
+const UPDATE_GATE_CONTINUE_DELAY_MS = 900;
 const UPDATE_GATE_SW_TIMEOUT_MS = 3500;
 const UPDATE_GATE_STEPS = [
   { id: "version", label: "Проверяем версию" },
@@ -206,6 +207,12 @@ function stepStatus(stepId: UpdateGateStepId, activeStep: UpdateGateStepId, erro
 
 function setGateStatus(root: HTMLElement, status: UpdateGateStatus): void {
   try {
+    try {
+      document.documentElement.classList.add("required-update-active");
+      document.body?.classList?.add("required-update-active");
+    } catch {
+      // ignore
+    }
     root.replaceChildren();
     const shell = document.createElement("main");
     shell.className = `required-update-gate required-update-gate--${status.mode || "running"}`;
@@ -277,6 +284,12 @@ function setGateStatus(root: HTMLElement, status: UpdateGateStatus): void {
 
 function clearGateRoot(root: HTMLElement): void {
   try {
+    try {
+      document.documentElement.classList.remove("required-update-active");
+      document.body?.classList?.remove("required-update-active");
+    } catch {
+      // ignore
+    }
     root.replaceChildren();
   } catch {
     // ignore
@@ -407,6 +420,36 @@ function setGateBypassed(root: HTMLElement): void {
     progress: 100,
     mode: "success",
   });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      window.setTimeout(resolve, Math.max(0, ms));
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: number | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = window.setTimeout(() => resolve(fallback), Math.max(0, ms));
+      }),
+    ]);
+  } finally {
+    if (timer !== null) {
+      try {
+        window.clearTimeout(timer);
+      } catch {
+        // ignore
+      }
+    }
+  }
 }
 
 async function fetchLiveBuildId(timeoutMs = UPDATE_GATE_FETCH_TIMEOUT_MS): Promise<string> {
@@ -550,7 +593,7 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
   }
 
   setGateChecking(root);
-  const liveBuildId = await fetchLiveBuildId();
+  const liveBuildId = await withTimeout(fetchLiveBuildId(), UPDATE_GATE_FETCH_TIMEOUT_MS + 500, "");
   if (!liveBuildId) {
     clearGateRoot(root);
     return { blocked: false, liveBuildId: "", reason: typeof fetch === "function" ? "fetch_failed" : "no_live_build" };
@@ -580,7 +623,11 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
   const guard = markAttempt(liveBuildId);
   if (guard.tries > UPDATE_GATE_MAX_TOTAL_RELOADS) {
     setGateFallback(root, liveBuildId);
-    return { blocked: true, liveBuildId, reason: "reload_failed" };
+    writeBypass(liveBuildId);
+    await delay(UPDATE_GATE_CONTINUE_DELAY_MS);
+    cleanupUpdateQueryParams();
+    clearGateRoot(root);
+    return { blocked: false, liveBuildId, reason: "reload_failed" };
   }
 
   if (guard.tries > UPDATE_GATE_MAX_DIRECT_RELOADS) {

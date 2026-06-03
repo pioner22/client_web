@@ -893,10 +893,15 @@ self.addEventListener("fetch", (event) => {
 
   if (req.method !== "GET") return;
 
-  // App shell: отдаём index.html из кэша, чтобы не смешивать версии index+assets.
+  // App shell: prefer network so old installed clients can escape a stale cached index.
+  // If network is unavailable, fall back to the version-consistent cached shell.
   if (isNavigationRequest(req)) {
     event.respondWith(
       (async () => {
+        try {
+          const fresh = await fetch(req);
+          if (fresh && fresh.ok) return fresh;
+        } catch {}
         try {
           const cache = await caches.open(CACHE);
           const cachedIndex = await cache.match("./index.html");

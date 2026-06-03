@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.832",
+    date: "2026-06-03",
+    improved: [
+      "Экран проверки обновлений Web/PWA переработан на контрастную поверхность: текст, шаги, progress и кнопки больше не зависят от текущей темы и не сливаются с фоном на телефоне или desktop.",
+      "Публичные клиенты сайта перепривязаны к свежей поставке: Android debug APK получил новый versionCode/versionName, а web deploy сохраняет старые hashed assets для безопасного выхода старых клиентов из обновления.",
+    ],
+    fixed: [
+      "Исправлен deadlock старых Web/PWA клиентов: проверка live build теперь имеет жёсткий timeout, после исчерпания попыток запускает текущий bundle вместо вечного экрана обновления, а boot.js показывает ранний recovery screen с действиями.",
+      "Service Worker navigation теперь сначала пробует сеть и только затем cached shell, чтобы установленный клиент мог уйти со старого index.html после production deploy.",
+      "Исправлен нижний обрез основного мессенджера на iPhone/PWA: дефолтный skin больше не перебивает общий `--app-bottom-inset` сырым `env(safe-area-inset-bottom)`, поэтому composer и sidebar используют тот же rounded-screen gap, что и app-frame.",
+    ],
+  },
+  {
     version: "0.1.831",
     date: "2026-06-03",
     improved: [

@@ -1317,7 +1317,7 @@ html[data-skin="yagodka-modern"] .viewer-pdf-fallback {
 }
 
 html.is-ios[data-skin="yagodka-modern"] .input-wrap {
-  padding-bottom: max(var(--composer-pad-y), calc(env(safe-area-inset-bottom) + 6px));
+  padding-bottom: var(--composer-bottom-edge-pad, max(var(--composer-pad-y), var(--app-bottom-inset)));
 }
 
 html.is-ios.kbd-open[data-skin="yagodka-modern"] .input-wrap {

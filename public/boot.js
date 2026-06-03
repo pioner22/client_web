@@ -8,6 +8,7 @@
   var LOOP_KEY = "yagodka_boot_loop_v1";
   var LOOP_RESET_MS = 2 * 60 * 1000;
   var LOOP_MAX = 3;
+  var RECOVERY_CLASS = "boot-recovery";
 
   var statusEl = document.getElementById("boot-status");
   var root = document.getElementById("app");
@@ -19,6 +20,81 @@
     try {
       if (statusEl) statusEl.textContent = text;
     } catch {}
+  }
+
+  function cleanUrl(paramName) {
+    try {
+      var url = new URL(window.location.href);
+      url.searchParams.delete("__yg_update");
+      url.searchParams.delete("__pwa_reset");
+      url.searchParams.delete("__yg_continue");
+      url.searchParams.delete("__boot_recover");
+      if (paramName) url.searchParams.set(paramName, String(Date.now()));
+      return url.toString();
+    } catch {
+      return window.location.href;
+    }
+  }
+
+  function navigateClean(paramName) {
+    var url = cleanUrl(paramName);
+    try {
+      window.location.replace(url);
+      return;
+    } catch {}
+    try {
+      window.location.href = url;
+    } catch {}
+  }
+
+  function renderRecoveryScreen() {
+    if (!root) return;
+    try {
+      root.innerHTML =
+        '<main class="' +
+        RECOVERY_CLASS +
+        '" role="status" aria-live="polite">' +
+        '<div class="boot-recovery__mark" aria-hidden="true">!</div>' +
+        '<h1 class="boot-recovery__title">Не удалось завершить обновление</h1>' +
+        '<p class="boot-recovery__text">Автоматический перезапуск остановлен. Откройте приложение сейчас или повторите очистку кэша.</p>' +
+        '<div class="boot-recovery__actions">' +
+        '<button class="boot-recovery__button boot-recovery__button--primary" type="button" data-boot-action="open">Открыть приложение</button>' +
+        '<button class="boot-recovery__button" type="button" data-boot-action="retry">Повторить обновление</button>' +
+        "</div>" +
+        "</main>";
+      var style = document.createElement("style");
+      style.textContent =
+        "html,body,#app{background:#f7fafc!important;background-color:#f7fafc!important}" +
+        ".boot-recovery{box-sizing:border-box;min-height:100%;min-height:100dvh;display:grid;align-content:center;justify-content:center;gap:14px;padding:28px;color:#14211b;background:linear-gradient(180deg,#fff,#eef6f2),#f7fafc;font:600 16px/1.35 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}" +
+        ".boot-recovery__mark{display:grid;place-items:center;width:48px;height:48px;border-radius:999px;background:#b4232d;color:#fff;font-size:26px;font-weight:900;box-shadow:0 0 0 6px rgba(180,35,45,.14)}" +
+        ".boot-recovery__title{width:min(440px,calc(100vw - 56px));margin:0;color:#14211b;font-size:24px;line-height:1.18;font-weight:850;letter-spacing:0}" +
+        ".boot-recovery__text{width:min(440px,calc(100vw - 56px));margin:0;color:#44534d;font-size:15px;line-height:1.45;font-weight:600}" +
+        ".boot-recovery__actions{width:min(440px,calc(100vw - 56px));display:flex;flex-wrap:wrap;gap:10px;margin-top:4px}" +
+        ".boot-recovery__button{min-height:46px;border:1px solid #b9c8c1;border-radius:14px;background:#fff;color:#14211b;padding:0 16px;font:800 15px/1 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}" +
+        ".boot-recovery__button--primary{border-color:#1877f2;background:#1877f2;color:#fff}";
+      document.head && document.head.appendChild(style);
+      root.addEventListener(
+        "click",
+        function (ev) {
+          var target = ev && ev.target;
+          var action = target && target.getAttribute ? target.getAttribute("data-boot-action") : "";
+          if (action === "open") {
+            clearBootFlags();
+            navigateClean("__boot_recover");
+          }
+          if (action === "retry") {
+            try {
+              sessionStorage.removeItem(RECOVER_KEY);
+              localStorage.removeItem(LOOP_KEY);
+            } catch {}
+            void recover(true);
+          }
+        },
+        { once: false }
+      );
+    } catch {
+      setStatus("Не удалось завершить обновление. Откройте приложение или повторите обновление.");
+    }
   }
 
   function hasBooted() {
@@ -74,21 +150,23 @@
       loopBlocked = true;
       clearBootFlags();
       setStatus("Слишком много перезапусков. Обновите страницу или переустановите приложение.");
+      renderRecoveryScreen();
       return false;
     }
     bumpLoopState();
     return true;
   }
 
-  async function recover() {
+  async function recover(force) {
     if (hasBooted()) return;
     var alreadyTried = false;
     try {
       alreadyTried = sessionStorage.getItem(RECOVER_KEY) === "1";
     } catch {}
 
-    if (alreadyTried) {
+    if (alreadyTried && !force) {
       setStatus("Не удалось запустить приложение. Обновите страницу или перезапустите приложение.");
+      renderRecoveryScreen();
       return;
     }
 
@@ -109,18 +187,14 @@
       if ("caches" in window) {
         var keys = await caches.keys();
         var dels = keys
-          .filter(function (k) { return String(k || "").indexOf("yagodka-web-cache-") === 0; })
+          .filter(function (k) { return String(k || "").indexOf("yagodka-") === 0; })
           .map(function (k) { return caches.delete(k); });
         await Promise.all(dels);
       }
     } catch {}
 
     if (!allowReload()) return;
-    try {
-      window.location.reload();
-    } catch {
-      window.location.href = window.location.href;
-    }
+    navigateClean("__boot_recover");
   }
 
   try {

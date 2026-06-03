@@ -227,7 +227,13 @@ test("requiredUpdateGate: stops automatic reload loop after finite attempts", as
             replaced.push("reload");
           },
         },
-        setTimeout: globalThis.setTimeout.bind(globalThis),
+        setTimeout(fn, ms) {
+          if (Number(ms) === 900) {
+            fn();
+            return 1;
+          }
+          return globalThis.setTimeout(fn, ms);
+        },
         clearTimeout: globalThis.clearTimeout.bind(globalThis),
       },
       configurable: true,
@@ -241,13 +247,52 @@ test("requiredUpdateGate: stops automatic reload loop after finite attempts", as
 
     const root = makeElement("div");
     const result = await gate.runRequiredUpdateGate(root);
-    assert.equal(result.blocked, true);
+    assert.equal(result.blocked, false);
     assert.equal(result.reason, "reload_failed");
     assert.equal(replaced.length, 0);
-    assert.equal(root.children.length, 1);
-    assert.match(collectText(root), /Обновление не завершилось/);
-    assert.match(collectText(root), /Открыть приложение/);
-    assert.match(collectText(root), /Повторить обновление/);
+    assert.equal(root.children.length, 0);
+    assert.match(sessionStorage.getItem("yagodka_required_update_gate_bypass_v1"), /0\.1\.810-abcdef123456/);
+  });
+  await gate.cleanup();
+});
+
+test("requiredUpdateGate: hard timeout opens app when live build probe hangs", async () => {
+  const gate = await loadGate("0.1.810");
+  await withBrowserStubs(async () => {
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        localStorage,
+        sessionStorage,
+        location: { href: "https://yagodka.org/web/" },
+        setTimeout(fn) {
+          fn();
+          return 1;
+        },
+        clearTimeout() {},
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: {
+        createElement: makeElement,
+        documentElement: { classList: { add() {}, remove() {} } },
+        body: { classList: { add() {}, remove() {} } },
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+    globalThis.fetch = async () => new Promise(() => {});
+
+    const root = makeElement("div");
+    const result = await gate.runRequiredUpdateGate(root);
+    assert.deepEqual(result, { blocked: false, liveBuildId: "", reason: "fetch_failed" });
+    assert.equal(root.children.length, 0);
   });
   await gate.cleanup();
 });
@@ -351,10 +396,29 @@ test("requiredUpdateGate: index waits for the gate before importing mountApp", a
 
 test("requiredUpdateGate: update surface has animated taskbar and finite fallback controls", async () => {
   const css = await readFile(path.resolve("src/scss/service-surfaces.css"), "utf8");
+  assert.match(css, /--required-update-text:\s*#14211b/);
+  assert.match(css, /--required-update-bg:\s*#f7fafc/);
+  assert.match(css, /html\.required-update-active/);
   assert.match(css, /\.required-update-gate__taskbar/);
   assert.match(css, /\.required-update-gate__steps/);
   assert.match(css, /\.required-update-gate__step--active::before/);
+  assert.match(css, /color:\s*var\(--required-update-pending\)/);
+  assert.match(css, /background:\s*#dce6e1/);
   assert.match(css, /@keyframes\s+required-update-spin/);
   assert.match(css, /@keyframes\s+required-update-bar/);
   assert.match(css, /\.required-update-gate--failed\s+\.required-update-gate__spinner/);
+});
+
+test("requiredUpdateGate: boot and service worker recovery are early and bounded", async () => {
+  const boot = await readFile(path.resolve("public/boot.js"), "utf8");
+  assert.match(boot, /boot-recovery/);
+  assert.match(boot, /Открыть приложение/);
+  assert.match(boot, /Повторить обновление/);
+  assert.match(boot, /__boot_recover/);
+  assert.match(boot, /indexOf\("yagodka-"\)/);
+
+  const swBuilder = await readFile(path.resolve("scripts/build_pwa.mjs"), "utf8");
+  assert.match(swBuilder, /prefer network so old installed clients can escape a stale cached index/);
+  assert.match(swBuilder, /const fresh = await fetch\(req\)/);
+  assert.match(swBuilder, /cachedIndex/);
 });
