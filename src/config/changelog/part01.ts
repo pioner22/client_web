@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.822",
+    date: "2026-06-03",
+    improved: [
+      "Мобильный экран авторизации Web/PWA получил видимую нижнюю safe-area зону и аккуратный marker `Обновлено 0.1.822`, чтобы на телефоне было понятно, что открыт новый экран.",
+    ],
+    fixed: [
+      "Низ auth screen теперь закрывается отдельным светлым continuation-band вместо незаметной theme-only правки: чёрный обрубок на iPhone/PWA должен визуально исчезнуть и быть проверяемым по скриншоту.",
+    ],
+  },
+  {
     version: "0.1.821",
     date: "2026-06-03",
     improved: [

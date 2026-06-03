@@ -2,6 +2,7 @@ import { el } from "../../helpers/dom/el";
 import { canUseDesktopBiometricUnlock } from "../../helpers/auth/session";
 import { applyLegacyIdMask } from "../../helpers/id/legacyIdMask";
 import { focusElement } from "../../helpers/ui/focus";
+import { APP_VERSION } from "../../config/app";
 import type { AuthMode, ConnStatus, SkinInfo } from "../../stores/types";
 
 export interface AuthModalActions {
@@ -193,6 +194,12 @@ export function renderAuthModal(
   const root = el("div", { id: "auth-pages", class: `auth-entry-page auth-entry-${mode}` });
   const scrollable = el("div", { class: "scrollable auth-entry-scroll" });
   const layout = el("div", { class: `container modal-auth auth-entry-layout ${mode === "register" ? "page-signUp" : "page-sign"}` });
+  const updateMarkerText = `Обновлено ${APP_VERSION}`;
+  const updateMarker = el(
+    "div",
+    { class: "auth-entry-update-marker", "aria-label": `Экран авторизации обновлён ${APP_VERSION}` },
+    [updateMarkerText]
+  );
   const btnClose = el("button", { class: "btn auth-close", type: "button", title: "Закрыть", "aria-label": "Закрыть" }, [
     "×",
   ]) as HTMLButtonElement;
@@ -390,7 +397,7 @@ export function renderAuthModal(
     el("div", { class: "modal-warn auth-entry-warn-reserved", "aria-hidden": "true" })
   );
   layout.append(hero, panel);
-  scrollable.append(layout);
+  scrollable.append(layout, updateMarker);
   root.append(scrollable);
 
   tabRegister.addEventListener("click", () => actions.onModeChange("register"));
