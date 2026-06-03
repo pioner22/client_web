@@ -1340,10 +1340,10 @@
     height: 100%;
     display: grid;
     grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto;
-    align-content: stretch;
+    align-content: start;
     margin: 0 auto;
-    padding: calc(clamp(18px, 4vh, 38px) + env(safe-area-inset-top)) 0 calc(42px + var(--auth-safe-bottom));
-    gap: 9px;
+    padding: calc(clamp(12px, 2.4vh, 28px) + env(safe-area-inset-top)) 0 calc(42px + var(--auth-safe-bottom));
+    gap: 8px;
     border: 0;
     border-radius: 0;
     box-shadow: none;
@@ -1353,7 +1353,7 @@
 
   .auth-panel-top,
   .modal-auth .auth-panel-top {
-    min-height: 92px;
+    min-height: 82px;
     justify-content: center;
     gap: 0;
     padding: 0 44px 4px;
@@ -1365,17 +1365,17 @@
   .auth-entry-panel .auth-brand {
     flex-direction: column;
     justify-content: center;
-    gap: 8px;
+    gap: 7px;
     text-align: center;
   }
 
   .auth-entry-panel .auth-brand-icon {
-    width: 58px;
-    height: 58px;
+    width: 54px;
+    height: 54px;
   }
 
   .auth-entry-panel .auth-brand-text {
-    font-size: 23px;
+    font-size: 22px;
     line-height: 1;
     font-weight: 900;
   }
@@ -1401,7 +1401,7 @@
 
   .auth-panel-heading {
     gap: 6px;
-    min-height: 68px;
+    min-height: 60px;
     padding: 0 4px;
     text-align: center;
     justify-items: center;
@@ -1434,7 +1434,7 @@
   }
 
   .auth-entry-panel .modal-tabs .btn {
-    min-height: 42px;
+    min-height: 40px;
     border-radius: 14px;
     border-color: transparent;
     background: transparent;
@@ -1457,7 +1457,7 @@
     min-height: 202px;
     align-self: start;
     align-content: start;
-    margin-top: clamp(8px, 1.4vh, 16px);
+    margin-top: clamp(4px, 0.8vh, 10px);
   }
 
   .auth-entry-panel .auth-entry-form-auto {
@@ -1465,7 +1465,7 @@
     min-height: 98px;
     align-self: start;
     align-content: start;
-    margin-top: clamp(8px, 1.4vh, 16px);
+    margin-top: clamp(4px, 0.8vh, 10px);
   }
 
   .auth-field-stack {

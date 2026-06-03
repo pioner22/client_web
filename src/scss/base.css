@@ -7,9 +7,9 @@
   --app-gap-bottom: 0px;
   --app-layout-gap-bottom: var(--app-gap-bottom);
   --app-shell-bottom-spill: 0px;
-  /* One bottom contract: app height owns physical bottom; layout can drop it under a real keyboard. */
+  /* One bottom contract: visible layout stays on visual viewport; the host canvas paints the physical bottom. */
   --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-layout-gap-bottom, var(--app-gap-bottom, 0px)));
-  /* Visible bottom controls use a compact live pad so the physical iPhone/PWA chin is occupied by the app layer. */
+  /* Visible bottom controls use a compact live pad so composer/buttons stay inside the visual viewport. */
   --app-bottom-live-pad: clamp(8px, calc(var(--app-bottom-inset) - 22px), 16px);
   --app-frame-bottom-inset: 0px;
   --safe-bottom-layout-pad: var(--app-bottom-live-pad);

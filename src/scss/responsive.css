@@ -34,9 +34,9 @@
 
   html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) #app {
     bottom: auto;
-    height: var(--app-frame-vh, var(--app-vh));
+    height: var(--app-vh);
     min-height: 0;
-    max-height: var(--app-frame-vh, var(--app-vh));
+    max-height: var(--app-vh);
   }
 
   html.app-vv-offset #app {
