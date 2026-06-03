@@ -20,6 +20,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     "data-app-safe-bottom",
     "data-app-vv-bottom",
     "data-app-keyboard",
+    "data-app-shell-spill",
   ];
 
   const isEditableElement = (el: unknown): boolean => {
@@ -240,10 +241,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     if (!height) {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
       if (docEl?.classList) docEl.classList.remove("kbd-open");
+      if (docEl?.classList) docEl.classList.remove("app-shell-physical-bottom");
       setVar("--app-vv-top", null);
       setVar("--app-vv-bottom", null);
       setVar("--app-gap-bottom", null);
       setVar("--app-layout-gap-bottom", null);
+      setVar("--app-shell-bottom-spill", null);
       setVar("--safe-bottom-pad", null);
       setVar("--safe-bottom-raw", null);
       clearDiagnosticAttrs();
@@ -289,8 +292,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     else setVar("--app-vv-bottom", null);
 
     const gap = gapBottom;
+    const shellBottomSpill = iosStandalone && !keyboard ? gap : 0;
     if (gap >= 1) setVar("--app-gap-bottom", `${gap}px`);
     else setVar("--app-gap-bottom", null);
+    if (shellBottomSpill >= 1) setVar("--app-shell-bottom-spill", `${shellBottomSpill}px`);
+    else setVar("--app-shell-bottom-spill", null);
+    if (docEl?.classList) docEl.classList.toggle("app-shell-physical-bottom", shellBottomSpill >= 1);
     if (keyboard) setVar("--app-layout-gap-bottom", "0px");
     else if (layoutGapBottom >= 1) setVar("--app-layout-gap-bottom", `${layoutGapBottom}px`);
     else setVar("--app-layout-gap-bottom", null);
@@ -302,6 +309,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     setDiagnosticAttr("data-app-safe-bottom", `${keyboard ? 0 : Math.max(safeBottomRaw, gapBottom)}`);
     setDiagnosticAttr("data-app-vv-bottom", `${keyboard ? vvBottom : 0}`);
     setDiagnosticAttr("data-app-keyboard", keyboard ? "1" : "0");
+    setDiagnosticAttr("data-app-shell-spill", `${shellBottomSpill}`);
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;
@@ -387,7 +395,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     setVar("--app-vv-bottom", null);
     setVar("--app-gap-bottom", null);
     setVar("--app-layout-gap-bottom", null);
+    setVar("--app-shell-bottom-spill", null);
     clearDiagnosticAttrs();
     if (docEl?.classList) docEl.classList.remove("app-vv-offset");
+    if (docEl?.classList) docEl.classList.remove("app-shell-physical-bottom");
   };
 }

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="app-frame-booting">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover" />
@@ -34,6 +34,7 @@
         --app-host-canvas-bg: #eaf5f0;
         --app-frame-bg: var(--app-host-canvas-bg);
         --app-frame-safe-bg: var(--app-host-canvas-bg);
+        --app-shell-bottom-spill: 0px;
         background: var(--app-frame-bg, var(--body-bg, var(--app-bg, #eaf5f0)));
         background-color: var(--app-host-canvas-bg);
         color: var(--app-text, #18211d);
@@ -46,11 +47,21 @@
           Arial,
           sans-serif;
       }
+      html.app-frame-booting,
+      html.app-frame-booting body {
+        --safe-area-bg: #eaf5f0;
+        --app-host-canvas-bg: #eaf5f0;
+        --app-frame-bg: #eaf5f0;
+        --app-frame-safe-bg: #eaf5f0;
+        background: #eaf5f0;
+        background-color: #eaf5f0;
+      }
       #app {
         position: fixed;
         inset: 0;
+        bottom: calc(-1 * var(--app-shell-bottom-spill, 0px));
         min-height: 0;
-        height: 100dvh;
+        height: auto;
         overflow: hidden;
         background: var(--app-frame-bg, #eaf5f0);
         background-color: var(--app-host-canvas-bg);

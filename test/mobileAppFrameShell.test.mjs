@@ -10,12 +10,14 @@ test("mobile app frame: boot/auth/main share one root frame state", async () => 
   const lateWiring = await readFile(path.resolve("src/app/bootstrap/installLateWiring.ts"), "utf8");
   const baseCss = await readFile(path.resolve("src/scss/base.css"), "utf8");
 
+  assert.match(html, /<html lang="ru" class="app-frame-booting">/);
   assert.match(html, /id="app" class="app-frame app-frame-booting"/);
   assert.match(createLayout, /root\.classList\.add\("app-frame"\)/);
   assert.match(createLayout, /root,/);
   assert.match(renderApp, /layout\.root\?\.classList\.toggle\("app-frame-auth",\s*fullScreenActive\)/);
   assert.match(renderApp, /layout\.root\?\.classList\.toggle\("app-frame-main",\s*!fullScreenActive\)/);
   assert.match(lateWiring, /root\.classList\.remove\("app-frame-booting"\)/);
+  assert.match(lateWiring, /document\.documentElement\.classList\.remove\("app-frame-booting"\)/);
   assert.doesNotMatch(baseCss, /#app\.app-frame\s*>\s*\.boot\s*{[^}]*position:\s*relative;/s);
   assert.match(baseCss, /#app\.app-frame\s*>\s*\.boot\s*{[^}]*z-index:\s*3;/s);
 });

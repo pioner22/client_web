@@ -28,6 +28,13 @@
     background-color: var(--app-host-canvas-bg, var(--safe-area-bg, var(--app-frame-bg)));
   }
 
+  html.app-shell-physical-bottom:not(.kbd-open) #app {
+    bottom: calc(-1 * var(--app-shell-bottom-spill, 0px));
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
   html.app-vv-offset #app {
     /* iOS: при открытии клавиатуры visualViewport может иметь offsetTop -> фиксируем "прыжки". */
     position: fixed;

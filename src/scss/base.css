@@ -4,6 +4,7 @@
   --safe-bottom-pad: clamp(0px, env(safe-area-inset-bottom), 44px);
   --app-gap-bottom: 0px;
   --app-layout-gap-bottom: var(--app-gap-bottom);
+  --app-shell-bottom-spill: 0px;
   /* One bottom contract: app height owns physical bottom; layout can drop it under a real keyboard. */
   --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-layout-gap-bottom, var(--app-gap-bottom, 0px)));
   --app-frame-bottom-inset: 0px;
@@ -40,6 +41,16 @@ html {
   text-size-adjust: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+html.app-frame-booting,
+html.app-frame-booting body {
+  --safe-area-bg: #eaf5f0;
+  --app-frame-bg: #eaf5f0;
+  --app-frame-safe-bg: #eaf5f0;
+  --app-host-canvas-bg: #eaf5f0;
+  background: #eaf5f0;
+  background-color: #eaf5f0;
 }
 
 /* iOS fullscreen/PWA: fix viewport "scroll" on focus (keyboard) and reduce bottom clipping/jumps. */
@@ -169,7 +180,7 @@ body::after {
   }
 
   body[data-viewport-diagnostic="1"]::before {
-    content: "PHYSICAL-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom) " kbd=" attr(data-app-keyboard) " safe=" attr(data-app-safe-bottom);
+    content: "PHYSICAL-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom) " kbd=" attr(data-app-keyboard) " safe=" attr(data-app-safe-bottom) " spill=" attr(data-app-shell-spill);
     position: fixed;
     right: 4px;
     bottom: 4px;
@@ -177,7 +188,7 @@ body::after {
   }
 
   #app.app-frame[data-viewport-diagnostic="1"]::before {
-    content: "APP-FRAME-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom);
+    content: "APP-FRAME-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom) " spill=" attr(data-app-shell-spill);
     position: absolute;
     left: 4px;
     bottom: max(4px, min(24px, var(--app-bottom-inset)));

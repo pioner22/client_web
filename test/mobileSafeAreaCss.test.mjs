@@ -27,12 +27,14 @@ test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () =
   const css = await readFile(path.resolve("src/scss/base.css"), "utf8");
   assert.match(css, /--safe-bottom-pad:\s*clamp\(\s*0px\s*,\s*env\(safe-area-inset-bottom\)\s*,\s*44px\s*\)\s*;/);
   assert.match(css, /--app-layout-gap-bottom:\s*var\(--app-gap-bottom\)\s*;/);
+  assert.match(css, /--app-shell-bottom-spill:\s*0px\s*;/);
   assert.match(css, /--app-bottom-inset:\s*max\(var\(--safe-bottom-pad\),\s*var\(--app-layout-gap-bottom,\s*var\(--app-gap-bottom,\s*0px\)\)\)\s*;/);
   assert.match(css, /--app-frame-bottom-inset:\s*0px\s*;/);
   assert.match(css, /--safe-bottom-layout-pad:\s*var\(--app-bottom-inset\)\s*;/);
   assert.match(css, /--app-frame-bg:\s*var\(--app-bg\)\s*;/);
   assert.match(css, /--app-host-canvas-bg:\s*var\(--safe-area-bg,\s*var\(--app-frame-bg,\s*var\(--app-bg\)\)\)\s*;/);
   assert.match(css, /background-color:\s*var\(--app-host-canvas-bg,\s*var\(--safe-area-bg,\s*var\(--app-frame-bg,\s*#eaf5f0\)\)\)\s*;/);
+  assert.match(css, /html\.app-frame-booting,\s*html\.app-frame-booting body\s*\{[\s\S]*?--app-host-canvas-bg:\s*#eaf5f0;/);
   assert.match(css, /#app\.app-frame::after\s*\{[\s\S]*?background:\s*var\(--app-frame-safe-bg,/);
   assert.match(css, /#app\.app-frame::after\s*\{[\s\S]*?height:\s*var\(--app-frame-bottom-inset\)/);
   assert.doesNotMatch(css, /--safe-bottom-layout-pad:\s*max\(0px,\s*calc\(var\(--safe-bottom-pad\)\s*-\s*var\(--app-gap-bottom/);
@@ -52,4 +54,11 @@ test("mobile safe-area: diagnostic markers expose every bottom layer", async () 
 test("mobile safe-area: pages have bottom padding for home indicator", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /\.page\s*\{[\s\S]*?padding-bottom:\s*calc\(\s*var\(--sp-4\)\s*\+\s*var\(--safe-bottom-layout-pad\)\s*\)\s*;/);
+});
+
+test("mobile safe-area: iOS standalone physical bottom uses shell spill not pseudo footer", async () => {
+  const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
+  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill,\s*0px\)\);/);
+  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?height:\s*auto;/);
+  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?max-height:\s*none;/);
 });

@@ -514,6 +514,7 @@ export function installLateWiring(deps: any) {
 
       window.setTimeout(() => {
         try {
+          document.documentElement.classList.remove("app-frame-booting");
           root.classList.remove("app-frame-booting");
           boot.classList.add("boot-out");
           boot.setAttribute("aria-hidden", "true");
@@ -529,6 +530,7 @@ export function installLateWiring(deps: any) {
         }, fadeMs);
       }, startDelay);
     } else {
+      document.documentElement.classList.remove("app-frame-booting");
       root.classList.remove("app-frame-booting");
     }
   } catch {

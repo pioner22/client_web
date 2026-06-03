@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.830",
+    date: "2026-06-03",
+    improved: [
+      "iPhone/PWA shell: boot/loading теперь получает тот же светлый canvas на html/body, а не только внутри #app, чтобы нижняя физическая область не наследовала тёмный mobile skin.",
+      "Mobile diagnostics: PHYSICAL-BOTTOM и APP-FRAME-BOTTOM дополнены spill=..., чтобы на screenshots было видно, расширяет ли app-frame физический низ устройства.",
+    ],
+    fixed: [
+      "Исправлен оставшийся state-dependent нижний дефект: в iOS standalone app-frame расширяется вниз на physical bottom gap только когда клавиатура закрыта, без отдельного pseudo-footer и без вмешательства в keyboard layout.",
+    ],
+  },
+  {
     version: "0.1.829",
     date: "2026-06-03",
     improved: [
