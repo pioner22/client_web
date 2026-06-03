@@ -66,6 +66,16 @@ function patchIndexHtmlCacheBust(html, patchHref) {
   });
 }
 
+function patchIndexHtmlBuildVersion(html, buildId) {
+  const safeBuildId = String(buildId ?? "").trim() || "dev";
+  return String(html ?? "")
+    .replace(/(<meta name="yagodka-build-id" content=")[^"]*(" \/>)/, `$1${safeBuildId}$2`)
+    .replace(
+      /(<div class="boot-version" id="boot-version" data-build-version=")[^"]*(">)[\s\S]*?(<\/div>)/,
+      `$1${safeBuildId}$2Web ${safeBuildId}$3`
+    );
+}
+
 function patchManifestCacheBust(manifest, patchHref) {
   const out = { ...(manifest && typeof manifest === "object" ? manifest : {}) };
 
@@ -186,7 +196,7 @@ async function main() {
   try {
     const indexPath = path.join(distDir, "index.html");
     const existing = await readText(indexPath);
-    const normalized = patchIndexHtmlCacheBust(existing, stripCacheBust);
+    const normalized = patchIndexHtmlBuildVersion(patchIndexHtmlCacheBust(existing, stripCacheBust), "dev");
     if (normalized !== existing) await fs.writeFile(indexPath, normalized, "utf8");
   } catch {}
   try {
@@ -244,8 +254,11 @@ async function main() {
   try {
     const indexPath = path.join(distDir, "index.html");
     const existing = await readText(indexPath);
-    const next = patchIndexHtmlCacheBust(existing, (href) =>
-      MANIFEST_URL_RE.test(href) ? withCacheBust(href, buildId) : ICON_URL_RE.test(href) ? withCacheBust(href, buildId) : href
+    const next = patchIndexHtmlBuildVersion(
+      patchIndexHtmlCacheBust(existing, (href) =>
+        MANIFEST_URL_RE.test(href) ? withCacheBust(href, buildId) : ICON_URL_RE.test(href) ? withCacheBust(href, buildId) : href
+      ),
+      buildId
     );
     if (next !== existing) await fs.writeFile(indexPath, next, "utf8");
   } catch {}

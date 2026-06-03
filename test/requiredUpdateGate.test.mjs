@@ -161,7 +161,7 @@ test("requiredUpdateGate: current version stores live build and lets app mount",
   await gate.cleanup();
 });
 
-test("requiredUpdateGate: blocks mount and reloads before entering stale app", async () => {
+test("requiredUpdateGate: opens current app and updates stale PWA in background", async () => {
   const gate = await loadGate("0.1.809");
   await withBrowserStubs(async () => {
     const localStorage = makeStorage([["yagodka_active_build_id_v1", "0.1.809-a3f3e6e46bee"]]);
@@ -180,7 +180,13 @@ test("requiredUpdateGate: blocks mount and reloads before entering stale app", a
             replaced.push("reload");
           },
         },
-        setTimeout: globalThis.setTimeout.bind(globalThis),
+        setTimeout(fn, ms) {
+          if (Number(ms) <= 900) {
+            fn();
+            return 1;
+          }
+          return globalThis.setTimeout(fn, ms);
+        },
         clearTimeout: globalThis.clearTimeout.bind(globalThis),
       },
       configurable: true,
@@ -194,19 +200,20 @@ test("requiredUpdateGate: blocks mount and reloads before entering stale app", a
 
     const root = makeElement("div");
     const result = await gate.runRequiredUpdateGate(root);
-    assert.equal(result.blocked, true);
+    assert.equal(result.blocked, false);
     assert.equal(result.liveBuildId, "0.1.810-abcdef123456");
     assert.equal(result.reason, "update_required");
-    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), "0.1.810-abcdef123456");
-    assert.equal(sessionStorage.getItem("yagodka_updating"), "1");
+    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), "0.1.809-a3f3e6e46bee");
+    assert.equal(sessionStorage.getItem("yagodka_updating"), null);
     assert.equal(sessionStorage.getItem("yagodka_force_recover"), null);
-    assert.equal(root.children.length, 1);
-    assert.match(replaced[0], /^https:\/\/yagodka\.org\/web\/\?room=1&__yg_update=\d+$/);
+    assert.equal(root.children.length, 0);
+    assert.equal(replaced.length, 0);
+    assert.match(sessionStorage.getItem("yagodka_required_update_gate_bypass_v1"), /0\.1\.810-abcdef123456/);
   });
   await gate.cleanup();
 });
 
-test("requiredUpdateGate: stops automatic reload loop after finite attempts", async () => {
+test("requiredUpdateGate: repeated stale build still opens without automatic reload loop", async () => {
   const gate = await loadGate("0.1.809");
   await withBrowserStubs(async () => {
     const liveBuildId = "0.1.810-abcdef123456";
@@ -248,7 +255,7 @@ test("requiredUpdateGate: stops automatic reload loop after finite attempts", as
     const root = makeElement("div");
     const result = await gate.runRequiredUpdateGate(root);
     assert.equal(result.blocked, false);
-    assert.equal(result.reason, "reload_failed");
+    assert.equal(result.reason, "update_required");
     assert.equal(replaced.length, 0);
     assert.equal(root.children.length, 0);
     assert.match(sessionStorage.getItem("yagodka_required_update_gate_bypass_v1"), /0\.1\.810-abcdef123456/);
@@ -390,7 +397,7 @@ test("requiredUpdateGate: current boot removes one-shot update/reset query param
 test("requiredUpdateGate: index waits for the gate before importing mountApp", async () => {
   const src = await readFile(path.resolve("src/index.ts"), "utf8");
   assert.match(src, /runRequiredUpdateGate\(appRoot\)/);
-  assert.match(src, /if \(result\.blocked\) return;/);
+  assert.doesNotMatch(src, /if \(result\.blocked\) return;/);
   assert.match(src, /mountRuntime\(\)/);
 });
 
@@ -412,12 +419,15 @@ test("requiredUpdateGate: update surface has animated taskbar and finite fallbac
 test("requiredUpdateGate: boot and service worker recovery are early and bounded", async () => {
   const boot = await readFile(path.resolve("public/boot.js"), "utf8");
   assert.match(boot, /boot-recovery/);
+  assert.match(boot, /boot-recovery__version/);
+  assert.match(boot, /yagodka-build-id/);
   assert.match(boot, /Открыть приложение/);
   assert.match(boot, /Повторить обновление/);
   assert.match(boot, /__boot_recover/);
   assert.match(boot, /indexOf\("yagodka-"\)/);
 
   const swBuilder = await readFile(path.resolve("scripts/build_pwa.mjs"), "utf8");
+  assert.match(swBuilder, /patchIndexHtmlBuildVersion/);
   assert.match(swBuilder, /prefer network so old installed clients can escape a stale cached index/);
   assert.match(swBuilder, /const fresh = await fetch\(req\)/);
   assert.match(swBuilder, /cachedIndex/);

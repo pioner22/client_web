@@ -87,6 +87,45 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     for (const name of diagnosticAttrNames) setDiagnosticAttr(name, null);
   };
 
+  const readBoolish = (value: unknown): boolean | null => {
+    const raw = String(value ?? "").trim().toLowerCase();
+    if (!raw) return null;
+    if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+    if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
+    return null;
+  };
+
+  const bottomDiagnosticsEnabled = (): boolean => {
+    try {
+      const url = new URL(window.location.href);
+      const value = readBoolish(url.searchParams.get("__bottom_diag"));
+      if (value === true) {
+        window.sessionStorage?.setItem("yagodka_bottom_diagnostics", "1");
+        return true;
+      }
+      if (value === false) {
+        window.sessionStorage?.removeItem("yagodka_bottom_diagnostics");
+        window.localStorage?.removeItem("yagodka_bottom_diagnostics");
+        return false;
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      const sessionValue = readBoolish(window.sessionStorage?.getItem("yagodka_bottom_diagnostics"));
+      if (sessionValue !== null) return sessionValue;
+    } catch {
+      // ignore
+    }
+    try {
+      const localValue = readBoolish(window.localStorage?.getItem("yagodka_bottom_diagnostics"));
+      if (localValue !== null) return localValue;
+      return readBoolish(window.localStorage?.getItem("yagodka_debug")) === true;
+    } catch {
+      return false;
+    }
+  };
+
   const read = (): {
     height: number;
     keyboard: boolean;
@@ -302,14 +341,18 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     else if (layoutGapBottom >= 1) setVar("--app-layout-gap-bottom", `${layoutGapBottom}px`);
     else setVar("--app-layout-gap-bottom", null);
 
-    setDiagnosticAttr("data-viewport-diagnostic", "1");
-    setDiagnosticAttr("data-app-vh", `${height}`);
-    setDiagnosticAttr("data-app-gap-bottom", `${gap}`);
-    setDiagnosticAttr("data-app-layout-gap-bottom", `${keyboard ? 0 : layoutGapBottom}`);
-    setDiagnosticAttr("data-app-safe-bottom", `${keyboard ? 0 : Math.max(safeBottomRaw, gapBottom)}`);
-    setDiagnosticAttr("data-app-vv-bottom", `${keyboard ? vvBottom : 0}`);
-    setDiagnosticAttr("data-app-keyboard", keyboard ? "1" : "0");
-    setDiagnosticAttr("data-app-shell-spill", `${shellBottomSpill}`);
+    if (bottomDiagnosticsEnabled()) {
+      setDiagnosticAttr("data-viewport-diagnostic", "1");
+      setDiagnosticAttr("data-app-vh", `${height}`);
+      setDiagnosticAttr("data-app-gap-bottom", `${gap}`);
+      setDiagnosticAttr("data-app-layout-gap-bottom", `${keyboard ? 0 : layoutGapBottom}`);
+      setDiagnosticAttr("data-app-safe-bottom", `${keyboard ? 0 : Math.max(safeBottomRaw, gapBottom)}`);
+      setDiagnosticAttr("data-app-vv-bottom", `${keyboard ? vvBottom : 0}`);
+      setDiagnosticAttr("data-app-keyboard", keyboard ? "1" : "0");
+      setDiagnosticAttr("data-app-shell-spill", `${shellBottomSpill}`);
+    } else {
+      clearDiagnosticAttrs();
+    }
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;

@@ -380,7 +380,8 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(authSrc, /AUTH_ENTRY_HELPER/);
   assert.match(authSrc, /APP_VERSION/);
   assert.match(authSrc, /auth-entry-update-marker/);
-  assert.match(authSrc, /Обновлено \$\{APP_VERSION\}/);
+  assert.match(authSrc, /Web \$\{APP_VERSION\}/);
+  assert.match(authSrc, /auth-hero-version/);
   assert.match(authSrc, /обновлени\[ея\] веб-клиента/);
   assert.match(authSrc, /auth-entry-notice-empty/);
   assert.match(authSrc, /copy\.heroTitle/);

@@ -412,6 +412,20 @@ function setGateReloading(root: HTMLElement): void {
   });
 }
 
+function setGateLaunchingCurrent(root: HTMLElement, liveBuildId: string, currentBuildId: string): void {
+  const live = splitBuildId(liveBuildId);
+  const current = splitBuildId(currentBuildId);
+  const liveLabel = live.version ? `Web ${live.version}` : "новая версия";
+  const currentLabel = current.version ? `Web ${current.version}` : "текущая версия";
+  setGateStatus(root, {
+    title: "Запускаем приложение",
+    detail: `Доступна ${liveLabel}. Открываем ${currentLabel} без ожидания перезагрузки, обновление продолжится в фоне.`,
+    activeStep: "ready",
+    progress: 100,
+    mode: "success",
+  });
+}
+
 function setGateBypassed(root: HTMLElement): void {
   setGateStatus(root, {
     title: "Запускаем приложение",
@@ -621,28 +635,20 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
   }
 
   const guard = markAttempt(liveBuildId);
-  if (guard.tries > UPDATE_GATE_MAX_TOTAL_RELOADS) {
-    setGateFallback(root, liveBuildId);
-    writeBypass(liveBuildId);
-    await delay(UPDATE_GATE_CONTINUE_DELAY_MS);
-    cleanupUpdateQueryParams();
-    clearGateRoot(root);
-    return { blocked: false, liveBuildId, reason: "reload_failed" };
-  }
-
-  if (guard.tries > UPDATE_GATE_MAX_DIRECT_RELOADS) {
+  if (guard.tries > UPDATE_GATE_MAX_TOTAL_RELOADS || guard.tries > UPDATE_GATE_MAX_DIRECT_RELOADS) {
     setGateClearing(root);
-    await resetServiceWorkerCaches();
+    void resetServiceWorkerCaches().catch(() => {});
   } else {
     setGatePreparing(root);
-    await applyServiceWorkerUpdate();
+    void applyServiceWorkerUpdate().catch(() => {});
   }
 
-  setGateReloading(root);
-  if (reloadForRequiredUpdate(liveBuildId)) {
-    return { blocked: true, liveBuildId, reason: "update_required" };
-  }
-
-  setGateReloadFallback(root);
-  return { blocked: true, liveBuildId, reason: "reload_failed" };
+  writeBypass(liveBuildId);
+  await delay(Math.min(320, UPDATE_GATE_CONTINUE_DELAY_MS));
+  setGateLaunchingCurrent(root, liveBuildId, currentBuildId);
+  await delay(UPDATE_GATE_CONTINUE_DELAY_MS);
+  clearGuard();
+  cleanupUpdateQueryParams();
+  clearGateRoot(root);
+  return { blocked: false, liveBuildId, reason: "update_required" };
 }

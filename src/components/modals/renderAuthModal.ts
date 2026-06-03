@@ -194,10 +194,10 @@ export function renderAuthModal(
   const root = el("div", { id: "auth-pages", class: `auth-entry-page auth-entry-${mode}` });
   const scrollable = el("div", { class: "scrollable auth-entry-scroll" });
   const layout = el("div", { class: `container modal-auth auth-entry-layout ${mode === "register" ? "page-signUp" : "page-sign"}` });
-  const updateMarkerText = `Обновлено ${APP_VERSION}`;
+  const updateMarkerText = `Web ${APP_VERSION}`;
   const updateMarker = el(
     "div",
-    { class: "auth-entry-update-marker", "aria-label": `Экран авторизации обновлён ${APP_VERSION}` },
+    { class: "auth-entry-update-marker", "aria-label": `Версия web-клиента ${APP_VERSION}` },
     [updateMarkerText]
   );
   const btnClose = el("button", { class: "btn auth-close", type: "button", title: "Закрыть", "aria-label": "Закрыть" }, [
@@ -210,6 +210,7 @@ export function renderAuthModal(
         el("img", { class: "auth-logo", src: "./icons/icon.svg", alt: "" }, []),
       ]),
       el("div", { class: "auth-hero-wordmark" }, ["Ягодка"]),
+      el("div", { class: "auth-hero-version" }, [`Web ${APP_VERSION}`]),
     ]),
     el("div", { class: "auth-hero-message" }, [
       el("div", { class: "auth-hero-kicker" }, ["Ягодка"]),

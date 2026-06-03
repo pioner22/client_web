@@ -727,6 +727,15 @@
   color: var(--auth-entry-text);
 }
 
+.auth-hero-version {
+  margin-top: -8px;
+  color: var(--auth-entry-muted);
+  font-size: 12px;
+  font-weight: 820;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
 .auth-hero-message {
   display: grid;
   gap: 12px;
@@ -1255,7 +1264,7 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  #auth-pages.auth-entry-page > .auth-entry-scroll::after {
+  body[data-viewport-diagnostic="1"] #auth-pages.auth-entry-page > .auth-entry-scroll::after {
     content: "AUTH-SCROLL-END";
     flex: 0 0 auto;
     display: inline-flex;

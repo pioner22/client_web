@@ -11,6 +11,7 @@
   var RECOVERY_CLASS = "boot-recovery";
 
   var statusEl = document.getElementById("boot-status");
+  var versionEl = document.getElementById("boot-version");
   var root = document.getElementById("app");
   var booted = false;
   var requiresBootEvent = false;
@@ -20,6 +21,27 @@
     try {
       if (statusEl) statusEl.textContent = text;
     } catch {}
+  }
+
+  function escapeHtml(text) {
+    return String(text == null ? "" : text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function readVersionText() {
+    try {
+      var fromText = versionEl && versionEl.textContent ? String(versionEl.textContent).trim() : "";
+      if (fromText) return fromText;
+      var fromData = versionEl && versionEl.getAttribute ? String(versionEl.getAttribute("data-build-version") || "").trim() : "";
+      if (fromData) return "Web " + fromData;
+      var meta = document.querySelector('meta[name="yagodka-build-id"]');
+      var fromMeta = meta && meta.getAttribute ? String(meta.getAttribute("content") || "").trim() : "";
+      if (fromMeta) return "Web " + fromMeta;
+    } catch {}
+    return "";
   }
 
   function cleanUrl(paramName) {
@@ -49,6 +71,7 @@
 
   function renderRecoveryScreen() {
     if (!root) return;
+    var versionText = readVersionText();
     try {
       root.innerHTML =
         '<main class="' +
@@ -57,6 +80,7 @@
         '<div class="boot-recovery__mark" aria-hidden="true">!</div>' +
         '<h1 class="boot-recovery__title">Не удалось завершить обновление</h1>' +
         '<p class="boot-recovery__text">Автоматический перезапуск остановлен. Откройте приложение сейчас или повторите очистку кэша.</p>' +
+        (versionText ? '<p class="boot-recovery__version">' + escapeHtml(versionText) + "</p>" : "") +
         '<div class="boot-recovery__actions">' +
         '<button class="boot-recovery__button boot-recovery__button--primary" type="button" data-boot-action="open">Открыть приложение</button>' +
         '<button class="boot-recovery__button" type="button" data-boot-action="retry">Повторить обновление</button>' +
@@ -69,6 +93,7 @@
         ".boot-recovery__mark{display:grid;place-items:center;width:48px;height:48px;border-radius:999px;background:#b4232d;color:#fff;font-size:26px;font-weight:900;box-shadow:0 0 0 6px rgba(180,35,45,.14)}" +
         ".boot-recovery__title{width:min(440px,calc(100vw - 56px));margin:0;color:#14211b;font-size:24px;line-height:1.18;font-weight:850;letter-spacing:0}" +
         ".boot-recovery__text{width:min(440px,calc(100vw - 56px));margin:0;color:#44534d;font-size:15px;line-height:1.45;font-weight:600}" +
+        ".boot-recovery__version{width:min(440px,calc(100vw - 56px));margin:0;color:#5e6f68;font-size:12px;line-height:1.35;font-weight:800}" +
         ".boot-recovery__actions{width:min(440px,calc(100vw - 56px));display:flex;flex-wrap:wrap;gap:10px;margin-top:4px}" +
         ".boot-recovery__button{min-height:46px;border:1px solid #b9c8c1;border-radius:14px;background:#fff;color:#14211b;padding:0 16px;font:800 15px/1 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}" +
         ".boot-recovery__button--primary{border-color:#1877f2;background:#1877f2;color:#fff}";

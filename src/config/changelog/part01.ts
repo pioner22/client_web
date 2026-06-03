@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.833",
+    date: "2026-06-03",
+    improved: [
+      "Web/PWA startup больше не блокирует вход в мессенджер из-за расхождения live BUILD_ID: новая версия подтягивается в фоне, а текущий клиент открывается без обязательного reload-цикла.",
+      "Версия Web теперь видна на раннем boot screen, recovery screen, экране авторизации, публичном сайте, странице статуса и в downloads manifest.",
+      "Нижние diagnostic markers переведены в debug-only режим: их можно включить через `?__bottom_diag=1`, но обычный production-вход их не показывает.",
+    ],
+    fixed: [
+      "Устранён повторный сценарий вечного экрана `Обновляем приложение`: даже при старом PWA/cache клиент получает finite status и переходит к запуску приложения.",
+      "Публичный сайт автоматически подставляет реальные версии Web, Android и macOS из build artifacts, чтобы было понятно, какая поставка опубликована на yagodka.org.",
+    ],
+  },
+  {
     version: "0.1.832",
     date: "2026-06-03",
     improved: [

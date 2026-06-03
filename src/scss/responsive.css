@@ -201,7 +201,7 @@
     margin-top: 0;
   }
 
-  .sidebar-body::after {
+  body[data-viewport-diagnostic="1"] .sidebar-body::after {
     content: "SIDEBAR-SCROLL-END";
     position: sticky;
     bottom: max(4px, calc(var(--app-bottom-inset) - 22px));
@@ -741,7 +741,7 @@
     padding-bottom: var(--composer-bottom-edge-pad);
   }
 
-  .input-wrap::after {
+  body[data-viewport-diagnostic="1"] .input-wrap::after {
     content: "CHAT-COMPOSER-BOTTOM";
     position: absolute;
     right: 6px;

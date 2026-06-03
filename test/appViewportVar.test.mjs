@@ -147,6 +147,9 @@ test("viewport var: installAppViewportHeightVar предпочитает innerHe
       cancelAnimationFrame() {},
       addEventListener() {},
       removeEventListener() {},
+      location: { href: "https://yagodka.org/web/" },
+      localStorage: { getItem: (key) => (key === "yagodka_bottom_diagnostics" ? "1" : null) },
+      sessionStorage: { getItem: () => null },
     };
 
     const cleanup = helper.fn(root);
@@ -358,6 +361,9 @@ test("viewport var: iOS PWA: включает screen gap в app height и bottom
       cancelAnimationFrame() {},
       addEventListener() {},
       removeEventListener() {},
+      location: { href: "https://yagodka.org/web/" },
+      localStorage: { getItem: (key) => (key === "yagodka_bottom_diagnostics" ? "1" : null) },
+      sessionStorage: { getItem: () => null },
     };
 
     const cleanup = helper.fn(root);
@@ -452,6 +458,9 @@ test("viewport var: iOS PWA: большой physical bottom gap не зажим�
       cancelAnimationFrame() {},
       addEventListener() {},
       removeEventListener() {},
+      location: { href: "https://yagodka.org/web/" },
+      localStorage: { getItem: (key) => (key === "yagodka_bottom_diagnostics" ? "1" : null) },
+      sessionStorage: { getItem: () => null },
     };
 
     const cleanup = helper.fn(root);
@@ -539,6 +548,9 @@ test("viewport var: iOS PWA: physical bottom gap не считается кла�
       cancelAnimationFrame() {},
       addEventListener() {},
       removeEventListener() {},
+      location: { href: "https://yagodka.org/web/" },
+      localStorage: { getItem: (key) => (key === "yagodka_bottom_diagnostics" ? "1" : null) },
+      sessionStorage: { getItem: () => null },
     };
 
     const cleanup = helper.fn(root);
@@ -567,7 +579,7 @@ test("viewport var: iOS PWA: physical bottom gap не считается кла�
   }
 });
 
-test("viewport var: iOS PWA: keyboard keeps physical diagnostics but removes layout gap", async () => {
+test("viewport var: iOS PWA: keyboard keeps debug diagnostics but removes layout gap", async () => {
   const helper = await loadInstall();
   const prev = {
     window: globalThis.window,
@@ -617,6 +629,9 @@ test("viewport var: iOS PWA: keyboard keeps physical diagnostics but removes lay
       cancelAnimationFrame() {},
       addEventListener() {},
       removeEventListener() {},
+      location: { href: "https://yagodka.org/web/" },
+      localStorage: { getItem: (key) => (key === "yagodka_bottom_diagnostics" ? "1" : null) },
+      sessionStorage: { getItem: () => null },
     };
 
     const cleanup = helper.fn(root);

@@ -41,8 +41,7 @@ function mountRuntime() {
 }
 
 void runRequiredUpdateGate(appRoot)
-  .then((result) => {
-    if (result.blocked) return;
+  .then(() => {
     mountRuntime();
   })
   .catch(() => {

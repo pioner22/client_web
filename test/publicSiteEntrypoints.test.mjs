@@ -22,6 +22,11 @@ test("public site root describes project, downloads clients, and links web clien
   assert.match(html, /href="\/downloads\/android\/yagodka-android-debug\.apk"/);
   assert.match(html, /href="\/downloads\/macos\/yagodka-macos-x64\.zip"/);
   assert.match(html, /href="\/downloads\/cli\/yagodka-cli-client\.tar\.gz"/);
+  assert.match(html, /data-yagodka-web-version/);
+  assert.match(html, /data-yagodka-android-version/);
+  assert.match(html, /data-yagodka-macos-version/);
+  assert.match(html, /release-strip/);
+  assert.match(html, /download-version/);
   assert.match(html, /Контакты и группы/);
   assert.match(html, /Каналы/);
   assert.match(html, /Файлы и медиа/);
@@ -91,6 +96,9 @@ test("web-www-build keeps messenger under /web and builds public root from site 
   assert.match(builder, /cli\/yagodka-cli-client\.tar\.gz/);
   assert.match(builder, /desktop-updates/);
   assert.match(builder, /latest-mac\.yml/);
+  assert.match(builder, /parse_web_build_id/);
+  assert.match(builder, /patch_version_placeholders/);
+  assert.match(builder, /web_version/);
   assert.match(rootServiceWorker, /legacy root-scope messenger service worker/);
   assert.match(rootServiceWorker, /self\.registration\.unregister/);
   assert.match(rootServiceWorker, /fetch\(event\.request\)/);
