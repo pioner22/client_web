@@ -12,6 +12,7 @@
   html #app {
     --app-outer-pad: 0px;
     width: 100%;
+    min-height: var(--app-vh);
     overscroll-behavior: none;
     padding: 0;
   }
@@ -171,7 +172,7 @@
     background: var(--sidebar-bg);
     border-top: 1px solid color-mix(in srgb, var(--line), transparent 60%);
     padding-top: var(--sp-2);
-    padding-bottom: max(var(--sp-2), var(--safe-bottom-pad));
+    padding-bottom: max(var(--sp-2), var(--app-bottom-inset));
     padding-inline: var(--sidebar-list-pad);
     margin-top: 0;
   }
@@ -679,7 +680,7 @@
   /* Composer: closer to Telegram pill + stable "bar" feel. */
   .input-wrap {
     /* Mobile: overlay the composer (tweb-like) so chat history can scroll "under" it. */
-    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--safe-bottom-layout-pad));
+    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-inset));
     position: absolute;
     left: 0;
     right: 0;
@@ -717,7 +718,7 @@
 
   /* iOS: blur/transparency can create an extra "dark strip" near the bottom safe-area. Keep the bar solid. */
   html.is-ios .input-wrap {
-    --composer-bottom-edge-pad: max(calc(var(--composer-pad-y) * 0.5), calc(var(--safe-bottom-layout-pad) * 0.7));
+    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-inset));
     padding-top: calc(var(--composer-pad-y) * 0.75);
     background: var(--composer-bg);
     -webkit-backdrop-filter: none;
@@ -1156,7 +1157,7 @@
     --app-radius: 0px;
     --app-shadow: none;
     --app-overflow: hidden;
-    --safe-bottom-layout-pad: var(--safe-bottom-pad);
+    --safe-bottom-layout-pad: var(--app-bottom-inset);
   }
 
   .hdr-label,
@@ -1180,7 +1181,7 @@ html.is-standalone {
   --app-radius: 0px;
   --app-shadow: none;
   --app-overflow: hidden;
-  --safe-bottom-layout-pad: var(--safe-bottom-pad);
+  --safe-bottom-layout-pad: var(--app-bottom-inset);
 }
 
 html.is-standalone .hdr-label,

@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.824",
+    date: "2026-06-03",
+    improved: [
+      "Web/PWA получил единый mobile bottom contract: iPhone/PWA safe-area gap теперь входит в высоту app shell, а composer, chat history, sidebar/contact list и auth используют общий bottom inset.",
+    ],
+    fixed: [
+      "Исправлен глобальный нижний обрез на rounded iPhone/PWA: мессенджер больше не отделяет низ внешним тёмным подвалом, а marker `Обновлено` на auth прижат к нижней safe-area.",
+    ],
+  },
+  {
     version: "0.1.823",
     date: "2026-06-03",
     improved: [

@@ -185,14 +185,20 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const resolvedHeight = height > 0 ? height : fallbackHeight;
     const vhHeight = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : base;
     const resolvedVhHeight = vhHeight > 0 ? vhHeight : resolvedHeight;
+    // In iOS standalone the reported layout viewport can exclude the home-indicator
+    // safe area. Treat the detected gap as part of the app shell height instead of
+    // painting it as an external footer; layout surfaces still use it as bottom inset.
+    const layoutOwnedGap = keyboardVisible ? 0 : gapBottom;
+    const appHeight = resolvedHeight > 0 ? resolvedHeight + layoutOwnedGap : 0;
+    const appVhHeight = resolvedVhHeight > 0 ? resolvedVhHeight + layoutOwnedGap : 0;
     return {
-      height: resolvedHeight > 0 ? resolvedHeight : 0,
+      height: appHeight,
       keyboard: keyboardVisible,
       vvTop,
       vvBottom: Math.round(coveredBottomForLayout),
       gapBottom,
       safeBottomRaw,
-      vhHeight: resolvedVhHeight > 0 ? resolvedVhHeight : 0,
+      vhHeight: appVhHeight,
     };
   };
 

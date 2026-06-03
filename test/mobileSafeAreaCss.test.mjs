@@ -17,12 +17,15 @@ test("mobile safe-area: mobile fullscreen overrides win against skins", async ()
 test("mobile safe-area: composer bottom padding avoids extra gap", async () => {
   const css = await readFile(path.resolve("src/scss/layout.css"), "utf8");
   assert.match(css, /\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*max\b/);
-  assert.match(css, /padding-bottom:\s*max\([^;]*--safe-bottom-layout-pad/);
+  assert.match(css, /padding-bottom:\s*max\([^;]*--app-bottom-inset/);
 });
 
-test("mobile safe-area: safe-bottom-pad clamp covers iPhone inset", async () => {
+test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () => {
   const css = await readFile(path.resolve("src/scss/base.css"), "utf8");
   assert.match(css, /--safe-bottom-pad:\s*clamp\(\s*0px\s*,\s*env\(safe-area-inset-bottom\)\s*,\s*44px\s*\)\s*;/);
+  assert.match(css, /--app-bottom-inset:\s*max\(var\(--safe-bottom-pad\),\s*var\(--app-gap-bottom,\s*0px\)\)\s*;/);
+  assert.match(css, /--safe-bottom-layout-pad:\s*var\(--app-bottom-inset\)\s*;/);
+  assert.doesNotMatch(css, /--safe-bottom-layout-pad:\s*max\(0px,\s*calc\(var\(--safe-bottom-pad\)\s*-\s*var\(--app-gap-bottom/);
 });
 
 test("mobile safe-area: pages have bottom padding for home indicator", async () => {

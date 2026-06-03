@@ -3,8 +3,9 @@
   /* iPhone safe-area bottom is typically 34px; allow up to 44px to avoid cutting off the composer. */
   --safe-bottom-pad: clamp(0px, env(safe-area-inset-bottom), 44px);
   --app-gap-bottom: 0px;
-  /* Portion of safe-area that is actually inside the layout (gap is painted separately). */
-  --safe-bottom-layout-pad: max(0px, calc(var(--safe-bottom-pad) - var(--app-gap-bottom, 0px)));
+  /* One bottom contract: iOS/PWA gap is part of layout, not a detached footer. */
+  --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-gap-bottom, 0px));
+  --safe-bottom-layout-pad: var(--app-bottom-inset);
 }
 
 html,
@@ -100,7 +101,7 @@ body::after {
   left: 0;
   right: 0;
   bottom: 0;
-  height: max(var(--safe-bottom-raw), var(--app-gap-bottom, 0px));
+  height: var(--app-bottom-inset);
   background: var(--safe-area-bg, var(--sidebar-bg));
   pointer-events: none;
   z-index: 0;
