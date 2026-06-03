@@ -1113,21 +1113,37 @@
 }
 
 @media (max-width: 860px) {
+  html.has-auth-pages,
+  body.has-auth-pages {
+    --auth-mobile-screen-bg: linear-gradient(
+      180deg,
+      #fbfcfd 0%,
+      #f6faf7 42%,
+      var(--auth-mobile-bg-mid, #eaf5f0) 100%
+    );
+    --safe-area-bg: var(--auth-mobile-bg-mid, #eaf5f0);
+    background: var(--auth-mobile-screen-bg);
+  }
+
+  html.has-auth-pages #app {
+    min-height: calc(var(--app-vh, 100dvh) + var(--app-gap-bottom, 0px));
+    background: var(--auth-mobile-screen-bg);
+  }
+
+  body.has-auth-pages::after {
+    background: var(--safe-area-bg, #eaf5f0);
+  }
+
   .overlay.overlay-auth {
-    background:
-      linear-gradient(
-        180deg,
-        #fbfcfd 0%,
-        #f6faf7 42%,
-        var(--auth-mobile-bg-mid) 100%
-      );
+    min-height: calc(var(--app-vh, 100dvh) + var(--app-gap-bottom, 0px));
+    background: var(--auth-mobile-screen-bg);
     place-items: stretch;
     padding: 0;
   }
 
   .overlay.overlay-auth:not(.hidden) > .modal {
     width: 100%;
-    height: 100dvh;
+    height: calc(var(--app-vh, 100dvh) + var(--app-gap-bottom, 0px));
     max-height: none;
     overflow: hidden;
     padding: 0;
@@ -1138,14 +1154,8 @@
   }
 
   #auth-pages.auth-entry-page {
-    min-height: 100dvh;
-    background:
-      linear-gradient(
-        180deg,
-        #fbfcfd 0%,
-        #f6faf7 42%,
-        var(--auth-mobile-bg-mid) 100%
-      );
+    min-height: calc(var(--app-vh, 100dvh) + var(--app-gap-bottom, 0px));
+    background: var(--auth-mobile-screen-bg);
   }
 
   #auth-pages.auth-entry-page::before,
@@ -1154,7 +1164,7 @@
   }
 
   #auth-pages.auth-entry-page > .auth-entry-scroll {
-    min-height: 100dvh;
+    min-height: calc(var(--app-vh, 100dvh) + var(--app-gap-bottom, 0px));
     align-items: start;
     justify-items: center;
     padding: 0 18px;
@@ -1172,7 +1182,7 @@
     min-height: 0;
     height: auto;
     max-height: none;
-    min-height: 100dvh;
+    min-height: calc(var(--app-vh, 100dvh) + var(--app-gap-bottom, 0px));
     width: 100%;
     max-width: none;
     grid-template-columns: 1fr;

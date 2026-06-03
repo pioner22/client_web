@@ -315,11 +315,15 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /\.overlay\.overlay-auth:not\(\.hidden\)\s*{[^}]*animation:\s*none;/s);
   assert.match(css, /\.modal-screen\s+\.screen-bar\s*{[^}]*display:\s*none;/s);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-hero\s*{[^}]*display:\s*none;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*html\.has-auth-pages,\s*body\.has-auth-pages\s*{[^}]*--auth-mobile-screen-bg:\s*linear-gradient\([^}]*--safe-area-bg:\s*var\(--auth-mobile-bg-mid,\s*#eaf5f0\);[^}]*background:\s*var\(--auth-mobile-screen-bg\);/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*html\.has-auth-pages\s+#app\s*{[^}]*min-height:\s*calc\(var\(--app-vh,\s*100dvh\) \+ var\(--app-gap-bottom,\s*0px\)\);[^}]*background:\s*var\(--auth-mobile-screen-bg\);/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*body\.has-auth-pages::after\s*{[^}]*background:\s*var\(--safe-area-bg,\s*#eaf5f0\);/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.overlay\.overlay-auth\s*{[^}]*place-items:\s*stretch;[^}]*padding:\s*0;/);
-  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.overlay\.overlay-auth:not\(\.hidden\)\s*>\s*\.modal\s*{[^}]*width:\s*100%;[^}]*height:\s*100dvh;[^}]*border:\s*0;[^}]*background:\s*transparent;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.overlay\.overlay-auth\s*{[^}]*min-height:\s*calc\(var\(--app-vh,\s*100dvh\) \+ var\(--app-gap-bottom,\s*0px\)\);[^}]*background:\s*var\(--auth-mobile-screen-bg\);/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.overlay\.overlay-auth:not\(\.hidden\)\s*>\s*\.modal\s*{[^}]*width:\s*100%;[^}]*height:\s*calc\(var\(--app-vh,\s*100dvh\) \+ var\(--app-gap-bottom,\s*0px\)\);[^}]*border:\s*0;[^}]*background:\s*transparent;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*#auth-pages\.auth-entry-page\s+>\s+\.auth-entry-scroll\s*{[^}]*align-items:\s*start;[^}]*justify-items:\s*center;[^}]*padding:\s*0 18px;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*#auth-pages\.auth-entry-page\s+\.tabs-tab,\s*#auth-pages\.auth-entry-page\s+\.tabs-tab\.active,\s*#auth-pages\.auth-entry-page\s+\.tabs-tab\s+\.container\s*{[^}]*background:\s*transparent;/);
-  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-layout\s*{[^}]*height:\s*auto;[^}]*max-height:\s*none;[^}]*min-height:\s*100dvh;[^}]*max-width:\s*none;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-layout\s*{[^}]*height:\s*auto;[^}]*max-height:\s*none;[^}]*min-height:\s*calc\(var\(--app-vh,\s*100dvh\) \+ var\(--app-gap-bottom,\s*0px\)\);[^}]*max-width:\s*none;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s*{[^}]*height:\s*auto;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s*{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*box-shadow:\s*none;[^}]*background:\s*transparent;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-panel-top,\s*\.modal-auth\s+\.auth-panel-top\s*{[^}]*border:\s*0;[^}]*background:\s*transparent;/);

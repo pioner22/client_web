@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.820",
+    date: "2026-06-03",
+    improved: [
+      "Мобильный экран авторизации Web/PWA теперь сам задаёт фон для всей высоты экрана, включая нижнюю safe-area/home-indicator область на iPhone.",
+    ],
+    fixed: [
+      "Убран тёмный обрубок внизу auth entry: фон html/body/#app/overlay и нижнего псевдо-слоя синхронизирован, а высота учитывает iOS PWA gap без возврата прокрутки.",
+    ],
+  },
+  {
     version: "0.1.819",
     date: "2026-06-03",
     improved: [
