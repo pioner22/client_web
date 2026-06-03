@@ -58,10 +58,13 @@
       }
       #app {
         position: fixed;
-        inset: 0;
-        bottom: calc(-1 * var(--app-shell-bottom-spill, 0px));
+        top: 0;
+        right: 0;
+        left: 0;
+        bottom: auto;
         min-height: 0;
-        height: auto;
+        height: 100vh;
+        height: 100dvh;
         overflow: hidden;
         background: var(--app-frame-bg, #eaf5f0);
         background-color: var(--app-host-canvas-bg);

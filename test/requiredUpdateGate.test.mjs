@@ -65,6 +65,7 @@ function makeElement(tag = "div") {
     className: "",
     textContent: "",
     type: "",
+    style: {},
     children: [],
     attrs: {},
     setAttribute(key, value) {
@@ -78,6 +79,17 @@ function makeElement(tag = "div") {
       this.children = [...items];
     },
   };
+}
+
+function collectText(el) {
+  const parts = [];
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (node.textContent) parts.push(String(node.textContent));
+    for (const child of node.children || []) walk(child);
+  };
+  walk(el);
+  return parts.join(" ");
 }
 
 async function withBrowserStubs(fn) {
@@ -194,6 +206,100 @@ test("requiredUpdateGate: blocks mount and reloads before entering stale app", a
   await gate.cleanup();
 });
 
+test("requiredUpdateGate: stops automatic reload loop after finite attempts", async () => {
+  const gate = await loadGate("0.1.809");
+  await withBrowserStubs(async () => {
+    const liveBuildId = "0.1.810-abcdef123456";
+    const guard = JSON.stringify({ buildId: liveBuildId, tries: 3, ts: Date.now() });
+    const localStorage = makeStorage([["yagodka_required_update_gate_v1", guard]]);
+    const sessionStorage = makeStorage([["yagodka_required_update_gate_v1", guard]]);
+    const replaced = [];
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        localStorage,
+        sessionStorage,
+        location: {
+          href: "https://yagodka.org/web/",
+          replace(url) {
+            replaced.push(String(url));
+          },
+          reload() {
+            replaced.push("reload");
+          },
+        },
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", { value: { createElement: makeElement }, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+    globalThis.fetch = async () => ({ ok: true, text: async () => `const BUILD_ID = "${liveBuildId}";` });
+
+    const root = makeElement("div");
+    const result = await gate.runRequiredUpdateGate(root);
+    assert.equal(result.blocked, true);
+    assert.equal(result.reason, "reload_failed");
+    assert.equal(replaced.length, 0);
+    assert.equal(root.children.length, 1);
+    assert.match(collectText(root), /Обновление не завершилось/);
+    assert.match(collectText(root), /Открыть приложение/);
+    assert.match(collectText(root), /Повторить обновление/);
+  });
+  await gate.cleanup();
+});
+
+test("requiredUpdateGate: session bypass opens current bundle without another reload", async () => {
+  const gate = await loadGate("0.1.809");
+  await withBrowserStubs(async () => {
+    const liveBuildId = "0.1.810-abcdef123456";
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage([
+      ["yagodka_required_update_gate_bypass_v1", JSON.stringify({ buildId: liveBuildId, ts: Date.now() })],
+    ]);
+    const replaced = [];
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        localStorage,
+        sessionStorage,
+        history: { state: null, replaceState() {} },
+        location: {
+          href: "https://yagodka.org/web/?__yg_continue=1",
+          replace(url) {
+            replaced.push(String(url));
+          },
+          reload() {
+            replaced.push("reload");
+          },
+        },
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: { createElement: makeElement, title: "Yagodka" },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+    globalThis.fetch = async () => ({ ok: true, text: async () => `const BUILD_ID = "${liveBuildId}";` });
+
+    const root = makeElement("div");
+    const result = await gate.runRequiredUpdateGate(root);
+    assert.deepEqual(result, { blocked: false, liveBuildId, reason: "reload_failed" });
+    assert.equal(replaced.length, 0);
+    assert.equal(root.children.length, 0);
+  });
+  await gate.cleanup();
+});
+
 test("requiredUpdateGate: current boot removes one-shot update/reset query params", async () => {
   const gate = await loadGate("0.1.810");
   await withBrowserStubs(async () => {
@@ -241,4 +347,14 @@ test("requiredUpdateGate: index waits for the gate before importing mountApp", a
   assert.match(src, /runRequiredUpdateGate\(appRoot\)/);
   assert.match(src, /if \(result\.blocked\) return;/);
   assert.match(src, /mountRuntime\(\)/);
+});
+
+test("requiredUpdateGate: update surface has animated taskbar and finite fallback controls", async () => {
+  const css = await readFile(path.resolve("src/scss/service-surfaces.css"), "utf8");
+  assert.match(css, /\.required-update-gate__taskbar/);
+  assert.match(css, /\.required-update-gate__steps/);
+  assert.match(css, /\.required-update-gate__step--active::before/);
+  assert.match(css, /@keyframes\s+required-update-spin/);
+  assert.match(css, /@keyframes\s+required-update-bar/);
+  assert.match(css, /\.required-update-gate--failed\s+\.required-update-gate__spinner/);
 });

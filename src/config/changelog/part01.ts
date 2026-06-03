@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.831",
+    date: "2026-06-03",
+    improved: [
+      "Web/PWA update gate получил понятный task-bar: шаги проверки версии, подготовки обновления, очистки кэша, перезапуска и запуска приложения теперь отображаются пользователю с прогрессом и анимацией.",
+      "iPhone/PWA bottom diagnostics больше не перекрывают основные действия: PHYSICAL-BOTTOM и APP-FRAME-BOTTOM подняты над нижним интерактивным слоем для контрольных скринов.",
+    ],
+    fixed: [
+      "Исправлен Mozilla/Firefox update loop: после ограниченного числа автоматических попыток экран обновления останавливается в конечном состоянии с кнопками `Открыть приложение` и `Повторить обновление`, без бесконечных reload/cache reset.",
+      "Исправлен нижний каркас iOS standalone: app-frame больше не уходит ниже физического экрана через отрицательный bottom/spill, а rounded-screen gap остаётся внутренним safe-area inset для auth, sidebar и chat composer.",
+    ],
+  },
+  {
     version: "0.1.830",
     date: "2026-06-03",
     improved: [

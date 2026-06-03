@@ -56,9 +56,10 @@ test("mobile safe-area: pages have bottom padding for home indicator", async () 
   assert.match(css, /\.page\s*\{[\s\S]*?padding-bottom:\s*calc\(\s*var\(--sp-4\)\s*\+\s*var\(--safe-bottom-layout-pad\)\s*\)\s*;/);
 });
 
-test("mobile safe-area: iOS standalone physical bottom uses shell spill not pseudo footer", async () => {
+test("mobile safe-area: iOS standalone physical bottom stays inside fixed app frame", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
-  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill,\s*0px\)\);/);
-  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?height:\s*auto;/);
-  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?max-height:\s*none;/);
+  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
+  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-vh\);/);
+  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?max-height:\s*var\(--app-vh\);/);
+  assert.doesNotMatch(css, /bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill/);
 });

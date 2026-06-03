@@ -39,7 +39,8 @@ test("entry boot screen: strict corporate surface without animated layout shifts
   assert.doesNotMatch(html, /--app-frame-bg:\s*#0d1117;/);
   assert.match(html, /background:\s*var\(--app-frame-bg,\s*var\(--body-bg,\s*var\(--app-bg,\s*#eaf5f0\)\)\);/);
   assert.match(html, /background-color:\s*var\(--app-host-canvas-bg\);/);
-  assert.match(html, /#app\s*{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill,\s*0px\)\);[^}]*overflow:\s*hidden;/s);
+  assert.match(html, /#app\s*{[^}]*position:\s*fixed;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*left:\s*0;[^}]*bottom:\s*auto;[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;/s);
+  assert.doesNotMatch(html, /bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill/);
   assert.match(html, /\.boot-frame\s*{[^}]*border-radius:\s*8px;/s);
   assert.match(html, /\.boot\.boot-out\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
   assert.doesNotMatch(html, /@keyframes\s+boot-/);

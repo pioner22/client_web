@@ -15,11 +15,41 @@ interface UpdateGateGuard {
 }
 
 const UPDATE_GATE_GUARD_KEY = "yagodka_required_update_gate_v1";
+const UPDATE_GATE_BYPASS_KEY = "yagodka_required_update_gate_bypass_v1";
 const UPDATE_GATE_RELOADING_KEY = "yagodka_required_update_gate_reloading_v1";
 const UPDATE_GATE_MAX_DIRECT_RELOADS = 2;
+const UPDATE_GATE_MAX_CACHE_RESET_RELOADS = 1;
+const UPDATE_GATE_MAX_TOTAL_RELOADS = UPDATE_GATE_MAX_DIRECT_RELOADS + UPDATE_GATE_MAX_CACHE_RESET_RELOADS;
 const UPDATE_GATE_GUARD_TTL_MS = 10 * 60 * 1000;
+const UPDATE_GATE_BYPASS_TTL_MS = 10 * 60 * 1000;
 const UPDATE_GATE_FETCH_TIMEOUT_MS = 2500;
 const UPDATE_GATE_SW_TIMEOUT_MS = 3500;
+const UPDATE_GATE_STEPS = [
+  { id: "version", label: "Проверяем версию" },
+  { id: "activate", label: "Готовим обновление" },
+  { id: "cache", label: "Очищаем кэш" },
+  { id: "reload", label: "Перезапускаем" },
+  { id: "ready", label: "Запускаем приложение" },
+] as const;
+
+type UpdateGateStepId = (typeof UPDATE_GATE_STEPS)[number]["id"];
+type UpdateGateMode = "running" | "success" | "warning" | "failed";
+
+interface UpdateGateAction {
+  label: string;
+  kind?: "primary" | "secondary";
+  run: () => void;
+}
+
+interface UpdateGateStatus {
+  title: string;
+  detail: string;
+  activeStep: UpdateGateStepId;
+  progress: number;
+  mode?: UpdateGateMode;
+  errorStep?: UpdateGateStepId;
+  actions?: UpdateGateAction[];
+}
 
 export function parseBuildIdFromServiceWorker(text: unknown): string {
   const raw = String(text ?? "");
@@ -96,6 +126,44 @@ function clearGuard(): void {
   writeGuard(null);
   try {
     storage("session")?.removeItem(UPDATE_GATE_RELOADING_KEY);
+    storage("session")?.removeItem("yagodka_updating");
+  } catch {
+    // ignore
+  }
+}
+
+function readBypass(liveBuildId: string): boolean {
+  const raw = (() => {
+    try {
+      return storage("session")?.getItem(UPDATE_GATE_BYPASS_KEY) || "";
+    } catch {
+      return "";
+    }
+  })();
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return false;
+    const buildId = String((parsed as any).buildId || "").trim();
+    const ts = Number((parsed as any).ts || 0);
+    if (!buildId || buildId !== liveBuildId || !Number.isFinite(ts) || ts <= 0) return false;
+    return Date.now() - ts <= UPDATE_GATE_BYPASS_TTL_MS;
+  } catch {
+    return false;
+  }
+}
+
+function writeBypass(liveBuildId: string): void {
+  try {
+    storage("session")?.setItem(UPDATE_GATE_BYPASS_KEY, JSON.stringify({ buildId: liveBuildId, ts: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
+
+function clearBypass(): void {
+  try {
+    storage("session")?.removeItem(UPDATE_GATE_BYPASS_KEY);
   } catch {
     // ignore
   }
@@ -107,6 +175,7 @@ function cleanupUpdateQueryParams(): void {
     const before = url.toString();
     url.searchParams.delete("__yg_update");
     url.searchParams.delete("__pwa_reset");
+    url.searchParams.delete("__yg_continue");
     if (url.toString() === before) return;
     window.history?.replaceState?.(window.history.state, document.title, url.toString());
   } catch {
@@ -126,11 +195,20 @@ function activeBuildIdForGate(): string {
   return APP_VERSION;
 }
 
-function setGateStatus(root: HTMLElement, title: string, detail: string, retry?: () => void): void {
+function stepStatus(stepId: UpdateGateStepId, activeStep: UpdateGateStepId, errorStep?: UpdateGateStepId): string {
+  if (errorStep && stepId === errorStep) return "error";
+  const stepIndex = UPDATE_GATE_STEPS.findIndex((step) => step.id === stepId);
+  const activeIndex = UPDATE_GATE_STEPS.findIndex((step) => step.id === activeStep);
+  if (stepIndex < activeIndex) return "done";
+  if (stepIndex === activeIndex) return "active";
+  return "pending";
+}
+
+function setGateStatus(root: HTMLElement, status: UpdateGateStatus): void {
   try {
     root.replaceChildren();
     const shell = document.createElement("main");
-    shell.className = "required-update-gate";
+    shell.className = `required-update-gate required-update-gate--${status.mode || "running"}`;
     shell.setAttribute("role", "status");
     shell.setAttribute("aria-live", "polite");
 
@@ -140,29 +218,195 @@ function setGateStatus(root: HTMLElement, title: string, detail: string, retry?:
 
     const h = document.createElement("h1");
     h.className = "required-update-gate__title";
-    h.textContent = title;
+    h.textContent = status.title;
 
     const p = document.createElement("p");
     p.className = "required-update-gate__text";
-    p.textContent = detail;
+    p.textContent = status.detail;
 
-    shell.append(spinner, h, p);
-    if (retry) {
-      const button = document.createElement("button");
-      button.className = "btn primary required-update-gate__btn";
-      button.type = "button";
-      button.textContent = "Повторить";
-      button.addEventListener("click", retry);
-      shell.append(button);
+    const taskbar = document.createElement("div");
+    taskbar.className = "required-update-gate__taskbar";
+    taskbar.setAttribute("aria-hidden", "true");
+    const track = document.createElement("div");
+    track.className = "required-update-gate__track";
+    const fill = document.createElement("div");
+    fill.className = "required-update-gate__fill";
+    const fillWidth = `${Math.max(4, Math.min(100, Math.round(status.progress)))}%`;
+    try {
+      fill.style.width = fillWidth;
+    } catch {
+      fill.setAttribute("style", `width: ${fillWidth}`);
+    }
+    track.append(fill);
+    taskbar.append(track);
+
+    const steps = document.createElement("ol");
+    steps.className = "required-update-gate__steps";
+    for (const step of UPDATE_GATE_STEPS) {
+      const item = document.createElement("li");
+      const state = stepStatus(step.id, status.activeStep, status.errorStep);
+      item.className = `required-update-gate__step required-update-gate__step--${state}`;
+      item.textContent = step.label;
+      steps.append(item);
+    }
+
+    shell.append(spinner, h, p, taskbar, steps);
+    if (status.actions?.length) {
+      const actions = document.createElement("div");
+      actions.className = "required-update-gate__actions";
+      for (const action of status.actions) {
+        const button = document.createElement("button");
+        const kind = action.kind || "secondary";
+        button.className = `btn ${kind === "primary" ? "primary" : ""} required-update-gate__btn required-update-gate__btn--${kind}`;
+        button.type = "button";
+        button.textContent = action.label;
+        button.addEventListener("click", action.run);
+        actions.append(button);
+      }
+      shell.append(actions);
     }
     root.append(shell);
   } catch {
     try {
-      root.textContent = `${title}. ${detail}`;
+      root.textContent = `${status.title}. ${status.detail}`;
     } catch {
       // ignore
     }
   }
+}
+
+function clearGateRoot(root: HTMLElement): void {
+  try {
+    root.replaceChildren();
+  } catch {
+    // ignore
+  }
+}
+
+function reloadCleanWithParam(paramName: string): boolean {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("__yg_update");
+    url.searchParams.delete("__pwa_reset");
+    url.searchParams.delete("__yg_continue");
+    url.searchParams.set(paramName, String(Date.now()));
+    window.location.replace(url.toString());
+    return true;
+  } catch {
+    // ignore
+  }
+  try {
+    window.location.reload();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function continueWithCurrentBundle(liveBuildId: string): void {
+  writeBypass(liveBuildId);
+  clearGuard();
+  reloadCleanWithParam("__yg_continue");
+}
+
+function retryRequiredUpdate(root: HTMLElement): void {
+  writeGuard(null);
+  clearBypass();
+  try {
+    storage("session")?.removeItem(UPDATE_GATE_RELOADING_KEY);
+    storage("session")?.removeItem("yagodka_updating");
+  } catch {
+    // ignore
+  }
+  void runRequiredUpdateGate(root);
+}
+
+function setGateFallback(root: HTMLElement, liveBuildId: string): void {
+  setGateStatus(root, {
+    title: "Обновление не завершилось",
+    detail: "Автоматическое обновление остановлено. Можно открыть приложение сейчас или попробовать обновить ещё раз.",
+    activeStep: "ready",
+    errorStep: "reload",
+    progress: 100,
+    mode: "failed",
+    actions: [
+      {
+        label: "Открыть приложение",
+        kind: "primary",
+        run: () => continueWithCurrentBundle(liveBuildId),
+      },
+      {
+        label: "Повторить обновление",
+        kind: "secondary",
+        run: () => retryRequiredUpdate(root),
+      },
+    ],
+  });
+}
+
+function setGateReloadFallback(root: HTMLElement): void {
+  setGateStatus(root, {
+    title: "Не удалось обновить приложение",
+    detail: "Проверьте подключение и повторите обновление перед входом.",
+    activeStep: "reload",
+    errorStep: "reload",
+    progress: 88,
+    mode: "failed",
+    actions: [
+      {
+        label: "Повторить обновление",
+        kind: "primary",
+        run: () => retryRequiredUpdate(root),
+      },
+    ],
+  });
+}
+
+function setGateChecking(root: HTMLElement): void {
+  setGateStatus(root, {
+    title: "Проверяем обновление",
+    detail: "Сверяем версию приложения перед запуском.",
+    activeStep: "version",
+    progress: 12,
+  });
+}
+
+function setGatePreparing(root: HTMLElement): void {
+  setGateStatus(root, {
+    title: "Обновляем приложение",
+    detail: "Найдена новая версия. Подготавливаем запуск без старого кэша.",
+    activeStep: "activate",
+    progress: 38,
+  });
+}
+
+function setGateClearing(root: HTMLElement): void {
+  setGateStatus(root, {
+    title: "Обновляем приложение",
+    detail: "Очищаем старый кэш приложения перед запуском новой версии.",
+    activeStep: "cache",
+    progress: 62,
+    mode: "warning",
+  });
+}
+
+function setGateReloading(root: HTMLElement): void {
+  setGateStatus(root, {
+    title: "Перезапускаем приложение",
+    detail: "Завершаем обновление и открываем новую версию.",
+    activeStep: "reload",
+    progress: 82,
+  });
+}
+
+function setGateBypassed(root: HTMLElement): void {
+  setGateStatus(root, {
+    title: "Запускаем приложение",
+    detail: "Автоматическое обновление не завершилось, открываем текущую версию без повторного цикла.",
+    activeStep: "ready",
+    progress: 100,
+    mode: "success",
+  });
 }
 
 async function fetchLiveBuildId(timeoutMs = UPDATE_GATE_FETCH_TIMEOUT_MS): Promise<string> {
@@ -305,8 +549,10 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
     return { blocked: false, liveBuildId: "", reason: "no_live_build" };
   }
 
+  setGateChecking(root);
   const liveBuildId = await fetchLiveBuildId();
   if (!liveBuildId) {
+    clearGateRoot(root);
     return { blocked: false, liveBuildId: "", reason: typeof fetch === "function" ? "fetch_failed" : "no_live_build" };
   }
 
@@ -318,28 +564,38 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
       // ignore
     }
     clearGuard();
+    clearBypass();
     cleanupUpdateQueryParams();
+    clearGateRoot(root);
     return { blocked: false, liveBuildId, reason: "current" };
   }
 
-  setGateStatus(root, "Обновляем приложение", "Найдена новая версия. Вход продолжится после обновления.");
+  if (readBypass(liveBuildId)) {
+    setGateBypassed(root);
+    cleanupUpdateQueryParams();
+    clearGateRoot(root);
+    return { blocked: false, liveBuildId, reason: "reload_failed" };
+  }
+
   const guard = markAttempt(liveBuildId);
+  if (guard.tries > UPDATE_GATE_MAX_TOTAL_RELOADS) {
+    setGateFallback(root, liveBuildId);
+    return { blocked: true, liveBuildId, reason: "reload_failed" };
+  }
+
   if (guard.tries > UPDATE_GATE_MAX_DIRECT_RELOADS) {
-    setGateStatus(root, "Обновляем приложение", "Сбрасываем старый кэш приложения перед запуском новой версии.");
+    setGateClearing(root);
     await resetServiceWorkerCaches();
   } else {
+    setGatePreparing(root);
     await applyServiceWorkerUpdate();
   }
 
+  setGateReloading(root);
   if (reloadForRequiredUpdate(liveBuildId)) {
     return { blocked: true, liveBuildId, reason: "update_required" };
   }
 
-  setGateStatus(
-    root,
-    "Не удалось обновить приложение",
-    "Проверьте подключение и повторите обновление перед входом.",
-    () => void runRequiredUpdateGate(root)
-  );
+  setGateReloadFallback(root);
   return { blocked: true, liveBuildId, reason: "reload_failed" };
 }

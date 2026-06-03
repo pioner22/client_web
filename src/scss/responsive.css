@@ -17,6 +17,7 @@
     --app-outer-pad: 0px;
     position: fixed;
     inset: 0;
+    bottom: auto;
     width: 100%;
     height: var(--app-vh);
     min-height: 0;
@@ -29,10 +30,10 @@
   }
 
   html.app-shell-physical-bottom:not(.kbd-open) #app {
-    bottom: calc(-1 * var(--app-shell-bottom-spill, 0px));
-    height: auto;
+    bottom: auto;
+    height: var(--app-vh);
     min-height: 0;
-    max-height: none;
+    max-height: var(--app-vh);
   }
 
   html.app-vv-offset #app {

@@ -458,13 +458,13 @@ test("viewport var: iOS PWA: большой physical bottom gap не зажим�
     assert.equal(style._props.get("--app-vh"), "900px");
     assert.equal(style._props.get("--vh"), "9px");
     assert.equal(style._props.get("--app-gap-bottom"), "90px");
-    assert.equal(style._props.get("--app-shell-bottom-spill"), "90px");
+    assert.equal(style._props.has("--app-shell-bottom-spill"), false);
     assert.equal(style._props.get("--safe-bottom-pad"), "34px");
     assert.equal(rootAttrs.get("data-viewport-diagnostic"), "1");
     assert.equal(rootAttrs.get("data-app-gap-bottom"), "90");
     assert.equal(rootAttrs.get("data-app-layout-gap-bottom"), "90");
     assert.equal(rootAttrs.get("data-app-keyboard"), "0");
-    assert.equal(rootAttrs.get("data-app-shell-spill"), "90");
+    assert.equal(rootAttrs.get("data-app-shell-spill"), "0");
     assert.equal(bodyAttrs.get("data-app-gap-bottom"), "90");
     assert.equal(docClasses.has("app-shell-physical-bottom"), true);
 
@@ -546,14 +546,14 @@ test("viewport var: iOS PWA: physical bottom gap не считается кла�
     assert.equal(style._props.get("--vh"), "9.56px");
     assert.equal(style._props.get("--app-gap-bottom"), "62px");
     assert.equal(style._props.get("--app-layout-gap-bottom"), "62px");
-    assert.equal(style._props.get("--app-shell-bottom-spill"), "62px");
+    assert.equal(style._props.has("--app-shell-bottom-spill"), false);
     assert.equal(style._props.get("--safe-bottom-pad"), "34px");
     assert.equal(style._props.has("--safe-bottom-raw"), false);
     assert.equal(style._props.has("--app-vv-bottom"), false);
     assert.equal(rootAttrs.get("data-app-gap-bottom"), "62");
     assert.equal(rootAttrs.get("data-app-layout-gap-bottom"), "62");
     assert.equal(rootAttrs.get("data-app-keyboard"), "0");
-    assert.equal(rootAttrs.get("data-app-shell-spill"), "62");
+    assert.equal(rootAttrs.get("data-app-shell-spill"), "0");
 
     cleanup();
   } finally {

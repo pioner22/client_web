@@ -292,12 +292,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     else setVar("--app-vv-bottom", null);
 
     const gap = gapBottom;
-    const shellBottomSpill = iosStandalone && !keyboard ? gap : 0;
+    const physicalBottom = iosStandalone && !keyboard && gap >= 1;
+    const shellBottomSpill = 0;
     if (gap >= 1) setVar("--app-gap-bottom", `${gap}px`);
     else setVar("--app-gap-bottom", null);
-    if (shellBottomSpill >= 1) setVar("--app-shell-bottom-spill", `${shellBottomSpill}px`);
-    else setVar("--app-shell-bottom-spill", null);
-    if (docEl?.classList) docEl.classList.toggle("app-shell-physical-bottom", shellBottomSpill >= 1);
+    setVar("--app-shell-bottom-spill", null);
+    if (docEl?.classList) docEl.classList.toggle("app-shell-physical-bottom", physicalBottom);
     if (keyboard) setVar("--app-layout-gap-bottom", "0px");
     else if (layoutGapBottom >= 1) setVar("--app-layout-gap-bottom", `${layoutGapBottom}px`);
     else setVar("--app-layout-gap-bottom", null);

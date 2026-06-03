@@ -182,8 +182,9 @@ body::after {
   body[data-viewport-diagnostic="1"]::before {
     content: "PHYSICAL-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom) " kbd=" attr(data-app-keyboard) " safe=" attr(data-app-safe-bottom) " spill=" attr(data-app-shell-spill);
     position: fixed;
-    right: 4px;
-    bottom: 4px;
+    left: 50%;
+    bottom: max(8px, calc(var(--app-bottom-inset) + 68px));
+    transform: translateX(-50%);
     z-index: 2147483600;
   }
 
@@ -191,7 +192,7 @@ body::after {
     content: "APP-FRAME-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom) " spill=" attr(data-app-shell-spill);
     position: absolute;
     left: 4px;
-    bottom: max(4px, min(24px, var(--app-bottom-inset)));
+    bottom: max(8px, calc(var(--app-bottom-inset) + 36px));
     z-index: 30;
   }
 }
