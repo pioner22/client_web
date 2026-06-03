@@ -16,8 +16,10 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     "data-viewport-diagnostic",
     "data-app-vh",
     "data-app-gap-bottom",
+    "data-app-layout-gap-bottom",
     "data-app-safe-bottom",
     "data-app-vv-bottom",
+    "data-app-keyboard",
   ];
 
   const isEditableElement = (el: unknown): boolean => {
@@ -90,6 +92,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     vvTop: number;
     vvBottom: number;
     gapBottom: number;
+    layoutGapBottom: number;
     safeBottomRaw: number;
     vhHeight: number;
   } => {
@@ -176,6 +179,8 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const hasLayoutBase = layoutBase > 0;
     const coveredBottomForKeyboard = hasLayoutBase ? Math.max(coveredBottomStable, coveredBottomNow) : coveredBottomStable;
     const coveredBottomForLayout = hasLayoutBase ? Math.min(coveredBottomStable, coveredBottomNow) : coveredBottomStable;
+    const keyboardCoveredBottom = Math.max(0, coveredBottomForKeyboard - gapBottom);
+    const layoutCoveredBottom = Math.max(0, coveredBottomForLayout - gapBottom);
     let activeEditable = false;
     try {
       const ae = typeof document !== "undefined" ? (document as any).activeElement : null;
@@ -189,10 +194,11 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const focusLikely = Boolean(activeEditable || (iosEnv && (recentFocus || recentPointer)));
     const keyboardThreshold = activeEditable ? USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX : USE_VISUAL_VIEWPORT_DIFF_PX;
     const keyboardByViewport = Boolean(
-      focusLikely && vvHeight && layout && coveredBottomForKeyboard >= USE_VISUAL_VIEWPORT_DIFF_PX
+      focusLikely && vvHeight && layout && keyboardCoveredBottom >= USE_VISUAL_VIEWPORT_DIFF_PX
     );
-    const keyboard = Boolean(activeEditable && vvHeight && layout && coveredBottomForKeyboard >= keyboardThreshold);
-    const innerDiff = lastStableLayout && inner ? Math.max(0, lastStableLayout - inner) : 0;
+    const keyboard = Boolean(activeEditable && vvHeight && layout && keyboardCoveredBottom >= keyboardThreshold);
+    const innerDiffRaw = lastStableLayout && inner ? Math.max(0, lastStableLayout - inner) : 0;
+    const innerDiff = Math.max(0, innerDiffRaw - gapBottom);
     const keyboardByInner = Boolean(iosEnv && focusLikely && innerDiff >= USE_VISUAL_VIEWPORT_DIFF_PX);
     const keyboardVisible = Boolean(keyboard || (iosEnv && (keyboardByViewport || keyboardByInner)));
     const allowVisualViewportHeight = Boolean(
@@ -220,8 +226,9 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       height: appHeight,
       keyboard: keyboardVisible,
       vvTop,
-      vvBottom: Math.round(coveredBottomForLayout),
+      vvBottom: Math.round(layoutCoveredBottom),
       gapBottom,
+      layoutGapBottom: layoutOwnedGap,
       safeBottomRaw,
       vhHeight: appVhHeight,
     };
@@ -229,13 +236,14 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
 
   const apply = () => {
     rafId = null;
-    const { height, keyboard, vvTop, vvBottom, gapBottom, safeBottomRaw, vhHeight } = read();
+    const { height, keyboard, vvTop, vvBottom, gapBottom, layoutGapBottom, safeBottomRaw, vhHeight } = read();
     if (!height) {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
       if (docEl?.classList) docEl.classList.remove("kbd-open");
       setVar("--app-vv-top", null);
       setVar("--app-vv-bottom", null);
       setVar("--app-gap-bottom", null);
+      setVar("--app-layout-gap-bottom", null);
       setVar("--safe-bottom-pad", null);
       setVar("--safe-bottom-raw", null);
       clearDiagnosticAttrs();
@@ -280,15 +288,20 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     if (keyboard && vvBottom >= 1) setVar("--app-vv-bottom", `${vvBottom}px`);
     else setVar("--app-vv-bottom", null);
 
-    const gap = keyboard ? 0 : gapBottom;
+    const gap = gapBottom;
     if (gap >= 1) setVar("--app-gap-bottom", `${gap}px`);
     else setVar("--app-gap-bottom", null);
+    if (keyboard) setVar("--app-layout-gap-bottom", "0px");
+    else if (layoutGapBottom >= 1) setVar("--app-layout-gap-bottom", `${layoutGapBottom}px`);
+    else setVar("--app-layout-gap-bottom", null);
 
     setDiagnosticAttr("data-viewport-diagnostic", "1");
     setDiagnosticAttr("data-app-vh", `${height}`);
     setDiagnosticAttr("data-app-gap-bottom", `${gap}`);
+    setDiagnosticAttr("data-app-layout-gap-bottom", `${keyboard ? 0 : layoutGapBottom}`);
     setDiagnosticAttr("data-app-safe-bottom", `${keyboard ? 0 : Math.max(safeBottomRaw, gapBottom)}`);
     setDiagnosticAttr("data-app-vv-bottom", `${keyboard ? vvBottom : 0}`);
+    setDiagnosticAttr("data-app-keyboard", keyboard ? "1" : "0");
 
     if (Math.abs(height - lastHeight) < 1) return;
     lastHeight = height;
@@ -373,6 +386,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     setVar("--app-vv-top", null);
     setVar("--app-vv-bottom", null);
     setVar("--app-gap-bottom", null);
+    setVar("--app-layout-gap-bottom", null);
     clearDiagnosticAttrs();
     if (docEl?.classList) docEl.classList.remove("app-vv-offset");
   };

@@ -444,13 +444,170 @@ test("viewport var: iOS PWA: большой physical bottom gap не зажим�
     assert.equal(style._props.get("--safe-bottom-pad"), "34px");
     assert.equal(rootAttrs.get("data-viewport-diagnostic"), "1");
     assert.equal(rootAttrs.get("data-app-gap-bottom"), "90");
+    assert.equal(rootAttrs.get("data-app-layout-gap-bottom"), "90");
+    assert.equal(rootAttrs.get("data-app-keyboard"), "0");
     assert.equal(bodyAttrs.get("data-app-gap-bottom"), "90");
 
     cleanup();
     assert.equal(style._props.has("--app-vh"), false);
     assert.equal(style._props.has("--app-gap-bottom"), false);
     assert.equal(rootAttrs.has("data-app-gap-bottom"), false);
+    assert.equal(rootAttrs.has("data-app-layout-gap-bottom"), false);
+    assert.equal(rootAttrs.has("data-app-keyboard"), false);
     assert.equal(bodyAttrs.has("data-app-gap-bottom"), false);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+    if (prev.navigator) Object.defineProperty(globalThis, "navigator", prev.navigator);
+    else delete globalThis.navigator;
+  }
+});
+
+test("viewport var: iOS PWA: physical bottom gap не считается клавиатурой при активном поле", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const rootAttrs = new Map();
+    const root = {
+      style,
+      setAttribute(k, v) {
+        rootAttrs.set(String(k), String(v));
+      },
+      removeAttribute(k) {
+        rootAttrs.delete(String(k));
+      },
+    };
+    const active = { tagName: "INPUT", isContentEditable: false };
+
+    Object.defineProperty(globalThis, "navigator", {
+      value: { userAgent: "iPhone", maxTouchPoints: 0, standalone: true },
+      configurable: true,
+      writable: true,
+    });
+    globalThis.document = { activeElement: active, documentElement: { clientHeight: 894 } };
+    globalThis.window = {
+      innerHeight: 894,
+      screen: { height: 956, availHeight: 956 },
+      outerHeight: 956,
+      visualViewport: { height: 894, addEventListener() {}, removeEventListener() {} },
+      getComputedStyle() {
+        return { getPropertyValue: () => "0px" };
+      },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "956px");
+    assert.equal(style._props.get("--vh"), "9.56px");
+    assert.equal(style._props.get("--app-gap-bottom"), "62px");
+    assert.equal(style._props.get("--app-layout-gap-bottom"), "62px");
+    assert.equal(style._props.get("--safe-bottom-pad"), "34px");
+    assert.equal(style._props.has("--safe-bottom-raw"), false);
+    assert.equal(style._props.has("--app-vv-bottom"), false);
+    assert.equal(rootAttrs.get("data-app-gap-bottom"), "62");
+    assert.equal(rootAttrs.get("data-app-layout-gap-bottom"), "62");
+    assert.equal(rootAttrs.get("data-app-keyboard"), "0");
+
+    cleanup();
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+    if (prev.navigator) Object.defineProperty(globalThis, "navigator", prev.navigator);
+    else delete globalThis.navigator;
+  }
+});
+
+test("viewport var: iOS PWA: keyboard keeps physical diagnostics but removes layout gap", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const rootAttrs = new Map();
+    const root = {
+      style,
+      setAttribute(k, v) {
+        rootAttrs.set(String(k), String(v));
+      },
+      removeAttribute(k) {
+        rootAttrs.delete(String(k));
+      },
+    };
+    const active = { tagName: "TEXTAREA", isContentEditable: false };
+
+    Object.defineProperty(globalThis, "navigator", {
+      value: { userAgent: "iPhone", maxTouchPoints: 0, standalone: true },
+      configurable: true,
+      writable: true,
+    });
+    globalThis.document = { activeElement: active, documentElement: { clientHeight: 810 } };
+    globalThis.window = {
+      innerHeight: 810,
+      screen: { height: 844, availHeight: 844 },
+      outerHeight: 844,
+      visualViewport: { height: 390, addEventListener() {}, removeEventListener() {} },
+      getComputedStyle() {
+        return { getPropertyValue: () => "34px" };
+      },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "390px");
+    assert.equal(style._props.get("--vh"), "3.9px");
+    assert.equal(style._props.get("--app-gap-bottom"), "34px");
+    assert.equal(style._props.get("--app-layout-gap-bottom"), "0px");
+    assert.equal(style._props.get("--safe-bottom-pad"), "0px");
+    assert.equal(style._props.get("--safe-bottom-raw"), "0px");
+    assert.equal(style._props.get("--app-vv-bottom"), "386px");
+    assert.equal(rootAttrs.get("data-app-gap-bottom"), "34");
+    assert.equal(rootAttrs.get("data-app-layout-gap-bottom"), "0");
+    assert.equal(rootAttrs.get("data-app-keyboard"), "1");
+
+    cleanup();
+    assert.equal(style._props.has("--app-layout-gap-bottom"), false);
   } finally {
     await helper.cleanup();
     if (prev.window === undefined) delete globalThis.window;

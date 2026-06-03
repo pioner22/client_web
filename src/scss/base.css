@@ -3,8 +3,10 @@
   /* iPhone safe-area bottom is typically 34px; allow up to 44px to avoid cutting off the composer. */
   --safe-bottom-pad: clamp(0px, env(safe-area-inset-bottom), 44px);
   --app-gap-bottom: 0px;
-  /* One bottom contract: iOS/PWA gap is part of layout, not a detached footer. */
-  --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-gap-bottom, 0px));
+  --app-layout-gap-bottom: var(--app-gap-bottom);
+  /* One bottom contract: frame paint owns physical bottom; layout can drop it under a real keyboard. */
+  --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-layout-gap-bottom, var(--app-gap-bottom, 0px)));
+  --app-frame-bottom-inset: max(var(--safe-bottom-pad), var(--app-gap-bottom, 0px));
   --safe-bottom-layout-pad: var(--app-bottom-inset);
   --app-frame-bg: var(--app-bg);
   --app-frame-safe-bg: var(--safe-area-bg, var(--app-frame-bg));
@@ -104,7 +106,7 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  height: var(--app-bottom-inset);
+  height: var(--app-frame-bottom-inset);
   background: var(--app-frame-safe-bg, var(--safe-area-bg, var(--sidebar-bg)));
   pointer-events: none;
   z-index: 0;
@@ -131,7 +133,7 @@ body::after {
   left: 0;
   right: 0;
   bottom: 0;
-  height: var(--app-bottom-inset);
+  height: var(--app-frame-bottom-inset);
   background: var(--app-frame-safe-bg, var(--safe-area-bg, var(--sidebar-bg)));
   pointer-events: none;
   z-index: 0;
@@ -160,7 +162,7 @@ body::after {
   }
 
   body[data-viewport-diagnostic="1"]::before {
-    content: "PHYSICAL-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " safe=" attr(data-app-safe-bottom);
+    content: "PHYSICAL-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom) " kbd=" attr(data-app-keyboard) " safe=" attr(data-app-safe-bottom);
     position: fixed;
     right: 4px;
     bottom: 4px;
@@ -168,7 +170,7 @@ body::after {
   }
 
   #app.app-frame[data-viewport-diagnostic="1"]::before {
-    content: "APP-FRAME-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom);
+    content: "APP-FRAME-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom);
     position: absolute;
     left: 4px;
     bottom: max(4px, min(24px, var(--app-bottom-inset)));

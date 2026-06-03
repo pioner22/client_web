@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.827",
+    date: "2026-06-03",
+    improved: [
+      "iPhone/PWA: physical bottom теперь отделён от keyboard/visualViewport state, чтобы rounded-screen низ не превращался в ложный keyboard mode.",
+      "Mobile debug: нижние diagnostic markers дополнены layout gap и keyboard flag для точной проверки app-frame ownership на screenshots.",
+    ],
+    fixed: [
+      "Исправлен остаточный тёмный physical bottom strip: app-frame красит реальный device bottom, а layout padding отдельно отключается только для настоящей клавиатуры.",
+    ],
+  },
+  {
     version: "0.1.826",
     date: "2026-06-03",
     improved: [
