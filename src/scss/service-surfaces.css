@@ -402,7 +402,8 @@
   --required-update-good: #087f5b;
   --required-update-bad: #b4232d;
   min-height: 100%;
-  min-height: var(--app-vh, 100dvh);
+  min-height: var(--app-frame-vh, var(--app-vh, 100dvh));
+  height: var(--app-frame-vh, var(--app-vh, 100dvh));
   display: grid;
   align-content: center;
   justify-content: center;
@@ -419,6 +420,10 @@
 html.required-update-active,
 html.required-update-active body,
 html.required-update-active #app {
+  --safe-area-bg: #f7fafc;
+  --app-frame-bg: #f7fafc;
+  --app-frame-safe-bg: #f7fafc;
+  --app-host-canvas-bg: #f7fafc;
   background: #f7fafc;
   background-color: #f7fafc;
 }

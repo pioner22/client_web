@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.842",
+    date: "2026-06-03",
+    improved: [
+      "iPhone/PWA: физический rounded-screen низ теперь входит в единый app frame, поэтому chat, sidebar, composer и viewer больше не заканчиваются раньше края экрана.",
+      "Экран проверки обновления показывает последовательные видимые стадии с task-bar вместо мгновенного зависания на первом пункте.",
+    ],
+    fixed: [
+      "Убран повторный двойной учёт нижнего gap: composer и sidebar больше не дотягиваются отрицательным bottom/margin, а работают внутри общего frame-height.",
+      "Мобильная авторизация и экран обновления используют общий `--app-frame-vh`, чтобы нижний фон и версия не жили отдельным внешним слоем.",
+    ],
+  },
+  {
     version: "0.1.841",
     date: "2026-06-03",
     improved: [

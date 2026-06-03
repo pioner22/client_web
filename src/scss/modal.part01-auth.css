@@ -1148,9 +1148,9 @@
 @media (max-width: 860px) {
   html.has-auth-pages,
   body.has-auth-pages {
-    --auth-safe-bottom: max(10px, var(--app-bottom-live-pad));
+    --auth-safe-bottom: max(10px, var(--safe-bottom-pad));
     --auth-scroll-bottom-space: max(8px, var(--auth-safe-bottom));
-    --auth-viewport-min: var(--app-vh, 100dvh);
+    --auth-viewport-min: var(--app-frame-vh, var(--app-vh, 100dvh));
     --auth-mobile-canvas-bg: #eaf5f0;
     --auth-mobile-screen-bg: linear-gradient(
       180deg,
@@ -1291,7 +1291,7 @@
   .auth-entry-update-marker {
     position: absolute;
     left: 50%;
-    bottom: max(8px, var(--auth-safe-bottom));
+    bottom: max(6px, var(--auth-safe-bottom));
     transform: translateX(-50%);
     margin: 0;
     min-height: 25px;

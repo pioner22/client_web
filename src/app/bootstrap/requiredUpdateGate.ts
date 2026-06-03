@@ -25,6 +25,7 @@ const UPDATE_GATE_BYPASS_TTL_MS = 10 * 60 * 1000;
 const UPDATE_GATE_FETCH_TIMEOUT_MS = 2500;
 const UPDATE_GATE_CONTINUE_DELAY_MS = 900;
 const UPDATE_GATE_SW_TIMEOUT_MS = 3500;
+const UPDATE_GATE_MIN_STEP_MS = 420;
 const UPDATE_GATE_STEPS = [
   { id: "version", label: "Проверяем версию" },
   { id: "activate", label: "Готовим обновление" },
@@ -426,6 +427,16 @@ function setGateLaunchingCurrent(root: HTMLElement, liveBuildId: string, current
   });
 }
 
+function setGateLaunchReady(root: HTMLElement): void {
+  setGateStatus(root, {
+    title: "Запускаем приложение",
+    detail: "Версия проверена. Открываем приложение.",
+    activeStep: "ready",
+    progress: 100,
+    mode: "success",
+  });
+}
+
 function setGateBypassed(root: HTMLElement): void {
   setGateStatus(root, {
     title: "Запускаем приложение",
@@ -439,11 +450,17 @@ function setGateBypassed(root: HTMLElement): void {
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     try {
-      window.setTimeout(resolve, Math.max(0, ms));
+      const fast = Boolean((window as any).__YAGODKA_TEST_FAST_UPDATE_GATE__);
+      window.setTimeout(resolve, fast ? 0 : Math.max(0, ms));
     } catch {
       resolve();
     }
   });
+}
+
+async function showGateStep(root: HTMLElement, render: (root: HTMLElement) => void, minMs = UPDATE_GATE_MIN_STEP_MS): Promise<void> {
+  render(root);
+  await delay(minMs);
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -607,7 +624,9 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
   }
 
   setGateChecking(root);
-  const liveBuildId = await withTimeout(fetchLiveBuildId(), UPDATE_GATE_FETCH_TIMEOUT_MS + 500, "");
+  const liveBuildIdPromise = withTimeout(fetchLiveBuildId(), UPDATE_GATE_FETCH_TIMEOUT_MS + 500, "");
+  await delay(UPDATE_GATE_MIN_STEP_MS);
+  const liveBuildId = await liveBuildIdPromise;
   if (!liveBuildId) {
     clearGateRoot(root);
     return { blocked: false, liveBuildId: "", reason: typeof fetch === "function" ? "fetch_failed" : "no_live_build" };
@@ -623,28 +642,31 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
     clearGuard();
     clearBypass();
     cleanupUpdateQueryParams();
+    await showGateStep(root, setGateLaunchReady, UPDATE_GATE_MIN_STEP_MS);
     clearGateRoot(root);
     return { blocked: false, liveBuildId, reason: "current" };
   }
 
   if (readBypass(liveBuildId)) {
-    setGateBypassed(root);
+    await showGateStep(root, setGateBypassed, UPDATE_GATE_MIN_STEP_MS);
     cleanupUpdateQueryParams();
     clearGateRoot(root);
     return { blocked: false, liveBuildId, reason: "reload_failed" };
   }
 
   const guard = markAttempt(liveBuildId);
+  await showGateStep(root, setGatePreparing);
+  let updatePromise: Promise<void>;
   if (guard.tries > UPDATE_GATE_MAX_TOTAL_RELOADS || guard.tries > UPDATE_GATE_MAX_DIRECT_RELOADS) {
-    setGateClearing(root);
-    void resetServiceWorkerCaches().catch(() => {});
+    updatePromise = resetServiceWorkerCaches().catch(() => {});
+    await showGateStep(root, setGateClearing);
   } else {
-    setGatePreparing(root);
-    void applyServiceWorkerUpdate().catch(() => {});
+    updatePromise = applyServiceWorkerUpdate().catch(() => {});
   }
+  await withTimeout(updatePromise, UPDATE_GATE_SW_TIMEOUT_MS + UPDATE_GATE_MIN_STEP_MS, undefined);
 
   writeBypass(liveBuildId);
-  await delay(Math.min(320, UPDATE_GATE_CONTINUE_DELAY_MS));
+  await showGateStep(root, setGateReloading);
   setGateLaunchingCurrent(root, liveBuildId, currentBuildId);
   await delay(UPDATE_GATE_CONTINUE_DELAY_MS);
   clearGuard();

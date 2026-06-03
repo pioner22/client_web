@@ -403,6 +403,7 @@ test("requiredUpdateGate: index waits for the gate before importing mountApp", a
 
 test("requiredUpdateGate: update surface has animated taskbar and finite fallback controls", async () => {
   const css = await readFile(path.resolve("src/scss/service-surfaces.css"), "utf8");
+  const gate = await readFile(path.resolve("src/app/bootstrap/requiredUpdateGate.ts"), "utf8");
   assert.match(css, /--required-update-text:\s*#14211b/);
   assert.match(css, /--required-update-bg:\s*#f7fafc/);
   assert.match(css, /html\.required-update-active/);
@@ -414,6 +415,10 @@ test("requiredUpdateGate: update surface has animated taskbar and finite fallbac
   assert.match(css, /@keyframes\s+required-update-spin/);
   assert.match(css, /@keyframes\s+required-update-bar/);
   assert.match(css, /\.required-update-gate--failed\s+\.required-update-gate__spinner/);
+  assert.match(gate, /UPDATE_GATE_MIN_STEP_MS/);
+  assert.match(gate, /showGateStep/);
+  assert.match(gate, /showGateStep\(root,\s*setGateReloading\)/);
+  assert.match(gate, /setGateLaunchReady/);
 });
 
 test("requiredUpdateGate: boot and service worker recovery are early and bounded", async () => {
