@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.828",
+    date: "2026-06-03",
+    improved: [
+      "iPhone/PWA: нижний physical gap теперь остаётся частью app host, а не отдельным pseudo-footer слоем поверх текущего экрана.",
+      "Mobile debug: gap/layout/kbd diagnostics сохранены, чтобы проверить, что outer host дошёл до самого rounded-screen bottom.",
+    ],
+    fixed: [
+      "Убран остаточный тёмный нижний обрубок после 0.1.827: frame-bottom paint больше не рисуется отдельной полосой, когда --app-vh уже включает physical bottom.",
+    ],
+  },
+  {
     version: "0.1.827",
     date: "2026-06-03",
     improved: [

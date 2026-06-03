@@ -4,9 +4,9 @@
   --safe-bottom-pad: clamp(0px, env(safe-area-inset-bottom), 44px);
   --app-gap-bottom: 0px;
   --app-layout-gap-bottom: var(--app-gap-bottom);
-  /* One bottom contract: frame paint owns physical bottom; layout can drop it under a real keyboard. */
+  /* One bottom contract: app height owns physical bottom; layout can drop it under a real keyboard. */
   --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-layout-gap-bottom, var(--app-gap-bottom, 0px)));
-  --app-frame-bottom-inset: max(var(--safe-bottom-pad), var(--app-gap-bottom, 0px));
+  --app-frame-bottom-inset: 0px;
   --safe-bottom-layout-pad: var(--app-bottom-inset);
   --app-frame-bg: var(--app-bg);
   --app-frame-safe-bg: var(--safe-area-bg, var(--app-frame-bg));
@@ -126,7 +126,8 @@ button {
   --app-frame-safe-bg: #0d1117;
 }
 
-/* iOS safe-area: paint bottom inset so rounded screens don't show black corners. */
+/* iOS safe-area: the host app height owns the physical bottom.
+   Keep this hook zero-height so old pseudo-footer paint cannot create a separate strip. */
 body::after {
   content: "";
   position: fixed;

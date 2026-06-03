@@ -28,7 +28,7 @@ test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () =
   assert.match(css, /--safe-bottom-pad:\s*clamp\(\s*0px\s*,\s*env\(safe-area-inset-bottom\)\s*,\s*44px\s*\)\s*;/);
   assert.match(css, /--app-layout-gap-bottom:\s*var\(--app-gap-bottom\)\s*;/);
   assert.match(css, /--app-bottom-inset:\s*max\(var\(--safe-bottom-pad\),\s*var\(--app-layout-gap-bottom,\s*var\(--app-gap-bottom,\s*0px\)\)\)\s*;/);
-  assert.match(css, /--app-frame-bottom-inset:\s*max\(var\(--safe-bottom-pad\),\s*var\(--app-gap-bottom,\s*0px\)\)\s*;/);
+  assert.match(css, /--app-frame-bottom-inset:\s*0px\s*;/);
   assert.match(css, /--safe-bottom-layout-pad:\s*var\(--app-bottom-inset\)\s*;/);
   assert.match(css, /--app-frame-bg:\s*var\(--app-bg\)\s*;/);
   assert.match(css, /#app\.app-frame::after\s*\{[\s\S]*?background:\s*var\(--app-frame-safe-bg,/);
