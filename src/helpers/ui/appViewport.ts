@@ -15,6 +15,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   const diagnosticAttrNames = [
     "data-viewport-diagnostic",
     "data-app-vh",
+    "data-app-frame-vh",
     "data-app-gap-bottom",
     "data-app-layout-gap-bottom",
     "data-app-safe-bottom",
@@ -135,6 +136,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     layoutGapBottom: number;
     safeBottomRaw: number;
     vhHeight: number;
+    frameHeight: number;
   } => {
     const USE_VISUAL_VIEWPORT_DIFF_PX = 96;
     const USE_VISUAL_VIEWPORT_DIFF_FOCUSED_PX = 32;
@@ -260,10 +262,8 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const resolvedHeight = height > 0 ? height : fallbackHeight;
     const vhHeight = keyboardVisible ? (vvHeight > 0 ? vvHeight : base) : base;
     const resolvedVhHeight = vhHeight > 0 ? vhHeight : resolvedHeight;
-    // iOS standalone screenshots include the physical rounded-screen bottom, but
-    // fixed/flex app surfaces are laid out in the visible viewport. Keep app height
-    // tied to the visible viewport and expose the physical gap only as bottom paint/inset.
     const layoutOwnedGap = keyboardVisible ? 0 : gapBottom;
+    const frameHeight = resolvedHeight > 0 ? resolvedHeight + layoutOwnedGap : 0;
     return {
       height: resolvedHeight,
       keyboard: keyboardVisible,
@@ -273,12 +273,14 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       layoutGapBottom: layoutOwnedGap,
       safeBottomRaw,
       vhHeight: resolvedVhHeight,
+      frameHeight,
     };
   };
 
   const apply = () => {
     rafId = null;
-    const { height, keyboard, vvTop, vvBottom, gapBottom, layoutGapBottom, safeBottomRaw, vhHeight } = read();
+    const { height, keyboard, vvTop, vvBottom, gapBottom, layoutGapBottom, safeBottomRaw, vhHeight, frameHeight } =
+      read();
     if (!height) {
       if (docEl?.classList) docEl.classList.remove("app-vv-offset");
       if (docEl?.classList) docEl.classList.remove("kbd-open");
@@ -287,6 +289,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       setVar("--app-vv-bottom", null);
       setVar("--app-gap-bottom", null);
       setVar("--app-layout-gap-bottom", null);
+      setVar("--app-frame-vh", null);
       setVar("--app-shell-bottom-spill", null);
       setVar("--safe-bottom-pad", null);
       setVar("--safe-bottom-raw", null);
@@ -299,6 +302,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     const vhSource = vhHeight > 0 ? vhHeight : height;
     const vh = +((vhSource * 0.01) as number).toFixed(2);
     setVar("--vh", `${vh}px`);
+    setVar("--app-frame-vh", `${frameHeight > 0 ? frameHeight : height}px`);
 
     // When iOS keyboard is visible, safe-area inset bottom is not useful (it's under the keyboard)
     // and creates an ugly gap above the keyboard. Override it to 0 while keyboard is open.
@@ -346,6 +350,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     if (bottomDiagnosticsEnabled()) {
       setDiagnosticAttr("data-viewport-diagnostic", "1");
       setDiagnosticAttr("data-app-vh", `${height}`);
+      setDiagnosticAttr("data-app-frame-vh", `${frameHeight > 0 ? frameHeight : height}`);
       setDiagnosticAttr("data-app-gap-bottom", `${gap}`);
       setDiagnosticAttr("data-app-layout-gap-bottom", `${keyboard ? 0 : layoutGapBottom}`);
       setDiagnosticAttr("data-app-safe-bottom", `${keyboard ? 0 : Math.max(safeBottomRaw, gapBottom)}`);
@@ -434,6 +439,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     if (docEl?.classList) docEl.classList.remove("kbd-open");
     setVar("--vh", null);
     setVar("--app-vh", null);
+    setVar("--app-frame-vh", null);
     setVar("--safe-bottom-pad", null);
     setVar("--safe-bottom-raw", null);
     setVar("--app-vv-top", null);

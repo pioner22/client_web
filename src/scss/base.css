@@ -2,6 +2,8 @@
   --safe-bottom-raw: env(safe-area-inset-bottom);
   /* iPhone safe-area bottom is typically 34px; allow up to 44px to avoid cutting off the composer. */
   --safe-bottom-pad: clamp(0px, env(safe-area-inset-bottom), 44px);
+  --app-vh: 100dvh;
+  --app-frame-vh: var(--app-vh);
   --app-gap-bottom: 0px;
   --app-layout-gap-bottom: var(--app-gap-bottom);
   --app-shell-bottom-spill: 0px;

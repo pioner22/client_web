@@ -67,9 +67,15 @@ test("mobile safe-area: pages have bottom padding for home indicator", async () 
 
 test("mobile safe-area: iOS standalone physical bottom stays inside fixed app frame", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
-  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
-  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-vh\);/);
-  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\)\s+#app\s*\{[\s\S]*?max-height:\s*var\(--app-vh\);/);
+  assert.match(css, /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
+  assert.match(
+    css,
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);/
+  );
+  assert.match(
+    css,
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?max-height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);/
+  );
   assert.doesNotMatch(css, /bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill/);
 });
 

@@ -335,8 +335,8 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-update-marker\s*{[^}]*position:\s*absolute;[^}]*bottom:\s*max\(8px,\s*var\(--auth-safe-bottom\)\);[^}]*transform:\s*translateX\(-50%\);[^}]*margin:\s*0;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*#auth-pages\.auth-entry-page\s+\.tabs-tab,\s*#auth-pages\.auth-entry-page\s+\.tabs-tab\.active,\s*#auth-pages\.auth-entry-page\s+\.tabs-tab\s+\.container\s*{[^}]*background:\s*transparent;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-layout\s*{[^}]*flex:\s*1 1 auto;[^}]*height:\s*100%;[^}]*max-height:\s*none;[^}]*min-height:\s*0;[^}]*max-width:\s*none;/);
-  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s*{[^}]*height:\s*100%;[^}]*display:\s*grid;[^}]*grid-template-rows:\s*auto auto auto auto minmax\(202px,\s*1fr\) auto auto;/);
-  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-entry-form-fixed\s*{[^}]*align-self:\s*center;[^}]*margin-top:\s*clamp\(18px,\s*3vh,\s*34px\);/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s*{[^}]*height:\s*100%;[^}]*display:\s*grid;[^}]*grid-template-rows:\s*auto auto auto auto auto minmax\(0,\s*1fr\) auto;/);
+  assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-entry-form-fixed\s*{[^}]*align-self:\s*start;[^}]*margin-top:\s*clamp\(8px,\s*1\.4vh,\s*16px\);/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s*{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*box-shadow:\s*none;[^}]*background:\s*transparent;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-panel-top,\s*\.modal-auth\s+\.auth-panel-top\s*{[^}]*border:\s*0;[^}]*background:\s*transparent;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s+\.auth-brand\s*{[^}]*flex-direction:\s*column;/);

@@ -1339,11 +1339,11 @@
     min-height: 0;
     height: 100%;
     display: grid;
-    grid-template-rows: auto auto auto auto minmax(202px, 1fr) auto auto;
+    grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto;
     align-content: stretch;
     margin: 0 auto;
     padding: calc(clamp(18px, 4vh, 38px) + env(safe-area-inset-top)) 0 calc(42px + var(--auth-safe-bottom));
-    gap: 10px;
+    gap: 9px;
     border: 0;
     border-radius: 0;
     box-shadow: none;
@@ -1455,17 +1455,17 @@
   .auth-entry-panel .auth-entry-form-fixed {
     grid-template-rows: 66px 66px 52px;
     min-height: 202px;
-    align-self: center;
-    align-content: end;
-    margin-top: clamp(18px, 3vh, 34px);
+    align-self: start;
+    align-content: start;
+    margin-top: clamp(8px, 1.4vh, 16px);
   }
 
   .auth-entry-panel .auth-entry-form-auto {
     grid-template-rows: 44px 50px;
     min-height: 98px;
-    align-self: center;
-    align-content: end;
-    margin-top: clamp(18px, 3vh, 34px);
+    align-self: start;
+    align-content: start;
+    margin-top: clamp(8px, 1.4vh, 16px);
   }
 
   .auth-field-stack {
