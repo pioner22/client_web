@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.858",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0954 перестраивает long-press меню сообщения как reference stack: прозрачный контейнер, frameless reaction pill сверху и компактная action panel под выбранным сообщением.",
+      "Нижняя навигация списка стала плавающей капсулой с видимыми подписями наших четырёх вкладок, вместо тяжёлого full-width бара и скрытых label.",
+      "Modern skin получил мягкий patterned chat background, плоские строки списка с разделителем от текстовой колонки и composer с отдельными круглыми action-кнопками вокруг input-pill.",
+    ],
+    fixed: [
+      "Modern skin больше не возвращает message action menu к старым 286px/48px параметрам W-0953.",
+      "Android/mobile overrides больше не прячут подписи bottom dock; auth `Web` version marker, collapsed search и принятый compact photo viewer chrome сохранены regression guards.",
+    ],
+  },
+  {
     version: "0.1.857",
     date: "2026-06-04",
     improved: [

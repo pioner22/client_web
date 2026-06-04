@@ -179,8 +179,10 @@ function applyCompactMessageGeometry(root: HTMLElement, payload: ContextMenuPayl
   const viewportH = Math.max(320, Number(window.innerHeight || 0));
   const pad = 12;
   const rect = root.getBoundingClientRect();
-  const width = Math.max(260, Math.min(rect.width || 286, viewportW - pad * 2));
-  const height = Math.max(170, Math.min(rect.height || 356, viewportH - pad * 2));
+  const stackWidth = Math.min(344, viewportW - pad * 2);
+  const actionWidth = Math.min(252, viewportW - 32);
+  const width = Math.max(280, Math.min(rect.width || stackWidth, viewportW - pad * 2));
+  const height = Math.max(210, Math.min(rect.height || 318, viewportH - pad * 2));
   const messageRect = findMessageAnchorRect(payload);
   const composerRect = composerAvoidRect();
   const bottomLimit =
@@ -204,17 +206,21 @@ function applyCompactMessageGeometry(root: HTMLElement, payload: ContextMenuPayl
       : messageRect.left
     : anchorX - width * 0.48;
   const left = clampNumber(leftRaw, pad, viewportW - width - pad);
-  const belowTop = messageRect ? messageRect.bottom + 10 : anchorY + 10;
-  const aboveTop = messageRect ? messageRect.top - height - 10 : anchorY - height - 10;
+  const belowTop = messageRect ? messageRect.bottom + 8 : anchorY + 8;
+  const aboveTop = messageRect ? messageRect.top - height - 8 : anchorY - height - 8;
   const hasRoomBelow = belowTop + height <= bottomLimit;
   const preferAbove = !hasRoomBelow && anchorY > viewportH * 0.38;
   const topRaw = preferAbove ? aboveTop : belowTop;
   const top = clampNumber(topRaw, pad + Math.max(0, Number(window.scrollY || 0)), Math.max(pad, bottomLimit - height));
   root.style.left = `${Math.round(left)}px`;
   root.style.top = `${Math.round(top)}px`;
-  root.style.setProperty("--ctx-list-max-h", `${Math.max(168, Math.min(318, height - 54))}px`);
-  root.style.maxHeight = `${Math.max(220, Math.min(390, bottomLimit - pad))}px`;
+  root.style.setProperty("--ctx-react-pill-w", `${Math.round(stackWidth)}px`);
+  root.style.setProperty("--ctx-action-list-w", `${Math.round(actionWidth)}px`);
+  root.style.setProperty("--ctx-list-max-h", `${Math.max(178, Math.min(318, height - 58))}px`);
+  root.style.maxHeight = `${Math.max(240, Math.min(420, bottomLimit - pad))}px`;
   root.setAttribute("data-anchor", messageRect ? "message-row" : "tap");
+  root.setAttribute("data-align", rightLeaning ? "end" : "start");
+  root.setAttribute("data-stack-position", preferAbove ? "above-message" : "below-message");
 }
 
 export function renderContextMenu(payload: ContextMenuPayload, actions: ContextMenuActions): HTMLElement {
@@ -235,6 +241,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     "data-target-kind": targetKind,
     "data-menu-layout": compactMessage ? "message-action-list" : sheet ? "modern-sheet" : "popover",
     "data-menu-density": compactMessage ? "ios-action" : undefined,
+    "data-menu-stack": compactMessage ? "selected-message-stack" : undefined,
     "data-has-reactions": payload.reactionBar?.emojis?.length ? "1" : undefined,
   });
   if (!sheet) {

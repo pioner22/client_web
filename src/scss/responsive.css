@@ -5,7 +5,7 @@
     --mobile-sidebar-sticky-h: calc(env(safe-area-inset-top) + 60px);
     --mobile-sidebar-menu-sticky-h: calc(env(safe-area-inset-top) + 48px);
     --mobile-bottom-nav-fill: var(--app-bottom-live-pad);
-    --mobile-bottom-nav-row-h: 64px;
+    --mobile-bottom-nav-row-h: 68px;
     --mobile-bottom-nav-h: calc(var(--mobile-bottom-nav-row-h) + var(--mobile-bottom-nav-fill));
     --mobile-composer-bottom-offset: 0px;
   }
@@ -366,21 +366,17 @@
     right: 0;
     bottom: 0;
     display: flex;
-    align-items: stretch;
+    align-items: flex-end;
     justify-content: center;
     z-index: 12;
     min-height: var(--mobile-bottom-nav-h);
     height: var(--mobile-bottom-nav-h);
     box-sizing: border-box;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--sidebar-bg), transparent 26%), var(--sidebar-bg) 42%),
-      var(--sidebar-bg);
-    border-top: 1px solid color-mix(in srgb, var(--line), transparent 34%);
-    padding: 6px 10px max(6px, min(18px, calc(var(--mobile-bottom-nav-fill) * 0.32)));
+    background: transparent;
+    border-top: 0;
+    padding: 7px 12px max(8px, min(22px, calc(var(--mobile-bottom-nav-fill) * 0.45)));
     margin-top: 0;
-    box-shadow:
-      0 -18px 34px color-mix(in srgb, #000, transparent 72%),
-      0 -1px 0 color-mix(in srgb, #fff, transparent 92%) inset;
+    box-shadow: none;
   }
 
   .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav {
@@ -388,23 +384,23 @@
     --sidebar-tab-icon-groups: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M9 11a3.5 3.5 0 1 0 0-7a3.5 3.5 0 0 0 0 7Zm7.5 1a3 3 0 1 0 0-6a3 3 0 0 0 0 6ZM9 13c-3.4 0-6 1.8-6 4.4V19h12v-1.6C15 14.8 12.4 13 9 13Zm7.5.4c-.8 0-1.5.1-2.1.4c1 .9 1.6 2 1.6 3.4V19h5v-1.4c0-2.4-2-4.2-4.5-4.2Z'/%3E%3C/svg%3E");
     --sidebar-tab-icon-boards: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm2 4v2h10V8H7Zm0 4v2h7v-2H7Z'/%3E%3C/svg%3E");
     --sidebar-tab-icon-menu: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 5h4v4H5V5Zm5 0h4v4h-4V5Zm5 0h4v4h-4V5ZM5 10h4v4H5v-4Zm5 0h4v4h-4v-4Zm5 0h4v4h-4v-4ZM5 15h4v4H5v-4Zm5 0h4v4h-4v-4Zm5 0h4v4h-4v-4Z'/%3E%3C/svg%3E");
-    width: min(100%, 384px);
-    height: 100%;
+    width: min(calc(100vw - 24px), 372px);
+    height: 56px;
     min-height: 0;
-    align-self: stretch;
+    align-self: auto;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    align-items: stretch;
-    column-gap: 4px;
-    padding: 6px;
-    border: 1px solid color-mix(in srgb, var(--line), transparent 12%);
-    border-radius: 22px;
-    background:
-      linear-gradient(135deg, color-mix(in srgb, var(--panel2), var(--focus) 10%), color-mix(in srgb, var(--panel), var(--accent) 8%)),
-      var(--panel2);
+    align-items: center;
+    column-gap: 3px;
+    padding: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    background: rgba(25, 25, 31, 0.92);
+    -webkit-backdrop-filter: blur(20px) saturate(1.16);
+    backdrop-filter: blur(20px) saturate(1.16);
     box-shadow:
-      0 18px 34px color-mix(in srgb, #000, transparent 70%),
-      0 1px 0 color-mix(in srgb, #fff, transparent 84%) inset;
+      0 16px 34px rgba(0, 0, 0, 0.38),
+      0 1px 0 rgba(255, 255, 255, 0.08) inset;
     overflow: hidden;
   }
 
@@ -421,14 +417,15 @@
     height: 100%;
     justify-content: center;
     align-items: center;
-    gap: 0;
+    gap: 3px;
     flex-direction: column;
     flex: 0 1 auto;
-    border-radius: 18px;
-    padding: 4px 2px;
-    color: color-mix(in srgb, var(--muted), var(--text) 18%);
-    font-size: 0;
-    line-height: 1;
+    border-radius: 999px;
+    padding: 4px 2px 5px;
+    color: rgba(235, 238, 244, 0.64);
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.05;
     overflow: hidden;
     text-overflow: clip;
     white-space: nowrap;
@@ -436,10 +433,8 @@
 
   .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab-active {
     color: #fff;
-    background:
-      linear-gradient(135deg, color-mix(in srgb, var(--focus), #fff 8%), color-mix(in srgb, var(--accent), var(--focus) 22%)),
-      var(--focus);
-    box-shadow: 0 9px 20px color-mix(in srgb, var(--focus), transparent 72%);
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
   }
 
   .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab::after {
@@ -513,7 +508,7 @@
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar-mobile-bottom {
     margin-bottom: 0;
-    padding-bottom: max(6px, min(18px, calc(var(--mobile-bottom-nav-fill) * 0.32)));
+    padding-bottom: max(8px, min(22px, calc(var(--mobile-bottom-nav-fill) * 0.45)));
   }
 
   body[data-viewport-diagnostic="1"] .sidebar-body::after {
@@ -1179,8 +1174,8 @@
     min-height: 0;
     height: 100%;
     padding: 4px 2px;
-    font-size: 0;
-    line-height: 1;
+    font-size: 11px;
+    line-height: 1.05;
   }
 
   .kbd-open .chat-col {
@@ -1202,11 +1197,31 @@
   }
 
   .composer-field {
-    box-shadow: var(--composer-field-shadow);
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .composer-field .input {
-    padding: var(--composer-input-pad-y) 0;
+    min-height: 42px;
+    padding: var(--composer-input-pad-y) 13px;
+    border: 1px solid color-mix(in srgb, var(--composer-field-border-color), transparent 18%);
+    border-radius: 999px;
+    background: var(--composer-field-bg);
+    box-shadow: var(--composer-field-shadow);
+  }
+
+  .composer-field .btn.composer-action {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--composer-bg), var(--panel2) 18%);
+    border: 1px solid color-mix(in srgb, var(--line), transparent 44%);
+    box-shadow: 0 8px 18px color-mix(in srgb, #000, transparent 86%);
   }
 
   .btn.composer-attach {

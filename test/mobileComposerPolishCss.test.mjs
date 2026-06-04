@@ -10,7 +10,7 @@ test("mobile composer: Telegram-like бар (blur) и более плотный 
   assert.match(css, /\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(/);
   assert.match(css, /\.input-wrap\s*\{[\s\S]*?backdrop-filter:\s*blur\(10px\)\s*;/);
   assert.match(css, /\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*var\(--composer-bottom-edge-pad\)\s*;/);
-  assert.match(css, /\.composer-field\s*\.input\s*\{[\s\S]*?padding:\s*var\(--composer-input-pad-y\)\s+0\s*;/);
+  assert.match(css, /\.composer-field\s*\.input\s*\{[\s\S]*?padding:\s*var\(--composer-input-pad-y\)\s+13px\s*;/);
 });
 
 test("mobile composer: iOS override lowers composer closer to the bottom edge", async () => {
@@ -49,4 +49,16 @@ test("mobile composer: Android native shell gets stable bars and touch tabs", as
   assert.match(css, /html\.env-os-android\s+\.input-wrap\s*\{[\s\S]*?backdrop-filter:\s*blur\(12px\)\s*;/);
   assert.match(css, /html\.env-os-android\s+\.composer-field\s*\{[\s\S]*?border-width:\s*1px\s*;/);
   assert.match(css, /html\.env-os-android\s+\.sidebar-tabs\.sidebar-tabs-mobile\s+\.sidebar-tab\s*\{[\s\S]*?min-height:\s*46px\s*;/);
+});
+
+test("mobile messenger reference polish: patterned chat, floating composer actions and input pill", async () => {
+  const [css, skinCss] = await Promise.all([
+    readFile(path.resolve("src/scss/responsive.css"), "utf8"),
+    readFile(path.resolve("public/skins/yagodka-modern.css"), "utf8"),
+  ]);
+  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.chat\s*\{[\s\S]*radial-gradient\(circle at 18px 24px/);
+  assert.doesNotMatch(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.chat\s*\{[\s\S]*linear-gradient\(90deg,[\s\S]*42px 42px/);
+  assert.match(css, /\.composer-field\s*\{[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(css, /\.composer-field\s+\.input\s*\{[\s\S]*background:\s*var\(--composer-field-bg\);[\s\S]*border-radius:\s*999px;/);
+  assert.match(css, /\.composer-field\s+\.btn\.composer-action\s*\{[\s\S]*border-radius:\s*999px;[\s\S]*background:/);
 });
