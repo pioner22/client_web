@@ -103,11 +103,11 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*var\(--app-logged-bottom-fill\);[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\);[\s\S]*?bottom:\s*var\(--mobile-composer-bottom-offset\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*0px;[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\),\s*var\(--app-logged-bottom-fill\)\);[\s\S]*?bottom:\s*0;/
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap::before\s*\{[\s\S]*?bottom:\s*calc\(-1 \* var\(--mobile-composer-bottom-offset\)\);[\s\S]*?height:\s*var\(--mobile-composer-bottom-offset\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap::before\s*\{[\s\S]*?display:\s*none;[\s\S]*?bottom:\s*0;[\s\S]*?height:\s*0;/
   );
   assert.match(
     css,
@@ -117,7 +117,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
     css,
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*var\(--sp-2\)\);/
   );
-  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?border-radius:\s*24px;[\s\S]*?background:/);
+  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?border-radius:\s*22px;[\s\S]*?background:/);
   assert.match(css, /\.sidebar-tab::before\s*\{[\s\S]*?mask:\s*var\(--sidebar-tab-icon\)\s+no-repeat\s+center\s*\/\s*contain;/);
   assert.match(css, /data-tab-icon="contacts"/);
   assert.doesNotMatch(css, /content:\s*attr\(data-tab-icon\)/);
@@ -136,7 +136,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.doesNotMatch(appFrameBlock, /height:\s*var\(--app-logged-frame-vh\);/);
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.chat-col\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*var\(--app-logged-bottom-fill\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.chat-col\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*0px;/
   );
   assert.doesNotMatch(
     css,

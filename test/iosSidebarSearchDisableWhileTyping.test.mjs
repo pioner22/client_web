@@ -72,6 +72,9 @@ async function withDomStubs(run) {
     hasAttribute(name) {
       return this._attrs.has(String(name));
     }
+    removeAttribute(name) {
+      this._attrs.delete(String(name));
+    }
     append(...nodes) {
       for (const n of nodes) this._children.push(n);
     }

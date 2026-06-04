@@ -678,12 +678,12 @@
 .ctx-menu.ctx-menu-sheet {
   position: relative;
   min-width: 0;
-  width: min(430px, calc(100vw - 20px));
-  max-width: calc(100vw - 20px);
-  max-height: var(--ctx-sheet-max-h, min(62dvh, 520px));
-  border-radius: 24px;
-  padding: 8px;
-  margin-bottom: calc(var(--safe-bottom-pad) + 10px + var(--ctx-sheet-bottom-offset, 0px));
+  width: min(380px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  max-height: var(--ctx-sheet-max-h, min(56dvh, 480px));
+  border-radius: 22px;
+  padding: 7px;
+  margin-bottom: calc(var(--safe-bottom-pad) + 8px + var(--ctx-sheet-bottom-offset, 0px));
   background: color-mix(in srgb, var(--modal-bg), transparent 4%);
   backdrop-filter: blur(22px) saturate(1.2);
   -webkit-backdrop-filter: blur(22px) saturate(1.2);
@@ -702,7 +702,7 @@
 }
 
 .ctx-handle {
-  width: 34px;
+  width: 30px;
   height: 4px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--modal-border-color), transparent 45%);
@@ -716,16 +716,16 @@
 }
 
 .ctx-menu.ctx-menu-sheet .ctx-item {
-  min-height: 44px;
-  padding: 7px 10px;
-  font-size: 15px;
-  border-radius: 14px;
+  min-height: 42px;
+  padding: 6px 9px;
+  font-size: 14px;
+  border-radius: 13px;
   background: color-mix(in srgb, var(--modal-bg), transparent 72%);
 }
 
 .ctx-menu.ctx-menu-sheet .ctx-sub,
 .ctx-menu.ctx-menu-sheet .ctx-meta {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .ctx-title {
@@ -755,20 +755,22 @@
 
 .ctx-close {
   flex: 0 0 auto;
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  min-height: 32px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
   padding: 0;
   border-radius: 999px;
   font-size: 0;
   white-space: nowrap;
+  color: color-mix(in srgb, var(--muted), var(--text) 32%);
 }
 
 .ctx-close::before {
   content: "";
-  width: 15px;
-  height: 15px;
+  display: block;
+  width: 14px;
+  height: 14px;
   background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M6.4 5L12 10.6L17.6 5L19 6.4L13.4 12L19 17.6L17.6 19L12 13.4L6.4 19L5 17.6L10.6 12L5 6.4L6.4 5Z'/%3E%3C/svg%3E") no-repeat center / contain;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M6.4 5L12 10.6L17.6 5L19 6.4L13.4 12L19 17.6L17.6 19L12 13.4L6.4 19L5 17.6L10.6 12L5 6.4L6.4 5Z'/%3E%3C/svg%3E") no-repeat center / contain;

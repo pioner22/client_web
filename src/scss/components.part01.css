@@ -1323,11 +1323,26 @@ html.app-typing .row-muted {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  font-size: 15px;
+  flex: 0 0 auto;
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0;
   color: var(--muted);
   opacity: 0.85;
+}
+
+.sidebar-search-icon::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13Zm0 2a4.5 4.5 0 1 1 0 9a4.5 4.5 0 0 1 0-9Zm5.2 9.3l4.5 4.5l-1.4 1.4l-4.5-4.5l1.4-1.4Z'/%3E%3C/svg%3E") no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13Zm0 2a4.5 4.5 0 1 1 0 9a4.5 4.5 0 0 1 0-9Zm5.2 9.3l4.5 4.5l-1.4 1.4l-4.5-4.5l1.4-1.4Z'/%3E%3C/svg%3E") no-repeat center / contain;
 }
 
 .sidebar-searchbar:focus-within .sidebar-search-icon {

@@ -352,7 +352,16 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
       spellcheck: "false",
       enterkeyhint: "search",
     }) as HTMLInputElement;
-    const searchIcon = el("span", { class: "sidebar-search-icon", "aria-hidden": "true" }, ["🔍"]);
+    const searchIcon = el(
+      "button",
+      {
+        class: "btn sidebar-search-icon sidebar-search-trigger",
+        type: "button",
+        title: "Поиск",
+        "aria-label": "Открыть поиск",
+      },
+      [""]
+    ) as HTMLButtonElement;
     input.value = sidebarQueryRaw;
     input.disabled = disableSearchWhileTyping;
     const clearBtn = el(
@@ -389,9 +398,14 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
       updateClearState();
       focusElement(input);
     });
+    searchIcon.addEventListener("click", (event) => {
+      event.preventDefault();
+      focusElement(input);
+    });
     const children: HTMLElement[] = [searchIcon, input, clearBtn];
     if (opts?.action) children.push(opts.action);
-    return el("div", { class: "sidebar-searchbar" }, children);
+    const cls = sidebarQueryRaw.trim() ? "sidebar-searchbar sidebar-searchbar-expanded" : "sidebar-searchbar";
+    return el("div", { class: cls }, children);
   };
 
   const buildSidebarArchiveToggle = (count: number, active: boolean): HTMLElement => {

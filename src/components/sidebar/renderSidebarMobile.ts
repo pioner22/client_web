@@ -186,6 +186,9 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
         .concat("sidebar-mobile-bottom")
     )
   ).join(" ");
+  bottomDock.removeAttribute("aria-hidden");
+  bottomDock.setAttribute("role", "navigation");
+  bottomDock.setAttribute("aria-label", "Разделы");
   bottomDock.replaceChildren(tabs);
   const menuTitle =
     activeTab === "menu"

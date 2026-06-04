@@ -279,11 +279,12 @@ test("context menu/pin remediation source guards: modern sheet geometry, compose
   ]);
 
   assert.match(modalCss, /\.ctx-menu\s*\{[\s\S]*overflow:\s*hidden;/);
-  assert.match(modalCss, /\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*width:\s*min\(430px,\s*calc\(100vw - 20px\)\)/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*width:\s*min\(380px,\s*calc\(100vw - 28px\)\)/);
+  assert.match(modalCss, /\.ctx-close::before\s*\{[\s\S]*display:\s*block;/);
   assert.match(modalCss, /--ctx-sheet-bottom-offset/);
   assert.match(modalCss, /\.ctx-icon::before\s*\{[\s\S]*mask:\s*var\(--ctx-icon-mask,\s*var\(--ctx-icon-dot\)\)/);
   assert.match(modalCss, /--ctx-list-max-h/);
-  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*max-height:\s*var\(--ctx-sheet-max-h,\s*min\(62dvh,\s*520px\)\)/);
+  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*max-height:\s*var\(--ctx-sheet-max-h,\s*min\(56dvh,\s*480px\)\)/);
   assert.match(renderSrc, /composerAvoidRect/);
   assert.match(renderSrc, /applyPopoverGeometry/);
   assert.match(renderSrc, /applySheetGeometry/);

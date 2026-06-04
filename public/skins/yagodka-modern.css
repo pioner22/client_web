@@ -841,12 +841,12 @@ html[data-skin="yagodka-modern"][data-theme="dark"] .ctx-menu {
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-sheet {
-  width: min(430px, calc(100vw - 20px));
-  max-width: calc(100vw - 20px);
-  max-height: var(--ctx-sheet-max-h, min(62dvh, 520px));
-  margin-bottom: calc(var(--safe-bottom-pad) + 10px + var(--ctx-sheet-bottom-offset, 0px));
-  border-radius: 24px;
-  padding: 8px;
+  width: min(380px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  max-height: var(--ctx-sheet-max-h, min(56dvh, 480px));
+  margin-bottom: calc(var(--safe-bottom-pad) + 8px + var(--ctx-sheet-bottom-offset, 0px));
+  border-radius: 22px;
+  padding: 7px;
 }
 
 html[data-skin="yagodka-modern"] .ctx-title {
@@ -867,8 +867,8 @@ html[data-skin="yagodka-modern"] .ctx-item {
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-sheet .ctx-item {
-  min-height: 44px;
-  border-radius: 14px;
+  min-height: 42px;
+  border-radius: 13px;
 }
 
 html[data-skin="yagodka-modern"] .ctx-item-multiline {

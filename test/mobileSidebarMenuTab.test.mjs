@@ -72,6 +72,9 @@ async function withDomStubs(run, opts = {}) {
       const v = this._attrs.get(String(name));
       return v === undefined ? null : v;
     }
+    removeAttribute(name) {
+      this._attrs.delete(String(name));
+    }
     append(...nodes) {
       for (const n of nodes) this._children.push(n);
     }
@@ -278,9 +281,13 @@ test("mobile sidebar: 4 вкладки (Контакты/Группы/Канал
         await flushLazySidebarRender();
         const bottomDock = findAll(target, (n) => String(n.className || "").includes("sidebar-mobile-bottom"))[0];
         assert.ok(bottomDock, "mobile tabs must mount in bottom dock");
+        assert.equal(bottomDock.getAttribute("aria-hidden"), null);
+        assert.equal(bottomDock.getAttribute("role"), "navigation");
         assert.equal(Boolean(findAll(bottomDock, (n) => String(n.className || "").includes("sidebar-tabs-bottom-nav"))[0]), true);
         const sticky = findAll(target, (n) => String(n.className || "").includes("sidebar-mobile-sticky"))[0];
         assert.equal(Boolean(findAll(sticky, (n) => String(n.className || "").includes("sidebar-tabs"))[0]), false);
+        const searchTrigger = findAll(sticky, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-search-trigger"))[0];
+        assert.ok(searchTrigger, "mobile search starts as a magnifier trigger");
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
         assert.deepEqual(labels, ["Контакты", "Группы", "Каналы", "Меню"]);

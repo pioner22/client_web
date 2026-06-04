@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.855",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0951 делает contact-list bottom dock реальной нижней навигацией: общий `.sidebar-bottom-dock` больше не скрывает mobile dock, а вкладки занимают нижний physical frame.",
+      "Поиск в мобильном списке стартует как кнопка-лупа и раскрывается в search input по фокусу, сохраняя фильтрацию контактов/групп/каналов.",
+      "Context/action sheets стали уже и плотнее, с видимым close icon вместо пустого rounded square.",
+    ],
+    fixed: [
+      "No-keyboard iOS/PWA composer теперь закреплён к `bottom: 0`, а нижний physical gap входит в padding самой панели, чтобы подвал не выглядел пустой полосой.",
+      "Auth `Web` version marker, keyboard-open chat state и принятый compact photo viewer chrome сохранены как regression guards.",
+    ],
+  },
+  {
     version: "0.1.854",
     date: "2026-06-04",
     improved: [
