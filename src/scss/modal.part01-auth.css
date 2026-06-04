@@ -1301,6 +1301,10 @@
     box-shadow: 0 8px 20px rgba(51, 89, 76, 0.08);
   }
 
+  html.kbd-open.has-auth-pages .auth-entry-update-marker {
+    display: none;
+  }
+
   #auth-pages.auth-entry-page .tabs-tab,
   #auth-pages.auth-entry-page .tabs-tab.active,
   #auth-pages.auth-entry-page .tabs-tab .container {

@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.843",
+    date: "2026-06-04",
+    improved: [
+      "iPhone/PWA: нижняя физическая область теперь передаётся рабочим слоям как `--app-physical-bottom-pad`, поэтому sidebar, composer и viewer занимают весь rounded-screen frame.",
+      "Просмотрщик фото привязан к реальной высоте stage: изображение больше не рассчитывается от старого `0.8 * app-vh` и не уезжает за верхние/нижние границы.",
+    ],
+    fixed: [
+      "Убран остаточный пустой нижний кусок в mobile/PWA за счёт общего bottom-pad для нижних панелей вместо одного только `safe-bottom-pad`.",
+      "Версия web-клиента на экране входа больше не накладывается на кнопку при открытой клавиатуре.",
+    ],
+  },
+  {
     version: "0.1.842",
     date: "2026-06-03",
     improved: [

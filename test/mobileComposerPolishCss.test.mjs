@@ -25,7 +25,7 @@ test("mobile composer: iOS physical bottom is part of the app frame", async () =
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--safe-bottom-pad\)\)\s*;/
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-physical-bottom-pad\)\)\s*;/
   );
   assert.match(
     css,

@@ -85,6 +85,8 @@
     top: 0;
     bottom: auto;
     height: var(--app-frame-vh, var(--app-vh));
+    min-height: 0;
+    max-height: var(--app-frame-vh, var(--app-vh));
   }
 
   :root[data-skin] {
@@ -227,13 +229,13 @@
 
   html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .sidebar-body {
     margin-bottom: 0;
-    padding-bottom: max(var(--sp-4), var(--safe-bottom-pad));
-    scroll-padding-bottom: max(var(--sp-4), var(--safe-bottom-pad));
+    padding-bottom: max(var(--sp-4), var(--app-physical-bottom-pad));
+    scroll-padding-bottom: max(var(--sp-4), var(--app-physical-bottom-pad));
   }
 
   html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .sidebar-mobile-bottom {
     margin-bottom: 0;
-    padding-bottom: max(var(--sp-4), var(--safe-bottom-pad));
+    padding-bottom: max(var(--sp-4), var(--app-physical-bottom-pad));
   }
 
   body[data-viewport-diagnostic="1"] .sidebar-body::after {
@@ -835,7 +837,7 @@
   }
 
   html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .input-wrap {
-    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--safe-bottom-pad));
+    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-physical-bottom-pad));
     bottom: 0;
     background: var(--composer-bg);
   }

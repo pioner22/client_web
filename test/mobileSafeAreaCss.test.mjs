@@ -31,6 +31,7 @@ test("mobile safe-area: one bottom inset owns safe-area and PWA gap", async () =
   assert.match(css, /--app-layout-gap-bottom:\s*var\(--app-gap-bottom\)\s*;/);
   assert.match(css, /--app-shell-bottom-spill:\s*0px\s*;/);
   assert.match(css, /--app-bottom-inset:\s*max\(var\(--safe-bottom-pad\),\s*var\(--app-layout-gap-bottom,\s*var\(--app-gap-bottom,\s*0px\)\)\)\s*;/);
+  assert.match(css, /--app-physical-bottom-pad:\s*var\(--app-bottom-inset\)\s*;/);
   assert.match(css, /--app-bottom-live-pad:\s*clamp\(8px,\s*calc\(var\(--app-bottom-inset\)\s*-\s*22px\),\s*16px\)\s*;/);
   assert.match(css, /--app-frame-bottom-inset:\s*0px\s*;/);
   assert.match(css, /--safe-bottom-layout-pad:\s*var\(--app-bottom-live-pad\)\s*;/);
@@ -82,15 +83,15 @@ test("mobile safe-area: iOS standalone physical frame keeps app layer on visual 
   );
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--safe-bottom-pad\)\);[\s\S]*?bottom:\s*0;/
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-physical-bottom-pad\)\);[\s\S]*?bottom:\s*0;/
   );
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*max\(var\(--sp-4\),\s*var\(--safe-bottom-pad\)\);/
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*max\(var\(--sp-4\),\s*var\(--app-physical-bottom-pad\)\);/
   );
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.overlay\.overlay-viewer\s*\{[\s\S]*?height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);[\s\S]*?bottom:\s*auto;/
+    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.overlay\.overlay-viewer\s*\{[\s\S]*?bottom:\s*auto;[\s\S]*?height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);[\s\S]*?max-height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);/
   );
   assert.doesNotMatch(css, /bottom:\s*calc\(-1 \* var\(--app-shell-bottom-spill/);
   assert.doesNotMatch(css, /bottom:\s*calc\(0px\s*-\s*var\(--app-layout-gap-bottom/);
