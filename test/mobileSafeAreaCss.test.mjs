@@ -74,10 +74,13 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app/);
   assert.match(css, /calc\(var\(--app-frame-vh,\s*var\(--app-vh\)\)\s*-\s*var\(--app-vh,\s*100dvh\)\)/);
   assert.match(css, /--app-frame-bottom-inset:\s*var\(--app-logged-bottom-fill\);/);
-  assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*0;/);
+  assert.match(css, /--mobile-header-overlay-h:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*96px\);/);
+  assert.match(css, /--mobile-sidebar-sticky-h:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*96px\);/);
+  assert.match(css, /--mobile-composer-bottom-offset:\s*0px;/);
+  assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*auto;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-logged-frame-vh\);[\s\S]*?min-height:\s*var\(--app-logged-frame-vh\);/
   );
   assert.match(
     css,
@@ -97,28 +100,32 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\);[\s\S]*?bottom:\s*0;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*var\(--app-logged-bottom-fill\);[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\);[\s\S]*?bottom:\s*var\(--mobile-composer-bottom-offset\);/
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*max\(var\(--sp-4\),\s*var\(--app-bottom-live-pad\)\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap::before\s*\{[\s\S]*?bottom:\s*calc\(-1 \* var\(--mobile-composer-bottom-offset\)\);[\s\S]*?height:\s*var\(--mobile-composer-bottom-offset\);/
+  );
+  assert.match(
+    css,
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*max\(var\(--sp-4\),\s*var\(--app-physical-bottom-pad\)\);/
   );
   assert.match(
     css,
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.overlay\.overlay-viewer\s*\{[\s\S]*?bottom:\s*auto;[\s\S]*?height:\s*var\(--app-vh\);[\s\S]*?max-height:\s*var\(--app-vh\);/
   );
   const appShellBlock =
-    css.match(/html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{(?<body>[^}]*)\}/)?.groups
+    css.match(/html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{\s*bottom:\s*auto;(?<body>[^}]*)\}/)?.groups
       ?.body || "";
   const appFrameBlock =
     css.match(/html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*>\s*\.app\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body || "";
   assert.doesNotMatch(appShellBlock, /height:\s*var\(--app-vh\);/);
-  assert.doesNotMatch(appShellBlock, /height:\s*var\(--app-logged-frame-vh\);/);
+  assert.match(appShellBlock, /height:\s*var\(--app-logged-frame-vh\);/);
   assert.doesNotMatch(appFrameBlock, /height:\s*var\(--app-logged-frame-vh\);/);
-  assert.doesNotMatch(
+  assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?padding-bottom:\s*max\(var\(--sp-4\),\s*var\(--app-physical-bottom-pad\)\)/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.chat-col\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*var\(--app-logged-bottom-fill\);/
   );
   assert.doesNotMatch(
     css,

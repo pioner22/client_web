@@ -33,7 +33,11 @@ test("mobile composer: iOS fixed frame uses compact live pad in no-keyboard shel
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?bottom:\s*0\s*;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?bottom:\s*var\(--mobile-composer-bottom-offset\)\s*;/
+  );
+  assert.match(
+    css,
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap::before\s*\{[\s\S]*?height:\s*var\(--mobile-composer-bottom-offset\)\s*;/
   );
   assert.doesNotMatch(css, /bottom:\s*calc\(0px\s*-\s*var\(--app-layout-gap-bottom/);
 });

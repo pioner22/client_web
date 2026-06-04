@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.852",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0948 переводит logged-in messenger на full-bleed overlay shell: `.grid`, `.sidebar`, `.chat-col` и `.chat` становятся full-frame сценами, а header/composer/sidebar sticky chrome накладываются сверху.",
+      "Contact list/sidebar теперь скроллится в full-frame body под overlay tabs/search, а нижний physical frame учитывается через scroll padding вместо отдельного обрезанного main-row.",
+    ],
+    fixed: [
+      "No-keyboard iOS/PWA снова использует physical `--app-logged-frame-vh` как canvas, но composer остаётся у visual edge через `--app-logged-bottom-fill`, поэтому нижняя область должна краситься без сдвига поля ввода вниз.",
+      "Сохранены auth `Web` version marker, keyboard-open chat поведение, ручной `?__bottom_diag=1` и принятый compact photo viewer chrome.",
+    ],
+  },
+  {
     version: "0.1.851",
     date: "2026-06-04",
     improved: [
