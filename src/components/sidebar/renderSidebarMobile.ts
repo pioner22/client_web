@@ -7,6 +7,7 @@ import { attentionHintForPeer, friendRow, isRowMenuOpen, previewForConversation,
 export type RenderSidebarMobileCtx = {
   target: HTMLElement;
   body: HTMLElement;
+  sidebarDock?: HTMLElement | null;
   state: AppState;
   mobileTab: MobileSidebarTab;
   isMobile: boolean;
@@ -71,6 +72,7 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
     target,
     state,
     body,
+    sidebarDock,
     mobileTab,
     isMobile,
     mobileUi,
@@ -142,13 +144,18 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
   const tabGroups = buildSidebarTabButton("groups", activeTab, "Группы");
   const tabBoards = buildSidebarTabButton("boards", activeTab, "Каналы");
   const tabMenu = buildSidebarTabButton("menu", activeTab, "Меню");
-  const tabs = el("div", { class: "sidebar-tabs sidebar-tabs-mobile", role: "tablist", "aria-label": "Раздел" }, [
-    tabContacts,
-    tabGroups,
-    tabBoards,
-    tabMenu,
+  const decorateBottomTab = (button: HTMLButtonElement, icon: string, label: string): HTMLButtonElement => {
+    button.className = `${String(button.className || "").trim()} sidebar-tab-bottom`.trim();
+    button.setAttribute("aria-label", label);
+    button.setAttribute("data-tab-icon", icon);
+    return button;
+  };
+  const tabs = el("div", { class: "sidebar-tabs sidebar-tabs-mobile sidebar-tabs-bottom-nav", role: "tablist", "aria-label": "Раздел" }, [
+    decorateBottomTab(tabContacts, "●", "Контакты"),
+    decorateBottomTab(tabGroups, "◆", "Группы"),
+    decorateBottomTab(tabBoards, "■", "Каналы"),
+    decorateBottomTab(tabMenu, "☰", "Меню"),
   ]);
-
   const searchBarAction =
     activeTab === "contacts"
       ? archiveToggle
@@ -170,15 +177,30 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
                 : "Поиск",
           searchBarAction ? { action: searchBarAction } : undefined
         );
-  const sticky = el("div", { class: "sidebar-mobile-sticky" }, [
-    tabs,
+  const bottomDock = sidebarDock || el("div", { class: "sidebar-bottom-dock" });
+  bottomDock.className = Array.from(
+    new Set(
+      String(bottomDock.className || "")
+        .split(/\s+/)
+        .filter((name) => name && name !== "hidden" && name !== "sidebar-desktop-bottom")
+        .concat("sidebar-mobile-bottom")
+    )
+  ).join(" ");
+  bottomDock.replaceChildren(tabs);
+  const menuTitle =
+    activeTab === "menu"
+      ? el("div", { class: "sidebar-mobile-title", role: "heading", "aria-level": "2" }, ["Меню"])
+      : null;
+  const topChildren = [
     ...(searchBar ? [searchBar] : []),
-  ]);
+    ...(menuTitle ? [menuTitle] : []),
+  ];
+  const sticky = el("div", { class: "sidebar-mobile-sticky" }, topChildren);
   const passesChatFilter = (_opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean => true;
   const mountMobile = (children: HTMLElement[]) => {
     setBodyChatlistClass(children);
     body.replaceChildren(...children);
-    target.replaceChildren(sticky, body);
+    target.replaceChildren(sticky, body, bottomDock);
     bindHeaderScroll(sticky);
     (target as any)._mobileSidebarPrevTab = activeTab;
     if (!forceTopTab) return;

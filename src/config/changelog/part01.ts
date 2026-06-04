@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.853",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0949 переносит `Контакты / Группы / Каналы / Меню` из верхнего tab chrome в rounded bottom navigation dock, который занимает нижний physical frame вместо пустой полосы.",
+      "Contact list top chrome стал легче: сверху остаются search/status/title surfaces, а scroll body резервирует место под bottom dock через `--mobile-bottom-nav-h`.",
+      "Mobile dark palette обновлена в сторону graphite/berry/teal contrast: меньше тяжёлого чёрно-зелёного, больше читаемого dock/composer/sidebar контраста.",
+    ],
+    fixed: [
+      "iOS/PWA no-keyboard sidebar теперь использует `--app-logged-bottom-fill` как высоту нижнего navigation dock, поэтому persistent bottom frame становится частью UI.",
+      "Chat composer, keyboard-open state, auth `Web` version marker и принятый compact photo viewer chrome сохранены как regression guards.",
+    ],
+  },
+  {
     version: "0.1.852",
     date: "2026-06-04",
     improved: [

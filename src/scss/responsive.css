@@ -2,8 +2,11 @@
   :root {
     --right-column-width: 100vw;
     --mobile-header-overlay-h: calc(env(safe-area-inset-top) + 96px);
-    --mobile-sidebar-sticky-h: calc(env(safe-area-inset-top) + 96px);
+    --mobile-sidebar-sticky-h: calc(env(safe-area-inset-top) + 60px);
     --mobile-sidebar-menu-sticky-h: calc(env(safe-area-inset-top) + 48px);
+    --mobile-bottom-nav-fill: var(--app-bottom-live-pad);
+    --mobile-bottom-nav-row-h: 58px;
+    --mobile-bottom-nav-h: calc(var(--mobile-bottom-nav-row-h) + var(--mobile-bottom-nav-fill));
     --mobile-composer-bottom-offset: 0px;
   }
 
@@ -114,6 +117,10 @@
     overflow: hidden;
   }
 
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar {
+    --mobile-bottom-nav-fill: var(--app-logged-bottom-fill);
+  }
+
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .overlay.overlay-viewer {
     top: 0;
     bottom: auto;
@@ -141,6 +148,19 @@
     max-height: none;
     overflow: hidden;
     background: var(--chat-bg);
+  }
+
+  html[data-skin="yagodka-modern"][data-theme="dark"] {
+    --sidebar-bg: #181820;
+    --chat-bg: #11161a;
+    --panel: #181c23;
+    --panel2: #211b26;
+    --composer-bg: rgba(24, 24, 32, 0.96);
+    --safe-area-bg: var(--sidebar-bg);
+    --focus: #ff5c8a;
+    --accent: #58d2bd;
+    --line: rgba(238, 232, 240, 0.12);
+    --muted: #a9a3b0;
   }
 
   html.sidebar-mobile-open,
@@ -200,6 +220,7 @@
   }
 
   .sidebar {
+    --mobile-bottom-nav-fill: var(--app-bottom-live-pad);
     display: block;
     position: absolute;
     inset: 0;
@@ -253,8 +274,10 @@
     left: 0;
     right: 0;
     z-index: 2;
-    background: var(--sidebar-bg);
-    padding: env(safe-area-inset-top) 0 0;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--sidebar-bg), var(--panel2) 22%), var(--sidebar-bg)),
+      var(--sidebar-bg);
+    padding: calc(env(safe-area-inset-top) + 6px) 10px 8px;
     padding-bottom: 0;
     margin-bottom: 0;
   }
@@ -279,6 +302,16 @@
     margin-bottom: 0;
   }
 
+  .sidebar-mobile-title {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 12px;
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 800;
+  }
+
   .sidebar-body > .pane-section:first-child {
     margin-top: 0;
   }
@@ -290,14 +323,88 @@
   }
 
   .sidebar-mobile-bottom {
-    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
     z-index: 3;
-    background: var(--sidebar-bg);
-    border-top: 1px solid color-mix(in srgb, var(--line), transparent 60%);
-    padding-top: var(--sp-2);
-    padding-bottom: max(var(--sp-2), var(--app-bottom-live-pad));
-    padding-inline: var(--sidebar-list-pad);
+    min-height: var(--mobile-bottom-nav-h);
+    height: var(--mobile-bottom-nav-h);
+    box-sizing: border-box;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--sidebar-bg), transparent 14%), var(--sidebar-bg) 46%),
+      var(--sidebar-bg);
+    border-top: 1px solid color-mix(in srgb, var(--line), transparent 46%);
+    padding: 6px 10px max(8px, var(--mobile-bottom-nav-fill));
     margin-top: 0;
+    box-shadow: 0 -16px 34px color-mix(in srgb, #000, transparent 78%);
+  }
+
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav {
+    width: min(100%, 420px);
+    height: var(--mobile-bottom-nav-row-h);
+    min-height: var(--mobile-bottom-nav-row-h);
+    padding: 5px;
+    border: 1px solid color-mix(in srgb, var(--line), transparent 22%);
+    border-radius: 22px;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--panel2), var(--focus) 7%), color-mix(in srgb, var(--panel), var(--accent) 4%)),
+      var(--panel2);
+    box-shadow:
+      0 14px 28px color-mix(in srgb, #000, transparent 78%),
+      0 1px 0 color-mix(in srgb, #fff, transparent 88%) inset;
+    overflow: hidden;
+  }
+
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav::before,
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav::after {
+    display: none;
+  }
+
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab {
+    min-width: 0;
+    min-height: 46px;
+    height: 100%;
+    gap: 3px;
+    flex-direction: column;
+    border-radius: 17px;
+    padding: 4px 2px;
+    color: color-mix(in srgb, var(--muted), var(--text) 18%);
+    font-size: 11px;
+    line-height: 1.05;
+  }
+
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab-active {
+    color: #fff;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--focus), #fff 8%), color-mix(in srgb, var(--accent), var(--focus) 22%)),
+      var(--focus);
+    box-shadow: 0 9px 20px color-mix(in srgb, var(--focus), transparent 72%);
+  }
+
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab::after {
+    display: none;
+  }
+
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab::before {
+    content: attr(data-tab-icon);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .sidebar-body {
@@ -309,6 +416,8 @@
     background: var(--sidebar-bg);
     overscroll-behavior: contain;
     padding-top: var(--mobile-sidebar-sticky-h);
+    padding-bottom: calc(var(--mobile-bottom-nav-h) + var(--sp-2));
+    scroll-padding-bottom: calc(var(--mobile-bottom-nav-h) + var(--sp-2));
     box-sizing: border-box;
   }
 
@@ -322,13 +431,13 @@
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar-body {
     margin-bottom: 0;
-    padding-bottom: max(var(--sp-4), var(--app-physical-bottom-pad));
-    scroll-padding-bottom: max(var(--sp-4), var(--app-physical-bottom-pad));
+    padding-bottom: calc(var(--mobile-bottom-nav-h) + var(--sp-2));
+    scroll-padding-bottom: calc(var(--mobile-bottom-nav-h) + var(--sp-2));
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar-mobile-bottom {
     margin-bottom: 0;
-    padding-bottom: max(var(--sp-4), var(--app-bottom-live-pad));
+    padding-bottom: max(8px, var(--mobile-bottom-nav-fill));
   }
 
   body[data-viewport-diagnostic="1"] .sidebar-body::after {

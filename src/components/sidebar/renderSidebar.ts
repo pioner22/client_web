@@ -282,7 +282,7 @@ export function renderSidebar(
     clearDeferredSidebarMenu(target);
     clearDeferredSidebarStandalone(target);
     renderSidebarMobileDeferred({
-      target, state, body, mobileTab: projection.mobileTab, isMobile, mobileUi,
+      target, state, body, sidebarDock, mobileTab: projection.mobileTab, isMobile, mobileUi,
       forceResetScroll, hasSidebarQuery,
       archiveToggle, groupArchiveToggle, boardArchiveToggle, groupArchiveOpen, boardArchiveOpen, archiveOpen,
       groupArchiveCount, boardArchiveCount, buildSidebarArchiveHint, buildSidebarArchiveEmpty,
