@@ -200,6 +200,31 @@ body::after {
     bottom: max(8px, calc(var(--app-bottom-inset) + 36px));
     z-index: 30;
   }
+
+  .app-frame-diagnostic-panel {
+    position: fixed;
+    top: max(86px, calc(env(safe-area-inset-top) + 70px));
+    left: 8px;
+    right: 8px;
+    z-index: 2147483647;
+    max-height: 42vh;
+    margin: 0;
+    padding: 8px 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 8px;
+    background: rgba(7, 13, 10, 0.9);
+    color: #f6fff9;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.24;
+    letter-spacing: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+  }
 }
 
 /* iOS Safari/PWA: use -webkit-fill-available only as a fallback for engines without 100dvh.

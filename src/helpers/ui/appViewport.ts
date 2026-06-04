@@ -7,13 +7,18 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   let lastStableLayout = 0;
   let lastEditableFocusTs = 0;
   let lastEditablePointerTs = 0;
+  let diagnosticPanel: HTMLElement | null = null;
+  let lastDiagnosticText = "";
   const isIos = isIOS();
   const standalone = isStandaloneDisplayMode();
   const iosStandalone = isIos && standalone;
   const docEl = typeof document !== "undefined" ? document.documentElement : null;
   const EDITABLE_INTENT_MS = 1200;
+  const W0946_AUTO_FRAME_DIAGNOSTICS = true;
   const diagnosticAttrNames = [
     "data-viewport-diagnostic",
+    "data-app-diagnostic-mode",
+    "data-app-diagnostic-target",
     "data-app-vh",
     "data-app-frame-vh",
     "data-app-gap-bottom",
@@ -96,7 +101,23 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     return null;
   };
 
-  const bottomDiagnosticsEnabled = (): boolean => {
+  const loggedInMobileFrameDiagnosticsAutoEnabled = (keyboard: boolean): boolean => {
+    if (!W0946_AUTO_FRAME_DIAGNOSTICS || !isIos || keyboard) return false;
+    try {
+      const html = typeof document !== "undefined" ? document.documentElement : null;
+      const body = typeof document !== "undefined" ? document.body : null;
+      if (html?.classList?.contains("has-auth-pages") || body?.classList?.contains("has-auth-pages")) return false;
+      if (typeof document.querySelector === "function" && document.querySelector(".overlay.overlay-viewer")) return false;
+      if (typeof document.querySelector === "function" && !document.querySelector(".grid")) return false;
+      const mobileQuery =
+        typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 600px) and (pointer: coarse)") : null;
+      return mobileQuery ? Boolean(mobileQuery.matches) : true;
+    } catch {
+      return false;
+    }
+  };
+
+  const bottomDiagnosticsEnabled = (keyboard: boolean): boolean => {
     try {
       const url = new URL(window.location.href);
       const value = readBoolish(url.searchParams.get("__bottom_diag"));
@@ -121,9 +142,136 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     try {
       const localValue = readBoolish(window.localStorage?.getItem("yagodka_bottom_diagnostics"));
       if (localValue !== null) return localValue;
-      return readBoolish(window.localStorage?.getItem("yagodka_debug")) === true;
+      if (readBoolish(window.localStorage?.getItem("yagodka_debug")) === true) return true;
     } catch {
-      return false;
+      // ignore
+    }
+    return loggedInMobileFrameDiagnosticsAutoEnabled(keyboard);
+  };
+
+  const px = (value: number): string => `${Math.round(Number(value) || 0)}`;
+
+  const cssValue = (el: Element | null, name: string): string => {
+    if (!el || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return "-";
+    try {
+      const value = window.getComputedStyle(el).getPropertyValue(name).trim();
+      return value || "-";
+    } catch {
+      return "-";
+    }
+  };
+
+  const formatElement = (el: Element | null): string => {
+    if (!el) return "-";
+    const anyEl = el as HTMLElement;
+    const tag = String(anyEl.tagName || "el").toLowerCase();
+    const id = anyEl.id ? `#${anyEl.id}` : "";
+    const classes =
+      typeof anyEl.className === "string"
+        ? anyEl.className
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 3)
+            .map((name) => `.${name}`)
+            .join("")
+        : "";
+    return `${tag}${id}${classes}`.slice(0, 64);
+  };
+
+  const rectLine = (label: string, selector: string): string => {
+    let el: Element | null = null;
+    try {
+      el = typeof document !== "undefined" && typeof document.querySelector === "function" ? document.querySelector(selector) : null;
+    } catch {
+      el = null;
+    }
+    if (!el || typeof (el as HTMLElement).getBoundingClientRect !== "function") return `${label}=-`;
+    const rect = (el as HTMLElement).getBoundingClientRect();
+    const bg = cssValue(el, "background-color");
+    const h = cssValue(el, "height");
+    const max = cssValue(el, "max-height");
+    const bottom = cssValue(el, "bottom");
+    return `${label} t=${px(rect.top)} b=${px(rect.bottom)} h=${px(rect.height)} cssH=${h} max=${max} bot=${bottom} bg=${bg}`;
+  };
+
+  const pointOwnerLine = (label: string, x: number, y: number): string => {
+    try {
+      const el =
+        typeof document !== "undefined" && typeof document.elementFromPoint === "function"
+          ? document.elementFromPoint(Math.max(0, x), Math.max(0, y))
+          : null;
+      return `${label}@${px(x)},${px(y)}=${formatElement(el)}`;
+    } catch {
+      return `${label}@${px(x)},${px(y)}=-`;
+    }
+  };
+
+  const buildDiagnosticText = (snapshot: {
+    height: number;
+    keyboard: boolean;
+    vvTop: number;
+    vvBottom: number;
+    gapBottom: number;
+    layoutGapBottom: number;
+    safeBottomRaw: number;
+    vhHeight: number;
+    frameHeight: number;
+  }): string => {
+    const vv = window.visualViewport;
+    const innerW = Math.round(Number(window.innerWidth) || 0);
+    const innerH = Math.round(Number(window.innerHeight) || 0);
+    const screenH = Math.round(Number((window as any).screen?.height) || 0);
+    const screenAvailH = Math.round(Number((window as any).screen?.availHeight) || 0);
+    const outerH = Math.round(Number(window.outerHeight) || 0);
+    const dpr = Number(window.devicePixelRatio || 1).toFixed(2);
+    const clientH = Math.round(Number(docEl?.clientHeight) || 0);
+    const body = typeof document !== "undefined" ? document.body : null;
+    const bodyH = Math.round(Number(body?.clientHeight) || 0);
+    const vvH = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
+    const vvW = vv && typeof vv.width === "number" ? Math.round(Number(vv.width) || 0) : 0;
+    const vvOffTop = vv && typeof (vv as any).offsetTop === "number" ? Math.round(Number((vv as any).offsetTop) || 0) : 0;
+    const yBottom = Math.max(0, innerH - 4);
+    const yGapTop = Math.max(0, innerH - Math.max(0, snapshot.gapBottom) + 4);
+    const xMid = Math.max(0, Math.round(innerW / 2));
+    const lines = [
+      "W0946-FRAME-DIAG",
+      `win=${innerW}x${innerH} outerH=${outerH} screenH=${screenH}/${screenAvailH} dpr=${dpr}`,
+      `vv=${vvW}x${vvH} offT=${vvOffTop} calcTop=${snapshot.vvTop} vvBottom=${snapshot.vvBottom} kbd=${snapshot.keyboard ? 1 : 0}`,
+      `docH=${clientH} bodyH=${bodyH} appVh=${snapshot.height} vhBase=${snapshot.vhHeight} frame=${snapshot.frameHeight} gap=${snapshot.gapBottom} layout=${snapshot.layoutGapBottom} safeRaw=${snapshot.safeBottomRaw}`,
+      `vars app=${cssValue(root, "--app-vh")} frame=${cssValue(root, "--app-frame-vh")} logged=${cssValue(root, "--app-logged-frame-vh")} fill=${cssValue(root, "--app-logged-bottom-fill")}`,
+      `vars phys=${cssValue(root, "--app-physical-bottom-pad")} live=${cssValue(root, "--app-bottom-live-pad")} safe=${cssValue(root, "--safe-bottom-pad")} vvB=${cssValue(root, "--app-vv-bottom")}`,
+      rectLine("#app", "#app"),
+      rectLine(".app", "#app > .app"),
+      rectLine(".grid", ".grid"),
+      rectLine(".chat", ".chat"),
+      rectLine(".input", ".input-wrap"),
+      rectLine(".side", ".sidebar.sidebar-mobile-open, .sidebar"),
+      rectLine(".sbody", ".sidebar-body"),
+      `${pointOwnerLine("ptBottom", xMid, yBottom)} ${pointOwnerLine("ptGapTop", xMid, yGapTop)}`,
+    ];
+    return lines.join("\n");
+  };
+
+  const updateDiagnosticPanel = (enabled: boolean, snapshot?: Parameters<typeof buildDiagnosticText>[0]) => {
+    const body = typeof document !== "undefined" ? document.body : null;
+    if (!enabled || !snapshot || !body || typeof document.createElement !== "function") {
+      if (diagnosticPanel?.parentElement) diagnosticPanel.parentElement.removeChild(diagnosticPanel);
+      diagnosticPanel = null;
+      lastDiagnosticText = "";
+      return;
+    }
+    if (!diagnosticPanel) {
+      diagnosticPanel = document.createElement("pre");
+      diagnosticPanel.id = "app-frame-diagnostic-panel";
+      diagnosticPanel.className = "app-frame-diagnostic-panel";
+      diagnosticPanel.setAttribute("aria-hidden", "true");
+      body.appendChild(diagnosticPanel);
+    }
+    const text = buildDiagnosticText(snapshot);
+    if (text !== lastDiagnosticText) {
+      diagnosticPanel.textContent = text;
+      lastDiagnosticText = text;
     }
   };
 
@@ -296,6 +444,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       setVar("--safe-bottom-pad", null);
       setVar("--safe-bottom-raw", null);
       clearDiagnosticAttrs();
+      updateDiagnosticPanel(false);
       return;
     }
 
@@ -349,8 +498,12 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     else if (layoutGapBottom >= 1) setVar("--app-layout-gap-bottom", `${layoutGapBottom}px`);
     else setVar("--app-layout-gap-bottom", null);
 
-    if (bottomDiagnosticsEnabled()) {
+    const diagnosticsEnabled = bottomDiagnosticsEnabled(keyboard);
+    if (diagnosticsEnabled) {
+      const diagnosticMode = loggedInMobileFrameDiagnosticsAutoEnabled(keyboard) ? "w0946-auto" : "manual";
       setDiagnosticAttr("data-viewport-diagnostic", "1");
+      setDiagnosticAttr("data-app-diagnostic-mode", diagnosticMode);
+      setDiagnosticAttr("data-app-diagnostic-target", "logged-in-frame");
       setDiagnosticAttr("data-app-vh", `${height}`);
       setDiagnosticAttr("data-app-frame-vh", `${frameHeight > 0 ? frameHeight : height}`);
       setDiagnosticAttr("data-app-gap-bottom", `${gap}`);
@@ -359,8 +512,20 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       setDiagnosticAttr("data-app-vv-bottom", `${keyboard ? vvBottom : 0}`);
       setDiagnosticAttr("data-app-keyboard", keyboard ? "1" : "0");
       setDiagnosticAttr("data-app-shell-spill", `${shellBottomSpill}`);
+      updateDiagnosticPanel(true, {
+        height,
+        keyboard,
+        vvTop,
+        vvBottom,
+        gapBottom,
+        layoutGapBottom,
+        safeBottomRaw,
+        vhHeight,
+        frameHeight,
+      });
     } else {
       clearDiagnosticAttrs();
+      updateDiagnosticPanel(false);
     }
 
     if (Math.abs(height - lastHeight) < 1) return;
@@ -450,6 +615,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
     setVar("--app-layout-gap-bottom", null);
     setVar("--app-shell-bottom-spill", null);
     clearDiagnosticAttrs();
+    updateDiagnosticPanel(false);
     if (docEl?.classList) docEl.classList.remove("app-vv-offset");
     if (docEl?.classList) docEl.classList.remove("app-shell-physical-bottom");
   };

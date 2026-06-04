@@ -51,6 +51,8 @@ test("mobile safe-area: diagnostic markers are debug-gated and expose every bott
   const responsiveCss = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   const authCss = await readFile(path.resolve("src/scss/modal.part01-auth.css"), "utf8");
   assert.match(baseCss, /data-viewport-diagnostic="1"/);
+  assert.match(baseCss, /\.app-frame-diagnostic-panel\s*\{/);
+  assert.match(baseCss, /pointer-events:\s*none;/);
   assert.match(authCss, /body\[data-viewport-diagnostic="1"\][\s\S]*AUTH-SCROLL-END/);
   assert.match(responsiveCss, /body\[data-viewport-diagnostic="1"\]\s+\.sidebar-body::after[\s\S]*SIDEBAR-SCROLL-END/);
   assert.match(responsiveCss, /body\[data-viewport-diagnostic="1"\]\s+\.input-wrap::after[\s\S]*CHAT-COMPOSER-BOTTOM/);

@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.849",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: добавлен временный W-0946 diagnostic overlay для logged-in contact/chat shell с реальными viewport, rect, CSS var и elementFromPoint данными.",
+      "Диагностика автоматически видна только на iOS mobile logged-in экране без клавиатуры и остаётся включаемой вручную через `?__bottom_diag=1`.",
+    ],
+    fixed: [
+      "Web 0.1.848 подтверждён на телефоне, но lower mobile frame всё ещё не принят; следующий fix будет опираться на реальные rect/paint-owner значения, а не на очередной blind padding/height toggle.",
+      "Auth version marker, keyboard-open chat state и принятый compact photo viewer не менялись.",
+    ],
+  },
+  {
     version: "0.1.848",
     date: "2026-06-04",
     improved: [

@@ -37,6 +37,19 @@ test("css viewport: #app поддерживает JS override через --app-v
   assert.match(css, /min-height:\s*var\(--app-vh\)\s*;/);
 });
 
+test("viewport diagnostics: W-0946 logged-in frame overlay is real-phone focused", async () => {
+  const source = await readFile(path.resolve("src/helpers/ui/appViewport.ts"), "utf8");
+  assert.match(source, /W0946_AUTO_FRAME_DIAGNOSTICS\s*=\s*true/);
+  assert.match(source, /loggedInMobileFrameDiagnosticsAutoEnabled\(keyboard\)/);
+  assert.match(source, /document\.querySelector\("\.grid"\)/);
+  assert.match(source, /document\.querySelector\("\.overlay\.overlay-viewer"\)/);
+  assert.match(source, /W0946-FRAME-DIAG/);
+  assert.match(source, /elementFromPoint/);
+  assert.match(source, /app-frame-diagnostic-panel/);
+  assert.match(source, /data-app-diagnostic-mode/);
+  assert.match(source, /data-app-diagnostic-target/);
+});
+
 test("viewport var: installAppViewportHeightVar использует innerHeight по умолчанию (без document)", async () => {
   const helper = await loadInstall();
   const prev = {
