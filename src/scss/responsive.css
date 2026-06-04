@@ -34,9 +34,9 @@
 
   html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) #app {
     bottom: auto;
-    height: var(--app-vh);
+    height: var(--app-frame-vh, var(--app-vh));
     min-height: 0;
-    max-height: var(--app-vh);
+    max-height: var(--app-frame-vh, var(--app-vh));
   }
 
   html.app-vv-offset #app {
@@ -69,8 +69,8 @@
   }
 
   html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) #app > .app {
-    height: var(--app-vh);
-    max-height: var(--app-vh);
+    height: var(--app-frame-vh, var(--app-vh));
+    max-height: var(--app-frame-vh, var(--app-vh));
     overflow: hidden;
   }
 
@@ -859,7 +859,7 @@
   }
 
   html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .input-wrap {
-    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-live-pad));
+    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-physical-bottom-pad));
     bottom: 0;
     background: var(--composer-bg);
   }

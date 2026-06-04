@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.847",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/PWA: основной contacts/chat shell снова занимает полный physical frame через `--app-frame-vh`, чтобы нижний rounded-screen участок не оставался внешним слоем.",
+      "Composer в physical-bottom режиме красит весь нижний frame через `--app-physical-bottom-pad`, но само поле ввода остаётся у visual edge.",
+    ],
+    fixed: [
+      "Contact list и chat больше не должны заканчиваться над отдельной нижней тёмной полосой после входа в Web 0.1.846.",
+      "Просмотр фото оставлен на visual viewport, чтобы не откатить принятый компактный mobile viewer chrome.",
+    ],
+  },
+  {
     version: "0.1.846",
     date: "2026-06-04",
     improved: [

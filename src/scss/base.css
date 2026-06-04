@@ -7,10 +7,10 @@
   --app-gap-bottom: 0px;
   --app-layout-gap-bottom: var(--app-gap-bottom);
   --app-shell-bottom-spill: 0px;
-  /* One bottom contract: visible layout stays on visual viewport; shell surfaces paint the physical bottom. */
+  /* One bottom contract: the app shell may own the physical frame; controls choose live vs physical pads explicitly. */
   --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-layout-gap-bottom, var(--app-gap-bottom, 0px)));
   --app-physical-bottom-pad: var(--app-bottom-inset);
-  /* Visible bottom controls use a compact live pad so composer/buttons stay inside the visual viewport. */
+  /* Compact live pad is for scroll surfaces; physical pad is used only by bars that must paint the bottom frame. */
   --app-bottom-live-pad: clamp(8px, calc(var(--app-bottom-inset) - 22px), 16px);
   --app-frame-bottom-inset: 0px;
   --safe-bottom-layout-pad: var(--app-bottom-live-pad);
