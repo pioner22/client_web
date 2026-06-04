@@ -39,7 +39,7 @@ test("css viewport: #app поддерживает JS override через --app-v
 
 test("viewport diagnostics: W-0946 logged-in frame overlay is real-phone focused", async () => {
   const source = await readFile(path.resolve("src/helpers/ui/appViewport.ts"), "utf8");
-  assert.match(source, /W0946_AUTO_FRAME_DIAGNOSTICS\s*=\s*true/);
+  assert.match(source, /W0946_AUTO_FRAME_DIAGNOSTICS\s*=\s*false/);
   assert.match(source, /loggedInMobileFrameDiagnosticsAutoEnabled\(keyboard\)/);
   assert.match(source, /document\.querySelector\("\.grid"\)/);
   assert.match(source, /document\.querySelector\("\.overlay\.overlay-viewer"\)/);

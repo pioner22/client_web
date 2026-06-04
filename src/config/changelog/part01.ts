@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.850",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0946 diagnostic overlay на реальном телефоне показал `--app-frame-vh=956px`, но `--app-logged-frame-vh=894px` внутри `#app`.",
+      "Auto diagnostic overlay отключён после снятия данных; ручной режим `?__bottom_diag=1` сохранён для повторной проверки при необходимости.",
+    ],
+    fixed: [
+      "Logged-in no-keyboard shell теперь задаёт `--app-logged-frame-vh` и `--app-logged-bottom-fill` непосредственно на `#app`, поэтому локальный default больше не занижает каркас до visual viewport.",
+      "Contact list/chat должны занимать physical frame 956px, while composer input остаётся у visual edge за счёт нижнего physical pad; auth, keyboard-open chat и принятый compact photo viewer не менялись.",
+    ],
+  },
+  {
     version: "0.1.849",
     date: "2026-06-04",
     improved: [

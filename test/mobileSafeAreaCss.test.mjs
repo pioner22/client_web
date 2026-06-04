@@ -71,12 +71,17 @@ test("mobile safe-area: pages have bottom padding for home indicator", async () 
 test("mobile safe-area: iOS standalone physical frame owns app shell while viewer stays visual", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /--app-logged-frame-vh:\s*max\(/);
-  assert.match(css, /--app-logged-bottom-fill:\s*max\(var\(--app-physical-bottom-pad\),\s*calc\(100dvh\s*-\s*var\(--app-vh,\s*100dvh\)\)\);/);
+  assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app/);
+  assert.match(css, /calc\(var\(--app-frame-vh,\s*var\(--app-vh\)\)\s*-\s*var\(--app-vh,\s*100dvh\)\)/);
   assert.match(css, /--app-frame-bottom-inset:\s*var\(--app-logged-bottom-fill\);/);
   assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
   assert.match(
     css,
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-logged-frame-vh\);/
+  );
+  assert.match(
+    css,
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\),[\s\S]*?html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?--app-logged-frame-vh:\s*max\(/
   );
   assert.match(
     css,

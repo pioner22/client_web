@@ -47,7 +47,10 @@ test("mobile app frame: contact list owns the full mobile frame without a footer
     css,
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*>\s*\.app\s*\{[\s\S]*?height:\s*var\(--app-logged-frame-vh\);/
   );
-  assert.match(css, /--app-logged-frame-vh:\s*max\([^}]*100dvh[^}]*calc\(var\(--app-vh\)\s*\+\s*var\(--app-physical-bottom-pad\)\)/);
+  assert.match(
+    css,
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\),[\s\S]*?html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?--app-logged-frame-vh:\s*max\([^}]*var\(--app-frame-vh,\s*var\(--app-vh\)\)[^}]*calc\(var\(--app-vh\)\s*\+\s*var\(--app-physical-bottom-pad\)\)/
+  );
   assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\):has\(\.sidebar\.sidebar-mobile-open\)/);
   assert.match(
     css,

@@ -14,7 +14,7 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
   const iosStandalone = isIos && standalone;
   const docEl = typeof document !== "undefined" ? document.documentElement : null;
   const EDITABLE_INTENT_MS = 1200;
-  const W0946_AUTO_FRAME_DIAGNOSTICS = true;
+  const W0946_AUTO_FRAME_DIAGNOSTICS = false;
   const diagnosticAttrNames = [
     "data-viewport-diagnostic",
     "data-app-diagnostic-mode",

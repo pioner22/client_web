@@ -35,13 +35,16 @@
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages),
-  html.is-ios:not(.kbd-open):not(.has-auth-pages) body {
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) body,
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) #app {
     --app-logged-frame-vh: max(
       var(--app-frame-vh, var(--app-vh)),
-      100dvh,
       calc(var(--app-vh) + var(--app-physical-bottom-pad))
     );
-    --app-logged-bottom-fill: max(var(--app-physical-bottom-pad), calc(100dvh - var(--app-vh, 100dvh)));
+    --app-logged-bottom-fill: max(
+      var(--app-physical-bottom-pad),
+      calc(var(--app-frame-vh, var(--app-vh)) - var(--app-vh, 100dvh))
+    );
     --app-frame-bottom-inset: var(--app-logged-bottom-fill);
   }
 
