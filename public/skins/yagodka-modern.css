@@ -858,6 +858,14 @@ html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-compact {
   border-radius: 18px;
 }
 
+html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list {
+  width: min(286px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(44dvh, 390px);
+  padding: 7px;
+  border-radius: 22px;
+}
+
 html[data-skin="yagodka-modern"] .ctx-title {
   padding: 6px 8px;
   color: var(--text);
@@ -886,6 +894,12 @@ html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-compact .ctx-item {
   border-radius: 12px;
 }
 
+html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-item {
+  min-height: 48px;
+  padding: 8px 10px;
+  border-radius: 14px;
+}
+
 html[data-skin="yagodka-modern"] .ctx-item-multiline {
   padding: 8px;
   background: transparent;
@@ -900,6 +914,13 @@ html[data-skin="yagodka-modern"] .ctx-icon {
   background: rgba(88, 210, 189, 0.11);
   color: #43505a;
   font-size: 0;
+}
+
+html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-icon {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text), var(--muted) 16%);
 }
 
 html[data-skin="yagodka-modern"] .ctx-meta {

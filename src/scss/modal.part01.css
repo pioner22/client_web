@@ -718,6 +718,19 @@
     0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
 
+.ctx-menu.ctx-menu-message-action-list {
+  width: min(286px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(44dvh, 390px);
+  border-radius: 22px;
+  padding: 7px;
+  gap: 4px;
+  background: color-mix(in srgb, var(--modal-bg), transparent 3%);
+  box-shadow:
+    0 22px 54px rgba(0, 0, 0, 0.36),
+    0 1px 0 rgba(255, 255, 255, 0.1) inset;
+}
+
 .ctx-header {
   display: flex;
   align-items: center;
@@ -755,11 +768,25 @@
   gap: 8px;
 }
 
+.ctx-menu.ctx-menu-message-action-list .ctx-item {
+  min-height: 48px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  font-size: 15px;
+  gap: 10px;
+  background: transparent;
+}
+
 .ctx-menu.ctx-menu-sheet .ctx-sub,
 .ctx-menu.ctx-menu-sheet .ctx-meta,
 .ctx-menu.ctx-menu-message-compact .ctx-sub,
 .ctx-menu.ctx-menu-message-compact .ctx-meta {
   font-size: 12px;
+}
+
+.ctx-menu.ctx-menu-message-action-list .ctx-sub,
+.ctx-menu.ctx-menu-message-action-list .ctx-meta {
+  display: none;
 }
 
 .ctx-title {
@@ -825,6 +852,11 @@
   gap: 3px;
 }
 
+.ctx-menu.ctx-menu-message-action-list .ctx-list {
+  max-height: min(var(--ctx-list-max-h, 318px), 38dvh);
+  gap: 2px;
+}
+
 .ctx-list::-webkit-scrollbar {
   display: none;
 }
@@ -841,6 +873,11 @@
 .ctx-menu.ctx-menu-message-compact .ctx-reacts {
   gap: 4px;
   padding: 0 2px 4px;
+}
+
+.ctx-menu.ctx-menu-message-action-list .ctx-reacts {
+  gap: 5px;
+  padding: 1px 3px 5px;
 }
 
 .ctx-reacts::-webkit-scrollbar {
@@ -869,6 +906,13 @@
   height: 29px;
   flex-basis: 29px;
   font-size: 15px;
+}
+
+.ctx-menu.ctx-menu-message-action-list .ctx-react {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+  font-size: 16px;
 }
 
 .ctx-react-more {
@@ -965,9 +1009,23 @@
   border-radius: 11px;
 }
 
+.ctx-menu.ctx-menu-message-action-list .ctx-icon {
+  flex-basis: 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 11px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text), var(--muted) 16%);
+}
+
 .ctx-menu.ctx-menu-message-compact .ctx-icon::before {
   width: 15px;
   height: 15px;
+}
+
+.ctx-menu.ctx-menu-message-action-list .ctx-icon::before {
+  width: 21px;
+  height: 21px;
 }
 
 .ctx-icon[data-ctx-icon="action"] {
@@ -1059,6 +1117,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ctx-menu.ctx-menu-message-action-list .ctx-label {
+  font-size: clamp(15px, 15px, 16px);
+  font-weight: 560;
+  line-height: 1.18;
 }
 
 .ctx-sub {

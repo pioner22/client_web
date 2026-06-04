@@ -366,7 +366,7 @@
     right: 0;
     bottom: 0;
     display: flex;
-    align-items: flex-end;
+    align-items: stretch;
     justify-content: center;
     z-index: 12;
     min-height: var(--mobile-bottom-nav-h);
@@ -376,7 +376,7 @@
       linear-gradient(180deg, color-mix(in srgb, var(--sidebar-bg), transparent 26%), var(--sidebar-bg) 42%),
       var(--sidebar-bg);
     border-top: 1px solid color-mix(in srgb, var(--line), transparent 34%);
-    padding: 8px 10px max(8px, min(34px, calc(var(--mobile-bottom-nav-fill) * 0.28)));
+    padding: 6px 10px max(6px, min(18px, calc(var(--mobile-bottom-nav-fill) * 0.32)));
     margin-top: 0;
     box-shadow:
       0 -18px 34px color-mix(in srgb, #000, transparent 72%),
@@ -389,8 +389,9 @@
     --sidebar-tab-icon-boards: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm2 4v2h10V8H7Zm0 4v2h7v-2H7Z'/%3E%3C/svg%3E");
     --sidebar-tab-icon-menu: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 5h4v4H5V5Zm5 0h4v4h-4V5Zm5 0h4v4h-4V5ZM5 10h4v4H5v-4Zm5 0h4v4h-4v-4Zm5 0h4v4h-4v-4ZM5 15h4v4H5v-4Zm5 0h4v4h-4v-4Zm5 0h4v4h-4v-4Z'/%3E%3C/svg%3E");
     width: min(100%, 384px);
-    height: var(--mobile-bottom-nav-row-h);
-    min-height: var(--mobile-bottom-nav-row-h);
+    height: 100%;
+    min-height: 0;
+    align-self: stretch;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: stretch;
@@ -416,7 +417,7 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    min-height: 50px;
+    min-height: 0;
     height: 100%;
     justify-content: center;
     align-items: center;
@@ -512,7 +513,7 @@
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar-mobile-bottom {
     margin-bottom: 0;
-    padding-bottom: max(8px, var(--mobile-bottom-nav-fill));
+    padding-bottom: max(6px, min(18px, calc(var(--mobile-bottom-nav-fill) * 0.32)));
   }
 
   body[data-viewport-diagnostic="1"] .sidebar-body::after {
@@ -1175,7 +1176,8 @@
   }
 
   html.env-os-android .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab {
-    min-height: 50px;
+    min-height: 0;
+    height: 100%;
     padding: 4px 2px;
     font-size: 0;
     line-height: 1;

@@ -249,7 +249,7 @@ test("renderContextMenu: на coarse pointer рендерится как modern 
   }
 });
 
-test("renderContextMenu: сообщение на coarse pointer рендерится компактным меню, а не sheet", async () => {
+test("renderContextMenu: сообщение на coarse pointer рендерится iOS-like action list, а не sheet", async () => {
   const helper = await loadRenderContextMenu();
   try {
     withStubs({ coarse: true }, () => {
@@ -268,10 +268,12 @@ test("renderContextMenu: сообщение на coarse pointer рендерит
         { onSelect() {}, onClose() {} }
       );
       assert.ok(node.className.includes("ctx-menu-message-compact"));
+      assert.ok(node.className.includes("ctx-menu-message-action-list"));
       assert.ok(!node.className.includes("ctx-menu-sheet"));
       assert.equal(node.getAttribute("role"), "menu");
       assert.equal(node.getAttribute("aria-modal"), null);
-      assert.equal(node.getAttribute("data-menu-layout"), "message-compact");
+      assert.equal(node.getAttribute("data-menu-layout"), "message-action-list");
+      assert.equal(node.getAttribute("data-menu-density"), "ios-action");
       assert.equal(node.style.left, "190px");
       assert.equal(node.style.top, "420px");
       const closeBtn = findFirst(node, (child) => typeof child.className === "string" && child.className.split(/\s+/).includes("ctx-close"));
@@ -319,7 +321,9 @@ test("context menu/pin remediation source guards: modern sheet, compact message 
 
   assert.match(modalCss, /\.ctx-menu\s*\{[\s\S]*overflow:\s*hidden;/);
   assert.match(modalCss, /\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*width:\s*min\(380px,\s*calc\(100vw - 28px\)\)/);
-  assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-compact\s*\{[\s\S]*width:\s*min\(300px,\s*calc\(100vw - 28px\)\)/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s*\{[\s\S]*width:\s*min\(286px,\s*calc\(100vw - 32px\)\)/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-item\s*\{[\s\S]*min-height:\s*48px;/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-label\s*\{[\s\S]*font-size:\s*clamp\(15px,\s*15px,\s*16px\);/);
   assert.match(modalCss, /\.overlay\.overlay-context\.overlay-context-message\s*\{[\s\S]*backdrop-filter:\s*none;/);
   assert.match(modalCss, /\.ctx-close::before\s*\{[\s\S]*display:\s*block;/);
   assert.match(modalCss, /--ctx-sheet-bottom-offset/);
@@ -328,14 +332,16 @@ test("context menu/pin remediation source guards: modern sheet, compact message 
   assert.match(responsiveCss, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(responsiveCss, /\.app-frame\.has-message-context-menu\s+\.chat-lines\s+\[data-msg-idx\]\.msg-context-active\s*\{[\s\S]*filter:\s*none;/);
   assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*max-height:\s*var\(--ctx-sheet-max-h,\s*min\(56dvh,\s*480px\)\)/);
-  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-message-compact\s*\{[\s\S]*width:\s*min\(300px,\s*calc\(100vw - 28px\)\)/);
+  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-message-action-list\s*\{[\s\S]*width:\s*min\(286px,\s*calc\(100vw - 32px\)\)/);
   assert.match(renderSrc, /composerAvoidRect/);
   assert.match(renderSrc, /applyPopoverGeometry/);
   assert.match(renderSrc, /applySheetGeometry/);
   assert.match(renderSrc, /applyCompactMessageGeometry/);
+  assert.match(renderSrc, /findMessageAnchorRect/);
   assert.match(renderSrc, /data-ctx-icon/);
   assert.match(renderSrc, /ctx-react-more/);
-  assert.match(renderSrc, /data-menu-layout":\s*compactMessage\s*\?\s*"message-compact"\s*:\s*sheet\s*\?\s*"modern-sheet"/);
+  assert.match(renderSrc, /data-menu-layout":\s*compactMessage\s*\?\s*"message-action-list"\s*:\s*sheet\s*\?\s*"modern-sheet"/);
+  assert.match(renderSrc, /data-menu-density":\s*compactMessage\s*\?\s*"ios-action"/);
   assert.match(renderSrc, /ctx-close/);
   assert.match(appSrc, /has-message-context-menu/);
   assert.match(overlaySrc, /overlay-context-message/);

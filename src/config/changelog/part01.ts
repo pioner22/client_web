@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.857",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0953 переводит long-press меню сообщения в отдельный iOS-like action list рядом с выбранной строкой: ширина 286px, строки 48px, крупные mask-icons и без лишних sub/meta подписей.",
+      "Выбранное сообщение теперь используется как anchor для compact context menu, поэтому меню не выезжает sheet-слоем от края и не спорит с composer.",
+      "Нижний contact-list dock растягивается на весь reserved bottom frame и держит четыре icon-кнопки как стабильную grid-навигацию.",
+    ],
+    fixed: [
+      "Modern skin больше не возвращает меню сообщения к старым 300px/38px размерам.",
+      "Android/mobile overrides больше не включают текстовую высоту tab-кнопок в нижнем dock; auth `Web` version marker и принятый compact photo viewer chrome сохранены regression guards.",
+    ],
+  },
+  {
     version: "0.1.856",
     date: "2026-06-04",
     improved: [

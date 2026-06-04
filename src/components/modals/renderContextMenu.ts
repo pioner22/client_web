@@ -159,28 +159,62 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function applyCompactMessageGeometry(root: HTMLElement, x: number, y: number) {
+function findMessageAnchorRect(payload: ContextMenuPayload): DOMRect | null {
+  if (payload?.target?.kind !== "message") return null;
+  const id = String(payload.target.id || "").trim();
+  if (!id) return null;
+  try {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-msg-idx]"));
+    const node = nodes.find((item) => String(item.getAttribute("data-msg-idx") || "").trim() === id) || null;
+    const rect = node?.getBoundingClientRect?.() ?? null;
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    return rect;
+  } catch {
+    return null;
+  }
+}
+
+function applyCompactMessageGeometry(root: HTMLElement, payload: ContextMenuPayload) {
   const viewportW = Math.max(320, Number(window.innerWidth || 0));
   const viewportH = Math.max(320, Number(window.innerHeight || 0));
   const pad = 12;
   const rect = root.getBoundingClientRect();
-  const width = Math.max(260, Math.min(rect.width || 300, viewportW - pad * 2));
-  const height = Math.max(160, Math.min(rect.height || 360, viewportH - pad * 2));
+  const width = Math.max(260, Math.min(rect.width || 286, viewportW - pad * 2));
+  const height = Math.max(170, Math.min(rect.height || 356, viewportH - pad * 2));
+  const messageRect = findMessageAnchorRect(payload);
   const composerRect = composerAvoidRect();
   const bottomLimit =
     composerRect && composerRect.width > 0 && composerRect.height > 0 && composerRect.top > 0
       ? Math.min(viewportH - pad, composerRect.top - pad)
       : viewportH - pad;
-  const anchorX = Number.isFinite(Number(x)) ? Number(x) : viewportW / 2;
-  const anchorY = Number.isFinite(Number(y)) ? Number(y) : viewportH / 2;
-  const left = clampNumber(anchorX - width * 0.48, pad, viewportW - width - pad);
-  const preferAbove = anchorY > viewportH * 0.45;
-  const topRaw = preferAbove ? anchorY - height - 10 : anchorY + 10;
+  const anchorX = messageRect
+    ? messageRect.left + messageRect.width / 2
+    : Number.isFinite(Number(payload.x))
+      ? Number(payload.x)
+      : viewportW / 2;
+  const anchorY = messageRect
+    ? messageRect.top + messageRect.height / 2
+    : Number.isFinite(Number(payload.y))
+      ? Number(payload.y)
+      : viewportH / 2;
+  const rightLeaning = messageRect ? messageRect.left + messageRect.width / 2 > viewportW * 0.56 : anchorX > viewportW * 0.56;
+  const leftRaw = messageRect
+    ? rightLeaning
+      ? messageRect.right - width
+      : messageRect.left
+    : anchorX - width * 0.48;
+  const left = clampNumber(leftRaw, pad, viewportW - width - pad);
+  const belowTop = messageRect ? messageRect.bottom + 10 : anchorY + 10;
+  const aboveTop = messageRect ? messageRect.top - height - 10 : anchorY - height - 10;
+  const hasRoomBelow = belowTop + height <= bottomLimit;
+  const preferAbove = !hasRoomBelow && anchorY > viewportH * 0.38;
+  const topRaw = preferAbove ? aboveTop : belowTop;
   const top = clampNumber(topRaw, pad + Math.max(0, Number(window.scrollY || 0)), Math.max(pad, bottomLimit - height));
   root.style.left = `${Math.round(left)}px`;
   root.style.top = `${Math.round(top)}px`;
-  root.style.setProperty("--ctx-list-max-h", `${Math.max(150, Math.min(330, height - 64))}px`);
-  root.style.maxHeight = `${Math.max(220, Math.min(420, bottomLimit - pad))}px`;
+  root.style.setProperty("--ctx-list-max-h", `${Math.max(168, Math.min(318, height - 54))}px`);
+  root.style.maxHeight = `${Math.max(220, Math.min(390, bottomLimit - pad))}px`;
+  root.setAttribute("data-anchor", messageRect ? "message-row" : "tap");
 }
 
 export function renderContextMenu(payload: ContextMenuPayload, actions: ContextMenuActions): HTMLElement {
@@ -191,7 +225,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
   const showTitle = Boolean(titleText && titleText !== "Меню" && !compactMessage);
   const root = el("div", {
     class: compactMessage
-      ? `ctx-menu ctx-menu-message-compact ctx-menu-${targetKind}`
+      ? `ctx-menu ctx-menu-message-compact ctx-menu-message-action-list ctx-menu-${targetKind}`
       : sheet
         ? `ctx-menu ctx-menu-sheet ctx-menu-${targetKind}`
         : `ctx-menu ctx-menu-${targetKind}`,
@@ -199,7 +233,8 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     tabindex: "-1",
     "aria-label": titleText || "Контекстное меню",
     "data-target-kind": targetKind,
-    "data-menu-layout": compactMessage ? "message-compact" : sheet ? "modern-sheet" : "popover",
+    "data-menu-layout": compactMessage ? "message-action-list" : sheet ? "modern-sheet" : "popover",
+    "data-menu-density": compactMessage ? "ios-action" : undefined,
     "data-has-reactions": payload.reactionBar?.emojis?.length ? "1" : undefined,
   });
   if (!sheet) {
@@ -330,7 +365,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     if (sheet) {
       applySheetGeometry(root);
     } else if (compactMessage) {
-      applyCompactMessageGeometry(root, payload.x, payload.y);
+      applyCompactMessageGeometry(root, payload);
     } else {
       applyPopoverGeometry(root);
       clampIntoViewport(root);
