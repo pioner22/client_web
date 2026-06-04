@@ -18,6 +18,8 @@
   /* Mobile (Safari + PWA): всегда фуллскрин, независимо от выбранного скина. */
   html #app {
     --app-outer-pad: 0px;
+    --app-logged-frame-vh: var(--app-vh);
+    --app-logged-bottom-fill: 0px;
     position: fixed;
     inset: 0;
     bottom: auto;
@@ -32,11 +34,32 @@
     background-color: var(--app-host-canvas-bg, var(--safe-area-bg, var(--app-frame-bg)));
   }
 
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) #app {
+  html.is-ios:not(.kbd-open):not(.has-auth-pages),
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) body {
+    --app-logged-frame-vh: max(
+      var(--app-frame-vh, var(--app-vh)),
+      100dvh,
+      calc(var(--app-vh) + var(--app-physical-bottom-pad))
+    );
+    --app-logged-bottom-fill: max(var(--app-physical-bottom-pad), calc(100dvh - var(--app-vh, 100dvh)));
+    --app-frame-bottom-inset: var(--app-logged-bottom-fill);
+  }
+
+  html.is-ios.sidebar-mobile-open:not(.kbd-open):not(.has-auth-pages),
+  html.is-ios.sidebar-mobile-open:not(.kbd-open):not(.has-auth-pages) body,
+  html.is-ios:not(.kbd-open):not(.has-auth-pages):has(.sidebar.sidebar-mobile-open),
+  html.is-ios:not(.kbd-open):not(.has-auth-pages):has(.sidebar.sidebar-mobile-open) body {
+    --safe-area-bg: var(--sidebar-bg);
+    --app-frame-safe-bg: var(--sidebar-bg);
+    --app-host-canvas-bg: var(--sidebar-bg);
+    background-color: var(--app-host-canvas-bg, var(--sidebar-bg));
+  }
+
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) #app {
     bottom: auto;
-    height: var(--app-frame-vh, var(--app-vh));
+    height: var(--app-logged-frame-vh);
     min-height: 0;
-    max-height: var(--app-frame-vh, var(--app-vh));
+    max-height: var(--app-logged-frame-vh);
   }
 
   html.app-vv-offset #app {
@@ -68,20 +91,20 @@
     min-height: 0;
   }
 
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) #app > .app {
-    height: var(--app-frame-vh, var(--app-vh));
-    max-height: var(--app-frame-vh, var(--app-vh));
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) #app > .app {
+    height: var(--app-logged-frame-vh);
+    max-height: var(--app-logged-frame-vh);
     overflow: hidden;
   }
 
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .grid,
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .chat-col,
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .chat,
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .sidebar {
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .grid,
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .chat-col,
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .chat,
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar {
     overflow: hidden;
   }
 
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .overlay.overlay-viewer {
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .overlay.overlay-viewer {
     top: 0;
     bottom: auto;
     height: var(--app-vh);
@@ -249,13 +272,13 @@
     min-height: 100%;
   }
 
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .sidebar-body {
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar-body {
     margin-bottom: 0;
     padding-bottom: max(var(--sp-4), var(--app-bottom-live-pad));
     scroll-padding-bottom: max(var(--sp-4), var(--app-bottom-live-pad));
   }
 
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .sidebar-mobile-bottom {
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar-mobile-bottom {
     margin-bottom: 0;
     padding-bottom: max(var(--sp-4), var(--app-bottom-live-pad));
   }
@@ -858,7 +881,7 @@
     backdrop-filter: none;
   }
 
-  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) .input-wrap {
+  html.is-ios:not(.kbd-open):not(.has-auth-pages) .input-wrap {
     --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-physical-bottom-pad));
     bottom: 0;
     background: var(--composer-bg);

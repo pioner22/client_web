@@ -41,12 +41,14 @@ test("mobile app frame: contact list owns the full mobile frame without a footer
   assert.match(css, /:root\[data-skin\]\s*\{[\s\S]*?--app-row-footer:\s*0px;/);
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-logged-frame-vh\);/
   );
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*>\s*\.app\s*\{[\s\S]*?height:\s*var\(--app-frame-vh,\s*var\(--app-vh\)\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*>\s*\.app\s*\{[\s\S]*?height:\s*var\(--app-logged-frame-vh\);/
   );
+  assert.match(css, /--app-logged-frame-vh:\s*max\([^}]*100dvh[^}]*calc\(var\(--app-vh\)\s*\+\s*var\(--app-physical-bottom-pad\)\)/);
+  assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\):has\(\.sidebar\.sidebar-mobile-open\)/);
   assert.match(
     css,
     /\.sidebar\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\);[\s\S]*?width:\s*100vw;[\s\S]*?transform:\s*none;[\s\S]*?visibility:\s*hidden;/
@@ -58,7 +60,7 @@ test("mobile app frame: contact list owns the full mobile frame without a footer
   assert.match(css, /\.sidebar-body\s*\{[\s\S]*?height:\s*100%;[\s\S]*?overscroll-behavior:\s*contain;/);
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?padding-bottom:\s*max\(var\(--sp-4\),\s*var\(--app-bottom-live-pad\)\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?padding-bottom:\s*max\(var\(--sp-4\),\s*var\(--app-bottom-live-pad\)\);/
   );
   assert.match(css, /\.footer\s*\{[\s\S]*?display:\s*none\s*!important;[\s\S]*?min-height:\s*0;/);
 });

@@ -25,15 +25,15 @@ test("mobile composer: iOS physical bottom paints frame while keeping controls a
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-physical-bottom-pad\)\)\s*;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-physical-bottom-pad\)\)\s*;/
   );
   assert.doesNotMatch(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\)\s*;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\)\s*;/
   );
   assert.match(
     css,
-    /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?bottom:\s*0\s*;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?bottom:\s*0\s*;/
   );
   assert.doesNotMatch(css, /bottom:\s*calc\(0px\s*-\s*var\(--app-layout-gap-bottom/);
 });

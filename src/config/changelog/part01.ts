@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.848",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: logged-in shell получил CSS fallback `--app-logged-frame-vh`, который берёт максимум из `--app-frame-vh`, `100dvh` и `--app-vh + physical bottom pad`.",
+      "Нижний paint-owner теперь выбирается для активного logged-in surface: contact list/sidebar могут красить bottom frame `--sidebar-bg`, а chat/composer — composer surface.",
+    ],
+    fixed: [
+      "Contact list и chat после Web 0.1.847 больше не зависят только от JS-класса `app-shell-physical-bottom`, поэтому нижняя тёмная область должна исчезнуть даже если real iOS/PWA geometry отдаёт неполный rect.",
+      "Composer продолжает красить physical bottom frame, но поле ввода остаётся у visual edge; auth version marker и принятый компактный photo viewer не менялись.",
+    ],
+  },
+  {
     version: "0.1.847",
     date: "2026-06-04",
     improved: [
