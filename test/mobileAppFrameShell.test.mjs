@@ -74,6 +74,8 @@ test("mobile app frame: contact list owns the full fixed mobile frame without a 
   assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*0;[\s\S]*?height:\s*var\(--mobile-bottom-nav-h\);/);
   assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?align-items:\s*flex-end;/);
   assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?height:\s*var\(--mobile-bottom-nav-row-h\);[\s\S]*?border-radius:\s*22px;/);
+  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s+\.sidebar-tab\s*\{[\s\S]*?font-size:\s*0;[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /\.sidebar-bottom-dock:not\(\.sidebar-mobile-bottom\)\s*\{[\s\S]*?display:\s*none;/);
   assert.match(css, /\.sidebar-body\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?height:\s*auto;[\s\S]*?padding-top:\s*var\(--mobile-sidebar-sticky-h\);[\s\S]*?padding-bottom:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*var\(--sp-2\)\);/);
   assert.match(css, /\.sidebar\[data-sidebar-tab="menu"\]\s+\.sidebar-body\s*\{[\s\S]*?padding-top:\s*var\(--mobile-sidebar-menu-sticky-h\);/);

@@ -386,6 +386,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const fullScreenActive = modalPresentation.fullScreenActive;
   const conversationViewportTarget = getConversationViewportTarget(state);
   const conversationViewportKey = getConversationViewportKey(state);
+  const messageContextMenuOpen = Boolean(state.modal?.kind === "context_menu" && state.modal.payload.target.kind === "message");
 
   // Контекстное меню не должно "ломать" макет и прятать composer.
   // Composer показываем только когда выбран чат/контакт/доска (как в tweb).
@@ -400,6 +401,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     document.documentElement.classList.toggle("has-auth-pages", fullScreenActive);
     layout.root?.classList.toggle("app-frame-auth", fullScreenActive);
     layout.root?.classList.toggle("app-frame-main", !fullScreenActive);
+    layout.root?.classList.toggle("has-message-context-menu", messageContextMenuOpen);
+    document.body?.classList.toggle("has-message-context-menu", messageContextMenuOpen);
     scheduleChromeColorSync();
   }
   layout.rightCol.classList.toggle("hidden", !showRightPanel);
@@ -747,7 +750,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
       ? (() => {
           const existing = layout.overlay.firstElementChild as HTMLElement | null;
           if (!existing || !existing.classList.contains("ctx-menu")) return null;
-          const sheet = shouldRenderContextMenuAsSheet();
+          const sheet = shouldRenderContextMenuAsSheet(state.modal.payload);
           const key = contextMenuPayloadKey(state.modal.payload, sheet);
           const prevKey = String(overlayState.__ctxMenuKey || "");
           overlayState.__ctxMenuKey = key;

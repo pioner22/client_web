@@ -64,6 +64,10 @@ export function applyOverlaySurface(overlay: HTMLElement, surface: OverlaySurfac
     "overlay-context-sheet",
     hasOverlay && surface === "overlay-context" && Boolean(nextNode?.classList.contains("ctx-menu-sheet"))
   );
+  overlay.classList.toggle(
+    "overlay-context-message",
+    hasOverlay && surface === "overlay-context" && Boolean(nextNode?.classList.contains("ctx-menu-message-compact"))
+  );
   overlay.classList.toggle("overlay-viewer", hasOverlay && surface === "overlay-viewer");
   overlay.classList.toggle("overlay-auth", hasOverlay && surface === "overlay-auth");
 

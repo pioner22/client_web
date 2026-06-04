@@ -6,12 +6,20 @@ export interface ContextMenuActions {
   onClose: () => void;
 }
 
-function shouldRenderAsSheet() {
+function isCoarsePointer() {
   try {
     return Boolean(window.matchMedia?.("(pointer: coarse)")?.matches || window.matchMedia?.("(hover: none)")?.matches);
   } catch {
     return false;
   }
+}
+
+function shouldRenderAsCompactMessage(payload: ContextMenuPayload) {
+  return payload?.target?.kind === "message" && isCoarsePointer();
+}
+
+function shouldRenderAsSheet(payload: ContextMenuPayload) {
+  return !shouldRenderAsCompactMessage(payload) && isCoarsePointer();
 }
 
 function focusFirstEnabled(root: HTMLElement) {
@@ -147,18 +155,51 @@ function applySheetGeometry(root: HTMLElement) {
   root.setAttribute("data-composer-avoid", composerVisible ? "1" : "0");
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function applyCompactMessageGeometry(root: HTMLElement, x: number, y: number) {
+  const viewportW = Math.max(320, Number(window.innerWidth || 0));
+  const viewportH = Math.max(320, Number(window.innerHeight || 0));
+  const pad = 12;
+  const rect = root.getBoundingClientRect();
+  const width = Math.max(260, Math.min(rect.width || 300, viewportW - pad * 2));
+  const height = Math.max(160, Math.min(rect.height || 360, viewportH - pad * 2));
+  const composerRect = composerAvoidRect();
+  const bottomLimit =
+    composerRect && composerRect.width > 0 && composerRect.height > 0 && composerRect.top > 0
+      ? Math.min(viewportH - pad, composerRect.top - pad)
+      : viewportH - pad;
+  const anchorX = Number.isFinite(Number(x)) ? Number(x) : viewportW / 2;
+  const anchorY = Number.isFinite(Number(y)) ? Number(y) : viewportH / 2;
+  const left = clampNumber(anchorX - width * 0.48, pad, viewportW - width - pad);
+  const preferAbove = anchorY > viewportH * 0.45;
+  const topRaw = preferAbove ? anchorY - height - 10 : anchorY + 10;
+  const top = clampNumber(topRaw, pad + Math.max(0, Number(window.scrollY || 0)), Math.max(pad, bottomLimit - height));
+  root.style.left = `${Math.round(left)}px`;
+  root.style.top = `${Math.round(top)}px`;
+  root.style.setProperty("--ctx-list-max-h", `${Math.max(150, Math.min(330, height - 64))}px`);
+  root.style.maxHeight = `${Math.max(220, Math.min(420, bottomLimit - pad))}px`;
+}
+
 export function renderContextMenu(payload: ContextMenuPayload, actions: ContextMenuActions): HTMLElement {
-  const sheet = shouldRenderAsSheet();
+  const compactMessage = shouldRenderAsCompactMessage(payload);
+  const sheet = shouldRenderAsSheet(payload);
   const targetKind = String(payload.target?.kind || "menu").replace(/[^a-z0-9_-]/gi, "");
   const titleText = String(payload.title || "").trim();
-  const showTitle = Boolean(titleText && titleText !== "Меню");
+  const showTitle = Boolean(titleText && titleText !== "Меню" && !compactMessage);
   const root = el("div", {
-    class: sheet ? `ctx-menu ctx-menu-sheet ctx-menu-${targetKind}` : `ctx-menu ctx-menu-${targetKind}`,
+    class: compactMessage
+      ? `ctx-menu ctx-menu-message-compact ctx-menu-${targetKind}`
+      : sheet
+        ? `ctx-menu ctx-menu-sheet ctx-menu-${targetKind}`
+        : `ctx-menu ctx-menu-${targetKind}`,
     role: "menu",
     tabindex: "-1",
     "aria-label": titleText || "Контекстное меню",
     "data-target-kind": targetKind,
-    "data-menu-layout": sheet ? "modern-sheet" : "popover",
+    "data-menu-layout": compactMessage ? "message-compact" : sheet ? "modern-sheet" : "popover",
     "data-has-reactions": payload.reactionBar?.emojis?.length ? "1" : undefined,
   });
   if (!sheet) {
@@ -230,7 +271,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     const clsBase = it.danger ? "ctx-item ctx-danger" : "ctx-item";
     const cls = it.subLabel ? `${clsBase} ctx-item-multiline` : clsBase;
     const iconToken = iconTokenForItem(it.id, it.icon);
-    const icon = it.icon || sheet ? el("span", { class: "ctx-icon", "aria-hidden": "true", "data-ctx-icon": iconToken }) : null;
+    const icon = it.icon || sheet || compactMessage ? el("span", { class: "ctx-icon", "aria-hidden": "true", "data-ctx-icon": iconToken }) : null;
     const main = el("span", { class: "ctx-main" }, [
       el("span", { class: "ctx-label" }, [it.label]),
       ...(it.subLabel ? [el("span", { class: "ctx-sub" }, [it.subLabel])] : []),
@@ -288,6 +329,8 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
   queueMicrotask(() => {
     if (sheet) {
       applySheetGeometry(root);
+    } else if (compactMessage) {
+      applyCompactMessageGeometry(root, payload.x, payload.y);
     } else {
       applyPopoverGeometry(root);
       clampIntoViewport(root);

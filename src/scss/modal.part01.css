@@ -29,6 +29,14 @@
   place-items: end center;
 }
 
+.overlay.overlay-context.overlay-context-message {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  place-items: start;
+  padding: 0;
+}
+
 .overlay.overlay-viewer {
   background: rgba(0, 0, 0, 0.88);
   backdrop-filter: none;
@@ -694,6 +702,22 @@
   transform: translateZ(0);
 }
 
+.ctx-menu.ctx-menu-message-compact {
+  min-width: 0;
+  width: min(300px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  max-height: min(46dvh, 420px);
+  border-radius: 18px;
+  padding: 6px;
+  gap: 5px;
+  background: color-mix(in srgb, var(--modal-bg), transparent 5%);
+  backdrop-filter: blur(20px) saturate(1.14);
+  -webkit-backdrop-filter: blur(20px) saturate(1.14);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.34),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
 .ctx-header {
   display: flex;
   align-items: center;
@@ -723,8 +747,18 @@
   background: color-mix(in srgb, var(--modal-bg), transparent 72%);
 }
 
+.ctx-menu.ctx-menu-message-compact .ctx-item {
+  min-height: 38px;
+  padding: 5px 8px;
+  border-radius: 12px;
+  font-size: 13px;
+  gap: 8px;
+}
+
 .ctx-menu.ctx-menu-sheet .ctx-sub,
-.ctx-menu.ctx-menu-sheet .ctx-meta {
+.ctx-menu.ctx-menu-sheet .ctx-meta,
+.ctx-menu.ctx-menu-message-compact .ctx-sub,
+.ctx-menu.ctx-menu-message-compact .ctx-meta {
   font-size: 12px;
 }
 
@@ -786,6 +820,11 @@
   scrollbar-width: none;
 }
 
+.ctx-menu.ctx-menu-message-compact .ctx-list {
+  max-height: min(var(--ctx-list-max-h, 320px), 40dvh);
+  gap: 3px;
+}
+
 .ctx-list::-webkit-scrollbar {
   display: none;
 }
@@ -797,6 +836,11 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+}
+
+.ctx-menu.ctx-menu-message-compact .ctx-reacts {
+  gap: 4px;
+  padding: 0 2px 4px;
 }
 
 .ctx-reacts::-webkit-scrollbar {
@@ -818,6 +862,13 @@
   font-size: 17px;
   line-height: 1;
   transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.ctx-menu.ctx-menu-message-compact .ctx-react {
+  width: 29px;
+  height: 29px;
+  flex-basis: 29px;
+  font-size: 15px;
 }
 
 .ctx-react-more {
@@ -905,6 +956,18 @@
   width: 30px;
   height: 30px;
   border-radius: 12px;
+}
+
+.ctx-menu.ctx-menu-message-compact .ctx-icon {
+  flex-basis: 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 11px;
+}
+
+.ctx-menu.ctx-menu-message-compact .ctx-icon::before {
+  width: 15px;
+  height: 15px;
 }
 
 .ctx-icon[data-ctx-icon="action"] {

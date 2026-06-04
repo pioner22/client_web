@@ -27,7 +27,8 @@ export function parseDatetimeLocal(value: string): number | null {
   return Number.isFinite(ts) ? ts : null;
 }
 
-export function shouldRenderContextMenuAsSheet(): boolean {
+export function shouldRenderContextMenuAsSheet(payload?: ContextMenuPayload): boolean {
+  if (payload?.target?.kind === "message") return false;
   try {
     return Boolean(window.matchMedia?.("(pointer: coarse)")?.matches || window.matchMedia?.("(hover: none)")?.matches);
   } catch {

@@ -849,6 +849,15 @@ html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-sheet {
   padding: 7px;
 }
 
+html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-compact {
+  min-width: 0;
+  width: min(300px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  max-height: min(46dvh, 420px);
+  padding: 6px;
+  border-radius: 18px;
+}
+
 html[data-skin="yagodka-modern"] .ctx-title {
   padding: 6px 8px;
   color: var(--text);
@@ -869,6 +878,12 @@ html[data-skin="yagodka-modern"] .ctx-item {
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-sheet .ctx-item {
   min-height: 42px;
   border-radius: 13px;
+}
+
+html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-compact .ctx-item {
+  min-height: 38px;
+  padding: 5px 8px;
+  border-radius: 12px;
 }
 
 html[data-skin="yagodka-modern"] .ctx-item-multiline {

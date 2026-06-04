@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.856",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0952 фиксирует contact-list bottom dock как стабильную 4-колоночную grid-навигацию без схлопывания вкладок в одну кучу.",
+      "Message context menu на touch больше не открывается крупным bottom sheet: для сообщений используется компактное меню рядом с выбранным сообщением.",
+      "При long-press выбранное сообщение получает Telegram-like highlight, а остальные строки, header и composer приглушаются blur/opacity-состоянием.",
+    ],
+    fixed: [
+      "Android/mobile override больше не возвращает текстовые подписи в bottom dock, поэтому нижнее меню остаётся иконками одинаковой ширины.",
+      "Auth `Web` version marker, collapsed search-лупа, compact photo viewer chrome и keyboard-open composer state сохранены как regression guards.",
+    ],
+  },
+  {
     version: "0.1.855",
     date: "2026-06-04",
     improved: [

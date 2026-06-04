@@ -118,6 +118,8 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*var\(--sp-2\)\);/
   );
   assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?border-radius:\s*22px;[\s\S]*?background:/);
+  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /html\.env-os-android\s+\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s+\.sidebar-tab\s*\{[\s\S]*?font-size:\s*0;/);
   assert.match(css, /\.sidebar-tab::before\s*\{[\s\S]*?mask:\s*var\(--sidebar-tab-icon\)\s+no-repeat\s+center\s*\/\s*contain;/);
   assert.match(css, /data-tab-icon="contacts"/);
   assert.doesNotMatch(css, /content:\s*attr\(data-tab-icon\)/);

@@ -53,6 +53,20 @@ function resolveAlbumSelectionState(items: AlbumItem[], selectionSet: Set<string
   return { anySelected, allSelected, partial };
 }
 
+function contextMenuMessageIdx(state: AppState, key: string): number | null {
+  const modal = state.modal;
+  if (!modal || modal.kind !== "context_menu" || modal.payload.target.kind !== "message") return null;
+  if (!state.selected || conversationKeyForState(state) !== key) return null;
+  const idx = Math.trunc(Number(modal.payload.target.id));
+  return Number.isFinite(idx) && idx >= 0 ? idx : null;
+}
+
+function conversationKeyForState(state: AppState): string {
+  const selected = state.selected;
+  if (!selected) return "";
+  return selected.kind === "dm" ? `dm:${selected.id}` : `room:${selected.id}`;
+}
+
 export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions): HistoryRenderSurfaceResult {
   const {
     state,
@@ -79,6 +93,7 @@ export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions
     unreadCount,
     albumLayout,
   } = opts;
+  const activeContextMsgIdx = contextMenuMessageIdx(state, key);
 
   const lineItems: HTMLElement[] = [];
   const lines: HTMLElement[] = [];
@@ -124,6 +139,7 @@ export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions
       if (groupCounts.anySelected) line.classList.add("msg-selected");
       if (hitSet && block.items.some((item) => hitSet.has(item.idx))) line.classList.add("msg-hit");
       if (activeMsgIdx !== null && block.items.some((item) => item.idx === activeMsgIdx)) line.classList.add("msg-hit-active");
+      if (activeContextMsgIdx !== null && block.items.some((item) => item.idx === activeContextMsgIdx)) line.classList.add("msg-context-active");
       line.setAttribute("data-msg-idx", String(block.endIdx));
       line.setAttribute("data-msg-group-start", String(block.startIdx));
       line.setAttribute("data-msg-group-end", String(block.endIdx));
@@ -151,6 +167,7 @@ export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions
     if (selected) line.classList.add("msg-selected");
     if (hitSet?.has(block.msgIdx)) line.classList.add("msg-hit");
     if (activeMsgIdx === block.msgIdx) line.classList.add("msg-hit-active");
+    if (activeContextMsgIdx === block.msgIdx) line.classList.add("msg-context-active");
     lineItems.push(line);
   }
 
