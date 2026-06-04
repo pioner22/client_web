@@ -333,7 +333,8 @@ test("modal flow polish: CSS and source guards present", async () => {
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.overlay\.overlay-auth:not\(\.hidden\)\s*>\s*\.modal\s*{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;[^}]*border:\s*0;[^}]*background:\s*transparent;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*#auth-pages\.auth-entry-page\s+>\s+\.auth-entry-scroll\s*{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*100%;[^}]*align-items:\s*center;[^}]*justify-content:\s*stretch;[^}]*padding:\s*0 18px;[^}]*overflow-y:\s*hidden;[^}]*scroll-padding-bottom:\s*var\(--auth-scroll-bottom-space\);/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-update-marker\s*{[^}]*position:\s*absolute;[^}]*bottom:\s*max\(6px,\s*var\(--auth-safe-bottom\)\);[^}]*transform:\s*translateX\(-50%\);[^}]*margin:\s*0;/);
-  assert.match(css, /html\.kbd-open\.has-auth-pages\s+\.auth-entry-update-marker\s*{[^}]*display:\s*none;/s);
+  assert.match(css, /html\.kbd-open\.has-auth-pages\s+\.auth-entry-update-marker\s*{[^}]*display:\s*inline-flex;[^}]*opacity:\s*0\.74;/s);
+  assert.doesNotMatch(css, /html\.kbd-open\.has-auth-pages\s+\.auth-entry-update-marker\s*{[^}]*display:\s*none;/s);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*#auth-pages\.auth-entry-page\s+\.tabs-tab,\s*#auth-pages\.auth-entry-page\s+\.tabs-tab\.active,\s*#auth-pages\.auth-entry-page\s+\.tabs-tab\s+\.container\s*{[^}]*background:\s*transparent;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-layout\s*{[^}]*flex:\s*1 1 auto;[^}]*height:\s*100%;[^}]*max-height:\s*none;[^}]*min-height:\s*0;[^}]*max-width:\s*none;/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)\s*{[\s\S]*\.auth-entry-panel\s*{[^}]*height:\s*100%;[^}]*display:\s*grid;[^}]*grid-template-rows:\s*auto auto auto auto auto minmax\(0,\s*1fr\) auto;/);

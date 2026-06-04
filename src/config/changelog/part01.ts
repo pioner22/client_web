@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.845",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/PWA: contact list теперь занимает один полный app frame без отдельной footer-строки и без бокового transform-slide при открытии.",
+      "Mobile sidebar переведён на явный grid-каркас: sticky/header и scroll-body больше не конкурируют за высоту нижней физической области.",
+    ],
+    fixed: [
+      "Экран входа снова показывает `Web`-версию внизу даже при фокусе поля пароля.",
+      "Нижняя тёмная полоса под contact list больше не создаётся мобильным footer-row.",
+    ],
+  },
+  {
     version: "0.1.844",
     date: "2026-06-04",
     improved: [
