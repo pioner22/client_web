@@ -1150,7 +1150,7 @@
   body.has-auth-pages {
     --auth-safe-bottom: max(10px, var(--safe-bottom-pad));
     --auth-scroll-bottom-space: max(8px, var(--auth-safe-bottom));
-    --auth-viewport-min: var(--app-frame-vh, var(--app-vh, 100dvh));
+    --auth-viewport-min: var(--app-vh, 100dvh);
     --auth-mobile-canvas-bg: #eaf5f0;
     --auth-mobile-screen-bg: linear-gradient(
       180deg,
@@ -1289,10 +1289,10 @@
   }
 
   .auth-entry-update-marker {
-    position: absolute;
+    position: fixed;
     left: 50%;
-    bottom: max(6px, var(--auth-safe-bottom));
-    z-index: 5;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 12;
     transform: translateX(-50%);
     margin: 0;
     min-height: 25px;
@@ -1300,6 +1300,7 @@
     background: rgba(255, 255, 255, 0.68);
     color: #496559;
     box-shadow: 0 8px 20px rgba(51, 89, 76, 0.08);
+    pointer-events: none;
   }
 
   html.kbd-open.has-auth-pages .auth-entry-update-marker {

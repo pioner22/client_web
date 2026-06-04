@@ -848,23 +848,66 @@ input.modal-input[type="file"]::file-selector-button:active {
 }
 
 @media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer {
+    --viewer-frame-bottom-pad: 0px;
+    background: #000;
+  }
+
   .overlay.overlay-viewer .viewer-header {
-    padding-top: calc(var(--viewer-pad) + env(safe-area-inset-top) + 8px);
+    padding: max(10px, env(safe-area-inset-top)) 10px 8px;
     align-items: flex-start;
-    gap: calc(var(--viewer-gap) * 0.75);
-    min-height: auto;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.42) 54%, rgba(0, 0, 0, 0));
+    justify-content: flex-end;
+    gap: 8px;
+    min-height: calc(52px + env(safe-area-inset-top));
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
   }
 
   .overlay.overlay-viewer .viewer-header-info {
-    min-width: 0;
-    padding-top: 2px;
-    gap: 4px;
+    display: none;
   }
 
   .overlay.overlay-viewer .viewer-header-actions {
     flex: 0 0 auto;
     align-self: flex-start;
+    max-width: 100%;
+    gap: 8px;
+    pointer-events: auto;
+  }
+
+  .overlay.overlay-viewer .viewer-header-actions .btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.58);
+    opacity: 1;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  .overlay.overlay-viewer .viewer-header-actions .btn:active {
+    background: rgba(0, 0, 0, 0.72);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-zoom-btn,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-jump-btn,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-forward-btn,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-delete-btn,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-share-btn {
+    display: none;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-download-btn,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .auth-close {
+    display: grid;
+    place-items: center;
+    font-size: 24px;
+    line-height: 1;
   }
 
   .overlay.overlay-viewer .viewer-author-avatar {
@@ -896,6 +939,16 @@ input.modal-input[type="file"]::file-selector-button:active {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .overlay.overlay-viewer .viewer-switcher-btn {
+    width: 48px;
+    height: 48px;
+    opacity: 0.88;
+    background: rgba(0, 0, 0, 0.48);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
   }
 }
 
@@ -1282,6 +1335,46 @@ audio.viewer-audio {
   .overlay.overlay-viewer .viewer-switcher-btn {
     opacity: 0.6;
     transform: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell {
+    opacity: 1;
+    gap: 0;
+    background: #000;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-main {
+    padding: 7px 12px 0;
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-counter {
+    min-height: 22px;
+    padding: 0 10px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption {
+    text-align: left;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-rail {
+    padding: 8px 12px max(10px, env(safe-area-inset-bottom));
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    gap: 8px;
+    background: #000;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-rail-item {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
   }
 }
 

@@ -315,18 +315,47 @@ test("renderFileViewerModal: footer shell helper and CSS hooks are present", asy
   assert.doesNotMatch(css, /viewer-bottom-ui-h/);
 });
 
-test("renderFileViewerModal: mobile overlay header keeps safe-area top padding and compact metadata", async () => {
+test("renderFileViewerModal: mobile visual viewer uses compact non-overlapping chrome", async () => {
   const css = await readFile(path.resolve("src/scss/modal.part02.css"), "utf8");
   assert.match(
     css,
-    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header\s*\{[\s\S]*?padding-top:\s*calc\(var\(--viewer-pad\)\s*\+\s*env\(safe-area-inset-top\)\s*\+\s*8px\)\s*;/
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\s*\{[\s\S]*?--viewer-frame-bottom-pad:\s*0px\s*;/
   );
   assert.match(
     css,
-    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header-actions\s*\{[\s\S]*?align-self:\s*flex-start\s*;/
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header\s*\{[\s\S]*?padding:\s*max\(10px,\s*env\(safe-area-inset-top\)\)\s+10px\s+8px\s*;[\s\S]*?justify-content:\s*flex-end\s*;[\s\S]*?pointer-events:\s*none\s*;/
   );
   assert.match(
     css,
-    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-title,\s*[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-sub,\s*[\s\S]*?text-overflow:\s*ellipsis\s*;/
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header-info\s*\{[\s\S]*?display:\s*none\s*;/
   );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header-actions\s*\{[\s\S]*?align-self:\s*flex-start\s*;[\s\S]*?gap:\s*8px\s*;[\s\S]*?pointer-events:\s*auto\s*;/
+  );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header-actions\s+\.btn\s*\{[\s\S]*?width:\s*44px\s*;[\s\S]*?min-width:\s*44px\s*;[\s\S]*?height:\s*44px\s*;[\s\S]*?background:\s*rgba\(0,\s*0,\s*0,\s*0\.58\)\s*;[\s\S]*?opacity:\s*1\s*;/
+  );
+  assert.match(
+    css,
+    /\.modal\.modal-viewer\.viewer-visual\s+\.viewer-zoom-btn,\s*[\s\S]*?\.modal\.modal-viewer\.viewer-visual\s+\.viewer-jump-btn,\s*[\s\S]*?\.modal\.modal-viewer\.viewer-visual\s+\.viewer-forward-btn,\s*[\s\S]*?\.modal\.modal-viewer\.viewer-visual\s+\.viewer-delete-btn,\s*[\s\S]*?\.modal\.modal-viewer\.viewer-visual\s+\.viewer-share-btn\s*\{[\s\S]*?display:\s*none\s*;/
+  );
+  assert.match(
+    css,
+    /\.modal\.modal-viewer\.viewer-visual\s+\.viewer-download-btn,\s*[\s\S]*?\.modal\.modal-viewer\.viewer-visual\s+\.auth-close\s*\{[\s\S]*?display:\s*grid\s*;[\s\S]*?place-items:\s*center\s*;/
+  );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\s+\.viewer-footer-shell\s*\{[\s\S]*?opacity:\s*1\s*;[\s\S]*?background:\s*#000\s*;/
+  );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\s+\.viewer-rail\s*\{[\s\S]*?padding:\s*8px\s+12px\s+max\(10px,\s*env\(safe-area-inset-bottom\)\)\s*;[\s\S]*?gap:\s*8px\s*;/
+  );
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\s+\.viewer-rail-item\s*\{[\s\S]*?width:\s*48px\s*;[\s\S]*?height:\s*48px\s*;/);
+
+  const baseRailIndex = css.indexOf(".viewer-rail {");
+  const mobileRailIndex = css.indexOf(".overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-rail {");
+  assert.ok(baseRailIndex >= 0 && mobileRailIndex > baseRailIndex, "mobile rail override must come after the base rail rule");
 });

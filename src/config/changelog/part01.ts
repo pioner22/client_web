@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.846",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/PWA: общий каркас снова держит auth, contact list, chat и viewer внутри видимого viewport без растягивания на физический bottom-gap.",
+      "Просмотр фото на телефоне получил компактный верхний слой: лишние действия скрыты, а скачать и закрыть стали крупными контрастными кнопками.",
+    ],
+    fixed: [
+      "Contact list и composer больше не получают пустую нижнюю полосу от `--app-physical-bottom-pad`; внутри видимого экрана используется компактный live-pad.",
+      "Маркер `Web`-версии на стартовом экране закреплён у нижнего края и снова виден без открытой клавиатуры.",
+    ],
+  },
+  {
     version: "0.1.845",
     date: "2026-06-04",
     improved: [
