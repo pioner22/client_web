@@ -225,7 +225,7 @@ function findFirst(node, predicate) {
   return null;
 }
 
-test("renderContextMenu: на coarse pointer рендерится как компактный sheet, не fullscreen dialog", async () => {
+test("renderContextMenu: на coarse pointer рендерится как modern action sheet, не fullscreen dialog", async () => {
   const helper = await loadRenderContextMenu();
   try {
     withStubs({ coarse: true }, () => {
@@ -236,11 +236,13 @@ test("renderContextMenu: на coarse pointer рендерится как ком�
       assert.ok(node.className.includes("ctx-menu-sheet"));
       assert.equal(node.getAttribute("role"), "menu");
       assert.equal(node.getAttribute("aria-modal"), null);
-      assert.equal(node.getAttribute("data-menu-layout"), "compact-sheet");
+      assert.equal(node.getAttribute("data-menu-layout"), "modern-sheet");
       assert.equal(node.style.left, "");
       assert.equal(node.style.top, "");
       const closeBtn = findFirst(node, (child) => typeof child.className === "string" && child.className.split(/\s+/).includes("ctx-close"));
       assert.ok(closeBtn, "compact sheet should expose an explicit close button");
+      const icon = findFirst(node, (child) => typeof child.getAttribute === "function" && child.getAttribute("data-ctx-icon") === "dot");
+      assert.ok(icon, "modern sheet should render a stable icon token even when the action has no emoji icon");
     });
   } finally {
     await helper.cleanup();
@@ -268,7 +270,7 @@ test("renderContextMenu: на fine pointer позиционируется по x
   }
 });
 
-test("context menu/pin remediation source guards: compact geometry, composer avoidance, and direct pin toggle", async () => {
+test("context menu/pin remediation source guards: modern sheet geometry, composer avoidance, and direct pin toggle", async () => {
   const [modalCss, skinCss, actionsSrc, renderSrc] = await Promise.all([
     readFile(path.resolve("src/scss/modal.part01.css"), "utf8"),
     readFile(path.resolve("public/skins/yagodka-modern.css"), "utf8"),
@@ -277,11 +279,17 @@ test("context menu/pin remediation source guards: compact geometry, composer avo
   ]);
 
   assert.match(modalCss, /\.ctx-menu\s*\{[\s\S]*overflow:\s*hidden;/);
-  assert.match(modalCss, /\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*width:\s*min\(360px,\s*calc\(100vw - 24px\)\)/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*width:\s*min\(430px,\s*calc\(100vw - 20px\)\)/);
+  assert.match(modalCss, /--ctx-sheet-bottom-offset/);
+  assert.match(modalCss, /\.ctx-icon::before\s*\{[\s\S]*mask:\s*var\(--ctx-icon-mask,\s*var\(--ctx-icon-dot\)\)/);
   assert.match(modalCss, /--ctx-list-max-h/);
-  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*max-height:\s*min\(66vh,\s*480px\)/);
+  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*max-height:\s*var\(--ctx-sheet-max-h,\s*min\(62dvh,\s*520px\)\)/);
   assert.match(renderSrc, /composerAvoidRect/);
   assert.match(renderSrc, /applyPopoverGeometry/);
+  assert.match(renderSrc, /applySheetGeometry/);
+  assert.match(renderSrc, /data-ctx-icon/);
+  assert.match(renderSrc, /ctx-react-more/);
+  assert.match(renderSrc, /data-menu-layout":\s*sheet\s*\?\s*"modern-sheet"/);
   assert.match(renderSrc, /ctx-close/);
 
   const pinBlock = actionsSrc.slice(actionsSrc.indexOf('itemId === "msg_pin_toggle"'), actionsSrc.indexOf('itemId === "msg_reply"'));

@@ -341,8 +341,8 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
       if (canEditSchedule) {
         const localId = typeof msg?.localId === "string" ? msg.localId.trim() : "";
         const canLocalOutbox = Boolean(st.authed && localId);
-        scheduleGroup.push(makeItem("msg_send_now", "Отправить сейчас", "⚡", { disabled: !canLocalOutbox }));
-        scheduleGroup.push(makeItem("msg_schedule_edit", "Изменить время…", "🗓", { disabled: !canLocalOutbox }));
+        scheduleGroup.push(makeItem("msg_send_now", "Отправить сейчас", "forward", { disabled: !canLocalOutbox }));
+        scheduleGroup.push(makeItem("msg_schedule_edit", "Изменить время…", "edit", { disabled: !canLocalOutbox }));
       }
       addGroup(scheduleGroup);
       const repliesCount = (() => {
@@ -365,26 +365,26 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
         msg?.reactions?.counts && typeof msg.reactions.counts === "object" && Object.keys(msg.reactions.counts).length
       );
       const primary: ContextMenuItem[] = [];
-      primary.push(makeItem("msg_reply", "Ответить", "↩", { subLabel: "Начать ответ в этом чате", disabled: !canReply || helperBlocked }));
-      if (repliesCount > 0) primary.push(makeItem("msg_view_replies", `Ответы (${repliesCount})`, "🧵", { subLabel: "Показать ветку ответов" }));
-      primary.push(makeItem("msg_forward", "Переслать", "↪", { subLabel: "Отправить в другой чат", disabled: !canReply || helperBlocked }));
-      primary.push(makeItem("msg_copy", copyLabel, "📋", { disabled: !msg }));
+      primary.push(makeItem("msg_reply", "Ответить", "reply", { subLabel: "Начать ответ в этом чате", disabled: !canReply || helperBlocked }));
+      if (repliesCount > 0) primary.push(makeItem("msg_view_replies", `Ответы (${repliesCount})`, "thread", { subLabel: "Показать ветку ответов" }));
+      primary.push(makeItem("msg_forward", "Переслать", "forward", { subLabel: "Отправить в другой чат", disabled: !canReply || helperBlocked }));
+      primary.push(makeItem("msg_copy", copyLabel, "copy", { disabled: !msg }));
       primary.push(
-        makeItem("msg_select_toggle", selectionSelected ? "Снять выбор" : "Выбрать", selectionSelected ? "☑️" : "✅", {
+        makeItem("msg_select_toggle", selectionSelected ? "Снять выбор" : "Выбрать", "check", {
           disabled: !canSelect,
         })
       );
       addGroup(primary);
 
       const editGroup: ContextMenuItem[] = [
-        makeItem("msg_pin_toggle", isPinned ? "Открепить" : "Закрепить", isPinned ? "📍" : "📌", {
+        makeItem("msg_pin_toggle", isPinned ? "Открепить" : "Закрепить", "pin", {
           subLabel: isPinned ? "Убрать из верхней панели" : "Показать наверху чата",
           disabled: !canPin,
         }),
       ];
       if (canEdit) {
         editGroup.push(
-          makeItem("msg_edit", (msg as any)?.attachment ? "Изменить подпись…" : "Изменить…", st.selected?.kind === "board" ? "✏️" : "🛠️", {
+          makeItem("msg_edit", (msg as any)?.attachment ? "Изменить подпись…" : "Изменить…", "edit", {
             disabled: !canAct,
           })
         );
@@ -406,7 +406,7 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
           label: badge.kind === "pdf" ? (hasLocalUrl ? "Открыть PDF / скачать" : "Скачать PDF") : hasLocalUrl ? "Открыть / скачать файл" : "Скачать файл",
           subLabel: fileName,
           meta: [badge.label, fileMeta].filter(Boolean).join(" · "),
-          icon: badge.kind === "pdf" ? "PDF" : "⬇",
+          icon: "download",
           disabled: !fileReady,
         });
       }
@@ -414,17 +414,17 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
 
       const extraGroup: ContextMenuItem[] = [];
       if (selectedText) {
-        extraGroup.push(makeItem("msg_quote", "Цитировать выделенное", "❝", { disabled: !canReply || helperBlocked }));
+        extraGroup.push(makeItem("msg_quote", "Цитировать выделенное", "reply", { disabled: !canReply || helperBlocked }));
       }
-      if (selectedText) extraGroup.push(makeItem("msg_search_selection", "Искать выделенное", "🔍", { disabled: !msg }));
-      if (hasReactions && msgId !== null && msgId > 0) extraGroup.push(makeItem("msg_reactions", "Реакции…", "😊", { disabled: !msg }));
-      if (translateText) extraGroup.push(makeItem("msg_translate", "Перевести", "🌐"));
-      if (fromId) extraGroup.push(makeItem("msg_profile", "Профиль отправителя", "👤", { disabled: !canAct }));
+      if (selectedText) extraGroup.push(makeItem("msg_search_selection", "Искать выделенное", "search", { disabled: !msg }));
+      if (hasReactions && msgId !== null && msgId > 0) extraGroup.push(makeItem("msg_reactions", "Реакции…", "reaction", { disabled: !msg }));
+      if (translateText) extraGroup.push(makeItem("msg_translate", "Перевести", "translate"));
+      if (fromId) extraGroup.push(makeItem("msg_profile", "Профиль отправителя", "profile", { disabled: !canAct }));
       addGroup(extraGroup);
 
-      const dangerGroup: ContextMenuItem[] = [makeItem("msg_delete_local", "Удалить у меня", "🧹", { danger: true, disabled: !msg })];
+      const dangerGroup: ContextMenuItem[] = [makeItem("msg_delete_local", "Удалить у меня", "trash", { danger: true, disabled: !msg })];
       if (canDeleteForAll) {
-        dangerGroup.push(makeItem("msg_delete", "Удалить", "🗑️", { danger: true, disabled: !canAct }));
+        dangerGroup.push(makeItem("msg_delete", "Удалить", "trash", { danger: true, disabled: !canAct }));
       }
       addGroup(dangerGroup);
     }

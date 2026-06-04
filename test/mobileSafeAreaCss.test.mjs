@@ -77,7 +77,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.match(css, /--mobile-header-overlay-h:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*96px\);/);
   assert.match(css, /--mobile-sidebar-sticky-h:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*60px\);/);
   assert.match(css, /--mobile-bottom-nav-fill:\s*var\(--app-bottom-live-pad\);/);
-  assert.match(css, /--mobile-bottom-nav-row-h:\s*58px;/);
+  assert.match(css, /--mobile-bottom-nav-row-h:\s*64px;/);
   assert.match(css, /--mobile-bottom-nav-h:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--mobile-bottom-nav-fill\)\);/);
   assert.match(css, /--mobile-composer-bottom-offset:\s*0px;/);
   assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
@@ -117,7 +117,10 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
     css,
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*var\(--sp-2\)\);/
   );
-  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?border-radius:\s*22px;[\s\S]*?background:/);
+  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?border-radius:\s*24px;[\s\S]*?background:/);
+  assert.match(css, /\.sidebar-tab::before\s*\{[\s\S]*?mask:\s*var\(--sidebar-tab-icon\)\s+no-repeat\s+center\s*\/\s*contain;/);
+  assert.match(css, /data-tab-icon="contacts"/);
+  assert.doesNotMatch(css, /content:\s*attr\(data-tab-icon\)/);
   assert.match(
     css,
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.overlay\.overlay-viewer\s*\{[\s\S]*?bottom:\s*auto;[\s\S]*?height:\s*var\(--app-vh\);[\s\S]*?max-height:\s*var\(--app-vh\);/

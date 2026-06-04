@@ -57,6 +57,41 @@ function composerAvoidRect(): DOMRect | null {
   }
 }
 
+const ACTION_ICON_RULES: Array<[RegExp, string]> = [
+  [/reply|quote/i, "reply"],
+  [/view_replies|thread/i, "thread"],
+  [/forward|send_now/i, "forward"],
+  [/copy|copy_id/i, "copy"],
+  [/select|mark_read|accept/i, "check"],
+  [/pin|board_profile/i, "pin"],
+  [/edit|rename|schedule/i, "edit"],
+  [/download|file|files/i, "download"],
+  [/search/i, "search"],
+  [/reaction/i, "reaction"],
+  [/translate/i, "translate"],
+  [/profile|avatar|user|member/i, "profile"],
+  [/archive|folder/i, "archive"],
+  [/mute|sound/i, "mute"],
+  [/block|decline|cancel/i, "block"],
+  [/create|invite|add/i, "plus"],
+  [/login|open/i, "open"],
+  [/logout|leave/i, "logout"],
+  [/status|info/i, "info"],
+  [/clear|delete|remove|disband/i, "trash"],
+];
+
+function iconTokenForItem(itemId: string, rawIcon?: string | null): string {
+  const key = String(itemId || "").trim();
+  const raw = String(rawIcon || "").trim().toLowerCase();
+  for (const [rule, token] of ACTION_ICON_RULES) {
+    if (rule.test(key) || (raw && rule.test(raw))) return token;
+  }
+  if (raw === "pdf") return "download";
+  if (raw === "+" || raw === "＋") return "plus";
+  if (raw === "✓" || raw === "check") return "check";
+  return raw ? "action" : "dot";
+}
+
 function clampIntoViewport(root: HTMLElement) {
   const rect = root.getBoundingClientRect();
   const pad = 8;
@@ -90,6 +125,28 @@ function applyPopoverGeometry(root: HTMLElement) {
   root.style.setProperty("--ctx-list-max-h", `${Math.max(120, available - 24)}px`);
 }
 
+function applySheetGeometry(root: HTMLElement) {
+  const viewportH = Math.max(320, Number(window.innerHeight || 0));
+  const pad = 10;
+  const composerRect = composerAvoidRect();
+  const composerVisible = Boolean(
+    composerRect &&
+      composerRect.width > 0 &&
+      composerRect.height > 0 &&
+      composerRect.top > 0 &&
+      composerRect.top < viewportH &&
+      composerRect.bottom > viewportH * 0.42
+  );
+  const composerOffset = composerVisible ? Math.max(0, viewportH - Math.max(0, composerRect!.top) + 8) : 0;
+  const bottomOffset = Math.min(Math.round(viewportH * 0.46), Math.round(composerOffset));
+  const maxHeight = Math.max(220, Math.min(520, viewportH - bottomOffset - pad * 2, Math.round(viewportH * (bottomOffset ? 0.56 : 0.62))));
+  root.style.maxHeight = `${maxHeight}px`;
+  root.style.setProperty("--ctx-sheet-bottom-offset", `${bottomOffset}px`);
+  root.style.setProperty("--ctx-sheet-max-h", `${maxHeight}px`);
+  root.style.setProperty("--ctx-list-max-h", `${Math.max(130, maxHeight - 114)}px`);
+  root.setAttribute("data-composer-avoid", composerVisible ? "1" : "0");
+}
+
 export function renderContextMenu(payload: ContextMenuPayload, actions: ContextMenuActions): HTMLElement {
   const sheet = shouldRenderAsSheet();
   const targetKind = String(payload.target?.kind || "menu").replace(/[^a-z0-9_-]/gi, "");
@@ -101,7 +158,8 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     tabindex: "-1",
     "aria-label": titleText || "Контекстное меню",
     "data-target-kind": targetKind,
-    "data-menu-layout": sheet ? "compact-sheet" : "popover",
+    "data-menu-layout": sheet ? "modern-sheet" : "popover",
+    "data-has-reactions": payload.reactionBar?.emojis?.length ? "1" : undefined,
   });
   if (!sheet) {
     root.style.left = `${payload.x}px`;
@@ -138,6 +196,8 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
                 class: active ? "ctx-react is-active" : "ctx-react",
                 type: "button",
                 "aria-pressed": active ? "true" : "false",
+                "aria-label": active ? `Убрать реакцию ${emoji}` : mine ? `Заменить реакцию на ${emoji}` : `Поставить реакцию ${emoji}`,
+                "data-reaction": emoji,
                 title: active ? `Убрать реакцию ${emoji}` : mine ? `Заменить реакцию на ${emoji}` : `Поставить реакцию ${emoji}`,
               },
               [emoji]
@@ -148,10 +208,11 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
           const pickerBtn = el(
             "button",
             {
-              class: "ctx-react",
+              class: "ctx-react ctx-react-more",
               type: "button",
               title: mine ? "Изменить реакцию" : "Добавить реакцию",
               "aria-label": mine ? "Изменить реакцию" : "Добавить реакцию",
+              "data-reaction": "more",
             },
             ["＋"]
           ) as HTMLButtonElement;
@@ -168,7 +229,8 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     const idSafe = String(it.id || "").replace(/[^a-z0-9:_-]/gi, "");
     const clsBase = it.danger ? "ctx-item ctx-danger" : "ctx-item";
     const cls = it.subLabel ? `${clsBase} ctx-item-multiline` : clsBase;
-    const icon = it.icon ? el("span", { class: "ctx-icon", "aria-hidden": "true" }, [it.icon]) : null;
+    const iconToken = iconTokenForItem(it.id, it.icon);
+    const icon = it.icon || sheet ? el("span", { class: "ctx-icon", "aria-hidden": "true", "data-ctx-icon": iconToken }) : null;
     const main = el("span", { class: "ctx-main" }, [
       el("span", { class: "ctx-label" }, [it.label]),
       ...(it.subLabel ? [el("span", { class: "ctx-sub" }, [it.subLabel])] : []),
@@ -224,7 +286,9 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
   });
 
   queueMicrotask(() => {
-    if (!sheet) {
+    if (sheet) {
+      applySheetGeometry(root);
+    } else {
       applyPopoverGeometry(root);
       clampIntoViewport(root);
     }

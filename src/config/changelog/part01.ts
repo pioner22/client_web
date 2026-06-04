@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.854",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0950 переделал message context menu в modern action sheet с composer-aware геометрией, чтобы меню не спорило с полем ввода и клавиатурой.",
+      "Пункты меню больше не используют emoji как action icons: строки получают stable `data-ctx-icon` tokens, а CSS рисует компактные mask-пиктограммы.",
+      "Нижний contact-list dock усилен по высоте, контрасту и z-index, а вкладки `Контакты / Группы / Каналы / Меню` перешли с текстовых символов на semantic mask-icons.",
+    ],
+    fixed: [
+      "Тёмная тема `yagodka-modern` больше не рисует context sheet тяжёлой зелёной плашкой; меню переведено в graphite/berry/teal palette.",
+      "Auth `Web` version marker, keyboard-open chat state и принятый compact photo viewer chrome сохранены как regression guards.",
+    ],
+  },
+  {
     version: "0.1.853",
     date: "2026-06-04",
     improved: [

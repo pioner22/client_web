@@ -284,6 +284,7 @@ test("mobile sidebar: 4 вкладки (Контакты/Группы/Канал
         const tabs = findAll(target, (n) => n.tagName === "BUTTON" && String(n.className || "").includes("sidebar-tab"));
         const labels = tabs.map((b) => collectText(b).trim());
         assert.deepEqual(labels, ["Контакты", "Группы", "Каналы", "Меню"]);
+        assert.deepEqual(tabs.map((b) => b.getAttribute("data-tab-icon")), ["contacts", "groups", "boards", "menu"]);
         assert.equal(hasText(target, "Контакты"), true);
         assert.equal(hasText(target, "Сообщения"), false);
       },

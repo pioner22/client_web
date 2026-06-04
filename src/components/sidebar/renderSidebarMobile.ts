@@ -151,10 +151,10 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
     return button;
   };
   const tabs = el("div", { class: "sidebar-tabs sidebar-tabs-mobile sidebar-tabs-bottom-nav", role: "tablist", "aria-label": "Раздел" }, [
-    decorateBottomTab(tabContacts, "●", "Контакты"),
-    decorateBottomTab(tabGroups, "◆", "Группы"),
-    decorateBottomTab(tabBoards, "■", "Каналы"),
-    decorateBottomTab(tabMenu, "☰", "Меню"),
+    decorateBottomTab(tabContacts, "contacts", "Контакты"),
+    decorateBottomTab(tabGroups, "groups", "Группы"),
+    decorateBottomTab(tabBoards, "boards", "Каналы"),
+    decorateBottomTab(tabMenu, "menu", "Меню"),
   ]);
   const searchBarAction =
     activeTab === "contacts"
