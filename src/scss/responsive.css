@@ -59,10 +59,10 @@
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) #app {
-    bottom: auto;
-    height: var(--app-logged-frame-vh);
+    bottom: 0;
+    height: auto;
     min-height: 0;
-    max-height: var(--app-logged-frame-vh);
+    max-height: none;
   }
 
   html.app-vv-offset #app {
@@ -95,8 +95,8 @@
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) #app > .app {
-    height: var(--app-logged-frame-vh);
-    max-height: var(--app-logged-frame-vh);
+    height: 100%;
+    max-height: none;
     overflow: hidden;
   }
 
@@ -104,6 +104,8 @@
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .chat-col,
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .chat,
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar {
+    min-height: 0;
+    max-height: none;
     overflow: hidden;
   }
 
@@ -885,7 +887,7 @@
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .input-wrap {
-    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-physical-bottom-pad));
+    --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-live-pad));
     bottom: 0;
     background: var(--composer-bg);
   }

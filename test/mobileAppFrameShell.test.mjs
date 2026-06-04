@@ -34,23 +34,24 @@ test("mobile app frame: auth stays inside fixed shell instead of owning viewport
   assert.match(css, /#auth-pages\.auth-entry-page\s+>\s+\.auth-entry-scroll\s*{[^}]*height:\s*100%;[^}]*overflow-y:\s*hidden;/s);
 });
 
-test("mobile app frame: contact list owns the full mobile frame without a footer row slide", async () => {
+test("mobile app frame: contact list owns the full fixed mobile frame without a footer row slide", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
 
   assert.match(css, /html\s+#app\s*>\s*\.app\s*\{[\s\S]*?--app-row-footer:\s*0px;/);
   assert.match(css, /:root\[data-skin\]\s*\{[\s\S]*?--app-row-footer:\s*0px;/);
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?height:\s*var\(--app-logged-frame-vh\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*0;[\s\S]*?height:\s*auto;[\s\S]*?max-height:\s*none;/
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*>\s*\.app\s*\{[\s\S]*?height:\s*var\(--app-logged-frame-vh\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*>\s*\.app\s*\{[\s\S]*?height:\s*100%;[\s\S]*?max-height:\s*none;/
   );
   assert.match(
     css,
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\),[\s\S]*?html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?--app-logged-frame-vh:\s*max\([^}]*var\(--app-frame-vh,\s*var\(--app-vh\)\)[^}]*calc\(var\(--app-vh\)\s*\+\s*var\(--app-physical-bottom-pad\)\)/
   );
+  assert.match(css, /--app-frame-bottom-inset:\s*var\(--app-logged-bottom-fill\);/);
   assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\):has\(\.sidebar\.sidebar-mobile-open\)/);
   assert.match(
     css,
@@ -66,4 +67,12 @@ test("mobile app frame: contact list owns the full mobile frame without a footer
     /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?padding-bottom:\s*max\(var\(--sp-4\),\s*var\(--app-bottom-live-pad\)\);/
   );
   assert.match(css, /\.footer\s*\{[\s\S]*?display:\s*none\s*!important;[\s\S]*?min-height:\s*0;/);
+  const appShellBlock =
+    css.match(/html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{(?<body>[^}]*)\}/)?.groups
+      ?.body || "";
+  const appFrameBlock =
+    css.match(/html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*>\s*\.app\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body || "";
+  assert.doesNotMatch(appShellBlock, /height:\s*var\(--app-logged-frame-vh\);/);
+  assert.doesNotMatch(appFrameBlock, /height:\s*var\(--app-logged-frame-vh\);/);
 });

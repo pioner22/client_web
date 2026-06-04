@@ -7,7 +7,7 @@
   --app-gap-bottom: 0px;
   --app-layout-gap-bottom: var(--app-gap-bottom);
   --app-shell-bottom-spill: 0px;
-  /* One bottom contract: the app shell may own the physical frame; controls choose live vs physical pads explicitly. */
+  /* One bottom contract: the shell fills the fixed frame; scroll owners and controls choose compact live pads. */
   --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-layout-gap-bottom, var(--app-gap-bottom, 0px)));
   --app-physical-bottom-pad: var(--app-bottom-inset);
   /* Compact live pad is for scroll surfaces; physical pad is used only by bars that must paint the bottom frame. */

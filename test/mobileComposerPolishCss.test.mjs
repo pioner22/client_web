@@ -21,15 +21,15 @@ test("mobile composer: iOS override lowers composer closer to the bottom edge", 
   assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?background:\s*var\(--composer-bg\)\s*;/);
 });
 
-test("mobile composer: iOS physical bottom paints frame while keeping controls at visual edge", async () => {
+test("mobile composer: iOS fixed frame uses compact live pad in no-keyboard shell", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-physical-bottom-pad\)\)\s*;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\)\s*;/
   );
   assert.doesNotMatch(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\)\s*;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-physical-bottom-pad\)\)\s*;/
   );
   assert.match(
     css,

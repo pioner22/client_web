@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.851",
+    date: "2026-06-04",
+    improved: [
+      "Mobile/iOS: W-0947 переделал logged-in messenger shell без старого `height: --app-logged-frame-vh`: fixed `#app` теперь заполняет no-keyboard frame через `top/bottom`, а внутренний `.app` держит `100%`.",
+      "Contact list/sidebar остаётся отдельным full-frame scroll owner без left-slide перехода и без footer-row; chat composer в no-keyboard режиме использует compact live-pad вместо большого physical-pad.",
+    ],
+    fixed: [
+      "Нижний физический участок больше не должен оставаться нерабочим хвостом под contact list/chat: строки списка и composer получают полный fixed frame, а viewer/auth/keyboard-open состояния остаются на своих visual-height контрактах.",
+      "Сохранены auth `Web` version marker, ручная диагностика `?__bottom_diag=1` и принятый компактный photo viewer chrome.",
+    ],
+  },
+  {
     version: "0.1.850",
     date: "2026-06-04",
     improved: [
