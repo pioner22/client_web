@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.844",
+    date: "2026-06-04",
+    improved: [
+      "iPhone/PWA: нижний rounded-screen gap теперь берётся из `env(safe-area-inset-bottom)` даже если WebKit не показывает его через `screen.height - innerHeight`.",
+    ],
+    fixed: [
+      "Исправлен случай, когда после Web 0.1.843 composer, список чатов и экран входа всё ещё оставляли отдельную нижнюю полосу на некоторых iPhone/PWA.",
+    ],
+  },
+  {
     version: "0.1.843",
     date: "2026-06-04",
     improved: [

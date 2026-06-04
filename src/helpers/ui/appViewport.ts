@@ -187,9 +187,11 @@ export function installAppViewportHeightVar(root: HTMLElement): () => void {
       screenGap = diff;
       if (diff >= 6 && diff <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = diff;
     }
-    // Fallback: if screen.height is not available (tests/odd environments), reuse safe-area inset as the "gap".
-    // On real iOS devices screen.height exists; we avoid treating safe-area as gap when there is no evidence.
-    if (iosStandalone && !screenMax && !gapBottom && safeBottomRaw > 0 && safeBottomRaw <= USE_SCREEN_HEIGHT_SLACK_PX) gapBottom = safeBottomRaw;
+    // Fallback: some iOS PWA builds report screen.height without the rounded-screen slack while
+    // `env(safe-area-inset-bottom)` still exposes the physical bottom that must belong to the app frame.
+    if (iosStandalone && safeBottomRaw > 0 && safeBottomRaw <= USE_SCREEN_HEIGHT_SLACK_PX) {
+      gapBottom = Math.max(gapBottom, safeBottomRaw);
+    }
     const vv = window.visualViewport;
     const vvHeight = vv && typeof vv.height === "number" ? Math.round(Number(vv.height) || 0) : 0;
     const vvTopRaw = (() => {

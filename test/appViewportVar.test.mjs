@@ -843,6 +843,105 @@ test("viewport var: iOS PWA: fallback safe-area inset тоже остаётся 
   }
 });
 
+test("viewport var: iOS PWA: safe-area fallback owns physical bottom when screen slack is zero", async () => {
+  const helper = await loadInstall();
+  const prev = {
+    window: globalThis.window,
+    document: globalThis.document,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+  };
+  try {
+    const style = {
+      _props: new Map(),
+      setProperty(k, v) {
+        this._props.set(String(k), String(v));
+      },
+      removeProperty(k) {
+        this._props.delete(String(k));
+      },
+    };
+    const rootAttrs = new Map();
+    const docClasses = new Set();
+    const root = {
+      style,
+      setAttribute(k, v) {
+        rootAttrs.set(String(k), String(v));
+      },
+      removeAttribute(k) {
+        rootAttrs.delete(String(k));
+      },
+    };
+    const docEl = {
+      clientHeight: 810,
+      style,
+      classList: {
+        add(name) {
+          docClasses.add(String(name));
+        },
+        remove(name) {
+          docClasses.delete(String(name));
+        },
+        toggle(name, value) {
+          const key = String(name);
+          if (value) docClasses.add(key);
+          else docClasses.delete(key);
+        },
+      },
+    };
+
+    Object.defineProperty(globalThis, "navigator", {
+      value: { userAgent: "iPhone", maxTouchPoints: 0, standalone: true },
+      configurable: true,
+      writable: true,
+    });
+    globalThis.document = { documentElement: docEl, body: { setAttribute() {}, removeAttribute() {} } };
+    globalThis.window = {
+      innerHeight: 810,
+      screen: { height: 810, availHeight: 810 },
+      outerHeight: 810,
+      visualViewport: { height: 808.2, addEventListener() {}, removeEventListener() {} },
+      getComputedStyle() {
+        return { getPropertyValue: () => "34px" };
+      },
+      requestAnimationFrame(cb) {
+        cb();
+        return 1;
+      },
+      cancelAnimationFrame() {},
+      addEventListener() {},
+      removeEventListener() {},
+      location: { href: "https://yagodka.org/web/" },
+      localStorage: { getItem: (key) => (key === "yagodka_bottom_diagnostics" ? "1" : null) },
+      sessionStorage: { getItem: () => null },
+    };
+
+    const cleanup = helper.fn(root);
+    assert.equal(style._props.get("--app-vh"), "810px");
+    assert.equal(style._props.get("--app-frame-vh"), "844px");
+    assert.equal(style._props.get("--vh"), "8.1px");
+    assert.equal(style._props.get("--app-gap-bottom"), "34px");
+    assert.equal(style._props.get("--app-layout-gap-bottom"), "34px");
+    assert.equal(style._props.get("--safe-bottom-pad"), "34px");
+    assert.equal(rootAttrs.get("data-app-frame-vh"), "844");
+    assert.equal(rootAttrs.get("data-app-gap-bottom"), "34");
+    assert.equal(rootAttrs.get("data-app-layout-gap-bottom"), "34");
+    assert.equal(docClasses.has("app-shell-physical-bottom"), true);
+
+    cleanup();
+    assert.equal(style._props.has("--app-frame-vh"), false);
+    assert.equal(style._props.has("--app-gap-bottom"), false);
+    assert.equal(docClasses.has("app-shell-physical-bottom"), false);
+  } finally {
+    await helper.cleanup();
+    if (prev.window === undefined) delete globalThis.window;
+    else globalThis.window = prev.window;
+    if (prev.document === undefined) delete globalThis.document;
+    else globalThis.document = prev.document;
+    if (prev.navigator) Object.defineProperty(globalThis, "navigator", prev.navigator);
+    else delete globalThis.navigator;
+  }
+});
+
 test("viewport var: installAppViewportHeightVar игнорирует screen.height на не-iOS", async () => {
   const helper = await loadInstall();
   const prev = {
