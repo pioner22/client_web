@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.860",
+    date: "2026-06-05",
+    improved: [
+      "Mobile/iOS: W-0956 закрепляет нижний dock списка как широкую капсулу на всю нижнюю строку, а не как блок шириной по содержимому.",
+      "Для нижней навигации убран рискованный `width: min(...)`: теперь используются совместимые `flex-basis`, `width: calc(100% - 24px)`, `max-width` и `box-sizing`.",
+    ],
+    fixed: [
+      "Нижнее меню больше не должно сжиматься в одну узкую кучку по центру: четыре вкладки снова получают отдельные равные колонки.",
+      "Сохранены вертикальный offset из W-0955, auth `Web` version marker, selected-message menu, composer/keyboard state и photo viewer regression guards.",
+    ],
+  },
+  {
     version: "0.1.859",
     date: "2026-06-05",
     improved: [
