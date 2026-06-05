@@ -79,7 +79,10 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.match(css, /--mobile-bottom-nav-fill:\s*var\(--app-bottom-live-pad\);/);
   assert.match(css, /--mobile-bottom-nav-row-h:\s*74px;/);
   assert.match(css, /--mobile-bottom-nav-h:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--mobile-bottom-nav-fill\)\);/);
+  assert.match(css, /--mobile-bottom-nav-scroll-pad:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--sp-2\)\);/);
   assert.match(css, /--mobile-bottom-nav-bottom-offset:\s*0px;/);
+  assert.match(css, /--mobile-bottom-nav-glass-bg:\s*rgba\(24,\s*24,\s*32,\s*0\.58\);/);
+  assert.match(css, /--mobile-bottom-nav-glass-border:\s*rgba\(255,\s*255,\s*255,\s*0\.14\);/);
   assert.match(css, /--mobile-composer-bottom-offset:\s*0px;/);
   assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
   assert.match(
@@ -116,10 +119,12 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*var\(--sp-2\)\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar-body\s*\{[\s\S]*?margin-bottom:\s*0;[\s\S]*?padding-bottom:\s*var\(--mobile-bottom-nav-scroll-pad\);/
   );
   assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?background:/);
   assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?flex:\s*0\s+0\s+calc\(100%\s*-\s*24px\);[\s\S]*?width:\s*calc\(100%\s*-\s*24px\);[\s\S]*?max-width:\s*372px;/);
+  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?background:\s*var\(--mobile-bottom-nav-glass-bg\);[\s\S]*?backdrop-filter:\s*blur\(28px\)\s+saturate\(1\.22\);/);
+  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s+\.sidebar-tab-active\s*\{[\s\S]*?background:\s*var\(--mobile-bottom-nav-active-bg\);/);
   assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s+\.sidebar-tab\s*\{[\s\S]*?padding-inline:\s*2px;/);
   assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?bottom:\s*var\(--mobile-bottom-nav-bottom-offset\);[\s\S]*?height:\s*var\(--mobile-bottom-nav-row-h\);/);
   assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?pointer-events:\s*none;/);

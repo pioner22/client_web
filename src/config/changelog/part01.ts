@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.861",
+    date: "2026-06-05",
+    improved: [
+      "Mobile/iOS: W-0957 делает нижний contact-list dock более прозрачным стеклянным слоем, чтобы список визуально проходил под нижней навигацией.",
+      "Scroll reserve нижнего списка больше не добавляет глухой physical-bottom хвост: видимый reserve отделён от safe-area fill, а scroll-padding сохраняет защиту от скрытия последней строки.",
+    ],
+    fixed: [
+      "Сохраняется исправленная ширина W-0956: нижняя капсула остаётся широкой, четыре кнопки не схлопываются в кучу.",
+      "Чат с клавиатурой, selected-message menu, auth `Web` version marker и photo viewer regression guards не менялись.",
+    ],
+  },
+  {
     version: "0.1.860",
     date: "2026-06-05",
     improved: [
