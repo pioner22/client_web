@@ -16,6 +16,8 @@ import { avatarHue, avatarMonogram, getStoredAvatar } from "../../../helpers/ava
 
 export interface CallModalActions {
   onHangup: () => void;
+  onRequestMediaAccess: () => void;
+  onOpenMediaSettings: (kind: "camera" | "microphone") => void;
   onAccept: (callId: string) => void;
   onDecline: (callId: string) => void;
   onOpenExternal: (url: string) => void;
@@ -70,6 +72,7 @@ function resolvePeerAvatar(state: AppState, modal: Extract<AppState["modal"], { 
 function formatPhaseLabel(modal: Extract<AppState["modal"], { kind: "call" }>): string {
   const incoming = Boolean(modal.incoming);
   const phase = modal.phase ?? (modal.callId && modal.roomName ? "active" : modal.roomName ? "ringing" : "creating");
+  if (phase === "permission") return "доступ…";
   if (phase === "active") return "в звонке";
   if (phase === "ringing") return incoming ? "входящий…" : "звоним…";
   return "создание…";
@@ -109,6 +112,31 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   const heroSubEl = el("div", { class: "call-hero-sub" }, [""]);
   const hero = el("div", { class: "call-hero" }, [avatarEl, heroTitleEl, heroSubEl]);
 
+  const permissionMicEl = el("div", { class: "call-device call-device-mic", "data-state": "requesting" }, [
+    el("span", { class: "call-device-icon", "aria-hidden": "true" }, [""]),
+    el("span", { class: "call-device-label" }, ["Микрофон"]),
+  ]);
+  const permissionCamEl = el("div", { class: "call-device call-device-cam", "data-state": "requesting" }, [
+    el("span", { class: "call-device-icon", "aria-hidden": "true" }, [""]),
+    el("span", { class: "call-device-label" }, ["Камера"]),
+  ]);
+  const permissionTitleEl = el("div", { class: "call-permission-title" }, ["Разрешите доступ"]);
+  const permissionTextEl = el("div", { class: "call-permission-text" }, [""]);
+  const permissionDetailEl = el("div", { class: "call-permission-detail" }, [""]);
+  const permissionPrimaryBtn = el("button", { class: "call-permission-btn call-permission-primary", type: "button" }, [
+    "Проверить снова",
+  ]) as HTMLButtonElement;
+  const permissionSettingsBtn = el("button", { class: "call-permission-btn call-permission-secondary hidden", type: "button" }, [
+    "Открыть настройки",
+  ]) as HTMLButtonElement;
+  const permissionPanel = el("div", { class: "call-permission", role: "status", "aria-live": "polite" }, [
+    el("div", { class: "call-permission-devices" }, [permissionMicEl, permissionCamEl]),
+    permissionTitleEl,
+    permissionTextEl,
+    permissionDetailEl,
+    el("div", { class: "call-permission-actions" }, [permissionPrimaryBtn, permissionSettingsBtn]),
+  ]);
+
   const surface = el("div", { class: "call-surface" }, [hero]);
   const jitsiHost = el("div", { class: "call-jitsi" }, []);
 
@@ -138,6 +166,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   let lastPhase: string = "";
   let lastIncoming = false;
   let lastCallId = "";
+  let lastPermissionKind: "camera" | "microphone" = "microphone";
   let ensureAfterAttachToken = 0;
 
   function stopTimer() {
@@ -226,6 +255,11 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   function showHero() {
     disposeJitsi();
     if (surface.firstElementChild !== hero) surface.replaceChildren(hero);
+  }
+
+  function showPermissionPanel() {
+    disposeJitsi();
+    if (surface.firstElementChild !== permissionPanel) surface.replaceChildren(permissionPanel);
   }
 
   function setMutedUi(btn: HTMLButtonElement, muted: boolean | null) {
@@ -330,15 +364,16 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
   function updateControls(phase: string, incoming: boolean, callId: string) {
     const isIncomingRinging = phase === "ringing" && incoming;
+    const isPermission = phase === "permission";
     acceptBtn.classList.toggle("hidden", !isIncomingRinging);
     declineBtn.classList.toggle("hidden", !isIncomingRinging);
-    micBtn.classList.toggle("hidden", isIncomingRinging);
-    camBtn.classList.toggle("hidden", isIncomingRinging);
+    micBtn.classList.toggle("hidden", isIncomingRinging || isPermission);
+    camBtn.classList.toggle("hidden", isIncomingRinging || isPermission);
     hangupBtn.classList.toggle("hidden", isIncomingRinging);
 
     acceptBtn.disabled = !callId;
     declineBtn.disabled = !callId;
-    hangupBtn.title = phase === "active" ? "Завершить" : "Отменить";
+    hangupBtn.title = phase === "active" ? "Завершить" : incoming ? "Отклонить" : "Отменить";
     hangupBtn.setAttribute("aria-label", hangupBtn.title);
   }
 
@@ -404,6 +439,12 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     window.setTimeout(() => {
       copyBtn.setAttribute("aria-label", copyDefaultLabel);
     }, 2000);
+  });
+  permissionPrimaryBtn.addEventListener("click", () => {
+    actions.onRequestMediaAccess();
+  });
+  permissionSettingsBtn.addEventListener("click", () => {
+    actions.onOpenMediaSettings(lastPermissionKind);
   });
 
   function update(state: AppState, modal: Extract<AppState["modal"], { kind: "call" }>) {
@@ -481,6 +522,39 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     lastIncoming = incoming;
 
     updateControls(phase, incoming, callId);
+    qualityEl.classList.toggle("hidden", phase !== "active");
+
+    if (phase === "permission") {
+      const permission = modal.permission;
+      const status = permission?.status || "idle";
+      lastPermissionKind = permission?.blockedKind || (mode === "video" ? "camera" : "microphone");
+      permissionCamEl.classList.toggle("hidden", mode !== "video");
+      const deviceState = status === "blocked" || status === "error" || status === "unsupported" ? "blocked" : status === "requesting" ? "requesting" : "idle";
+      permissionMicEl.dataset.state = deviceState;
+      permissionCamEl.dataset.state = deviceState;
+      permissionTitleEl.textContent =
+        status === "requesting"
+          ? "Запрашиваем доступ"
+          : status === "blocked"
+            ? "Доступ заблокирован"
+            : status === "unsupported"
+              ? "Звонок недоступен"
+              : status === "error"
+                ? "Проверьте устройство"
+                : "Разрешите доступ";
+      permissionTextEl.textContent =
+        permission?.message || (mode === "video" ? "Нужен доступ к камере и микрофону" : "Нужен доступ к микрофону");
+      const detail = String(permission?.detail || "").trim();
+      permissionDetailEl.textContent = detail;
+      permissionDetailEl.classList.toggle("hidden", !detail);
+      permissionPrimaryBtn.disabled = status === "requesting";
+      permissionPrimaryBtn.textContent = status === "requesting" ? "Ждем разрешение…" : status === "idle" ? "Разрешить доступ" : "Проверить снова";
+      const canOpenSettings = Boolean(permission?.canOpenSettings);
+      permissionSettingsBtn.classList.toggle("hidden", !canOpenSettings);
+      permissionSettingsBtn.textContent = lastPermissionKind === "camera" ? "Настройки камеры" : "Настройки микрофона";
+      showPermissionPanel();
+      return;
+    }
 
     // Show meeting as early as possible for outgoing calls: once room exists and we are already "ringing".
     // Incoming ringing still stays on the hero screen until user accepts.

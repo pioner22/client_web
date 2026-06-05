@@ -1804,6 +1804,8 @@ export function mountApp(root: HTMLElement) {
     closeRightPanel,
     closeMobileSidebar,
     closeModal,
+    callRequestMediaAccess: () => callsFeature?.requestMediaAccess(),
+    callOpenMediaSettings: (kind: "camera" | "microphone") => callsFeature?.openMediaSettings(kind),
     callAccept: (callId: string) => callsFeature?.acceptCall(callId),
     callDecline: (callId: string) => callsFeature?.declineCall(callId),
     setPage,

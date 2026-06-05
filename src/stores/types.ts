@@ -188,8 +188,16 @@ export type ModalState =
       room?: string | null;
       title: string;
       incoming?: boolean;
-      phase?: "creating" | "ringing" | "active";
+      phase?: "permission" | "creating" | "ringing" | "active";
       phaseAt?: number; // ms timestamp (used for local UI timer)
+      permissionToken?: string;
+      permission?: {
+        status: "idle" | "requesting" | "blocked" | "error" | "unsupported";
+        message: string;
+        detail?: string;
+        blockedKind?: "camera" | "microphone" | null;
+        canOpenSettings?: boolean;
+      };
     }
   | {
       kind: "send_schedule";

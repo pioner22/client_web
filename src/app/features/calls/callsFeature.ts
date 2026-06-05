@@ -2,7 +2,16 @@ import { getMeetBaseUrl } from "../../../config/env";
 import type { AppState, TargetRef } from "../../../stores/types";
 import type { Store } from "../../../stores/store";
 import { buildMeetJoinUrl, type CallMode } from "../../../helpers/calls/meetUrl";
-import { formatMediaAccessError, queryCapturePermissionState, type MediaAccessKind } from "../../../helpers/media/permissions";
+import {
+  canUseDesktopMediaPermissions,
+  formatMediaAccessError,
+  openDesktopMediaPermissionSettings,
+  queryCapturePermissionState,
+  requestDesktopCapturePermissions,
+  type CapturePermissionKind,
+  type DesktopCapturePermissionResult,
+  type MediaAccessKind,
+} from "../../../helpers/media/permissions";
 import { isMobileLikeUi } from "../../../helpers/ui/mobileLike";
 import type { TabNotifierLike } from "../../../helpers/notify/tabNotifierLazy";
 
@@ -27,9 +36,12 @@ export interface CallsFeatureDeps {
 }
 
 export type CallModalState = Extract<AppState["modal"], { kind: "call" }>;
+type CallPermissionState = NonNullable<CallModalState["permission"]>;
 
 export interface CallsFeature {
   startCall: (mode: CallMode) => void;
+  requestMediaAccess: () => void;
+  openMediaSettings: (kind: CapturePermissionKind) => void;
   acceptCall: (callId: string) => void;
   declineCall: (callId: string) => void;
   handleMessage: (msg: any) => boolean;
@@ -113,6 +125,55 @@ function formatCallEndNotice(reasonRaw: string, opts: { isCaller: boolean; bySel
   if (reason === "gc") return { label: "Звонок завершен по таймауту активности", kind: "warn" };
   if (reason === "ended") return { label: opts.bySelf ? "Звонок завершен" : "Собеседник завершил звонок", kind: "info" };
   return { label: "Звонок завершен", kind: "info" };
+}
+
+function callPermissionToken(): string {
+  return `call-perm-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function callMediaAccessKind(mode: CallMode): MediaAccessKind {
+  return mode === "video" ? "camera_microphone" : "microphone";
+}
+
+function callMediaKinds(mode: CallMode): CapturePermissionKind[] {
+  return mode === "video" ? ["microphone", "camera"] : ["microphone"];
+}
+
+function callMediaAccessLabel(mode: CallMode): string {
+  return mode === "video" ? "камере и микрофону" : "микрофону";
+}
+
+function callMediaDeviceLabel(mode: CallMode): string {
+  return mode === "video" ? "Камера и микрофон" : "Микрофон";
+}
+
+function browserPermissionDetail(mode: CallMode): string {
+  const access = callMediaAccessLabel(mode);
+  return `iPhone/Safari показывает системный запрос только после нажатия в приложении. Если доступ уже был запрещен, включите ${access} в настройках сайта или приложения и нажмите «Проверить снова».`;
+}
+
+function buildCallMediaConstraints(mode: CallMode): MediaStreamConstraints {
+  if (mode !== "video") return { audio: true, video: false };
+  return {
+    audio: true,
+    video: {
+      facingMode: "user",
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+  };
+}
+
+function stopMediaStream(stream: MediaStream | null | undefined): void {
+  try {
+    for (const track of stream?.getTracks() ?? []) track.stop();
+  } catch {
+    // ignore
+  }
+}
+
+function mediaErrorName(errorRaw: unknown): string {
+  return String((errorRaw as { name?: unknown } | null)?.name ?? "").trim().toLowerCase();
 }
 
 export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
@@ -205,55 +266,333 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     return { st, sel };
   }
 
-  async function ensureMediaAccess(mode: CallMode): Promise<boolean> {
-    if (typeof navigator === "undefined") return true;
-    const mediaDevices = navigator.mediaDevices;
-    if (!mediaDevices?.getUserMedia) return true;
+  function permissionRequestState(mode: CallMode): CallPermissionState {
+    return {
+      status: "requesting",
+      message: `Разрешите доступ к ${callMediaAccessLabel(mode)}`,
+      detail: "Если появилось системное окно iPhone/Safari, нажмите «Разрешить».",
+      blockedKind: mode === "video" ? "camera" : "microphone",
+      canOpenSettings: false,
+    };
+  }
+
+  function patchPermissionGate(token: string, permission: CallPermissionState, status?: string) {
+    const gateToken = String(token || "").trim();
+    if (!gateToken) return;
+    store.set((prev) => {
+      if (prev.modal?.kind !== "call" || prev.modal.phase !== "permission" || prev.modal.permissionToken !== gateToken) return prev;
+      return {
+        ...prev,
+        modal: { ...prev.modal, permission, phaseAt: Date.now() },
+        ...(status ? { status } : {}),
+      };
+    });
+  }
+
+  function permissionGateStillOpen(token: string): boolean {
+    const modal = store.get().modal;
+    return Boolean(modal?.kind === "call" && modal.phase === "permission" && modal.permissionToken === token);
+  }
+
+  function desktopPermissionIssue(mode: CallMode, result: DesktopCapturePermissionResult): CallPermissionState {
+    const blocked = result.blockedKind || (mode === "video" ? "camera" : "microphone");
+    const status = result.rawStatuses[blocked];
+    const device = blocked === "camera" ? "камере" : "микрофону";
+    const message =
+      status === "restricted"
+        ? `Система ограничила доступ к ${device}`
+        : `Доступ к ${device} запрещен в настройках приложения`;
+    return {
+      status: "blocked",
+      message,
+      detail: "Откройте настройки приватности, разрешите доступ для Ягодки и нажмите «Проверить снова».",
+      blockedKind: blocked,
+      canOpenSettings: result.canOpenSettings,
+    };
+  }
+
+  async function inferBlockedKind(mode: CallMode, errorRaw: unknown): Promise<CapturePermissionKind> {
+    if (mode !== "video") return "microphone";
+    const name = mediaErrorName(errorRaw);
+    if (name === "notfounderror" || name === "devicesnotfounderror") return "camera";
+    try {
+      const micState = await queryCapturePermissionState("microphone");
+      if (micState === "denied") return "microphone";
+      const camState = await queryCapturePermissionState("camera");
+      if (camState === "denied") return "camera";
+    } catch {
+      // ignore
+    }
+    return "camera";
+  }
+
+  async function browserPermissionIssue(mode: CallMode, errorRaw: unknown): Promise<CallPermissionState> {
+    const name = mediaErrorName(errorRaw);
+    const blockedKind = await inferBlockedKind(mode, errorRaw);
+    if (name === "notallowederror" || name === "permissiondeniederror" || name === "securityerror") {
+      return {
+        status: "blocked",
+        message: `Доступ к ${callMediaAccessLabel(mode)} не выдан`,
+        detail: browserPermissionDetail(mode),
+        blockedKind,
+        canOpenSettings: false,
+      };
+    }
+    if (name === "notfounderror" || name === "devicesnotfounderror") {
+      return {
+        status: "error",
+        message: mode === "video" ? "Камера или микрофон не найдены" : "Микрофон не найден",
+        detail: "Проверьте, что устройство подключено и доступно браузеру.",
+        blockedKind,
+        canOpenSettings: false,
+      };
+    }
+    if (name === "notreadableerror" || name === "trackstarterror" || name === "aborterror") {
+      return {
+        status: "error",
+        message: `${callMediaDeviceLabel(mode)} сейчас заняты`,
+        detail: "Закройте другое приложение или вкладку, где используется камера/микрофон, затем нажмите «Проверить снова».",
+        blockedKind,
+        canOpenSettings: false,
+      };
+    }
+    return {
+      status: "error",
+      message: formatMediaAccessError(callMediaAccessKind(mode), errorRaw),
+      detail: browserPermissionDetail(mode),
+      blockedKind,
+      canOpenSettings: false,
+    };
+  }
+
+  function showPermissionIssue(issue: CallPermissionState) {
+    const blockedKind = issue.blockedKind || "microphone";
+    const actions: Array<{ id: string; label: string; primary?: boolean; onClick: () => void }> = [];
+    if (issue.canOpenSettings) {
+      actions.push({
+        id: `call_media_settings_${blockedKind}`,
+        label: blockedKind === "camera" ? "Настройки камеры" : "Настройки микрофона",
+        primary: true,
+        onClick: () => openMediaSettings(blockedKind),
+      });
+    }
+    actions.push({
+      id: "call_media_retry",
+      label: "Проверить снова",
+      primary: !issue.canOpenSettings,
+      onClick: () => requestMediaAccess(),
+    });
+    showToast(issue.message, { kind: "warn", timeoutMs: 10000, actions });
+  }
+
+  async function ensureMediaAccess(mode: CallMode, token: string): Promise<boolean> {
+    const gateToken = String(token || "").trim();
+    if (!gateToken || !permissionGateStillOpen(gateToken)) return false;
     if (mediaAccessInFlight) {
-      showToast("Подтвердите запрос камеры/микрофона в приложении", { kind: "info", timeoutMs: 5000 });
+      showToast("Подтвердите запрос камеры/микрофона в системном окне", { kind: "info", timeoutMs: 5000 });
       return false;
     }
 
-    // If the app/browser already has explicit deny, it may skip prompts; surface a clear action hint.
-    const micState = await queryCapturePermissionState("microphone");
-    if (micState === "denied") {
-      showToast("Доступ к микрофону запрещён в настройках приложения или браузера", { kind: "warn", timeoutMs: 9000 });
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      const issue: CallPermissionState = {
+        status: "unsupported",
+        message: "Звонки с камерой и микрофоном доступны только по HTTPS",
+        detail: "Откройте Ягодку через защищенный адрес и повторите звонок.",
+        blockedKind: mode === "video" ? "camera" : "microphone",
+        canOpenSettings: false,
+      };
+      patchPermissionGate(gateToken, issue, issue.message);
+      showPermissionIssue(issue);
       return false;
     }
-    if (mode === "video") {
-      const camState = await queryCapturePermissionState("camera");
-      if (camState === "denied") {
-        showToast("Доступ к камере запрещён в настройках приложения или браузера", { kind: "warn", timeoutMs: 9000 });
-        return false;
-      }
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      const issue: CallPermissionState = {
+        status: "unsupported",
+        message: "Этот браузер не поддерживает доступ к камере и микрофону",
+        detail: "Откройте Ягодку в Safari/Chrome/Edge или в приложении и повторите звонок.",
+        blockedKind: mode === "video" ? "camera" : "microphone",
+        canOpenSettings: false,
+      };
+      patchPermissionGate(gateToken, issue, issue.message);
+      showPermissionIssue(issue);
+      return false;
     }
 
     mediaAccessInFlight = true;
-    async function requestMedia(constraints: MediaStreamConstraints, kind: MediaAccessKind): Promise<boolean> {
-      let stream: MediaStream | null = null;
-      try {
-        stream = await mediaDevices.getUserMedia(constraints);
-        return true;
-      } catch (error) {
-        showToast(formatMediaAccessError(kind, error), { kind: "warn", timeoutMs: 8000 });
-        return false;
-      } finally {
-        try {
-          for (const track of stream?.getTracks() ?? []) track.stop();
-        } catch {
-          // ignore
+    patchPermissionGate(gateToken, permissionRequestState(mode), `Запрашиваем доступ к ${callMediaAccessLabel(mode)}…`);
+    try {
+      if (canUseDesktopMediaPermissions()) {
+        const desktopPerm = await requestDesktopCapturePermissions(callMediaKinds(mode));
+        if (desktopPerm && !desktopPerm.ok) {
+          const issue = desktopPermissionIssue(mode, desktopPerm);
+          patchPermissionGate(gateToken, issue, issue.message);
+          showPermissionIssue(issue);
+          return false;
         }
       }
-    }
-    try {
-      // Request microphone first so users always see/resolve mic permission explicitly.
-      const micOk = await requestMedia({ audio: true, video: false }, "microphone");
-      if (!micOk) return false;
-      if (mode !== "video") return true;
-      const camOk = await requestMedia({ audio: false, video: true }, "camera");
-      return camOk;
+
+      if (!permissionGateStillOpen(gateToken)) return false;
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(buildCallMediaConstraints(mode));
+        return true;
+      } catch (error) {
+        const issue = await browserPermissionIssue(mode, error);
+        patchPermissionGate(gateToken, issue, issue.message);
+        showPermissionIssue(issue);
+        return false;
+      } finally {
+        stopMediaStream(stream);
+      }
     } finally {
       mediaAccessInFlight = false;
+    }
+  }
+
+  function targetFromCallModal(modal: CallModalState): TargetRef | null {
+    const roomId = String(modal.room || "").trim();
+    if (roomId) return { kind: "group", id: roomId };
+    const toId = String(modal.to || "").trim();
+    if (toId) return { kind: "dm", id: toId };
+    return null;
+  }
+
+  function openOutgoingPermissionGate(ctx: { st: AppState; sel: NonNullable<AppState["selected"]> }, mode: CallMode): string {
+    const token = callPermissionToken();
+    const target: TargetRef = ctx.sel.kind === "dm" ? { kind: "dm", id: ctx.sel.id } : { kind: "group", id: ctx.sel.id };
+    const title = callTitleForTarget(ctx.st, target, mode, false, formatTargetLabel);
+    store.set({
+      modal: {
+        kind: "call",
+        callId: "",
+        roomName: "",
+        mode,
+        from: ctx.st.selfId || "",
+        ...(target.kind === "dm" ? { to: target.id } : { room: target.id }),
+        title,
+        phase: "permission",
+        phaseAt: Date.now(),
+        permissionToken: token,
+        permission: permissionRequestState(mode),
+      },
+      status: `Запрашиваем доступ к ${callMediaAccessLabel(mode)}…`,
+    });
+    return token;
+  }
+
+  function setIncomingPermissionGate(callId: string, mode: CallMode): string | null {
+    const existing = store.get().modal;
+    if (!existing || existing.kind !== "call" || String(existing.callId || "").trim() !== callId) return null;
+    const token = existing.phase === "permission" && existing.permissionToken ? existing.permissionToken : callPermissionToken();
+    store.set((prev) => {
+      if (prev.modal?.kind !== "call" || String(prev.modal.callId || "").trim() !== callId) return prev;
+      return {
+        ...prev,
+        modal: {
+          ...prev.modal,
+          phase: "permission",
+          phaseAt: Date.now(),
+          permissionToken: token,
+          permission: permissionRequestState(mode),
+        },
+        status: `Запрашиваем доступ к ${callMediaAccessLabel(mode)}…`,
+      };
+    });
+    return token;
+  }
+
+  function beginOutgoingCallCreateFromModal(modal: CallModalState) {
+    const st = store.get();
+    if (st.conn !== "connected" || !st.authed) {
+      store.set({ modal: null });
+      showToast("Нет соединения", { kind: "warn", timeoutMs: 5000 });
+      return;
+    }
+    if (!getMeetBaseUrl()) {
+      store.set({ modal: null });
+      showToast("Звонки не настроены (нет meet URL)", { kind: "warn", timeoutMs: 7000 });
+      return;
+    }
+    if (callCreateLocalId) {
+      showToast("Звонок уже создаётся…", { kind: "info", timeoutMs: 4000 });
+      return;
+    }
+    const target = targetFromCallModal(modal);
+    if (!target) {
+      store.set({ modal: null, status: "Выберите контакт или чат" });
+      return;
+    }
+    const mode: CallMode = modal.mode === "audio" ? "audio" : "video";
+    const title = callTitleForTarget(st, target, mode, false, formatTargetLabel);
+    callCreateLocalId = `call-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+    store.set({
+      modal: {
+        kind: "call",
+        callId: "",
+        roomName: "",
+        mode,
+        from: st.selfId || "",
+        ...(target.kind === "dm" ? { to: target.id } : { room: target.id }),
+        title,
+        phase: "creating",
+        phaseAt: Date.now(),
+      },
+      status: mode === "audio" ? "Аудиозвонок…" : "Видеозвонок…",
+    });
+    startCallCreateTimeout(callCreateLocalId);
+    try {
+      send({
+        type: "call_create",
+        mode,
+        ...(target.kind === "dm" ? { peer: target.id } : { room: target.id }),
+        local_id: callCreateLocalId,
+      });
+    } catch {
+      clearCallCreateTimeout();
+      callCreateLocalId = null;
+      store.set({ modal: null });
+      showToast("Не удалось начать звонок (ошибка соединения)", { kind: "warn", timeoutMs: 8000 });
+    }
+  }
+
+  function requestMediaAccess() {
+    void requestMediaAccessInternal();
+  }
+
+  async function requestMediaAccessInternal() {
+    const stBefore = store.get();
+    const modal = stBefore.modal;
+    if (!modal || modal.kind !== "call" || modal.phase !== "permission") return;
+    const token = modal.permissionToken || callPermissionToken();
+    if (!modal.permissionToken) {
+      store.set((prev) => {
+        if (prev.modal?.kind !== "call" || prev.modal.phase !== "permission") return prev;
+        return { ...prev, modal: { ...prev.modal, permissionToken: token } };
+      });
+    }
+    const mode: CallMode = modal.mode === "audio" ? "audio" : "video";
+    if (!(await ensureMediaAccess(mode, token))) return;
+    const stNow = store.get();
+    const modalNow = stNow.modal;
+    if (!modalNow || modalNow.kind !== "call" || modalNow.phase !== "permission" || modalNow.permissionToken !== token) return;
+    const callId = String(modalNow.callId || "").trim();
+    if (modalNow.incoming && callId) {
+      await acceptCallInternal(callId, { skipMediaAccess: true });
+      return;
+    }
+    beginOutgoingCallCreateFromModal(modalNow);
+  }
+
+  function openMediaSettings(kindRaw: CapturePermissionKind) {
+    void openMediaSettingsInternal(kindRaw);
+  }
+
+  async function openMediaSettingsInternal(kindRaw: CapturePermissionKind) {
+    const kind: CapturePermissionKind = kindRaw === "camera" ? "camera" : "microphone";
+    const ok = await openDesktopMediaPermissionSettings(kind);
+    if (!ok) {
+      showToast("Откройте настройки приложения или браузера и разрешите доступ вручную", { kind: "info", timeoutMs: 8000 });
     }
   }
 
@@ -261,7 +600,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     void acceptCallInternal(callIdRaw);
   }
 
-  async function acceptCallInternal(callIdRaw: string) {
+  async function acceptCallInternal(callIdRaw: string, opts?: { skipMediaAccess?: boolean }) {
     const callId = String(callIdRaw || "").trim();
     if (!callId) return;
     const stBefore = store.get();
@@ -282,7 +621,11 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       store.set({ modal: null });
       return;
     }
-    if (!(await ensureMediaAccess(mode))) return;
+    if (!opts?.skipMediaAccess) {
+      const token = setIncomingPermissionGate(callId, mode);
+      if (!token) return;
+      if (!(await ensureMediaAccess(mode, token))) return;
+    }
 
     const stNow = store.get();
     const modalNow = stNow.modal;
@@ -338,41 +681,11 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
   async function startCallInternal(mode: CallMode) {
     const firstCtx = resolveStartCallContext(false);
     if (!firstCtx) return;
-    if (!(await ensureMediaAccess(mode))) return;
-    const ctx = resolveStartCallContext(true);
-    if (!ctx) return;
-    const { st, sel } = ctx;
-    callCreateLocalId = `call-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-    const target: TargetRef = sel.kind === "dm" ? { kind: "dm", id: sel.id } : { kind: "group", id: sel.id };
-    const title = callTitleForTarget(st, target, mode, false, formatTargetLabel);
-    store.set({
-      modal: {
-        kind: "call",
-        callId: "",
-        roomName: "",
-        mode,
-        from: st.selfId || "",
-        ...(target.kind === "dm" ? { to: target.id } : { room: target.id }),
-        title,
-        phase: "creating",
-        phaseAt: Date.now(),
-      },
-      status: mode === "audio" ? "Аудиозвонок…" : "Видеозвонок…",
-    });
-    startCallCreateTimeout(callCreateLocalId);
-    try {
-      send({
-        type: "call_create",
-        mode,
-        ...(sel.kind === "dm" ? { peer: sel.id } : { room: sel.id }),
-        local_id: callCreateLocalId,
-      });
-    } catch {
-      clearCallCreateTimeout();
-      callCreateLocalId = null;
-      store.set({ modal: null });
-      showToast("Не удалось начать звонок (ошибка соединения)", { kind: "warn", timeoutMs: 8000 });
-    }
+    const token = openOutgoingPermissionGate(firstCtx, mode);
+    if (!(await ensureMediaAccess(mode, token))) return;
+    const modal = store.get().modal;
+    if (!modal || modal.kind !== "call" || modal.phase !== "permission" || modal.permissionToken !== token) return;
+    beginOutgoingCallCreateFromModal(modal);
   }
 
   function closeCallModal() {
@@ -629,5 +942,5 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     return false;
   }
 
-  return { startCall, acceptCall, declineCall, handleMessage, closeCallModal };
+  return { startCall, requestMediaAccess, openMediaSettings, acceptCall, declineCall, handleMessage, closeCallModal };
 }

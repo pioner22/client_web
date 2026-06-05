@@ -309,6 +309,8 @@ export interface RenderActions {
   onAuthLogout: () => void;
   onOpenSidebarToolsMenu: (x: number, y: number) => void;
   onCloseModal: () => void;
+  onCallRequestMediaAccess: () => void;
+  onCallOpenMediaSettings: (kind: "camera" | "microphone") => void;
   onCallAccept: (callId: string) => void;
   onCallDecline: (callId: string) => void;
   onConfirmModal: () => void;
@@ -765,6 +767,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     state.modal?.kind === "call"
       ? callModalRuntime.render(state, state.modal, {
           onHangup: actions.onCloseModal,
+          onRequestMediaAccess: actions.onCallRequestMediaAccess,
+          onOpenMediaSettings: actions.onCallOpenMediaSettings,
           onAccept: (cid) => actions.onCallAccept(cid),
           onDecline: (cid) => actions.onCallDecline(cid),
           onOpenExternal: (url) => {

@@ -20,6 +20,8 @@ test("calls: CSS contains modal-call layout", async () => {
   const css = await readCssWithImports("src/scss/modal.css");
   assert.match(css, /\.modal\.modal-call/);
   assert.match(css, /\.call-frame/);
+  assert.match(css, /\.call-permission/);
+  assert.match(css, /\.call-device/);
 });
 
 test("calls: outgoing ringing shows Jitsi surface without waiting active", async () => {
@@ -32,12 +34,24 @@ test("calls: call_invite is not blocked by toast dedupe", async () => {
   assert.ok(!/if \(!showToastHere\) return true;/.test(src));
 });
 
-test("calls: media/call status goes through status line, not center popups", async () => {
+test("calls: media permission gate asks from the call modal", async () => {
   const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
+  const modalSrc = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
+  const renderSrc = await readFile(path.resolve("src/app/renderApp.ts"), "utf8");
   assert.doesNotMatch(src, /placement:\s*"center"/);
-  assert.doesNotMatch(src, /занят[аы]? другим приложением/);
-  assert.doesNotMatch(src, /настройках сайта/);
+  assert.match(src, /phase:\s*"permission"/);
+  assert.match(src, /permissionToken/);
+  assert.match(src, /requestMediaAccess/);
+  assert.match(src, /navigator\.mediaDevices\.getUserMedia\(buildCallMediaConstraints\(mode\)\)/);
+  assert.match(src, /requestDesktopCapturePermissions/);
+  assert.match(src, /настройках сайта/);
+  assert.match(src, /iPhone\/Safari/);
   assert.match(src, /queryCapturePermissionState/);
+  assert.match(modalSrc, /call-permission/);
+  assert.match(modalSrc, /onRequestMediaAccess/);
+  assert.match(modalSrc, /onOpenMediaSettings/);
+  assert.match(renderSrc, /onCallRequestMediaAccess/);
+  assert.match(renderSrc, /onCallOpenMediaSettings/);
 });
 
 test("calls: client sends call_invite_ack and dedupes same call invite", async () => {

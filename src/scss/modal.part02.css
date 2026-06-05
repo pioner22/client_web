@@ -544,6 +544,158 @@ input.modal-input[type="file"]::file-selector-button:active {
   opacity: 0.72;
 }
 
+.call-permission {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 96px 22px calc(118px + env(safe-area-inset-bottom));
+  color: #fff;
+  text-align: center;
+}
+
+.call-permission-devices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.call-device {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 760;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.22);
+}
+
+.call-device[data-state="requesting"] {
+  border-color: rgba(126, 201, 255, 0.34);
+  background: rgba(86, 156, 214, 0.16);
+}
+
+.call-device[data-state="blocked"] {
+  border-color: color-mix(in srgb, var(--bad), transparent 50%);
+  background: color-mix(in srgb, var(--bad), transparent 84%);
+}
+
+.call-device-icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  background: currentColor;
+}
+
+.call-device-mic .call-device-icon {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm7-3a1 1 0 1 1 2 0a9 9 0 0 1-8 8.94V22a1 1 0 1 1-2 0v-2.06A9 9 0 0 1 3 11a1 1 0 1 1 2 0a7 7 0 0 0 14 0Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm7-3a1 1 0 1 1 2 0a9 9 0 0 1-8 8.94V22a1 1 0 1 1-2 0v-2.06A9 9 0 0 1 3 11a1 1 0 1 1 2 0a7 7 0 0 0 14 0Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
+.call-device-cam .call-device-icon {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M15 8a1 1 0 0 1 1 1v1.2l3.2-2a1 1 0 0 1 1.5.86v6a1 1 0 0 1-1.5.86l-3.2-2V16a1 1 0 0 1-1 1H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M15 8a1 1 0 0 1 1 1v1.2l3.2-2a1 1 0 0 1 1.5.86v6a1 1 0 0 1-1.5.86l-3.2-2V16a1 1 0 0 1-1 1H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
+.call-permission-title {
+  max-width: 100%;
+  font-size: 24px;
+  font-weight: 860;
+  line-height: 1.12;
+}
+
+.call-permission-text {
+  max-width: 420px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  font-weight: 680;
+  line-height: 1.35;
+}
+
+.call-permission-detail {
+  max-width: 440px;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.call-permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.call-permission-btn {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.call-permission-primary {
+  border-color: transparent;
+  background: #f2f2f4;
+  color: #101014;
+}
+
+.call-permission-secondary {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.call-permission-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+@media (max-width: 480px) {
+  .call-permission {
+    gap: 12px;
+    padding-inline: 18px;
+  }
+
+  .call-permission-title {
+    font-size: 21px;
+  }
+
+  .call-permission-text {
+    font-size: 14px;
+  }
+
+  .call-permission-actions {
+    width: 100%;
+  }
+
+  .call-permission-btn {
+    flex: 1 1 180px;
+  }
+}
+
 .call-controls {
   position: absolute;
   bottom: 0;
