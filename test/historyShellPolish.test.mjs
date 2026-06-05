@@ -245,12 +245,17 @@ test("history shell polish: source and CSS guards present", async () => {
   assert.match(css, /\.msg-sep-count\b/);
   assert.match(css, /\.msg-meta-item \+ \.msg-meta-item::before\b/);
   assert.match(css, /\.msg-content-shell\b/);
-  assert.match(css, /--msg-modern-outline-in:\s*rgba\(255,\s*255,\s*255,\s*0\.56\)/);
-  assert.match(css, /--msg-modern-outline-out:\s*rgba\(255,\s*255,\s*255,\s*0\.32\)/);
+  assert.match(css, /--msg-telegram-tail-size:\s*11px/);
+  assert.match(css, /--msg-modern-time-chip-bg:\s*transparent/);
+  assert.match(css, /--msg-modern-time-chip-border:\s*transparent/);
+  assert.match(css, /--msg-modern-bubble-gloss:\s*none/);
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-content-shell\s*\{[\s\S]*display:\s*grid;/);
-  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-content-shell\s+\.msg-meta\s*\{[\s\S]*background:\s*var\(--msg-modern-time-chip-bg\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-content-shell\s+\.msg-meta\s*\{[\s\S]*background:\s*transparent;[\s\S]*border:\s*0;/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg:not\(\[data-msg-attach\]\):not\(\[data-msg-has-ref\]\):not\(\[data-msg-has-reacts\]\):not\(\[data-msg-emoji-only\]\)\s+\.msg-text\s*\{[\s\S]*padding-right:\s*var\(--msg-meta-inline-pad\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg:not\(\[data-msg-attach\]\):not\(\[data-msg-has-ref\]\):not\(\[data-msg-has-reacts\]\):not\(\[data-msg-emoji-only\]\)\s+\.msg-content-shell\s+\.msg-meta\s*\{[\s\S]*position:\s*absolute;[\s\S]*right:\s*6px;[\s\S]*bottom:\s*4px;/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-tail:not\(\.msg-attach\)\s+\.msg-body::after\s*\{[\s\S]*width:\s*var\(--msg-telegram-tail-size\);[\s\S]*-webkit-mask:\s*var\(--msg-telegram-tail-mask\)/);
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-ref-quote\s*\{[\s\S]*border-inline-start:\s*3px solid var\(--msg-ref-accent\)/);
-  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-ref-forward\s*\{[\s\S]*border:\s*1px solid color-mix\(in srgb,\s*var\(--msg-ref-accent\)\s*26%,\s*transparent\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-ref-forward\s*\{[\s\S]*border-inline-start:\s*3px solid var\(--msg-ref-accent\)/);
 
   const historyRenderSurfaceSrc = await readFile(path.resolve("src/components/chat/historyRenderSurface.ts"), "utf8");
   assert.match(historyRenderSurfaceSrc, /renderDateSeparator/);

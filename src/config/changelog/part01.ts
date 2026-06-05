@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.863",
+    date: "2026-06-05",
+    improved: [
+      "Mobile/iOS: W-0959 переводит оформление сообщений ближе к Telegram: спокойные bubble colors, тонкие хвосты, меньше карточных теней и более аккуратный ритм текста.",
+      "Время/статус у простых текстовых сообщений теперь встроены в пузырь как прозрачная inline-мета, без отдельного тяжёлого чипа.",
+    ],
+    fixed: [
+      "Reply/forward previews больше не выглядят как тяжёлые карточки: оставлена тонкая акцентная линия и мягкий прозрачный фон.",
+      "Сохранены compact selected-message menu, прозрачный нижний dock W-0957, auth Web version marker и принятый photo viewer.",
+    ],
+  },
+  {
     version: "0.1.862",
     date: "2026-06-05",
     improved: [

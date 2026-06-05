@@ -87,16 +87,16 @@
   --sidebar-pad: 12px;
   --sidebar-list-pad: 8px;
 
-  --chat-bg: #edf4ef;
+  --chat-bg: #e7efe9;
   --chat-pad: 18px;
   --chat-title-color: #63746c;
   --chat-title-mb: 10px;
-  --chat-line-gap: 7px;
+  --chat-line-gap: 5px;
   --messages-container-width: min(100%, 810px);
   --chat-input-max-width: min(100%, 810px);
   --chat-lines-max-width: var(--messages-container-width);
   --chat-bubbles-max-width: var(--messages-container-width);
-  --msg-body-max-width: min(78%, 680px);
+  --msg-body-max-width: min(84%, 680px);
   --msg-media-max-width: 520px;
   --msg-avatar-size: 34px;
   --msg-avatar-font-size: 12px;
@@ -104,7 +104,8 @@
   --msg-body-gap: 5px;
   --msg-meta-font-size: 11px;
   --msg-status-read-color: #158a71;
-  --msg-time-color: #738079;
+  --msg-time-color: #7f8d86;
+  --msg-out-meta-color: rgba(77, 142, 80, 0.88);
   --msg-from-in-color: #a7203d;
   --msg-from-out-color: #0b6f61;
   --msg-sep-color: #66736d;
@@ -112,39 +113,39 @@
   --msg-text-line: 1.46;
   --msg-text-in-color: #18211d;
   --msg-text-out-color: #10221d;
-  --msg-modern-outline-in: rgba(255, 255, 255, 0.72);
-  --msg-modern-outline-out: rgba(255, 255, 255, 0.42);
-  --msg-modern-time-chip-bg: rgba(255, 255, 255, 0.42);
-  --msg-modern-time-chip-border: rgba(37, 52, 45, 0.08);
-  --msg-card-shadow: 0 10px 28px rgba(36, 48, 42, 0.11);
-  --msg-card-outline: 0 0 0 1px rgba(37, 52, 45, 0.06);
-  --msg-bubble-radius: 20px;
-  --msg-bubble-pad-x: 13px;
-  --msg-bubble-pad-y: 8px;
-  --msg-bubble-pad-bottom: 8px;
+  --msg-modern-outline-in: rgba(37, 52, 45, 0.06);
+  --msg-modern-outline-out: rgba(77, 142, 80, 0.2);
+  --msg-modern-time-chip-bg: transparent;
+  --msg-modern-time-chip-border: transparent;
+  --msg-card-shadow: none;
+  --msg-card-outline: 0 0 0 1px rgba(37, 52, 45, 0.045);
+  --msg-bubble-radius: 15px;
+  --msg-bubble-pad-x: 10px;
+  --msg-bubble-pad-y: 6px;
+  --msg-bubble-pad-bottom: 6px;
   --msg-in-bg: #ffffff;
   --msg-in-bg-hi: #ffffff;
   --msg-in-fill: #ffffff;
-  --msg-in-border-color: rgba(37, 52, 45, 0.08);
+  --msg-in-border-color: rgba(37, 52, 45, 0.055);
   --msg-in-border-width: 1px;
-  --msg-in-radius: 20px;
-  --msg-in-radius-tail: 20px;
-  --msg-in-cont-corner: 9px;
+  --msg-in-radius: 15px;
+  --msg-in-radius-tail: 5px;
+  --msg-in-cont-corner: 7px;
   --msg-in-pad-y: var(--msg-bubble-pad-y);
   --msg-in-pad-x: var(--msg-bubble-pad-x);
   --msg-in-pad-bottom: var(--msg-bubble-pad-bottom);
-  --msg-out-bg: #dff5ec;
-  --msg-out-bg-hi: #eaf9f3;
-  --msg-out-fill: linear-gradient(145deg, var(--msg-out-bg-hi), var(--msg-out-bg));
-  --msg-out-border-color: rgba(21, 138, 113, 0.16);
+  --msg-out-bg: #e7ffdb;
+  --msg-out-bg-hi: #e7ffdb;
+  --msg-out-fill: var(--msg-out-bg);
+  --msg-out-border-color: rgba(77, 142, 80, 0.18);
   --msg-out-border-width: 1px;
-  --msg-out-radius: 20px;
-  --msg-out-radius-tail: 20px;
-  --msg-out-cont-corner: 9px;
+  --msg-out-radius: 15px;
+  --msg-out-radius-tail: 5px;
+  --msg-out-cont-corner: 7px;
   --msg-out-pad-y: var(--msg-bubble-pad-y);
   --msg-out-pad-x: var(--msg-bubble-pad-x);
   --msg-out-pad-bottom: var(--msg-bubble-pad-bottom);
-  --msg-tail-size: 0px;
+  --msg-tail-size: 11px;
   --message-time-background: rgba(24, 33, 29, 0.52);
 
   --composer-bg: rgba(249, 251, 250, 0.9);
@@ -259,7 +260,7 @@
   --sidebar-border-color: rgba(234, 242, 238, 0.08);
   --right-column-bg: #14201c;
   --right-column-border-color: rgba(234, 242, 238, 0.08);
-  --chat-bg: #111c18;
+  --chat-bg: #0e1621;
   --safe-area-bg: #14201c;
 
   --hk-bg: rgba(234, 242, 238, 0.06);
@@ -279,22 +280,23 @@
   --row-unread-selected-text: #ffffff;
 
   --chat-title-color: #aab8b1;
-  --msg-time-color: #9baaa3;
+  --msg-time-color: #8f9daa;
+  --msg-out-meta-color: rgba(190, 218, 240, 0.78);
   --msg-from-in-color: #ff9aad;
-  --msg-from-out-color: #7be0c8;
-  --msg-sep-color: #9baaa3;
-  --msg-text-in-color: #eef7f2;
-  --msg-text-out-color: #eef7f2;
-  --msg-card-shadow: 0 16px 34px rgba(0, 0, 0, 0.26);
-  --msg-card-outline: 0 0 0 1px rgba(234, 242, 238, 0.06);
-  --msg-in-bg: #1c2b26;
-  --msg-in-bg-hi: #20332d;
-  --msg-in-fill: linear-gradient(145deg, var(--msg-in-bg-hi), var(--msg-in-bg));
-  --msg-in-border-color: rgba(234, 242, 238, 0.08);
-  --msg-out-bg: #173b34;
-  --msg-out-bg-hi: #1f4d43;
-  --msg-out-fill: linear-gradient(145deg, var(--msg-out-bg-hi), var(--msg-out-bg));
-  --msg-out-border-color: rgba(83, 211, 181, 0.14);
+  --msg-from-out-color: #86c7f3;
+  --msg-sep-color: #8f9daa;
+  --msg-text-in-color: #f2f6fa;
+  --msg-text-out-color: #f2f6fa;
+  --msg-card-shadow: none;
+  --msg-card-outline: 0 0 0 1px rgba(255, 255, 255, 0.035);
+  --msg-in-bg: #182533;
+  --msg-in-bg-hi: #182533;
+  --msg-in-fill: var(--msg-in-bg);
+  --msg-in-border-color: rgba(255, 255, 255, 0.04);
+  --msg-out-bg: #2b5278;
+  --msg-out-bg-hi: #2b5278;
+  --msg-out-fill: var(--msg-out-bg);
+  --msg-out-border-color: rgba(190, 218, 240, 0.08);
 
   --composer-bg: rgba(20, 32, 28, 0.9);
   --composer-border-color: rgba(234, 242, 238, 0.08);
@@ -462,24 +464,22 @@ html[data-skin="yagodka-modern"] .avatar {
 
 html[data-skin="yagodka-modern"] .chat {
   background:
-    radial-gradient(circle at 18px 24px, rgba(24, 33, 29, 0.05) 0 1px, transparent 1px 100%),
-    radial-gradient(circle at 92px 58px, rgba(215, 57, 88, 0.035) 0 1px, transparent 1px 100%),
-    radial-gradient(circle at 136px 108px, rgba(21, 138, 113, 0.035) 0 1px, transparent 1px 100%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.34), transparent 34%),
+    radial-gradient(circle at 18px 24px, rgba(24, 33, 29, 0.035) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 92px 58px, rgba(21, 138, 113, 0.025) 0 1px, transparent 1px 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 34%),
     var(--chat-bg);
-  background-size: 156px 156px, 212px 212px, 260px 260px, auto, auto;
-  background-position: 0 0, 34px 18px, 72px 42px, 0 0, 0 0;
+  background-size: 156px 156px, 212px 212px, auto, auto;
+  background-position: 0 0, 34px 18px, 0 0, 0 0;
 }
 
 html[data-skin="yagodka-modern"][data-theme="dark"] .chat {
   background:
-    radial-gradient(circle at 18px 24px, rgba(234, 242, 238, 0.055) 0 1px, transparent 1px 100%),
-    radial-gradient(circle at 92px 58px, rgba(255, 92, 138, 0.038) 0 1px, transparent 1px 100%),
-    radial-gradient(circle at 136px 108px, rgba(88, 210, 189, 0.035) 0 1px, transparent 1px 100%),
-    linear-gradient(180deg, rgba(234, 242, 238, 0.03), transparent 34%),
+    radial-gradient(circle at 18px 24px, rgba(234, 242, 238, 0.045) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 92px 58px, rgba(88, 210, 189, 0.025) 0 1px, transparent 1px 100%),
+    linear-gradient(180deg, rgba(234, 242, 238, 0.018), transparent 34%),
     var(--chat-bg);
-  background-size: 156px 156px, 212px 212px, 260px 260px, auto, auto;
-  background-position: 0 0, 34px 18px, 72px 42px, 0 0, 0 0;
+  background-size: 156px 156px, 212px 212px, auto, auto;
+  background-position: 0 0, 34px 18px, 0 0, 0 0;
 }
 
 html[data-skin="yagodka-modern"] .chat-title {
@@ -1253,8 +1253,8 @@ html[data-skin="yagodka-modern"] .viewer-pdf-fallback {
   }
 
   html[data-skin="yagodka-modern"] .chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach):hover .msg-body {
-    transform: translateY(-1px);
-    box-shadow: 0 18px 38px rgba(36, 48, 42, 0.15);
+    transform: none;
+    box-shadow: var(--msg-card-shadow), var(--msg-card-outline);
   }
 }
 

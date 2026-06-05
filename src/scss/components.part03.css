@@ -111,11 +111,11 @@
 }
 
 .chat:not(.chat-board) .msg-ref-quote {
-  background: color-mix(in srgb, var(--msg-ref-accent) 10%, var(--panel2) 90%);
+  background: color-mix(in srgb, var(--msg-ref-accent) 8%, transparent);
   border-inline-start: 3px solid var(--msg-ref-accent);
-  border-radius: 13px;
-  padding: 7px 9px;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  border-radius: 8px;
+  padding: 5px 8px;
+  box-shadow: none;
 }
 
 .chat:not(.chat-board) .msg-ref-quote::before,
@@ -136,11 +136,12 @@
 }
 
 .chat:not(.chat-board) .msg-ref-forward {
-  background: color-mix(in srgb, var(--msg-ref-accent) 7%, var(--panel2) 93%);
-  border: 1px solid color-mix(in srgb, var(--msg-ref-accent) 26%, transparent);
-  padding: 7px 9px;
-  border-radius: 14px;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  background: color-mix(in srgb, var(--msg-ref-accent) 7%, transparent);
+  border: 0;
+  border-inline-start: 3px solid var(--msg-ref-accent);
+  padding: 5px 8px;
+  border-radius: 8px;
+  box-shadow: none;
   color: var(--msg-time-color);
   font-size: 12px;
   margin: 2px 0 4px;
