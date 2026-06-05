@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.864",
+    date: "2026-06-05",
+    improved: [
+      "Publish: обновлены downloadable clients для сайта после W-0959: Web/PWA, Android debug APK, macOS desktop ZIP/feed и CLI archive.",
+      "Сайт downloads теперь должен показывать актуальные версии всех клиентов вместо старых Android/macOS/CLI артефактов.",
+    ],
+    fixed: [
+      "Android debug APK получил новый versionName/versionCode, чтобы sideload-клиенты видели отдельный новый артефакт.",
+      "macOS desktop unsigned ZIP/feed пересобираются на текущей версии Web/PWA, а CLI archive пересобирается штатным dist pipeline.",
+    ],
+  },
+  {
     version: "0.1.863",
     date: "2026-06-05",
     improved: [

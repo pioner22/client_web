@@ -97,6 +97,6 @@ test("android update prompt opens current APK download instead of reloading bund
   assert.match(viteConfig, /loadAndroidAppVersionMeta/);
   assert.match(viteConfig, /__ANDROID_APP_VERSION_NAME__/);
   assert.match(viteConfig, /__ANDROID_APP_VERSION_CODE__/);
-  assert.match(gradle, /versionCode 23/);
-  assert.match(gradle, /versionName "1\.0\.22"/);
+  assert.match(gradle, /versionCode 24/);
+  assert.match(gradle, /versionName "1\.0\.23"/);
 });
