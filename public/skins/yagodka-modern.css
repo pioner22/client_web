@@ -112,6 +112,10 @@
   --msg-text-line: 1.46;
   --msg-text-in-color: #18211d;
   --msg-text-out-color: #10221d;
+  --msg-modern-outline-in: rgba(255, 255, 255, 0.72);
+  --msg-modern-outline-out: rgba(255, 255, 255, 0.42);
+  --msg-modern-time-chip-bg: rgba(255, 255, 255, 0.42);
+  --msg-modern-time-chip-border: rgba(37, 52, 45, 0.08);
   --msg-card-shadow: 0 10px 28px rgba(36, 48, 42, 0.11);
   --msg-card-outline: 0 0 0 1px rgba(37, 52, 45, 0.06);
   --msg-bubble-radius: 20px;
@@ -493,7 +497,7 @@ html[data-skin="yagodka-modern"] .chat-lines {
 
 html[data-skin="yagodka-modern"] .chat:not(.chat-board) .msg-body {
   border-radius: var(--msg-in-radius);
-  box-shadow: var(--msg-card-shadow);
+  box-shadow: var(--msg-card-shadow), var(--msg-card-outline);
 }
 
 html[data-skin="yagodka-modern"] .chat:not(.chat-board) .msg-out .msg-body {
@@ -863,7 +867,13 @@ html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-compact {
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list {
-  width: min(344px, calc(100vw - 24px));
+  --ctx-menu-message-glass-bg: rgba(21, 19, 27, 0.82);
+  --ctx-menu-message-glass-border: rgba(255, 255, 255, 0.14);
+  --ctx-menu-message-shadow:
+    0 22px 48px rgba(0, 0, 0, 0.44),
+    0 1px 0 rgba(255, 255, 255, 0.1) inset;
+
+  width: min(286px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   max-height: none;
   padding: 0;
@@ -902,8 +912,8 @@ html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-compact .ctx-item {
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-item {
-  min-height: 42px;
-  padding: 7px 16px 7px 14px;
+  min-height: 50px;
+  padding: 8px 18px 8px 17px;
   border-radius: 0;
 }
 
@@ -924,10 +934,10 @@ html[data-skin="yagodka-modern"] .ctx-icon {
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-icon {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   background: transparent;
-  color: rgba(250, 250, 252, 0.78);
+  color: rgba(250, 250, 252, 0.86);
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-react {
@@ -937,7 +947,13 @@ html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-rea
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-list,
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-reacts {
-  background: rgba(24, 24, 30, 0.9);
+  background: var(--ctx-menu-message-glass-bg);
+  border-color: var(--ctx-menu-message-glass-border);
+  box-shadow: var(--ctx-menu-message-shadow);
+}
+
+html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-action-list .ctx-list {
+  border-radius: 22px;
 }
 
 html[data-skin="yagodka-modern"] .ctx-meta {

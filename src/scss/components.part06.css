@@ -1,3 +1,11 @@
+.chat:not(.chat-board) {
+  --msg-modern-outline-in: rgba(255, 255, 255, 0.56);
+  --msg-modern-outline-out: rgba(255, 255, 255, 0.32);
+  --msg-modern-time-chip-bg: color-mix(in srgb, var(--panel2) 76%, transparent);
+  --msg-modern-time-chip-border: color-mix(in srgb, var(--line) 36%, transparent);
+  --msg-modern-bubble-gloss: 0 1px 0 rgba(255, 255, 255, 0.1) inset;
+}
+
 .msg-content-shell {
   min-width: 0;
   display: grid;
@@ -13,10 +21,35 @@
   --msg-content-gap: calc(var(--sp-1) + 1px);
 }
 
+.chat:not(.chat-board) .msg-content-shell {
+  display: grid;
+  gap: var(--msg-content-gap, 4px);
+  min-width: 0;
+}
+
+.chat:not(.chat-board) .msg-content-shell .msg-meta {
+  background: var(--msg-modern-time-chip-bg);
+  border: 1px solid var(--msg-modern-time-chip-border);
+}
+
+.chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach) .msg-body {
+  box-shadow: var(--msg-card-shadow), var(--msg-card-outline), var(--msg-modern-bubble-gloss);
+}
+
+.chat:not(.chat-board) .msg.msg-in:not(.msg-sys):not(.msg-attach) .msg-body {
+  border-color: var(--msg-modern-outline-in);
+}
+
+.chat:not(.chat-board) .msg.msg-out:not(.msg-sys):not(.msg-attach) .msg-body {
+  border-color: var(--msg-modern-outline-out);
+}
+
 .chat:not(.chat-board) .msg:not(.msg-attach) .msg-content-shell .msg-meta {
   margin: 0;
   min-height: 0;
   padding: 2px 8px;
+  background: var(--msg-modern-time-chip-bg);
+  border: 1px solid var(--msg-modern-time-chip-border);
   border-radius: 999px;
   align-self: flex-end;
 }

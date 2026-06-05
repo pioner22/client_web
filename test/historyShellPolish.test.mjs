@@ -245,6 +245,12 @@ test("history shell polish: source and CSS guards present", async () => {
   assert.match(css, /\.msg-sep-count\b/);
   assert.match(css, /\.msg-meta-item \+ \.msg-meta-item::before\b/);
   assert.match(css, /\.msg-content-shell\b/);
+  assert.match(css, /--msg-modern-outline-in:\s*rgba\(255,\s*255,\s*255,\s*0\.56\)/);
+  assert.match(css, /--msg-modern-outline-out:\s*rgba\(255,\s*255,\s*255,\s*0\.32\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-content-shell\s*\{[\s\S]*display:\s*grid;/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-content-shell\s+\.msg-meta\s*\{[\s\S]*background:\s*var\(--msg-modern-time-chip-bg\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-ref-quote\s*\{[\s\S]*border-inline-start:\s*3px solid var\(--msg-ref-accent\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-ref-forward\s*\{[\s\S]*border:\s*1px solid color-mix\(in srgb,\s*var\(--msg-ref-accent\)\s*26%,\s*transparent\)/);
 
   const historyRenderSurfaceSrc = await readFile(path.resolve("src/components/chat/historyRenderSurface.ts"), "utf8");
   assert.match(historyRenderSurfaceSrc, /renderDateSeparator/);

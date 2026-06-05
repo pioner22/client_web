@@ -719,13 +719,19 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list {
-  width: min(344px, calc(100vw - 24px));
+  --ctx-menu-message-glass-bg: rgba(21, 19, 27, 0.82);
+  --ctx-menu-message-glass-border: rgba(255, 255, 255, 0.14);
+  --ctx-menu-message-shadow:
+    0 22px 48px rgba(0, 0, 0, 0.44),
+    0 1px 0 rgba(255, 255, 255, 0.1) inset;
+
+  width: min(286px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   max-height: none;
   border: 0;
   border-radius: 0;
   padding: 0;
-  gap: 8px;
+  gap: 9px;
   align-items: flex-start;
   overflow: visible;
   background: transparent;
@@ -776,11 +782,11 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-item {
-  min-height: 42px;
-  padding: 7px 16px 7px 14px;
+  min-height: 50px;
+  padding: 8px 18px 8px 17px;
   border-radius: 0;
-  font-size: 16px;
-  gap: 12px;
+  font-size: 18px;
+  gap: 14px;
   background: transparent;
   color: rgba(250, 250, 252, 0.94);
 }
@@ -861,18 +867,16 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-list {
-  width: min(var(--ctx-action-list-w, 252px), calc(100vw - 32px));
-  max-height: min(var(--ctx-list-max-h, 318px), calc(100dvh - 126px));
+  width: min(var(--ctx-action-list-w, 286px), calc(100vw - 32px));
+  max-height: min(var(--ctx-list-max-h, 380px), calc(100dvh - 126px));
   gap: 0;
   padding: 10px 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
-  background: rgba(24, 24, 30, 0.9);
-  -webkit-backdrop-filter: blur(24px) saturate(1.18);
-  backdrop-filter: blur(24px) saturate(1.18);
-  box-shadow:
-    0 20px 44px rgba(0, 0, 0, 0.42),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  border: 1px solid var(--ctx-menu-message-glass-border);
+  border-radius: 22px;
+  background: var(--ctx-menu-message-glass-bg);
+  -webkit-backdrop-filter: blur(30px) saturate(1.22);
+  backdrop-filter: blur(30px) saturate(1.22);
+  box-shadow: var(--ctx-menu-message-shadow);
 }
 
 .ctx-list::-webkit-scrollbar {
@@ -894,19 +898,17 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-reacts {
-  width: min(var(--ctx-react-pill-w, 344px), calc(100vw - 24px));
+  width: min(var(--ctx-react-pill-w, 286px), calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   justify-content: space-between;
   gap: 0;
-  padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 5px 8px;
+  border: 1px solid var(--ctx-menu-message-glass-border);
   border-radius: 999px;
-  background: rgba(24, 24, 30, 0.9);
-  -webkit-backdrop-filter: blur(24px) saturate(1.18);
-  backdrop-filter: blur(24px) saturate(1.18);
-  box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.4),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  background: var(--ctx-menu-message-glass-bg);
+  -webkit-backdrop-filter: blur(30px) saturate(1.22);
+  backdrop-filter: blur(30px) saturate(1.22);
+  box-shadow: var(--ctx-menu-message-shadow);
   overflow: hidden;
 }
 
@@ -939,12 +941,12 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-react {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   border: 0;
   background: transparent;
-  font-size: 24px;
+  font-size: 25px;
 }
 
 .ctx-react-more {
@@ -1047,12 +1049,12 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-icon {
-  flex-basis: 28px;
-  width: 28px;
-  height: 28px;
+  flex-basis: 34px;
+  width: 34px;
+  height: 34px;
   border-radius: 11px;
   background: transparent;
-  color: rgba(250, 250, 252, 0.78);
+  color: rgba(250, 250, 252, 0.86);
 }
 
 .ctx-menu.ctx-menu-message-compact .ctx-icon::before {
@@ -1061,8 +1063,8 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-icon::before {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 
 .ctx-icon[data-ctx-icon="action"] {
@@ -1157,9 +1159,9 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-label {
-  font-size: 16px;
-  font-weight: 560;
-  line-height: 1.18;
+  font-size: 18px;
+  font-weight: 520;
+  line-height: 1.15;
 }
 
 .ctx-sub {
@@ -1187,8 +1189,8 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-sep {
-  margin: 8px 16px;
-  background: rgba(255, 255, 255, 0.12);
+  margin: 10px 16px;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-danger,
