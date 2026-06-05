@@ -70,10 +70,13 @@ test("mobile app frame: contact list owns the full fixed mobile frame without a 
     /\.sidebar\.sidebar-mobile-open\s*\{[\s\S]*?transform:\s*none;[\s\S]*?visibility:\s*visible;[\s\S]*?pointer-events:\s*auto;/
   );
   assert.match(css, /--mobile-bottom-nav-h:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--mobile-bottom-nav-fill\)\);/);
+  assert.match(css, /--mobile-bottom-nav-bottom-offset:\s*0px;/);
   assert.match(css, /\.sidebar-mobile-sticky\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?padding:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*6px\)\s+10px\s+8px;/);
-  assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*0;[\s\S]*?height:\s*var\(--mobile-bottom-nav-h\);/);
+  assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*var\(--mobile-bottom-nav-bottom-offset\);[\s\S]*?height:\s*var\(--mobile-bottom-nav-row-h\);/);
   assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?align-items:\s*flex-end;/);
+  assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?pointer-events:\s*none;/);
   assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?height:\s*56px;[\s\S]*?border-radius:\s*999px;/);
+  assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?pointer-events:\s*auto;/);
   assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(css, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s+\.sidebar-tab\s*\{[\s\S]*?height:\s*100%;[\s\S]*?font-size:\s*11px;[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /html\.env-os-android\s+\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s+\.sidebar-tab\s*\{[\s\S]*?font-size:\s*11px;/);
@@ -82,7 +85,7 @@ test("mobile app frame: contact list owns the full fixed mobile frame without a 
   assert.match(css, /\.sidebar\[data-sidebar-tab="menu"\]\s+\.sidebar-body\s*\{[\s\S]*?padding-top:\s*var\(--mobile-sidebar-menu-sticky-h\);/);
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar\s*\{[\s\S]*?--mobile-bottom-nav-fill:\s*var\(--app-logged-bottom-fill\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.sidebar\s*\{[\s\S]*?--mobile-bottom-nav-fill:\s*var\(--app-logged-bottom-fill\);[\s\S]*?--mobile-bottom-nav-bottom-offset:\s*var\(--app-logged-bottom-fill\);/
   );
   assert.match(
     css,

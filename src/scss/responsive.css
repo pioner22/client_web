@@ -5,8 +5,9 @@
     --mobile-sidebar-sticky-h: calc(env(safe-area-inset-top) + 60px);
     --mobile-sidebar-menu-sticky-h: calc(env(safe-area-inset-top) + 48px);
     --mobile-bottom-nav-fill: var(--app-bottom-live-pad);
-    --mobile-bottom-nav-row-h: 68px;
+    --mobile-bottom-nav-row-h: 74px;
     --mobile-bottom-nav-h: calc(var(--mobile-bottom-nav-row-h) + var(--mobile-bottom-nav-fill));
+    --mobile-bottom-nav-bottom-offset: 0px;
     --mobile-composer-bottom-offset: 0px;
   }
 
@@ -119,6 +120,7 @@
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar {
     --mobile-bottom-nav-fill: var(--app-logged-bottom-fill);
+    --mobile-bottom-nav-bottom-offset: var(--app-logged-bottom-fill);
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .overlay.overlay-viewer {
@@ -364,18 +366,19 @@
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: var(--mobile-bottom-nav-bottom-offset);
     display: flex;
     align-items: flex-end;
     justify-content: center;
     z-index: 12;
-    min-height: var(--mobile-bottom-nav-h);
-    height: var(--mobile-bottom-nav-h);
+    min-height: var(--mobile-bottom-nav-row-h);
+    height: var(--mobile-bottom-nav-row-h);
     box-sizing: border-box;
     background: transparent;
     border-top: 0;
-    padding: 7px 12px max(8px, min(22px, calc(var(--mobile-bottom-nav-fill) * 0.45)));
+    padding: 6px 12px max(6px, min(8px, var(--app-bottom-live-pad, 8px)));
     margin-top: 0;
+    pointer-events: none;
     box-shadow: none;
   }
 
@@ -401,6 +404,7 @@
     box-shadow:
       0 16px 34px rgba(0, 0, 0, 0.38),
       0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    pointer-events: auto;
     overflow: hidden;
   }
 
@@ -508,7 +512,8 @@
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar-mobile-bottom {
     margin-bottom: 0;
-    padding-bottom: max(8px, min(22px, calc(var(--mobile-bottom-nav-fill) * 0.45)));
+    bottom: var(--mobile-bottom-nav-bottom-offset);
+    padding-bottom: max(6px, min(8px, var(--app-bottom-live-pad, 8px)));
   }
 
   body[data-viewport-diagnostic="1"] .sidebar-body::after {

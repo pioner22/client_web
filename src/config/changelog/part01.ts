@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
+    version: "0.1.859",
+    date: "2026-06-05",
+    improved: [
+      "Mobile/iOS: W-0955 отделяет видимое положение нижнего dock от физического bottom fill, чтобы floating capsule оставалась целиком внутри видимой области телефона.",
+      "Contact-list bottom navigation держит отдельную высоту visual row и не растягивает прозрачный контейнер до physical gap.",
+    ],
+    fixed: [
+      "Нижнее меню больше не должно срезаться снизу и собираться в кучу на iPhone/PWA: scroll reserve сохранён через `--mobile-bottom-nav-h`, а сам dock поднят через `--mobile-bottom-nav-bottom-offset`.",
+      "Auth `Web` version marker, selected-message context menu, accepted photo viewer chrome и composer/keyboard state сохранены regression guards.",
+    ],
+  },
+  {
     version: "0.1.858",
     date: "2026-06-04",
     improved: [
