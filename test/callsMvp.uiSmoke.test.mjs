@@ -85,10 +85,31 @@ test("calls: modal exposes speaker route control with iPhone fallback", async ()
   const modalSrc = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
   const css = await readCssWithImports("src/scss/modal.css");
   assert.match(modalSrc, /data-icon": "speaker"/);
+  assert.match(modalSrc, /aria-pressed": "false"/);
   assert.match(modalSrc, /setAudioOutputDevice/);
+  assert.match(modalSrc, /Переключаем на динамик/);
   assert.match(modalSrc, /На iPhone аудиовывод переключается системно/);
   assert.match(css, /\.call-ctl\[data-icon="speaker"\]::before/);
   assert.match(css, /\.call-ctl-route-unsupported/);
+});
+
+test("calls: control buttons expose active, busy and tap feedback states", async () => {
+  const modalSrc = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
+  const css = await readCssWithImports("src/scss/modal.css");
+  assert.match(modalSrc, /call-control-status/);
+  assert.match(modalSrc, /setControlStatus/);
+  assert.match(modalSrc, /pulseControl/);
+  assert.match(modalSrc, /call-ctl-pending/);
+  assert.match(modalSrc, /Микрофон выключен/);
+  assert.match(modalSrc, /Камера включена/);
+  assert.match(modalSrc, /Принимаем вызов/);
+  assert.match(css, /\.call-control-status/);
+  assert.match(css, /\.call-control-buttons/);
+  assert.match(css, /\.call-ctl-on::after/);
+  assert.match(css, /\.call-ctl-off::after/);
+  assert.match(css, /\.call-ctl-success/);
+  assert.match(css, /\.call-ctl-error/);
+  assert.match(css, /@keyframes call-control-spin/);
 });
 
 test("calls: jitsi external API uses configured meet host", async () => {

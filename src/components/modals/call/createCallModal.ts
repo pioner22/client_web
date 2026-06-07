@@ -90,6 +90,8 @@ function formatDuration(ms: number): string {
 }
 
 const CALL_IFRAME_ALLOW = "camera *; microphone *; fullscreen; display-capture *; autoplay *; speaker-selection *";
+const CONTROL_FEEDBACK_MS = 520;
+const CONTROL_STATUS_MS = 2600;
 
 export function createCallModal(actions: CallModalActions): CallModalController {
   const titleEl = el("div", { class: "call-peer-title" }, ["Звонок"]);
@@ -157,14 +159,16 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   const jitsiHost = el("div", { class: "call-jitsi" }, []);
   const iframeHost = el("div", { class: "call-iframe-shell" }, []);
 
-  const micBtn = el("button", { class: "call-ctl call-ctl-action", type: "button", disabled: "true", title: "Микрофон", "aria-label": "Микрофон", "data-icon": "mic" }, []) as HTMLButtonElement;
-  const camBtn = el("button", { class: "call-ctl call-ctl-action", type: "button", disabled: "true", title: "Камера", "aria-label": "Камера", "data-icon": "cam" }, []) as HTMLButtonElement;
-  const speakerBtn = el("button", { class: "call-ctl call-ctl-action", type: "button", disabled: "true", title: "Динамик", "aria-label": "Динамик", "data-icon": "speaker" }, []) as HTMLButtonElement;
+  const micBtn = el("button", { class: "call-ctl call-ctl-action", type: "button", disabled: "true", title: "Микрофон", "aria-label": "Микрофон", "aria-pressed": "false", "data-icon": "mic" }, []) as HTMLButtonElement;
+  const camBtn = el("button", { class: "call-ctl call-ctl-action", type: "button", disabled: "true", title: "Камера", "aria-label": "Камера", "aria-pressed": "false", "data-icon": "cam" }, []) as HTMLButtonElement;
+  const speakerBtn = el("button", { class: "call-ctl call-ctl-action", type: "button", disabled: "true", title: "Динамик", "aria-label": "Динамик", "aria-pressed": "false", "data-icon": "speaker" }, []) as HTMLButtonElement;
   const hangupBtn = el("button", { class: "call-ctl call-ctl-end", type: "button", title: "Завершить", "aria-label": "Завершить", "data-icon": "hangup" }, []) as HTMLButtonElement;
   const acceptBtn = el("button", { class: "call-ctl call-ctl-accept", type: "button", title: "Принять", "aria-label": "Принять", "data-icon": "accept" }, []) as HTMLButtonElement;
   const declineBtn = el("button", { class: "call-ctl call-ctl-decline", type: "button", title: "Отклонить", "aria-label": "Отклонить", "data-icon": "hangup" }, []) as HTMLButtonElement;
 
-  const controls = el("div", { class: "call-controls" }, [micBtn, camBtn, speakerBtn, hangupBtn, acceptBtn, declineBtn]);
+  const controlStatusEl = el("div", { class: "call-control-status hidden", role: "status", "aria-live": "polite" }, [""]);
+  const controlButtons = el("div", { class: "call-control-buttons" }, [micBtn, camBtn, speakerBtn, hangupBtn, acceptBtn, declineBtn]);
+  const controls = el("div", { class: "call-controls" }, [controlStatusEl, controlButtons]);
 
   const stage = el("div", { class: "call-stage" }, [top, surface, controls]);
   const root = el("div", { class: "modal modal-call" }, [stage]);
@@ -189,6 +193,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   let lastCallId = "";
   let lastPermissionKind: "camera" | "microphone" = "microphone";
   let ensureAfterAttachToken = 0;
+  let controlStatusTimer: number | null = null;
 
   function stopTimer() {
     if (activeTimer === null) return;
@@ -268,9 +273,10 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     camBtn.disabled = true;
     speakerBtn.disabled = true;
     speakerRouteEnabled = false;
-    micBtn.classList.remove("call-ctl-off", "call-ctl-on");
-    camBtn.classList.remove("call-ctl-off", "call-ctl-on");
-    speakerBtn.classList.remove("call-ctl-off", "call-ctl-on", "call-ctl-route-unsupported");
+    resetControlButtonState(micBtn);
+    resetControlButtonState(camBtn);
+    resetControlButtonState(speakerBtn);
+    setControlStatus("", "neutral", 0);
     if (!jitsiApi) {
       jitsiKey = "";
       return;
@@ -286,6 +292,67 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
   function updateLiveStatus(status: string) {
     liveStatusEl.textContent = status;
+  }
+
+  function clearControlStatusTimer() {
+    if (controlStatusTimer === null) return;
+    try {
+      window.clearTimeout(controlStatusTimer);
+    } catch {
+      // ignore
+    }
+    controlStatusTimer = null;
+  }
+
+  function setControlStatus(status: string, tone: "neutral" | "success" | "warning" | "danger" = "neutral", ttl = CONTROL_STATUS_MS) {
+    clearControlStatusTimer();
+    const clean = String(status || "").trim();
+    controlStatusEl.textContent = clean;
+    controlStatusEl.dataset.tone = tone;
+    controlStatusEl.classList.toggle("hidden", !clean);
+    if (!clean || ttl <= 0) return;
+    controlStatusTimer = window.setTimeout(() => {
+      controlStatusEl.textContent = "";
+      controlStatusEl.classList.add("hidden");
+      controlStatusTimer = null;
+    }, ttl);
+  }
+
+  function pulseControl(btn: HTMLButtonElement, className = "call-ctl-feedback") {
+    btn.classList.remove("call-ctl-feedback", "call-ctl-success", "call-ctl-error");
+    // Restart the short mobile-visible feedback animation even on repeated taps.
+    void btn.offsetWidth;
+    btn.classList.add(className);
+    window.setTimeout(() => {
+      btn.classList.remove(className);
+    }, CONTROL_FEEDBACK_MS);
+  }
+
+  function setControlBusy(btn: HTMLButtonElement, busy: boolean) {
+    btn.classList.toggle("call-ctl-pending", busy);
+    if (busy) btn.setAttribute("aria-busy", "true");
+    else btn.removeAttribute("aria-busy");
+  }
+
+  function releaseControlBusySoon(btn: HTMLButtonElement, delay = 1100) {
+    window.setTimeout(() => {
+      setControlBusy(btn, false);
+    }, delay);
+  }
+
+  function resetControlButtonState(btn: HTMLButtonElement) {
+    btn.classList.remove(
+      "call-ctl-off",
+      "call-ctl-on",
+      "call-ctl-route-unsupported",
+      "call-ctl-feedback",
+      "call-ctl-success",
+      "call-ctl-error",
+      "call-ctl-pending",
+    );
+    btn.removeAttribute("aria-busy");
+    if (btn.hasAttribute("aria-pressed")) btn.setAttribute("aria-pressed", "false");
+    delete btn.dataset.state;
   }
 
   function attachLiveBackdrop(host: HTMLElement) {
@@ -364,12 +431,31 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   function setMutedUi(btn: HTMLButtonElement, muted: boolean | null) {
     btn.classList.toggle("call-ctl-off", muted === true);
     btn.classList.toggle("call-ctl-on", muted === false);
+    btn.dataset.state = muted === true ? "off" : muted === false ? "on" : "idle";
+    btn.setAttribute("aria-pressed", String(muted === false));
+    const isMic = btn.dataset.icon === "mic";
+    const label =
+      muted === true
+        ? isMic
+          ? "Микрофон выключен"
+          : "Камера выключена"
+        : muted === false
+          ? isMic
+            ? "Микрофон включен"
+            : "Камера включена"
+          : isMic
+            ? "Микрофон"
+            : "Камера";
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
   }
 
   function setSpeakerUi(enabled: boolean, supported = true) {
     speakerBtn.classList.toggle("call-ctl-on", enabled);
     speakerBtn.classList.toggle("call-ctl-off", !enabled);
     speakerBtn.classList.toggle("call-ctl-route-unsupported", !supported);
+    speakerBtn.dataset.state = supported ? (enabled ? "on" : "off") : "unsupported";
+    speakerBtn.setAttribute("aria-pressed", String(enabled && supported));
     const label = !supported
       ? "Аудиовывод управляется системой iPhone"
       : enabled
@@ -410,16 +496,26 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   }
 
   async function toggleSpeakerRoute() {
+    pulseControl(speakerBtn);
+    setControlBusy(speakerBtn, true);
     const next = !speakerRouteEnabled;
-    speakerRouteEnabled = next;
     setSpeakerUi(next, true);
+    setControlStatus(next ? "Переключаем на динамик…" : "Возвращаем обычный аудиовывод…", "neutral", 0);
     const ok = await applyAudioOutputRoute(next);
+    setControlBusy(speakerBtn, false);
     if (ok) {
+      speakerRouteEnabled = next;
+      setSpeakerUi(next, true);
+      pulseControl(speakerBtn, "call-ctl-success");
       updateLiveStatus(next ? "Динамик включен" : "Обычный аудиовывод");
+      setControlStatus(next ? "Динамик включен" : "Обычный аудиовывод", "success");
       return;
     }
-    setSpeakerUi(next, false);
+    speakerRouteEnabled = false;
+    setSpeakerUi(false, false);
+    pulseControl(speakerBtn, "call-ctl-error");
     updateLiveStatus("На iPhone аудиовывод переключается системно");
+    setControlStatus("На iPhone аудиовывод переключается системно", "warning");
   }
 
   async function ensureJitsi(roomName: string, mode: "audio" | "video", joinUrl: string, title: string, displayName: string) {
@@ -525,8 +621,12 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     }
 
     micBtn.disabled = false;
-    camBtn.disabled = false;
+    camBtn.disabled = mode !== "video";
     speakerBtn.disabled = false;
+    if (audioMuted === null) audioMuted = false;
+    if (videoMuted === null) videoMuted = mode === "video" ? false : true;
+    setMutedUi(micBtn, audioMuted);
+    setMutedUi(camBtn, videoMuted);
     setSpeakerUi(speakerRouteEnabled, true);
     disposeQualityWatch = watchJitsiQuality(jitsiApi, applyQualitySnapshot);
 
@@ -538,10 +638,16 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       jitsiApi.addEventListener?.("audioMuteStatusChanged", (e: any) => {
         audioMuted = Boolean(e?.muted);
         setMutedUi(micBtn, audioMuted);
+        setControlBusy(micBtn, false);
+        pulseControl(micBtn, "call-ctl-success");
+        setControlStatus(audioMuted ? "Микрофон выключен" : "Микрофон включен", audioMuted ? "warning" : "success");
       });
       jitsiApi.addEventListener?.("videoMuteStatusChanged", (e: any) => {
         videoMuted = Boolean(e?.muted);
         setMutedUi(camBtn, videoMuted);
+        setControlBusy(camBtn, false);
+        pulseControl(camBtn, "call-ctl-success");
+        setControlStatus(videoMuted ? "Камера выключена" : "Камера включена", videoMuted ? "warning" : "success");
       });
       jitsiApi.addEventListener?.("readyToClose", () => {
         actions.onHangup();
@@ -555,25 +661,30 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     scheduleJitsiReadyWatchdog(token, key, 5200);
   }
 
-  function updateControls(phase: string, incoming: boolean, callId: string) {
+  function updateControls(phase: string, incoming: boolean, callId: string, mode: "audio" | "video") {
     const isIncomingRinging = phase === "ringing" && incoming;
     const isPermission = phase === "permission";
     acceptBtn.classList.toggle("hidden", !isIncomingRinging);
     declineBtn.classList.toggle("hidden", !isIncomingRinging);
     micBtn.classList.toggle("hidden", isIncomingRinging || isPermission);
-    camBtn.classList.toggle("hidden", isIncomingRinging || isPermission);
+    camBtn.classList.toggle("hidden", isIncomingRinging || isPermission || mode === "audio");
     speakerBtn.classList.toggle("hidden", isIncomingRinging || isPermission);
     hangupBtn.classList.toggle("hidden", isIncomingRinging);
 
     acceptBtn.disabled = !callId;
     declineBtn.disabled = !callId;
     speakerBtn.disabled = phase !== "active";
+    if (mode === "audio") {
+      camBtn.disabled = true;
+      setMutedUi(camBtn, true);
+    }
     hangupBtn.title = phase === "active" ? "Завершить" : incoming ? "Отклонить" : "Отменить";
     hangupBtn.setAttribute("aria-label", hangupBtn.title);
   }
 
   function destroy() {
     stopTimer();
+    clearControlStatusTimer();
     disposeJitsi();
     jitsiDisabledKey = null;
     activeSinceMs = null;
@@ -591,6 +702,8 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   }
 
   hangupBtn.addEventListener("click", () => {
+    pulseControl(hangupBtn);
+    setControlStatus(lastPhase === "active" ? "Завершаем звонок…" : "Отменяем вызов…", "danger", 1400);
     try {
       jitsiApi?.executeCommand?.("hangup");
     } catch {
@@ -599,17 +712,45 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     actions.onHangup();
   });
   micBtn.addEventListener("click", () => {
+    if (!jitsiApi) {
+      pulseControl(micBtn, "call-ctl-error");
+      setControlStatus("Микрофон пока недоступен для управления", "warning");
+      return;
+    }
+    const nextMuted = audioMuted === null ? true : !audioMuted;
+    audioMuted = nextMuted;
+    setMutedUi(micBtn, audioMuted);
+    setControlBusy(micBtn, true);
+    pulseControl(micBtn);
+    setControlStatus(audioMuted ? "Выключаем микрофон…" : "Включаем микрофон…", audioMuted ? "warning" : "success", 0);
     try {
       jitsiApi?.executeCommand?.("toggleAudio");
+      releaseControlBusySoon(micBtn);
     } catch {
-      // ignore
+      setControlBusy(micBtn, false);
+      pulseControl(micBtn, "call-ctl-error");
+      setControlStatus("Микрофон не переключился", "danger");
     }
   });
   camBtn.addEventListener("click", () => {
+    if (!jitsiApi) {
+      pulseControl(camBtn, "call-ctl-error");
+      setControlStatus("Камера пока недоступна для управления", "warning");
+      return;
+    }
+    const nextMuted = videoMuted === null ? true : !videoMuted;
+    videoMuted = nextMuted;
+    setMutedUi(camBtn, videoMuted);
+    setControlBusy(camBtn, true);
+    pulseControl(camBtn);
+    setControlStatus(videoMuted ? "Выключаем камеру…" : "Включаем камеру…", videoMuted ? "warning" : "success", 0);
     try {
       jitsiApi?.executeCommand?.("toggleVideo");
+      releaseControlBusySoon(camBtn);
     } catch {
-      // ignore
+      setControlBusy(camBtn, false);
+      pulseControl(camBtn, "call-ctl-error");
+      setControlStatus("Камера не переключилась", "danger");
     }
   });
   speakerBtn.addEventListener("click", () => {
@@ -618,11 +759,15 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   declineBtn.addEventListener("click", () => {
     const cid = String(lastCallId || "").trim();
     if (!cid) return;
+    pulseControl(declineBtn);
+    setControlStatus("Отклоняем вызов…", "danger", 1400);
     actions.onDecline(cid);
   });
   acceptBtn.addEventListener("click", () => {
     const cid = String(lastCallId || "").trim();
     if (!cid) return;
+    pulseControl(acceptBtn);
+    setControlStatus("Принимаем вызов…", "success", 1400);
     actions.onAccept(cid);
   });
   openExternalBtn.addEventListener("click", () => {
@@ -754,7 +899,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     lastPhase = phase;
     lastIncoming = incoming;
 
-    updateControls(phase, incoming, callId);
+    updateControls(phase, incoming, callId, mode);
     qualityEl.classList.toggle("hidden", phase !== "active");
 
     if (phase === "permission") {
