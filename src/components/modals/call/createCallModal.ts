@@ -111,6 +111,19 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   const heroTitleEl = el("div", { class: "call-hero-title" }, ["Звонок"]);
   const heroSubEl = el("div", { class: "call-hero-sub" }, [""]);
   const hero = el("div", { class: "call-hero" }, [avatarEl, heroTitleEl, heroSubEl]);
+  const liveAvatarEl = el("div", { class: "call-live-avatar", "aria-hidden": "true" }, [""]);
+  const liveTitleEl = el("div", { class: "call-live-title" }, ["Звонок"]);
+  const liveSubEl = el("div", { class: "call-live-sub" }, [""]);
+  const liveStatusEl = el("div", { class: "call-live-status" }, ["Подключаемся…"]);
+  const liveBackdrop = el("div", { class: "call-live-backdrop", "aria-hidden": "true" }, [
+    el("div", { class: "call-live-card" }, [
+      liveAvatarEl,
+      liveTitleEl,
+      liveSubEl,
+      el("div", { class: "call-live-progress", "aria-hidden": "true" }, [""]),
+      liveStatusEl,
+    ]),
+  ]);
 
   const permissionMicEl = el("div", { class: "call-device call-device-mic", "data-state": "requesting" }, [
     el("span", { class: "call-device-icon", "aria-hidden": "true" }, [""]),
@@ -139,6 +152,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
   const surface = el("div", { class: "call-surface" }, [hero]);
   const jitsiHost = el("div", { class: "call-jitsi" }, []);
+  const iframeHost = el("div", { class: "call-iframe-shell" }, []);
 
   const micBtn = el("button", { class: "call-ctl call-ctl-action", type: "button", disabled: "true", title: "Микрофон", "aria-label": "Микрофон", "data-icon": "mic" }, []) as HTMLButtonElement;
   const camBtn = el("button", { class: "call-ctl call-ctl-action", type: "button", disabled: "true", title: "Камера", "aria-label": "Камера", "data-icon": "cam" }, []) as HTMLButtonElement;
@@ -158,6 +172,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   let jitsiKey: string = "";
   let jitsiInitToken = 0;
   let jitsiFallbackTimer: number | null = null;
+  let fallbackIframeReady = false;
   let disposeQualityWatch: (() => void) | null = null;
   let audioMuted: boolean | null = null;
   let videoMuted: boolean | null = null;
@@ -188,6 +203,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       const base = String(subEl.dataset.baseLabel || "").trim();
       subEl.textContent = base ? `${base} · ${dur}` : dur;
       heroSubEl.textContent = subEl.textContent || "";
+      liveSubEl.textContent = subEl.textContent || "";
     }, 1000);
   }
 
@@ -220,6 +236,8 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     resetQualitySnapshot();
     audioMuted = null;
     videoMuted = null;
+    jitsiHost.classList.remove("call-jitsi-ready", "call-jitsi-failed");
+    iframeHost.classList.remove("call-iframe-ready", "call-iframe-failed");
     micBtn.disabled = true;
     camBtn.disabled = true;
     micBtn.classList.remove("call-ctl-off", "call-ctl-on");
@@ -237,6 +255,40 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     jitsiKey = "";
   }
 
+  function updateLiveStatus(status: string) {
+    liveStatusEl.textContent = status;
+  }
+
+  function attachLiveBackdrop(host: HTMLElement) {
+    if (host.firstElementChild !== liveBackdrop) host.prepend(liveBackdrop);
+  }
+
+  function showJitsiHost(status: string) {
+    updateLiveStatus(status);
+    attachLiveBackdrop(jitsiHost);
+    jitsiHost.classList.remove("call-jitsi-ready", "call-jitsi-failed");
+    if (surface.firstElementChild !== jitsiHost) surface.replaceChildren(jitsiHost);
+  }
+
+  function showIframeHost(status: string) {
+    updateLiveStatus(status);
+    attachLiveBackdrop(iframeHost);
+    iframeHost.classList.remove("call-iframe-ready", "call-iframe-failed");
+    if (surface.firstElementChild !== iframeHost) surface.replaceChildren(iframeHost);
+  }
+
+  function markMeetingReady() {
+    jitsiHost.classList.add("call-jitsi-ready");
+    iframeHost.classList.add("call-iframe-ready");
+    updateLiveStatus("Соединение установлено");
+  }
+
+  function markMeetingFailed(status: string) {
+    updateLiveStatus(status);
+    jitsiHost.classList.add("call-jitsi-failed");
+    iframeHost.classList.add("call-iframe-failed");
+  }
+
   function ensureIframe(joinUrl: string, title: string) {
     disposeJitsi();
     if (!iframe) {
@@ -247,9 +299,24 @@ export function createCallModal(actions: CallModalActions): CallModalController 
         allowfullscreen: "true",
         title,
       }) as HTMLIFrameElement;
+      iframe.addEventListener("load", () => {
+        window.setTimeout(() => {
+          fallbackIframeReady = true;
+          iframeHost.classList.add("call-iframe-ready");
+          updateLiveStatus("Открыт резервный видеомост");
+        }, 420);
+      });
+      iframe.addEventListener("error", () => {
+        markMeetingFailed("Видеомост не загрузился");
+      });
     }
-    if (iframe.src !== joinUrl) iframe.src = joinUrl;
-    if (!surface.contains(iframe)) surface.replaceChildren(iframe);
+    if (iframe.src !== joinUrl) {
+      fallbackIframeReady = false;
+      iframe.src = joinUrl;
+    }
+    showIframeHost("Открываем резервный видеомост…");
+    if (!iframeHost.contains(iframe)) iframeHost.append(iframe);
+    if (fallbackIframeReady) iframeHost.classList.add("call-iframe-ready");
   }
 
   function showHero() {
@@ -306,7 +373,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     }
 
     try {
-      if (surface.firstElementChild !== jitsiHost) surface.replaceChildren(jitsiHost);
+      showJitsiHost(mode === "video" ? "Подключаем видео…" : "Подключаем аудио…");
       const configOverwrite = buildJitsiMediaPolicy(mode);
       const interfaceConfigOverwrite: Record<string, unknown> = {
         TOOLBAR_BUTTONS: [],
@@ -324,6 +391,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     } catch {
       jitsiApi = null;
       jitsiDisabledKey = key;
+      markMeetingFailed("Видеомост не загрузился");
       ensureIframe(joinUrl, title);
       return;
     } finally {
@@ -336,6 +404,9 @@ export function createCallModal(actions: CallModalActions): CallModalController 
         apiIframe.allow = CALL_IFRAME_ALLOW;
         apiIframe.setAttribute("allowfullscreen", "true");
         apiIframe.setAttribute("referrerpolicy", "no-referrer");
+        apiIframe.addEventListener("load", () => {
+          updateLiveStatus("Почти готово…");
+        });
       }
     } catch {
       // ignore
@@ -346,6 +417,9 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     disposeQualityWatch = watchJitsiQuality(jitsiApi, applyQualitySnapshot);
 
     try {
+      jitsiApi.addEventListener?.("videoConferenceJoined", () => {
+        markMeetingReady();
+      });
       jitsiApi.addEventListener?.("audioMuteStatusChanged", (e: any) => {
         audioMuted = Boolean(e?.muted);
         setMutedUi(micBtn, audioMuted);
@@ -356,6 +430,9 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       });
       jitsiApi.addEventListener?.("readyToClose", () => {
         actions.onHangup();
+      });
+      jitsiApi.addEventListener?.("errorOccurred", () => {
+        markMeetingFailed("Проблема подключения");
       });
     } catch {
       // ignore
@@ -386,6 +463,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     lastPhase = "";
     lastIncoming = false;
     lastCallId = "";
+    fallbackIframeReady = false;
     iframe = null;
     try {
       root.replaceChildren();
@@ -457,10 +535,25 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     const callId = normalizeId(modal.callId);
     lastCallId = callId;
     lastJoinUrl = joinUrl;
+    root.dataset.callPhase = phase;
+    root.dataset.callMode = mode;
+    root.dataset.callIncoming = incoming ? "1" : "0";
 
     const peerLabel = resolvePeerLabel(state, modal);
     const phaseLabel = formatPhaseLabel(modal);
     const modeLabel = mode === "audio" ? "аудио" : "видео";
+    const liveStatus =
+      phase === "active"
+        ? mode === "video"
+          ? "Подключаем видео…"
+          : "Подключаем аудио…"
+        : phase === "ringing"
+          ? incoming
+            ? "Входящий вызов"
+            : "Ждём ответа…"
+          : phase === "creating"
+            ? "Создаём звонок…"
+            : "Проверяем доступ…";
 
     titleEl.textContent = peerLabel || "Звонок";
     const baseSub = `${modeLabel} · ${phaseLabel}`;
@@ -468,6 +561,9 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     subEl.textContent = baseSub;
     heroTitleEl.textContent = peerLabel || "Звонок";
     heroSubEl.textContent = baseSub;
+    liveTitleEl.textContent = peerLabel || "Звонок";
+    liveSubEl.textContent = baseSub;
+    updateLiveStatus(liveStatus);
 
     const av = resolvePeerAvatar(state, modal);
     if (av) {
@@ -479,15 +575,23 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     }
     const avatarId = avatarKindId.id;
     const avatarUrl = avatarId ? getStoredAvatar(avatarKindId.kind, avatarId) : null;
-    avatarEl.style.setProperty("--avatar-h", String(avatarHue(`${avatarKindId.kind}:${avatarId || peerLabel}`)));
+    const avatarH = String(avatarHue(`${avatarKindId.kind}:${avatarId || peerLabel}`));
+    avatarEl.style.setProperty("--avatar-h", avatarH);
+    liveAvatarEl.style.setProperty("--avatar-h", avatarH);
     if (avatarUrl) {
       avatarEl.textContent = "";
       avatarEl.style.backgroundImage = `url(${avatarUrl})`;
       avatarEl.classList.add("call-avatar-img");
+      liveAvatarEl.textContent = "";
+      liveAvatarEl.style.backgroundImage = `url(${avatarUrl})`;
+      liveAvatarEl.classList.add("call-live-avatar-img");
     } else {
       avatarEl.style.backgroundImage = "";
       avatarEl.classList.remove("call-avatar-img");
       avatarEl.textContent = av ? avatarMonogram(avatarKindId.kind, avatarId) : "—";
+      liveAvatarEl.style.backgroundImage = "";
+      liveAvatarEl.classList.remove("call-live-avatar-img");
+      liveAvatarEl.textContent = av ? avatarMonogram(avatarKindId.kind, avatarId) : "—";
     }
 
     // Open/copy availability.

@@ -22,6 +22,8 @@ test("calls: CSS contains modal-call layout", async () => {
   assert.match(css, /\.call-frame/);
   assert.match(css, /\.call-permission/);
   assert.match(css, /\.call-device/);
+  assert.match(css, /\.call-live-backdrop/);
+  assert.match(css, /\.call-jitsi-ready iframe/);
 });
 
 test("calls: outgoing ringing shows Jitsi surface without waiting active", async () => {
@@ -95,4 +97,16 @@ test("calls: modal wires Jitsi media policy", async () => {
   assert.match(policySrc, /maxBitratesVideo/);
   assert.match(policySrc, /enableLayerSuspension/);
   assert.match(policySrc, /saveData/);
+});
+
+test("calls: modal keeps a dark live backdrop until Jitsi is ready", async () => {
+  const modalSrc = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
+  const css = await readCssWithImports("src/scss/modal.css");
+  assert.match(modalSrc, /call-live-backdrop/);
+  assert.match(modalSrc, /videoConferenceJoined/);
+  assert.match(modalSrc, /markMeetingReady/);
+  assert.match(modalSrc, /call-jitsi-ready/);
+  assert.match(css, /\.call-jitsi iframe,\n\.call-iframe-shell iframe/);
+  assert.match(css, /opacity:\s*0;\n\s*pointer-events:\s*none;/);
+  assert.match(css, /\.call-jitsi-ready \.call-live-backdrop/);
 });

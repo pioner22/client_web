@@ -336,9 +336,10 @@ input.modal-input[type="file"]::file-selector-button:active {
   flex-direction: column;
   isolation: isolate;
   background:
-    radial-gradient(900px 600px at 70% 20%, rgba(255, 255, 255, 0.08), transparent 60%),
-    radial-gradient(1000px 700px at 10% 100%, rgba(255, 255, 255, 0.05), transparent 60%),
-    linear-gradient(180deg, rgba(10, 10, 14, 1), rgba(0, 0, 0, 1));
+    linear-gradient(145deg, rgba(39, 27, 46, 0.94), rgba(8, 13, 17, 0.96) 46%, rgba(2, 5, 7, 1)),
+    #05080b;
+  color: #fff;
+  overflow: hidden;
 }
 
 .call-topbar {
@@ -402,9 +403,67 @@ input.modal-input[type="file"]::file-selector-button:active {
 }
 
 @media (max-width: 480px) {
+  .modal.modal-call,
+  .overlay.overlay-viewer .modal.modal-call {
+    min-height: 100%;
+  }
+
+  .call-topbar {
+    gap: 10px;
+    padding: 12px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    background: linear-gradient(180deg, rgba(5, 7, 10, 0.86), rgba(5, 7, 10, 0));
+  }
+
+  .call-peer-title {
+    font-size: 17px;
+  }
+
+  .call-peer-sub {
+    font-size: 13px;
+  }
+
+  .call-top-actions {
+    gap: 8px;
+  }
+
+  .call-top-btn {
+    width: 42px;
+    height: 42px;
+  }
+
   .call-quality {
     max-width: 112px;
     padding-inline: 8px;
+  }
+
+  .call-live-backdrop {
+    padding: 108px 18px calc(132px + env(safe-area-inset-bottom));
+  }
+
+  .call-live-card {
+    width: min(100%, 350px);
+    gap: 10px;
+    padding: 20px 18px;
+    border-radius: 26px;
+  }
+
+  .call-live-avatar {
+    width: 98px;
+    height: 98px;
+    font-size: 30px;
+  }
+
+  .call-live-title {
+    font-size: 24px;
+  }
+
+  .call-live-status {
+    min-height: 32px;
+    white-space: normal;
+    line-height: 1.15;
   }
 }
 
@@ -474,26 +533,194 @@ input.modal-input[type="file"]::file-selector-button:active {
   justify-content: stretch;
   position: relative;
   z-index: 1;
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(86, 45, 76, 0.64), rgba(8, 14, 17, 0.92) 44%, rgba(1, 3, 5, 0.98)),
+    #05080b;
 }
 
-.call-jitsi {
+.call-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 30%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.032) 0 1px, transparent 1px 86px);
+  opacity: 0.4;
+}
+
+.call-jitsi,
+.call-iframe-shell {
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(65, 39, 67, 0.72), rgba(9, 13, 17, 0.94) 48%, rgba(1, 2, 4, 1)),
+    #05080b;
 }
 
-.call-jitsi iframe {
+.call-jitsi iframe,
+.call-iframe-shell iframe {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   border: 0;
-  background: #000;
+  background: #05080b;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.call-jitsi-ready iframe,
+.call-iframe-ready iframe {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.call-jitsi-ready .call-live-backdrop,
+.call-iframe-ready .call-live-backdrop {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.call-jitsi-failed .call-live-backdrop,
+.call-iframe-failed .call-live-backdrop {
+  opacity: 1;
+  visibility: visible;
 }
 
 .call-frame {
   width: 100%;
   height: 100%;
   border: 0;
-  background: #000;
+  background: #05080b;
+}
+
+.call-live-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 104px 22px calc(128px + env(safe-area-inset-bottom));
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(8, 11, 15, 0.72), rgba(8, 11, 15, 0.2) 42%, rgba(8, 11, 15, 0.86)),
+    linear-gradient(145deg, rgba(92, 49, 88, 0.42), rgba(8, 15, 18, 0.82) 54%, rgba(2, 4, 6, 0.96));
+  transition:
+    opacity 200ms ease,
+    visibility 200ms ease;
+}
+
+.call-live-card {
+  width: min(100%, 420px);
+  display: grid;
+  justify-items: center;
+  gap: 11px;
+  padding: 22px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.052)),
+    rgba(8, 10, 14, 0.58);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.36),
+    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+}
+
+.call-live-avatar {
+  width: 108px;
+  height: 108px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 3px;
+  font-size: 34px;
+  font-weight: 900;
+  color: #fff;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 46%),
+    hsl(var(--avatar-h, 190) 64% 42%);
+  box-shadow:
+    0 20px 58px rgba(0, 0, 0, 0.44),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+
+.call-live-avatar-img {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.call-live-title {
+  max-width: 100%;
+  font-size: 26px;
+  font-weight: 880;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.call-live-sub {
+  max-width: 100%;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 14px;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.call-live-status {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.call-live-progress {
+  width: min(170px, 56vw);
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.call-live-progress::before {
+  content: "";
+  display: block;
+  width: 48%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.92));
+  animation: call-live-progress 1.3s ease-in-out infinite;
+}
+
+@keyframes call-live-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(230%);
+  }
 }
 
 .call-hero {
@@ -506,6 +733,8 @@ input.modal-input[type="file"]::file-selector-button:active {
   padding-bottom: calc(28px + 96px + env(safe-area-inset-bottom));
   text-align: center;
   color: #fff;
+  position: relative;
+  z-index: 1;
 }
 
 .call-avatar {
@@ -537,6 +766,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   font-size: 22px;
   font-weight: 860;
   line-height: 1.12;
+  overflow-wrap: anywhere;
 }
 
 .call-hero-sub {
@@ -708,7 +938,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   padding-bottom: calc(18px + env(safe-area-inset-bottom));
   padding-left: calc(18px + env(safe-area-inset-left));
   padding-right: calc(18px + env(safe-area-inset-right));
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
+  background: linear-gradient(0deg, rgba(2, 4, 6, 0.86), rgba(2, 4, 6, 0.42) 48%, rgba(2, 4, 6, 0));
 }
 
 .call-ctl {
@@ -716,13 +946,18 @@ input.modal-input[type="file"]::file-selector-button:active {
   height: 58px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
   display: grid;
   place-items: center;
   cursor: pointer;
   padding: 0;
   font-size: 0;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.32),
+    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  -webkit-backdrop-filter: blur(14px) saturate(145%);
+  backdrop-filter: blur(14px) saturate(145%);
   transition:
     transform 80ms ease,
     background 160ms ease,
