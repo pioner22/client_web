@@ -197,6 +197,7 @@ export type ModalState =
         detail?: string;
         blockedKind?: "camera" | "microphone" | null;
         canOpenSettings?: boolean;
+        settingsLabel?: string;
       };
     }
   | {

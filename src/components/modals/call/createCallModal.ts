@@ -551,7 +551,8 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       permissionPrimaryBtn.textContent = status === "requesting" ? "Ждем разрешение…" : status === "idle" ? "Разрешить доступ" : "Проверить снова";
       const canOpenSettings = Boolean(permission?.canOpenSettings);
       permissionSettingsBtn.classList.toggle("hidden", !canOpenSettings);
-      permissionSettingsBtn.textContent = lastPermissionKind === "camera" ? "Настройки камеры" : "Настройки микрофона";
+      permissionSettingsBtn.textContent =
+        permission?.settingsLabel || (lastPermissionKind === "camera" ? "Настройки камеры" : "Настройки микрофона");
       showPermissionPanel();
       return;
     }

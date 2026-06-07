@@ -207,6 +207,120 @@ test("fileViewerFeature: explicit visual open accepts pending file offer before 
   }
 });
 
+test("fileViewerFeature: failed iOS inline stream recovery falls back to file_get", async () => {
+  const prevWindow = globalThis.window;
+  const prevNavigator = globalThis.navigator;
+  const helper = await loadFeature();
+  try {
+    const enqueued = [];
+    const pending = [];
+    let streamAttempts = 0;
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        location: { href: "https://yagodka.org/web/" },
+        matchMedia(query) {
+          return { matches: query === "(display-mode: standalone)" };
+        },
+        setTimeout() {
+          return 1;
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+        standalone: true,
+        maxTouchPoints: 5,
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "f-stream",
+              name: "photo.jpg",
+              size: 123,
+              mime: "image/jpeg",
+            },
+          },
+        ],
+      },
+      fileOffersIn: [],
+      fileTransfers: [],
+      fileThumbs: {},
+      modal: {
+        kind: "file_viewer",
+        fileId: "f-stream",
+        url: "/__yagodka_stream__/files/f-stream?sid=s1&inline=1",
+        name: "photo.jpg",
+        size: 123,
+        mime: "image/jpeg",
+        caption: null,
+        chatKey: "dm:222",
+        msgIdx: 0,
+        prevIdx: null,
+        nextIdx: null,
+        openedAtMs: Date.now(),
+      },
+      status: "",
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") Object.assign(storeState, patch);
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        return false;
+      },
+      enqueueFileGet(fileId) {
+        enqueued.push(String(fileId));
+      },
+      beginViewerStream() {
+        streamAttempts += 1;
+        return "/__yagodka_stream__/files/f-stream?sid=s2&inline=1";
+      },
+      setPendingFileViewer(state) {
+        pending.push(state);
+      },
+    });
+
+    await feature.recoverCurrent();
+
+    assert.equal(streamAttempts, 0);
+    assert.deepEqual(enqueued, ["f-stream"]);
+    assert.equal(pending[0]?.fileId, "f-stream");
+    assert.equal(storeState.status, "Скачивание: photo.jpg");
+  } finally {
+    if (prevWindow === undefined) delete globalThis.window;
+    else Object.defineProperty(globalThis, "window", { value: prevWindow, configurable: true, writable: true });
+    if (prevNavigator === undefined) delete globalThis.navigator;
+    else Object.defineProperty(globalThis, "navigator", { value: prevNavigator, configurable: true, writable: true });
+    await helper.cleanup();
+  }
+});
+
 test("fileViewerFeature: terminal visual not_found is not re-enqueued from chat open", async () => {
   const helper = await loadFeature();
   try {

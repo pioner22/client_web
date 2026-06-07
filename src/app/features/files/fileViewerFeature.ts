@@ -94,6 +94,17 @@ function isVisualMediaMessage(st: AppState, msg: ChatMessage | null | undefined)
   return isImageLikeFile(name, mime) || isVideoLikeFile(name, mime) || isPdfLikeFile(name, mime) || hasThumb;
 }
 
+function isInlineViewerStreamUrl(rawUrl: unknown): boolean {
+  const value = String(rawUrl || "").trim();
+  if (!value) return false;
+  try {
+    const url = new URL(value, typeof window !== "undefined" ? window.location.href : "https://yagodka.local/");
+    return url.pathname.startsWith("/__yagodka_stream__/files/") && url.searchParams.get("inline") === "1";
+  } catch {
+    return value.includes("/__yagodka_stream__/files/") && value.includes("inline=1");
+  }
+}
+
 export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewerFeature {
   const {
     store,
@@ -432,6 +443,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const name = String(modal.name || "файл");
     const size = Number(modal.size || 0) || 0;
     const mime = (modal.mime ?? null) || null;
+    const recoveringFromInlineStream = isInlineViewerStreamUrl(modal.url);
     const rawCaption = String(modal.caption || "").trim();
     const caption = rawCaption && !rawCaption.startsWith("[file]") ? rawCaption : null;
     const kindHint =
@@ -469,6 +481,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       return;
     }
     if (
+      !recoveringFromInlineStream &&
       shouldUseInlineViewerStream(fileId, name, mime, kindHint) &&
       openInlineViewerStream({
         fileId,

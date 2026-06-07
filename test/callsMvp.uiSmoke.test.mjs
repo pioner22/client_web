@@ -44,10 +44,12 @@ test("calls: media permission gate asks from the call modal", async () => {
   assert.match(src, /requestMediaAccess/);
   assert.match(src, /navigator\.mediaDevices\.getUserMedia\(buildCallMediaConstraints\(mode\)\)/);
   assert.match(src, /requestDesktopCapturePermissions/);
-  assert.match(src, /настройках сайта/);
-  assert.match(src, /iPhone\/Safari/);
+  assert.match(src, /разрешение закреплено за Safari\/Chrome/);
+  assert.match(src, /Инструкция iPhone/);
+  assert.match(src, /настройки сайта или браузера/);
   assert.match(src, /queryCapturePermissionState/);
   assert.match(modalSrc, /call-permission/);
+  assert.match(modalSrc, /settingsLabel/);
   assert.match(modalSrc, /onRequestMediaAccess/);
   assert.match(modalSrc, /onOpenMediaSettings/);
   assert.match(renderSrc, /onCallRequestMediaAccess/);

@@ -15,3 +15,12 @@ test("service worker runtime is disabled for Electron/native/file builds", () =>
   assert.ok(runtime.includes("navigator.serviceWorker.getRegistrations()"));
   assert.ok(register.includes("unregisterServiceWorkersForUnsupportedRuntime"));
 });
+
+test("service worker inline media streams stay inline in generated PWA output", () => {
+  const sw = fs.readFileSync(path.join(root, "public/sw.js"), "utf8");
+  const buildPwa = fs.readFileSync(path.join(root, "scripts/build_pwa.mjs"), "utf8");
+  for (const source of [sw, buildPwa]) {
+    assert.match(source, /searchParams\.get\("inline"\)/);
+    assert.match(source, /inline \? "inline" : "attachment"/);
+  }
+});

@@ -13,6 +13,7 @@ import {
   type MediaAccessKind,
 } from "../../../helpers/media/permissions";
 import { isMobileLikeUi } from "../../../helpers/ui/mobileLike";
+import { isIOS, isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
 import type { TabNotifierLike } from "../../../helpers/notify/tabNotifierLazy";
 
 export type ToastFn = (
@@ -149,7 +150,26 @@ function callMediaDeviceLabel(mode: CallMode): string {
 
 function browserPermissionDetail(mode: CallMode): string {
   const access = callMediaAccessLabel(mode);
-  return `iPhone/Safari показывает системный запрос только после нажатия в приложении. Если доступ уже был запрещен, включите ${access} в настройках сайта или приложения и нажмите «Проверить снова».`;
+  if (isIOS()) {
+    const surface = isStandaloneDisplayMode() ? "PWA на экране Домой" : "страница в браузере";
+    return `На iPhone Ягодка сейчас работает как ${surface}; разрешение закреплено за Safari/Chrome, а не за отдельной Ягодкой. Включите ${access} в настройках браузера и нажмите «Проверить снова».`;
+  }
+  return `Системный запрос появляется только после нажатия в приложении. Если доступ уже был запрещен, включите ${access} в настройках сайта или браузера и нажмите «Проверить снова».`;
+}
+
+function browserPermissionSettingsLabel(): string {
+  return isIOS() ? "Инструкция iPhone" : "Как включить доступ";
+}
+
+function browserPermissionCanShowSettingsHelp(): boolean {
+  return isIOS();
+}
+
+function browserPermissionRequestDetail(): string {
+  if (isIOS()) {
+    return "Если появилось системное окно iPhone, нажмите «Разрешить». Если окна нет, доступ уже выключен в настройках браузера.";
+  }
+  return "Если появилось системное окно, нажмите «Разрешить».";
 }
 
 function buildCallMediaConstraints(mode: CallMode): MediaStreamConstraints {
@@ -270,7 +290,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     return {
       status: "requesting",
       message: `Разрешите доступ к ${callMediaAccessLabel(mode)}`,
-      detail: "Если появилось системное окно iPhone/Safari, нажмите «Разрешить».",
+      detail: browserPermissionRequestDetail(),
       blockedKind: mode === "video" ? "camera" : "microphone",
       canOpenSettings: false,
     };
@@ -335,7 +355,8 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         message: `Доступ к ${callMediaAccessLabel(mode)} не выдан`,
         detail: browserPermissionDetail(mode),
         blockedKind,
-        canOpenSettings: false,
+        canOpenSettings: browserPermissionCanShowSettingsHelp(),
+        settingsLabel: browserPermissionSettingsLabel(),
       };
     }
     if (name === "notfounderror" || name === "devicesnotfounderror") {
@@ -361,7 +382,8 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       message: formatMediaAccessError(callMediaAccessKind(mode), errorRaw),
       detail: browserPermissionDetail(mode),
       blockedKind,
-      canOpenSettings: false,
+      canOpenSettings: browserPermissionCanShowSettingsHelp(),
+      settingsLabel: browserPermissionSettingsLabel(),
     };
   }
 
@@ -371,7 +393,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     if (issue.canOpenSettings) {
       actions.push({
         id: `call_media_settings_${blockedKind}`,
-        label: blockedKind === "camera" ? "Настройки камеры" : "Настройки микрофона",
+        label: issue.settingsLabel || (blockedKind === "camera" ? "Настройки камеры" : "Настройки микрофона"),
         primary: true,
         onClick: () => openMediaSettings(blockedKind),
       });
@@ -592,7 +614,15 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     const kind: CapturePermissionKind = kindRaw === "camera" ? "camera" : "microphone";
     const ok = await openDesktopMediaPermissionSettings(kind);
     if (!ok) {
-      showToast("Откройте настройки приложения или браузера и разрешите доступ вручную", { kind: "info", timeoutMs: 8000 });
+      if (isIOS()) {
+        const device = kind === "camera" ? "камеру" : "микрофон";
+        showToast(
+          `iPhone: откройте настройки Safari/Chrome и разрешите ${device}. Если Ягодка открыта ссылкой, отдельной Ягодки в списке приложений не будет.`,
+          { kind: "info", timeoutMs: 14000 }
+        );
+        return;
+      }
+      showToast("Откройте настройки сайта или браузера и разрешите доступ вручную", { kind: "info", timeoutMs: 8000 });
     }
   }
 
