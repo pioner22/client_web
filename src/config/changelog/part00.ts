@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.868",
+    date: "2026-06-07",
+    improved: [
+      "Видеозвонок на iPhone/PWA устойчивее раскрывает медиаслой: загруженный видеомост становится видимым и интерактивным даже если iOS не отдаёт событие готовности Jitsi.",
+      "Ссылка входа в видеомост теперь явно запускает аудио и видео не выключенными для видеозвонка, а iframe делегирует камеру/микрофон максимально явно.",
+    ],
+    fixed: [
+      "Обновлён истёкший TLS-сертификат meet.yagodka.org, из-за которого браузер мог не загружать Jitsi external_api.js и сам видеомост.",
+      "Починен ACME webroot-route для meet.yagodka.org, чтобы будущие certbot-renewal снова проходили через /.well-known/acme-challenge/.",
+    ],
+  },
+  {
     version: "0.1.867",
     date: "2026-06-07",
     improved: [

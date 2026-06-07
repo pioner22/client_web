@@ -14,10 +14,8 @@ function buildMeetJoinUrlRaw(baseUrl: string, roomName: string, mode: CallMode):
 
   const hash = new URLSearchParams();
   hash.set("config.prejoinPageEnabled", "false");
-  if (mode === "audio") {
-    hash.set("config.startWithVideoMuted", "true");
-    hash.set("config.startWithAudioMuted", "false");
-  }
+  hash.set("config.startWithAudioMuted", "false");
+  hash.set("config.startWithVideoMuted", mode === "audio" ? "true" : "false");
   const hashText = hash.toString();
   const safeRoom = encodeURIComponent(room);
   return `${base}/${safeRoom}${hashText ? `#${hashText}` : ""}`;
@@ -30,4 +28,3 @@ export function buildMeetJoinUrl(roomName: string, mode: CallMode): string | nul
   const base = typeof location !== "undefined" ? location.href : "http://localhost/";
   return safeUrl(raw, { base, allowedProtocols: ["https:", "http:"] });
 }
-

@@ -88,7 +88,7 @@ function formatDuration(ms: number): string {
   return `${h}:${String(mm).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-const CALL_IFRAME_ALLOW = "camera; microphone; fullscreen; display-capture; autoplay";
+const CALL_IFRAME_ALLOW = "camera *; microphone *; fullscreen; display-capture *; autoplay *; speaker-selection *";
 
 export function createCallModal(actions: CallModalActions): CallModalController {
   const titleEl = el("div", { class: "call-peer-title" }, ["Звонок"]);
@@ -174,6 +174,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   let jitsiKey: string = "";
   let jitsiInitToken = 0;
   let jitsiFallbackTimer: number | null = null;
+  let jitsiReadyWatchdogTimer: number | null = null;
   let fallbackIframeReady = false;
   let disposeQualityWatch: (() => void) | null = null;
   let audioMuted: boolean | null = null;
@@ -219,6 +220,25 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     jitsiFallbackTimer = null;
   }
 
+  function clearJitsiReadyWatchdogTimer() {
+    if (jitsiReadyWatchdogTimer === null) return;
+    try {
+      window.clearTimeout(jitsiReadyWatchdogTimer);
+    } catch {
+      // ignore
+    }
+    jitsiReadyWatchdogTimer = null;
+  }
+
+  function scheduleJitsiReadyWatchdog(token: number, key: string, delayMs: number) {
+    clearJitsiReadyWatchdogTimer();
+    jitsiReadyWatchdogTimer = window.setTimeout(() => {
+      if (token !== jitsiInitToken) return;
+      if (!jitsiApi || jitsiKey !== key) return;
+      markMeetingReady();
+    }, delayMs);
+  }
+
   function applyQualitySnapshot(snapshot: CallQualitySnapshot) {
     qualityEl.textContent = formatCallQualityLabel(snapshot);
     qualityEl.title = formatCallQualityTitle(snapshot);
@@ -231,6 +251,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
   function disposeJitsi() {
     clearJitsiFallbackTimer();
+    clearJitsiReadyWatchdogTimer();
     if (disposeQualityWatch) {
       disposeQualityWatch();
       disposeQualityWatch = null;
@@ -281,12 +302,14 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   }
 
   function markMeetingReady() {
+    clearJitsiReadyWatchdogTimer();
     jitsiHost.classList.add("call-jitsi-ready");
     iframeHost.classList.add("call-iframe-ready");
     updateLiveStatus("Соединение установлено");
   }
 
   function markMeetingFailed(status: string) {
+    clearJitsiReadyWatchdogTimer();
     updateLiveStatus(status);
     jitsiHost.classList.add("call-jitsi-failed");
     iframeHost.classList.add("call-iframe-failed");
@@ -305,8 +328,8 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       iframe.addEventListener("load", () => {
         window.setTimeout(() => {
           fallbackIframeReady = true;
-          iframeHost.classList.add("call-iframe-loaded");
-          updateLiveStatus("Видеомост открыт. Если экран пустой, откройте отдельно");
+          iframeHost.classList.add("call-iframe-loaded", "call-iframe-ready");
+          updateLiveStatus("Видеомост открыт");
         }, 420);
       });
       iframe.addEventListener("error", () => {
@@ -319,7 +342,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     }
     showIframeHost("Открываем резервный видеомост…");
     if (!iframeHost.contains(iframe)) iframeHost.append(iframe);
-    if (fallbackIframeReady) iframeHost.classList.add("call-iframe-loaded");
+    if (fallbackIframeReady) iframeHost.classList.add("call-iframe-loaded", "call-iframe-ready");
   }
 
   function showHero() {
@@ -409,6 +432,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
         apiIframe.setAttribute("referrerpolicy", "no-referrer");
         apiIframe.addEventListener("load", () => {
           updateLiveStatus("Почти готово…");
+          scheduleJitsiReadyWatchdog(token, key, 1600);
         });
       }
     } catch {
@@ -440,6 +464,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     } catch {
       // ignore
     }
+    scheduleJitsiReadyWatchdog(token, key, 5200);
   }
 
   function updateControls(phase: string, incoming: boolean, callId: string) {

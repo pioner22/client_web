@@ -578,23 +578,20 @@ input.modal-input[type="file"]::file-selector-button:active {
 }
 
 .call-jitsi-ready iframe,
-.call-iframe-ready iframe {
+.call-iframe-ready iframe,
+.call-iframe-loaded iframe {
   opacity: 1;
   pointer-events: auto;
 }
 
-.call-iframe-loaded iframe {
-  opacity: 0.16;
+.call-jitsi-ready .call-live-backdrop,
+.call-iframe-ready .call-live-backdrop {
+  opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 
-.call-jitsi-ready .call-live-backdrop {
-  opacity: 0;
-  visibility: hidden;
-}
-
 .call-jitsi-failed .call-live-backdrop,
-.call-iframe-loaded .call-live-backdrop,
 .call-iframe-failed .call-live-backdrop {
   opacity: 1;
   visibility: visible;
