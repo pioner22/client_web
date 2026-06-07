@@ -223,12 +223,12 @@ function resolveRoomLabel(state: AppState, kind: "group" | "board", id: string):
 
 export function createSearchPage(actions: SearchPageActions): SearchPage {
   const mobileUi = isMobileLikeUi();
-  const title = el("div", { class: "chat-title" }, ["Поиск"]);
 
   const input = el("input", {
-    class: "modal-input",
-    type: "text",
-    placeholder: "Имя, @логин, ID, текст, from:@логин, #тег",
+    class: "modal-input search-input",
+    type: "search",
+    placeholder: "Имя, ID, @логин, текст",
+    "aria-label": "Поиск",
     "data-ios-assistant": "off",
     autocomplete: "off",
     autocorrect: "off",
@@ -238,9 +238,25 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     enterkeyhint: "search",
   }) as HTMLInputElement;
 
-  const btn = el("button", { class: "btn", type: "button" }, ["Искать"]);
+  const clearBtn = el("button", { class: "btn search-clear hidden", type: "button", "aria-label": "Очистить поиск" }, [
+    el("span", { class: "search-clear-icon", "aria-hidden": "true" }),
+  ]);
+  const btn = el("button", { class: "btn search-submit", type: "button", "aria-label": "Искать" }, [
+    el("span", { class: "search-submit-icon", "aria-hidden": "true" }),
+  ]);
 
-  const form = el("div", { class: "page-form" }, [input, btn]);
+  const searchField = el("div", { class: "search-field" }, [
+    el("span", { class: "search-field-icon", "aria-hidden": "true" }),
+    input,
+    clearBtn,
+  ]);
+  const form = el("div", { class: "page-form search-form", role: "search" }, [searchField, btn]);
+  const quickHints = el("div", { class: "search-quick" }, [
+    el("span", { class: "search-quick-chip" }, ["Контакты"]),
+    el("span", { class: "search-quick-chip" }, ["Сообщения"]),
+    el("span", { class: "search-quick-chip" }, ["ID"]),
+    el("span", { class: "search-quick-chip" }, ["@логин"]),
+  ]);
   const tabsBar = el("div", { class: "search-tabs", role: "tablist" });
   const tabsWrap = el("div", { class: "search-tabs-wrap" }, [tabsBar]);
   const filterBar = el("div", { class: "search-filters hidden", role: "tablist" });
@@ -255,14 +271,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   const selectionBar = el("div", { class: "search-selection hidden" });
   const results = el("div", { class: "page-results" });
   const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — искать | Esc — назад"]);
+  const searchShell = el("div", { class: "search-shell" }, [form, quickHints, tabsWrap, filterBar, dateBar, selectionBar]);
 
   const root = el("div", { class: "page page-search" }, [
-    title,
-    form,
-    tabsWrap,
-    filterBar,
-    dateBar,
-    selectionBar,
+    searchShell,
     results,
     ...(hint ? [hint] : []),
   ]);
@@ -729,6 +741,18 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
   }
 
   btn.addEventListener("click", () => submit());
+  clearBtn.addEventListener("click", () => {
+    if (!input.value && !activeDate) return;
+    input.value = "";
+    activeDate = "";
+    dateInput.value = "";
+    clearSelection();
+    showAllHistory = false;
+    resetHistoryPaging();
+    actions.onQueryChange("");
+    if (lastState) update({ ...lastState, searchQuery: "" });
+    focusElement(input);
+  });
 
   input.addEventListener("input", () => {
     applyLegacyIdMask(input);
@@ -757,6 +781,9 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
     const filters = extractSearchQueryFilters(qRaw);
     const openQuery = buildPivotSearchQuery(filters);
     const canSearchNow = Boolean(deriveServerSearchQuery(qRaw));
+    root.classList.toggle("search-has-query", Boolean(q));
+    quickHints.classList.toggle("hidden", Boolean(q));
+    clearBtn.classList.toggle("hidden", !qRaw);
 
     if (qRaw !== lastQueryKey) {
       clearSelection();
@@ -785,9 +812,10 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
       selectionBar.replaceChildren();
       clearSelection();
       results.replaceChildren(
-        el("div", { class: "page-empty" }, [
-          el("div", { class: "page-empty-title" }, ["Введите имя, @логин или ID"]),
-          el("div", { class: "page-empty-sub" }, ["По контактам и истории поиск работает сразу, по серверу — от 3 цифр ID или 3+ символов логина (@ необязателен). Фильтры: from:@логин, #тег"]),
+        el("div", { class: "page-empty search-empty" }, [
+          el("div", { class: "search-empty-icon", "aria-hidden": "true" }),
+          el("div", { class: "page-empty-title" }, ["Начните поиск"]),
+          el("div", { class: "page-empty-sub" }, ["Имя, ID, @логин, текст сообщения"]),
         ])
       );
       return;
@@ -1285,21 +1313,29 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           const isSelected = selectionMode && selectionScope === "server" && selectedServer.has(key);
           const disableRow = !canOpen && !(selectionMode && selectionScope === "server");
 
-          const rowChildren: Array<string | HTMLElement> = [];
-          if (isGroup) {
-            rowChildren.push(el("span", { class: "row-prefix", "aria-hidden": "true" }, ["#"]), avatar("group", r.id), el("span", { class: "row-label" }, [r.id]));
-          } else if (isBoard) {
-            rowChildren.push(el("span", { class: "row-prefix", "aria-hidden": "true" }, ["#"]), avatar("board", r.id), el("span", { class: "row-label" }, [r.id]));
-          } else {
-            const dot = r.online ? "●" : "○";
-            const star = isFriend ? "★" : " ";
-            rowChildren.push(
-              el("span", { class: "row-star", "aria-hidden": "true" }, [star]),
-              avatar("dm", r.id),
-              el("span", { class: `row-dot ${r.online ? "row-dot-online" : "row-dot-offline"}`, "aria-hidden": "true" }, [dot]),
-              el("span", { class: "row-id" }, [r.id])
-            );
-          }
+          const typeLabel = isGroup ? "Группа" : isBoard ? "Доска" : isFriend ? "Контакт" : "Пользователь";
+          const stateLabel = pendingIn
+            ? "Входящий запрос"
+            : pendingOut
+              ? "Ожидает подтверждения"
+              : isGroup && !inGroup
+                ? "Доступ по запросу"
+                : isBoard && !inBoard
+                  ? "Открытая доска"
+                  : typeLabel;
+          const rowTitle = isGroup || isBoard ? `# ${r.id}` : r.id;
+          const rowChildren: Array<string | HTMLElement> = [
+            avatar(info.kind, r.id),
+            el("span", { class: "row-main" }, [
+              el("span", { class: "row-title" }, [rowTitle]),
+              el("span", { class: "row-sub" }, [stateLabel]),
+            ]),
+            isGroup || isBoard
+              ? el("span", { class: "search-result-badge" }, [typeLabel])
+              : el("span", { class: "search-result-status", "aria-label": r.online ? "Онлайн" : "Офлайн" }, [
+                  el("span", { class: `row-dot ${r.online ? "row-dot-online" : "row-dot-offline"}`, "aria-hidden": "true" }, ["●"]),
+                ]),
+          ];
 
           const rowBtn = el(
             "button",
@@ -1309,7 +1345,7 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
               ...(disableRow ? { disabled: "true" } : {}),
               ...(isSelected ? { "aria-pressed": "true" } : {}),
             },
-            rowChildren.length ? rowChildren : [resultLabel(r)]
+            rowChildren
           );
           rowBtn.addEventListener("click", (e) => {
             if (selectionMode && selectionScope === "server") {
