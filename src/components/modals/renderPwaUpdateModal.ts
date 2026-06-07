@@ -7,9 +7,11 @@ export interface PwaUpdateModalActions {
   onApply: () => void;
 }
 
-export function renderPwaUpdateModal(clientVersion: string, actions: PwaUpdateModalActions): HTMLElement {
+export function renderPwaUpdateModal(clientVersion: string, latest: string, actions: PwaUpdateModalActions): HTMLElement {
   const mobileUi = isMobileLikeUi();
   const webBuild = splitBuildId(clientVersion);
+  const latestBuild = splitBuildId(latest);
+  const latestLabel = latestBuild.version || latest || "новая сборка";
   const box = el("div", { class: "modal" });
 
   const btnApply = el("button", { class: "btn btn-primary", type: "button" }, ["Обновить"]);
@@ -21,8 +23,9 @@ export function renderPwaUpdateModal(clientVersion: string, actions: PwaUpdateMo
   box.append(
     el("div", { class: "modal-title" }, ["Обнаружено обновление веб-клиента"]),
     el("div", { class: "modal-line", title: webBuild.build ? `build ${webBuild.build}` : undefined }, [
-      `Текущая версия: web ${webBuild.version || "—"}`,
+      `web ${webBuild.version || "—"} → ${latestLabel}`,
     ]),
+    el("div", { class: "modal-line" }, ["Новая версия готова. Обновление займёт несколько секунд."]),
     ...(mobileUi
       ? []
       : [el("div", { class: "modal-line" }, ["Ctrl+U или Enter (OK) — обновить"]), el("div", { class: "modal-line" }, ["Esc или любая клавиша — позже"])]),

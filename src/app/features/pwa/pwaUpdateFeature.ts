@@ -113,6 +113,8 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     pwaAutoApplySuppressed = false;
   };
 
+  const shouldOpenPwaUpdatePrompt = (st: AppState): boolean => !st.modal || st.modal.kind === "pwa_update";
+
   const setPendingPwaBuild = (buildId: string, status?: string) => {
     const id = String(buildId || "").trim();
     if (!id) return;
@@ -124,7 +126,8 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       ...prev,
       updateLatest: id,
       pwaUpdateAvailable: true,
-      status: status || prev.status || "Обновление веб-клиента…",
+      status: status || "Доступно обновление веб-клиента. Нажмите «Обновить», когда будет удобно.",
+      ...(shouldOpenPwaUpdatePrompt(prev) ? { modal: { kind: "pwa_update" } } : {}),
     }));
   };
 
@@ -183,7 +186,17 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     return guard.tries >= PWA_AUTO_APPLY_MAX_TRIES;
   };
 
-  function forceUpdateReload(reason?: string) {
+  function buildUpdateReloadUrl(): string {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("__yg_update", String(Date.now()));
+      return url.toString();
+    } catch {
+      return window.location.href;
+    }
+  }
+
+  function navigateForUpdateReload(reason?: string) {
     try {
       sessionStorage.setItem("yagodka_updating", "1");
     } catch {
@@ -191,12 +204,16 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     }
     if (reason) logPwaUpdate("force_reload", reason);
     try {
-      window.location.replace(window.location.href);
+      window.location.replace(buildUpdateReloadUrl());
       return;
     } catch {
       // ignore
     }
     window.location.reload();
+  }
+
+  function forceUpdateReload(reason?: string) {
+    navigateForUpdateReload(reason || "force");
   }
 
   async function requestPwaBuildId(reg: ServiceWorkerRegistration | null, timeoutMs = 1200): Promise<string> {
@@ -401,17 +418,12 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
           return;
         }
         try {
-          sessionStorage.setItem("yagodka_updating", "1");
-        } catch {
-          // ignore
-        }
-        try {
-          window.location.replace(window.location.href);
+          navigateForUpdateReload(mode === "manual" ? "manual_active" : "auto_active");
           return;
         } catch {
           // ignore
         }
-        window.location.reload();
+        forceUpdateReload(mode === "manual" ? "manual_active_fallback" : "auto_active_fallback");
         return;
       }
       const msg =
@@ -426,21 +438,10 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       return;
     }
     storeActiveBuildId(buildId);
-    try {
-      sessionStorage.setItem("yagodka_updating", "1");
-    } catch {
-      // ignore
-    }
     // iOS/WebKit may occasionally produce a blank screen on `reload()` after a SW update.
-    // `location.replace()` behaves more like a fresh navigation and is generally more reliable.
-    try {
-      logPwaUpdate(mode === "manual" ? "manual_reload" : "auto_reload", buildId || "unknown");
-      window.location.replace(window.location.href);
-      return;
-    } catch {
-      // ignore
-    }
-    window.location.reload();
+    // Cache-busted location.replace() behaves more like a fresh navigation and is generally more reliable.
+    logPwaUpdate(mode === "manual" ? "manual_reload" : "auto_reload", buildId || "unknown");
+    navigateForUpdateReload(mode === "manual" ? "manual" : "auto");
   }
 
   async function forcePwaUpdate() {
@@ -633,7 +634,12 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
 
   const onPwaUpdate = () => {
     logPwaUpdate("sw_update");
-    store.set({ pwaUpdateAvailable: true, status: "Получено обновление веб-клиента (применится автоматически)" });
+    store.set((prev) => ({
+      ...prev,
+      pwaUpdateAvailable: true,
+      status: "Получено обновление веб-клиента. Нажмите «Обновить», когда будет удобно.",
+      ...(shouldOpenPwaUpdatePrompt(prev) ? { modal: { kind: "pwa_update" } } : {}),
+    }));
     scheduleAutoApplyPwaUpdate();
   };
 

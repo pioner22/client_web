@@ -180,6 +180,7 @@ test("pwaUpdateFeature: новый BUILD_ID не подменяет clientVersio
     assert.equal(store.state.clientVersion, "0.1.791-27ef803b5f72");
     assert.equal(store.state.updateLatest, "0.1.792-abcdef123456");
     assert.equal(store.state.pwaUpdateAvailable, true);
+    assert.deepEqual(store.state.modal, { kind: "pwa_update" });
     assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), null);
     assert.equal(sendCalls.length, 0);
   } finally {

@@ -3,12 +3,14 @@ import type { ChangelogEntry } from "./types";
 export const CHANGELOG_PART_01: ChangelogEntry[] = [
   {
     version: "0.1.864",
-    date: "2026-06-05",
+    date: "2026-06-07",
     improved: [
+      "PWA update: новое Web/PWA обновление теперь открывает явный prompt `Обновить`, показывает переход версии и применяет сборку через cache-busted navigation для iOS.",
       "Publish: обновлены downloadable clients для сайта после W-0959: Web/PWA, Android debug APK, macOS desktop ZIP/feed и CLI archive.",
       "Сайт downloads теперь должен показывать актуальные версии всех клиентов вместо старых Android/macOS/CLI артефактов.",
     ],
     fixed: [
+      "Медиа: фото/видео со статусом `complete`, но без runtime URL, больше не блокируют повторное получение preview/file_get и должны восстанавливаться вместо вечной кнопки `Загрузить фото`.",
       "Android debug APK получил новый versionName/versionCode, чтобы sideload-клиенты видели отдельный новый артефакт.",
       "macOS desktop unsigned ZIP/feed пересобираются на текущей версии Web/PWA, а CLI archive пересобирается штатным dist pipeline.",
     ],

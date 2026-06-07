@@ -24,4 +24,7 @@ test("file runtime: features route shared prefetch policy and HTTP queue ownersh
   const httpRuntimeSrc = await readSrc("src/app/features/files/fileHttpDownloadRuntime.ts");
   assert.match(httpRuntimeSrc, /promoteUserRequestedPrefetchToHigh/);
   assert.match(httpRuntimeSrc, /canDrainFilePrefetch/);
+
+  const bootstrapSrc = await readSrc("src/app/features/files/fileTransferBootstrap.ts");
+  assert.match(bootstrapSrc, /isBlockingFileDownloadState/);
 });

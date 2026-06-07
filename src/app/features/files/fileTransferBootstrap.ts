@@ -1,5 +1,5 @@
 import type { Store } from "../../../stores/store";
-import type { AppState } from "../../../stores/types";
+import type { AppState, FileTransferEntry } from "../../../stores/types";
 import type { DeviceCaps } from "../navigation/deviceCaps";
 import { createAutoDownloadCachePolicyFeature } from "./autoDownloadCachePolicyFeature";
 import { createCachedPreviewRestoreFeature } from "./cachedPreviewRestoreFeature";
@@ -40,6 +40,16 @@ type Deps = {
   isUploadActive: (fileId: string) => boolean;
 };
 
+export function isBlockingFileDownloadState(
+  fileId: string,
+  downloadByFileId: Map<string, DownloadState>,
+  transfer: Pick<FileTransferEntry, "status" | "url"> | null | undefined
+): boolean {
+  const fid = String(fileId || "").trim();
+  if (!fid) return false;
+  return downloadByFileId.has(fid) || transfer?.status === "downloading" || (transfer?.status === "complete" && Boolean(transfer.url));
+}
+
 export function initFileTransferBootstrap(deps: Deps): FileTransferBootstrap {
   const downloadByFileId = new Map<string, DownloadState>();
   const fileUploadMaxConcurrency = deps.deviceCaps.slowNetwork || deps.deviceCaps.constrained ? 1 : 2;
@@ -79,7 +89,7 @@ export function initFileTransferBootstrap(deps: Deps): FileTransferBootstrap {
       const fid = String(fileId || "").trim();
       if (!fid) return false;
       const transfer = deps.store.get().fileTransfers.find((t) => String(t.id || "").trim() === fid);
-      return downloadByFileId.has(fid) || transfer?.status === "downloading" || transfer?.status === "complete";
+      return isBlockingFileDownloadState(fid, downloadByFileId, transfer);
     },
     resolveFileMeta: (fileId) => fileDownloadActions.resolveFileMeta(fileId),
   });

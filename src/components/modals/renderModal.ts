@@ -269,7 +269,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     });
   }
   if (kind === "pwa_update") {
-    return renderPwaUpdateModal(state.clientVersion, {
+    return renderPwaUpdateModal(state.clientVersion, state.updateLatest ?? "", {
       onDismiss: actions.onClose,
       onApply: actions.onApplyPwaUpdate,
     });

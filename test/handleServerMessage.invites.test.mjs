@@ -236,7 +236,7 @@ test("handleServerMessage: update_required на Android показывает я�
   }
 });
 
-test("handleServerMessage: update_required с build id инициирует SW update без модала", async () => {
+test("handleServerMessage: update_required с build id открывает явное PWA обновление и инициирует SW update", async () => {
   const { handleServerMessage, cleanup } = await loadHandleServerMessage();
   const nav = globalThis.navigator ?? {};
   const hadNavigator = Boolean(globalThis.navigator);
@@ -260,8 +260,9 @@ test("handleServerMessage: update_required с build id инициирует SW u
 
     const st = getState();
     assert.equal(st.updateLatest, "0.1.515-c539a3244834");
-    assert.equal(st.modal, null);
-    assert.ok(String(st.status || "").includes("автоматически"));
+    assert.equal(st.pwaUpdateAvailable, true);
+    assert.deepEqual(st.modal, { kind: "pwa_update" });
+    assert.ok(String(st.status || "").includes("Нажмите"));
   } finally {
     if (prevSw === undefined) {
       delete nav.serviceWorker;

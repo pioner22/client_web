@@ -25,7 +25,12 @@ export function handleUpdateRequiredMessage(t: string, msg: any, state: AppState
 
   if (hasSw && !isAndroidAppUpdate) {
     if (state.updateLatest !== latest) {
-      patch({ updateLatest: latest, status: "Доступно обновление веб-клиента (применится автоматически)" });
+      patch({
+        updateLatest: latest,
+        pwaUpdateAvailable: true,
+        status: "Доступно обновление веб-клиента. Нажмите «Обновить», когда будет удобно.",
+        modal: state.modal && state.modal.kind !== "pwa_update" ? state.modal : { kind: "pwa_update" },
+      });
     }
     try {
       if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent !== "undefined") {
