@@ -608,3 +608,29 @@ html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-
     max-width: calc(100vw - 36px);
   }
 }
+
+/* W-0977: desktop/Web captioned media must shrink-wrap the preview, not the full frame. */
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"]:not([data-msg-album="1"])[data-msg-file="image"] .msg-body,
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"]:not([data-msg-album="1"])[data-msg-file="video"] .msg-body {
+  width: fit-content;
+  max-width: min(100%, var(--msg-body-max-width));
+  align-items: stretch;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"]:not([data-msg-album="1"])[data-msg-file="image"] .msg-attach-footer,
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"]:not([data-msg-album="1"])[data-msg-file="video"] .msg-attach-footer {
+  width: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 901px) {
+  .chat:not(.chat-board)
+    .msg-attach[data-msg-footer="stacked"]:not([data-msg-album="1"]):not([data-msg-sticker="1"]):not([data-msg-round-video="1"])[data-msg-file="image"]
+    .file-row-chat.file-row-image,
+  .chat:not(.chat-board)
+    .msg-attach[data-msg-footer="stacked"]:not([data-msg-album="1"]):not([data-msg-sticker="1"]):not([data-msg-round-video="1"])[data-msg-file="video"]
+    .file-row-chat.file-row-image {
+    min-width: min(260px, var(--chat-media-frame-width));
+  }
+}

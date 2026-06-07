@@ -27,13 +27,13 @@ export type ChatVisualPreviewOptions = {
   mobileUi?: boolean;
 };
 
-export const CHAT_MEDIA_PREVIEW_SCALE = 0.33;
+export const CHAT_MEDIA_PREVIEW_SCALE = 0.5;
 export const CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX = 420;
 export const CHAT_IMAGE_PREVIEW_FALLBACK_ASPECT_RATIO = 4 / 3;
 export const CHAT_VIDEO_PREVIEW_FALLBACK_ASPECT_RATIO = 16 / 9;
 
 export function resolvePreviewBaseWidthPx(info: FileAttachmentInfo): number | null {
-  const w = info.thumbW || info.mediaW || CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX;
+  const w = info.mediaW || info.thumbW || CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX;
   if (!Number.isFinite(w) || w <= 0) return null;
   return Math.trunc(w);
 }
