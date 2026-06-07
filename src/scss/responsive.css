@@ -1550,18 +1550,24 @@
   }
 
   .app-frame.has-message-context-menu .chat-lines [data-msg-idx].msg-context-active {
-    filter: none;
+    filter: none !important;
     opacity: 1;
     position: relative;
-    z-index: 6;
+    z-index: 8;
     transform: translateZ(0) scale(1.015);
   }
 
-  .app-frame.has-message-context-menu .chat-lines [data-msg-idx].msg-context-active .msg-body {
+  .app-frame.has-message-context-menu .chat-lines [data-msg-idx].msg-context-active .msg-body,
+  .app-frame.has-message-context-menu .chat-lines [data-msg-idx].msg-context-active .file-row-chat {
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--focus), transparent 54%),
-      0 18px 36px color-mix(in srgb, #000, transparent 78%),
+      0 18px 42px color-mix(in srgb, #000, transparent 72%),
       var(--msg-card-shadow);
+  }
+
+  .app-frame.has-message-context-menu .chat-lines [data-msg-idx].msg-context-active .msg-body {
+    outline: 1px solid color-mix(in srgb, #ffffff, transparent 84%);
+    outline-offset: 1px;
   }
 }
 

@@ -57,9 +57,19 @@ export function buildJitsiMediaPolicy(mode: JitsiCallMode, hints: JitsiMediaHint
     enableWelcomePage: false,
     requireDisplayName: false,
     disableInviteFunctions: true,
+    notifications: [],
+    hideConferenceSubject: true,
+    hideConferenceTimer: true,
+    disableModeratorIndicator: true,
+    disablePolls: true,
+    disableReactions: true,
+    disableSelfViewSettings: true,
+    disableShowMoreStats: true,
+    disableThirdPartyRequests: true,
     startWithVideoMuted: mode === "audio",
     startWithAudioMuted: false,
     toolbarButtons: [],
+    buttonsWithNotifyClick: [],
     constraints: {
       video: {
         height: {

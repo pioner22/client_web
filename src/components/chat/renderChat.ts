@@ -228,6 +228,10 @@ export function renderChat(layout: Layout, state: AppState) {
   const activePos = searchActive ? Math.max(0, Math.min(hits.length ? hits.length - 1 : 0, state.chatSearchPos | 0)) : 0;
   const activeMsgIdx = searchActive && hits.length ? hits[activePos] : null;
   const searchResultsOpen = Boolean(searchActive && state.chatSearchResultsOpen);
+  const contextMenuMessageIdx =
+    state.modal?.kind === "context_menu" && state.modal.payload.target.kind === "message" && key
+      ? String(state.modal.payload.target.id || "").trim()
+      : "";
   const prevRender = hostState.__chatRenderState as
     | {
         key: string;
@@ -259,6 +263,7 @@ export function renderChat(layout: Layout, state: AppState) {
         messageView: AppState["messageView"];
         searchFilter: AppState["chatSearchFilter"];
         searchDate: AppState["chatSearchDate"];
+        contextMenuMessageIdx: string;
       }
     | null;
   const pinnedIds = key && state.pinnedMessages ? state.pinnedMessages[key] : null;
@@ -304,6 +309,7 @@ export function renderChat(layout: Layout, state: AppState) {
     messageView: state.messageView,
     searchFilter: state.chatSearchFilter,
     searchDate: state.chatSearchDate,
+    contextMenuMessageIdx,
   };
   const canSkipRenderExceptTransfers =
     prevRender &&
@@ -334,7 +340,8 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.fileThumbsRef === renderState.fileThumbsRef &&
     prevRender.messageView === renderState.messageView &&
     prevRender.searchFilter === renderState.searchFilter &&
-    prevRender.searchDate === renderState.searchDate;
+    prevRender.searchDate === renderState.searchDate &&
+    prevRender.contextMenuMessageIdx === renderState.contextMenuMessageIdx;
   const canSkipRender =
     prevRender &&
     prevRender.key === renderState.key &&
@@ -365,7 +372,8 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.fileThumbsRef === renderState.fileThumbsRef &&
     prevRender.messageView === renderState.messageView &&
     prevRender.searchFilter === renderState.searchFilter &&
-    prevRender.searchDate === renderState.searchDate;
+    prevRender.searchDate === renderState.searchDate &&
+    prevRender.contextMenuMessageIdx === renderState.contextMenuMessageIdx;
   if (
     canSkipRenderExceptTransfers &&
     prevRender.fileTransfersRef !== renderState.fileTransfersRef &&

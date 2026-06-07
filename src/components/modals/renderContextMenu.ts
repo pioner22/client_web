@@ -65,6 +65,26 @@ function composerAvoidRect(): DOMRect | null {
   }
 }
 
+function messageContextTopLimit(): number {
+  const pad = 12;
+  let top = pad;
+  try {
+    const vv = window.visualViewport;
+    if (vv && Number.isFinite(vv.offsetTop)) top = Math.max(top, Math.round(vv.offsetTop) + pad);
+  } catch {
+    // ignore
+  }
+  try {
+    const chatTop = (document.querySelector(".chat-top") as HTMLElement | null)?.getBoundingClientRect() ?? null;
+    if (chatTop && chatTop.width > 0 && chatTop.height > 0 && chatTop.bottom > 0 && chatTop.bottom < window.innerHeight * 0.5) {
+      top = Math.max(top, Math.round(chatTop.bottom) + 8);
+    }
+  } catch {
+    // ignore
+  }
+  return top;
+}
+
 const ACTION_ICON_RULES: Array<[RegExp, string]> = [
   [/reply|quote/i, "reply"],
   [/view_replies|thread/i, "thread"],
@@ -174,25 +194,27 @@ function findMessageAnchorRect(payload: ContextMenuPayload): DOMRect | null {
   }
 }
 
-function applyCompactMessageGeometry(root: HTMLElement, payload: ContextMenuPayload) {
+function applyCompactMessageGeometry(root: HTMLElement, payload: ContextMenuPayload, messageRect: DOMRect | null) {
   const viewportW = Math.max(320, Number(window.innerWidth || 0));
   const viewportH = Math.max(320, Number(window.innerHeight || 0));
   const pad = 12;
-  const rect = root.getBoundingClientRect();
+  const topLimit = messageContextTopLimit();
   const actionCount = payload.items.filter((item) => !item.separator).length;
   const sepCount = payload.items.filter((item) => item.separator).length;
-  const stackWidth = Math.min(286, viewportW - pad * 2);
-  const actionWidth = Math.min(286, viewportW - 32);
-  const width = Math.max(260, Math.min(rect.width || stackWidth, viewportW - pad * 2));
-  const actionListHeight = Math.min(318, 18 + actionCount * 44 + sepCount * 9);
-  const previewHeight = payload.anchorPreview ? 54 : 0;
-  const height = Math.max(190, Math.min(rect.height || actionListHeight + previewHeight + 62, viewportH - pad * 2));
-  const messageRect = findMessageAnchorRect(payload);
+  const stackWidth = Math.min(276, viewportW - pad * 2);
+  const actionWidth = Math.min(276, viewportW - 32);
+  const width = Math.max(248, Math.min(stackWidth, viewportW - pad * 2));
+  const actionListHeight = Math.min(292, 14 + actionCount * 40 + sepCount * 8);
+  const previewHeight = payload.anchorPreview && !messageRect ? 48 : 0;
+  const reactionHeight = payload.reactionBar?.emojis?.length ? 48 : 0;
+  const estimatedHeight = actionListHeight + previewHeight + reactionHeight + 18;
   const composerRect = composerAvoidRect();
   const bottomLimit =
     composerRect && composerRect.width > 0 && composerRect.height > 0 && composerRect.top > 0
       ? Math.min(viewportH - pad, composerRect.top - pad)
       : viewportH - pad;
+  const availableStack = Math.max(180, bottomLimit - topLimit);
+  const height = Math.max(180, Math.min(estimatedHeight, availableStack));
   const anchorX = messageRect
     ? messageRect.left + messageRect.width / 2
     : Number.isFinite(Number(payload.x))
@@ -212,17 +234,21 @@ function applyCompactMessageGeometry(root: HTMLElement, payload: ContextMenuPayl
   const left = clampNumber(leftRaw, pad, viewportW - width - pad);
   const belowTop = messageRect ? messageRect.bottom + 8 : anchorY + 8;
   const aboveTop = messageRect ? messageRect.top - height - 8 : anchorY - height - 8;
-  const hasRoomBelow = belowTop + height <= bottomLimit;
-  const preferAbove = !hasRoomBelow && anchorY > viewportH * 0.38;
+  const roomBelow = bottomLimit - belowTop;
+  const roomAbove = (messageRect ? messageRect.top : anchorY) - topLimit - 8;
+  const hasRoomBelow = roomBelow >= Math.min(height, 220);
+  const preferAbove = !hasRoomBelow && roomAbove > roomBelow;
   const topRaw = preferAbove ? aboveTop : belowTop;
-  const top = clampNumber(topRaw, pad + Math.max(0, Number(window.scrollY || 0)), Math.max(pad, bottomLimit - height));
+  const top = clampNumber(topRaw, topLimit, Math.max(topLimit, bottomLimit - height));
+  const listMax = Math.max(124, Math.min(actionListHeight, height - reactionHeight - previewHeight - 18));
   root.style.left = `${Math.round(left)}px`;
   root.style.top = `${Math.round(top)}px`;
   root.style.setProperty("--ctx-react-pill-w", `${Math.round(stackWidth)}px`);
   root.style.setProperty("--ctx-action-list-w", `${Math.round(actionWidth)}px`);
-  root.style.setProperty("--ctx-list-max-h", `${Math.max(132, Math.min(318, actionListHeight))}px`);
-  root.style.maxHeight = `${Math.max(228, Math.min(420, bottomLimit - pad))}px`;
+  root.style.setProperty("--ctx-list-max-h", `${Math.round(listMax)}px`);
+  root.style.maxHeight = `${Math.round(height)}px`;
   root.setAttribute("data-anchor", messageRect ? "message-row" : "tap");
+  root.setAttribute("data-anchor-visible", messageRect ? "1" : "0");
   root.setAttribute("data-align", rightLeaning ? "end" : "start");
   root.setAttribute("data-stack-position", preferAbove ? "above-message" : "below-message");
 }
@@ -233,6 +259,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
   const targetKind = String(payload.target?.kind || "menu").replace(/[^a-z0-9_-]/gi, "");
   const titleText = String(payload.title || "").trim();
   const showTitle = Boolean(titleText && titleText !== "Меню" && !compactMessage);
+  const liveMessageRect = compactMessage ? findMessageAnchorRect(payload) : null;
   const root = el("div", {
     class: compactMessage
       ? `ctx-menu ctx-menu-message-compact ctx-menu-message-action-list ctx-menu-${targetKind}`
@@ -310,7 +337,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
       : null;
 
   const anchorPreview =
-    compactMessage && payload.anchorPreview
+    compactMessage && payload.anchorPreview && !liveMessageRect
       ? el("div", { class: "ctx-selected-preview", "aria-hidden": "true" }, [String(payload.anchorPreview).trim()])
       : null;
 
@@ -386,7 +413,7 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     if (sheet) {
       applySheetGeometry(root);
     } else if (compactMessage) {
-      applyCompactMessageGeometry(root, payload);
+      applyCompactMessageGeometry(root, payload, liveMessageRect);
     } else {
       applyPopoverGeometry(root);
       clampIntoViewport(root);

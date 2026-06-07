@@ -26,6 +26,24 @@ function buildMeetJoinUrlRaw(baseUrl: string, roomName: string, mode: CallMode, 
   hash.set("config.startWithAudioMuted", "false");
   hash.set("config.startWithVideoMuted", mode === "audio" ? "true" : "false");
   hash.set("config.disableInviteFunctions", "true");
+  hash.set("config.notifications", "[]");
+  hash.set("config.toolbarButtons", "[]");
+  hash.set("config.buttonsWithNotifyClick", "[]");
+  hash.set("config.hideConferenceSubject", "true");
+  hash.set("config.hideConferenceTimer", "true");
+  hash.set("config.disableModeratorIndicator", "true");
+  hash.set("config.disablePolls", "true");
+  hash.set("config.disableReactions", "true");
+  hash.set("config.disableSelfViewSettings", "true");
+  hash.set("config.disableShowMoreStats", "true");
+  hash.set("config.disableThirdPartyRequests", "true");
+  hash.set("interfaceConfig.DISABLE_JOIN_LEAVE_NOTIFICATIONS", "true");
+  hash.set("interfaceConfig.MOBILE_APP_PROMO", "false");
+  hash.set("interfaceConfig.SHOW_JITSI_WATERMARK", "false");
+  hash.set("interfaceConfig.SHOW_BRAND_WATERMARK", "false");
+  hash.set("interfaceConfig.SHOW_WATERMARK_FOR_GUESTS", "false");
+  hash.set("interfaceConfig.VIDEO_QUALITY_LABEL_DISABLED", "true");
+  hash.set("interfaceConfig.CONNECTION_INDICATOR_DISABLED", "true");
   if (name) {
     hash.set("config.defaultLocalDisplayName", name);
     hash.set("userInfo.displayName", name);

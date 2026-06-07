@@ -490,7 +490,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   padding-left: calc(14px + env(safe-area-inset-left));
   padding-right: calc(14px + env(safe-area-inset-right));
   color: #fff;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.22) 58%, rgba(0, 0, 0, 0));
   position: absolute;
   top: 0;
   inset-inline: 0;
@@ -552,7 +552,7 @@ input.modal-input[type="file"]::file-selector-button:active {
     padding-top: calc(12px + env(safe-area-inset-top));
     padding-left: calc(12px + env(safe-area-inset-left));
     padding-right: calc(12px + env(safe-area-inset-right));
-    background: linear-gradient(180deg, rgba(5, 7, 10, 0.86), rgba(5, 7, 10, 0));
+    background: linear-gradient(180deg, rgba(5, 7, 10, 0.78), rgba(5, 7, 10, 0.2) 62%, rgba(5, 7, 10, 0));
   }
 
   .call-peer-title {
@@ -699,6 +699,33 @@ input.modal-input[type="file"]::file-selector-button:active {
   background:
     linear-gradient(160deg, rgba(65, 39, 67, 0.72), rgba(9, 13, 17, 0.94) 48%, rgba(1, 2, 4, 1)),
     #05080b;
+}
+
+.call-jitsi::before,
+.call-iframe-shell::before,
+.call-jitsi::after,
+.call-iframe-shell::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.call-jitsi::before,
+.call-iframe-shell::before {
+  top: 0;
+  height: calc(108px + env(safe-area-inset-top));
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.74), rgba(0, 0, 0, 0.42) 54%, rgba(0, 0, 0, 0));
+}
+
+.call-jitsi::after,
+.call-iframe-shell::after {
+  bottom: 0;
+  height: calc(126px + env(safe-area-inset-bottom));
+  background:
+    linear-gradient(0deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.32) 48%, rgba(0, 0, 0, 0));
 }
 
 .call-jitsi iframe,
@@ -1111,7 +1138,7 @@ input.modal-input[type="file"]::file-selector-button:active {
   padding-bottom: calc(18px + env(safe-area-inset-bottom));
   padding-left: calc(18px + env(safe-area-inset-left));
   padding-right: calc(18px + env(safe-area-inset-right));
-  background: linear-gradient(0deg, rgba(2, 4, 6, 0.86), rgba(2, 4, 6, 0.42) 48%, rgba(2, 4, 6, 0));
+  background: linear-gradient(0deg, rgba(2, 4, 6, 0.72), rgba(2, 4, 6, 0.28) 52%, rgba(2, 4, 6, 0));
 }
 
 .call-ctl {
@@ -1181,6 +1208,26 @@ input.modal-input[type="file"]::file-selector-button:active {
 .call-ctl-decline {
   background: color-mix(in srgb, var(--bad), #000000 8%);
   border-color: transparent;
+}
+
+@media (max-width: 480px) {
+  .call-controls {
+    gap: 14px;
+    padding: 14px;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    padding-left: calc(14px + env(safe-area-inset-left));
+    padding-right: calc(14px + env(safe-area-inset-right));
+  }
+
+  .call-ctl {
+    width: 54px;
+    height: 54px;
+  }
+
+  .call-ctl::before {
+    width: 21px;
+    height: 21px;
+  }
 }
 
 .call-ctl-end:hover:not(:disabled),

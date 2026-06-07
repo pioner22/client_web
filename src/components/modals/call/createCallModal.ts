@@ -407,8 +407,21 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       };
       const interfaceConfigOverwrite: Record<string, unknown> = {
         TOOLBAR_BUTTONS: [],
+        DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+        MOBILE_APP_PROMO: false,
         SHOW_JITSI_WATERMARK: false,
+        SHOW_BRAND_WATERMARK: false,
         SHOW_WATERMARK_FOR_GUESTS: false,
+        SHOW_POWERED_BY: false,
+        SHOW_PROMOTIONAL_CLOSE_PAGE: false,
+        VIDEO_QUALITY_LABEL_DISABLED: true,
+        CONNECTION_INDICATOR_DISABLED: true,
+        TOOLBAR_ALWAYS_VISIBLE: false,
+        HIDE_INVITE_MORE_HEADER: true,
+        SETTINGS_SECTIONS: [],
+        DEFAULT_BACKGROUND: "#05080b",
+        APP_NAME: "Ягодка",
+        NATIVE_APP_NAME: "Ягодка",
       };
       jitsiApi = new Ctor(domain, {
         roomName,
@@ -427,6 +440,12 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       return;
     } finally {
       clearJitsiFallbackTimer();
+    }
+
+    try {
+      jitsiApi.executeCommand?.("subject", "");
+    } catch {
+      // ignore
     }
 
     try {

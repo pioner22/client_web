@@ -103,6 +103,12 @@ test("calls: modal wires Jitsi media policy", async () => {
   assert.match(policySrc, /prejoinConfig/);
   assert.match(policySrc, /requireDisplayName:\s*false/);
   assert.match(policySrc, /enableWelcomePage:\s*false/);
+  assert.match(policySrc, /notifications:\s*\[\]/);
+  assert.match(policySrc, /hideConferenceSubject:\s*true/);
+  assert.match(policySrc, /disableSelfViewSettings:\s*true/);
+  assert.match(modalSrc, /DISABLE_JOIN_LEAVE_NOTIFICATIONS:\s*true/);
+  assert.match(modalSrc, /MOBILE_APP_PROMO:\s*false/);
+  assert.match(modalSrc, /CONNECTION_INDICATOR_DISABLED:\s*true/);
 });
 
 test("calls: modal keeps a dark live backdrop until Jitsi is ready", async () => {
@@ -131,6 +137,9 @@ test("calls: meet join URL starts the requested media unmuted and skips prejoin"
   assert.match(src, /hash\.set\("config\.startWithVideoMuted", mode === "audio" \? "true" : "false"\)/);
   assert.match(src, /hash\.set\("config\.requireDisplayName", "false"\)/);
   assert.match(src, /hash\.set\("config\.prejoinConfig\.enabled", "false"\)/);
+  assert.match(src, /hash\.set\("config\.notifications", "\[\]"\)/);
+  assert.match(src, /hash\.set\("interfaceConfig\.DISABLE_JOIN_LEAVE_NOTIFICATIONS", "true"\)/);
+  assert.match(src, /hash\.set\("interfaceConfig\.SHOW_JITSI_WATERMARK", "false"\)/);
   assert.match(src, /hash\.set\("userInfo\.displayName", name\)/);
   assert.match(src, /hash\.set\("config\.defaultLocalDisplayName", name\)/);
 });
@@ -150,7 +159,17 @@ test("calls: message context menu has selected preview and compact action height
   const css = await readCssWithImports("src/scss/modal.css");
   assert.match(featureSrc, /anchorPreview/);
   assert.match(rendererSrc, /ctx-selected-preview/);
-  assert.match(rendererSrc, /actionCount \* 44/);
+  assert.match(rendererSrc, /actionCount \* 40/);
+  assert.match(rendererSrc, /messageContextTopLimit/);
+  assert.match(rendererSrc, /data-anchor-visible/);
   assert.match(css, /\.ctx-menu\.ctx-menu-message-action-list \.ctx-selected-preview/);
-  assert.match(css, /min-height:\s*44px;/);
+  assert.match(css, /min-height:\s*40px;/);
+});
+
+test("calls: message context spotlight participates in chat render cache key", async () => {
+  const renderChatSrc = await readFile(path.resolve("src/components/chat/renderChat.ts"), "utf8");
+  const responsiveCss = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
+  assert.match(renderChatSrc, /contextMenuMessageIdx/);
+  assert.match(renderChatSrc, /state\.modal\?\.kind === "context_menu"/);
+  assert.match(responsiveCss, /\.msg-context-active\s*\{[\s\S]*filter:\s*none !important;/);
 });
