@@ -101,6 +101,22 @@ test("modalSurface: context_menu и file_viewer идут через overlay surf
   }
 });
 
+test("modalSurface: pwa_update идёт через отдельный update overlay без auth fullscreen", async () => {
+  const { resolveModalPresentation, cleanup } = await loadModalSurface();
+  try {
+    const presentation = resolveModalPresentation({
+      authed: true,
+      modal: { kind: "pwa_update" },
+    });
+    assert.equal(presentation.fullScreenKind, null);
+    assert.equal(presentation.fullScreenActive, false);
+    assert.equal(presentation.inlineModal, false);
+    assert.equal(presentation.overlaySurface, "overlay-update");
+  } finally {
+    await cleanup();
+  }
+});
+
 test("modalSurface: backdrop policy различает none / consume / close", async () => {
   const { resolveOverlayBackdropAction, cleanup } = await loadModalSurface();
   try {

@@ -2,6 +2,7 @@ import type { AppState } from "../../../stores/types";
 import { getMeetBaseUrl } from "../../../config/env";
 import { el } from "../../../helpers/dom/el";
 import { buildMeetJoinUrl } from "../../../helpers/calls/meetUrl";
+import { resolveCallDisplayName } from "../../../helpers/calls/callIdentity";
 import { loadJitsiExternalApi, resolveJitsiApiDomain, resolveJitsiExternalApiScriptUrl } from "../../../helpers/calls/jitsiExternalApi";
 import {
   CALL_QUALITY_UNKNOWN,
@@ -360,7 +361,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     btn.classList.toggle("call-ctl-on", muted === false);
   }
 
-  async function ensureJitsi(roomName: string, mode: "audio" | "video", joinUrl: string, title: string) {
+  async function ensureJitsi(roomName: string, mode: "audio" | "video", joinUrl: string, title: string, displayName: string) {
     const base = getMeetBaseUrl();
     const domain = resolveJitsiApiDomain(base);
     const scriptUrl = resolveJitsiExternalApiScriptUrl(base);
@@ -400,7 +401,10 @@ export function createCallModal(actions: CallModalActions): CallModalController 
 
     try {
       showJitsiHost(mode === "video" ? "Подключаем видео…" : "Подключаем аудио…");
-      const configOverwrite = buildJitsiMediaPolicy(mode);
+      const configOverwrite = {
+        ...buildJitsiMediaPolicy(mode),
+        defaultLocalDisplayName: displayName,
+      };
       const interfaceConfigOverwrite: Record<string, unknown> = {
         TOOLBAR_BUTTONS: [],
         SHOW_JITSI_WATERMARK: false,
@@ -413,6 +417,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
         height: "100%",
         configOverwrite,
         interfaceConfigOverwrite,
+        userInfo: { displayName },
       });
     } catch {
       jitsiApi = null;
@@ -561,7 +566,8 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   function update(state: AppState, modal: Extract<AppState["modal"], { kind: "call" }>) {
     const roomName = normalizeId(modal.roomName);
     const mode = modal.mode === "audio" ? "audio" : "video";
-    const joinUrl = roomName ? buildMeetJoinUrl(roomName, mode) : null;
+    const selfDisplayName = resolveCallDisplayName(state);
+    const joinUrl = roomName ? buildMeetJoinUrl(roomName, mode, selfDisplayName) : null;
 
     const phase = modal.phase ?? (modal.callId && roomName ? "active" : roomName ? "ringing" : "creating");
     const incoming = Boolean(modal.incoming);
@@ -719,11 +725,11 @@ export function createCallModal(actions: CallModalActions): CallModalController 
         const canInitAfterAttach = lastPhase === "active" || (!lastIncoming && lastPhase === "ringing");
         if (!canInitAfterAttach) return;
         if (String(lastJoinUrl || "").trim() !== String(joinUrl || "").trim()) return;
-        void ensureJitsi(roomName, mode, joinUrl, peerLabel || "Звонок");
+        void ensureJitsi(roomName, mode, joinUrl, peerLabel || "Звонок", selfDisplayName);
       });
       return;
     }
-    void ensureJitsi(roomName, mode, joinUrl, peerLabel || "Звонок");
+    void ensureJitsi(roomName, mode, joinUrl, peerLabel || "Звонок", selfDisplayName);
   }
 
   return { root, update, destroy };

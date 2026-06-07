@@ -1,7 +1,7 @@
 import type { AppState } from "../../../stores/types";
 
-export type FullScreenModalKind = "auth" | "welcome" | "logout" | "update" | "pwa_update";
-export type OverlaySurface = "overlay-auth" | "overlay-context" | "overlay-viewer";
+export type FullScreenModalKind = "auth" | "welcome" | "logout" | "update";
+export type OverlaySurface = "overlay-auth" | "overlay-context" | "overlay-viewer" | "overlay-update";
 export type OverlayBackdropAction = "none" | "consume" | "close";
 
 export interface ModalPresentation {
@@ -21,7 +21,6 @@ export function resolveModalPresentation(state: ModalStateLike): ModalPresentati
     modalKind === "welcome" ||
     modalKind === "logout" ||
     modalKind === "update" ||
-    modalKind === "pwa_update" ||
     modalKind === "auth"
       ? modalKind
       : authOnly
@@ -30,6 +29,7 @@ export function resolveModalPresentation(state: ModalStateLike): ModalPresentati
 
   let overlaySurface: OverlaySurface | null = null;
   if (fullScreenKind) overlaySurface = "overlay-auth";
+  else if (modalKind === "pwa_update") overlaySurface = "overlay-update";
   else if (modalKind === "context_menu") overlaySurface = "overlay-context";
   else if (modalKind === "file_viewer" || modalKind === "call") overlaySurface = "overlay-viewer";
 
@@ -60,6 +60,7 @@ export function applyOverlaySurface(overlay: HTMLElement, surface: OverlaySurfac
   const hasOverlay = Boolean(nextNode);
   overlay.classList.toggle("hidden", !hasOverlay);
   overlay.classList.toggle("overlay-context", hasOverlay && surface === "overlay-context");
+  overlay.classList.toggle("overlay-update", hasOverlay && surface === "overlay-update");
   overlay.classList.toggle(
     "overlay-context-sheet",
     hasOverlay && surface === "overlay-context" && Boolean(nextNode?.classList.contains("ctx-menu-sheet"))

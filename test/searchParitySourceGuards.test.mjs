@@ -20,6 +20,8 @@ test("search page polish: global search keeps the modern shell and compact resul
   assert.doesNotMatch(pageSrc, /class: "chat-title" \}, \["Поиск"\]/);
   assert.match(cssSrc, /\.page-search \.search-shell/);
   assert.match(cssSrc, /\.page-search \.search-field:focus-within/);
+  assert.match(cssSrc, /\.page-search \.search-input:focus/);
+  assert.match(cssSrc, /border-radius:\s*999px;/);
   assert.match(cssSrc, /\.page-search \.result-item/);
   assert.match(cssSrc, /\.page-search \.page-actions \.btn/);
 });

@@ -95,9 +95,14 @@ test("calls: modal wires Jitsi media policy", async () => {
   const modalSrc = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
   const policySrc = await readFile(path.resolve("src/helpers/calls/jitsiMediaPolicy.ts"), "utf8");
   assert.match(modalSrc, /buildJitsiMediaPolicy\(mode\)/);
+  assert.match(modalSrc, /userInfo:\s*\{\s*displayName\s*\}/);
+  assert.match(modalSrc, /defaultLocalDisplayName:\s*displayName/);
   assert.match(policySrc, /maxBitratesVideo/);
   assert.match(policySrc, /enableLayerSuspension/);
   assert.match(policySrc, /saveData/);
+  assert.match(policySrc, /prejoinConfig/);
+  assert.match(policySrc, /requireDisplayName:\s*false/);
+  assert.match(policySrc, /enableWelcomePage:\s*false/);
 });
 
 test("calls: modal keeps a dark live backdrop until Jitsi is ready", async () => {
@@ -113,16 +118,21 @@ test("calls: modal keeps a dark live backdrop until Jitsi is ready", async () =>
   assert.match(css, /opacity:\s*0;\n\s*pointer-events:\s*none;/);
   assert.match(css, /\.call-jitsi-ready \.call-live-backdrop/);
   assert.match(css, /\.call-iframe-ready \.call-live-backdrop/);
-  assert.doesNotMatch(css, /\.call-iframe-loaded \.call-live-backdrop/);
+  assert.match(css, /\.call-iframe-loaded \.call-live-backdrop/);
+  assert.match(css, /overflow-wrap:\s*anywhere;/);
   assert.doesNotMatch(css, /opacity:\s*0\.16;/);
   assert.match(modalSrc, /call-iframe-loaded/);
   assert.match(modalSrc, /Открыть видеомост/);
 });
 
-test("calls: meet join URL starts the requested media unmuted", async () => {
+test("calls: meet join URL starts the requested media unmuted and skips prejoin", async () => {
   const src = await readFile(path.resolve("src/helpers/calls/meetUrl.ts"), "utf8");
   assert.match(src, /hash\.set\("config\.startWithAudioMuted", "false"\)/);
   assert.match(src, /hash\.set\("config\.startWithVideoMuted", mode === "audio" \? "true" : "false"\)/);
+  assert.match(src, /hash\.set\("config\.requireDisplayName", "false"\)/);
+  assert.match(src, /hash\.set\("config\.prejoinConfig\.enabled", "false"\)/);
+  assert.match(src, /hash\.set\("userInfo\.displayName", name\)/);
+  assert.match(src, /hash\.set\("config\.defaultLocalDisplayName", name\)/);
 });
 
 test("calls: incoming notification fallback works before lazy tab notifier loads", async () => {

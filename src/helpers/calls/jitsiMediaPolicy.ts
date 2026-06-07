@@ -50,7 +50,13 @@ export function buildJitsiMediaPolicy(mode: JitsiCallMode, hints: JitsiMediaHint
   const standard = standardVideoBitrate(height);
   return {
     prejoinPageEnabled: false,
+    prejoinConfig: {
+      enabled: false,
+    },
     disableDeepLinking: true,
+    enableWelcomePage: false,
+    requireDisplayName: false,
+    disableInviteFunctions: true,
     startWithVideoMuted: mode === "audio",
     startWithAudioMuted: false,
     toolbarButtons: [],

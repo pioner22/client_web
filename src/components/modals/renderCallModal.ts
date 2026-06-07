@@ -1,6 +1,7 @@
 import type { AppState } from "../../stores/types";
 import { el } from "../../helpers/dom/el";
 import { buildMeetJoinUrl } from "../../helpers/calls/meetUrl";
+import { resolveCallDisplayName } from "../../helpers/calls/callIdentity";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { copyText } from "../../helpers/dom/copyText";
 
@@ -17,7 +18,7 @@ export function renderCallModal(
   const title = String(modal.title || "Звонок").trim() || "Звонок";
   const mode = modal.mode === "audio" ? "audio" : "video";
   const roomName = String(modal.roomName || "").trim();
-  const joinUrl = roomName ? buildMeetJoinUrl(roomName, mode) : null;
+  const joinUrl = roomName ? buildMeetJoinUrl(roomName, mode, resolveCallDisplayName(state)) : null;
   const phase = modal.phase ?? (modal.callId && roomName ? "active" : roomName ? "ringing" : "creating");
   const phaseLabel = phase === "active" ? "в звонке" : phase === "ringing" ? "звоним…" : "создание…";
 

@@ -2,6 +2,7 @@ import { getMeetBaseUrl } from "../../../config/env";
 import type { AppState, TargetRef } from "../../../stores/types";
 import type { Store } from "../../../stores/store";
 import { buildMeetJoinUrl, type CallMode } from "../../../helpers/calls/meetUrl";
+import { resolveCallDisplayName } from "../../../helpers/calls/callIdentity";
 import {
   canUseDesktopMediaPermissions,
   formatMediaAccessError,
@@ -638,7 +639,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     if (!modal || modal.kind !== "call" || String(modal.callId || "").trim() !== callId) return;
     const roomName = String(modal.roomName || "").trim();
     const mode: CallMode = String(modal.mode || "").trim() === "audio" ? "audio" : "video";
-    const joinUrl = roomName ? buildMeetJoinUrl(roomName, mode) : null;
+    const joinUrl = roomName ? buildMeetJoinUrl(roomName, mode, resolveCallDisplayName(stBefore)) : null;
     if (!joinUrl) {
       showToast("Звонки не настроены (нет meet URL)", { kind: "warn", timeoutMs: 7000 });
       if (stBefore.conn === "connected" && stBefore.authed) {
@@ -791,7 +792,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       if (!callId || !roomName) return true;
 
       const st = store.get();
-      const joinUrl = buildMeetJoinUrl(roomName, mode);
+      const joinUrl = buildMeetJoinUrl(roomName, mode, resolveCallDisplayName(st));
       if (!joinUrl) {
         showToast("Звонки не настроены (нет meet URL)", { kind: "warn", timeoutMs: 7000 });
         if (st.conn === "connected" && st.authed) {
@@ -887,7 +888,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       }
 
       const title = callTitleForIncoming(stNow, fromId, mode, roomId || null, formatTargetLabel, formatSenderLabel);
-      const joinUrl = buildMeetJoinUrl(roomName, mode);
+      const joinUrl = buildMeetJoinUrl(roomName, mode, resolveCallDisplayName(stNow));
       if (!joinUrl) {
         showToast("Звонки не настроены (нет meet URL)", { kind: "warn", timeoutMs: 7000 });
         if (stNow.conn === "connected" && stNow.authed) {
