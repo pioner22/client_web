@@ -13,7 +13,6 @@ import {
   type DesktopCapturePermissionResult,
   type MediaAccessKind,
 } from "../../../helpers/media/permissions";
-import { isMobileLikeUi } from "../../../helpers/ui/mobileLike";
 import { isIOS, isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
 import type { TabNotifierLike } from "../../../helpers/notify/tabNotifierLazy";
 
@@ -39,6 +38,8 @@ export interface CallsFeatureDeps {
 
 export type CallModalState = Extract<AppState["modal"], { kind: "call" }>;
 type CallPermissionState = NonNullable<CallModalState["permission"]>;
+
+const CALL_RING_TIMEOUT_MS = 45_000;
 
 export interface CallsFeature {
   startCall: (mode: CallMode) => void;
@@ -74,17 +75,6 @@ function formatCallCreateError(reasonRaw: string, limit?: number): string {
     return lim > 0 ? `Слишком много участников (лимит ${lim})` : "Слишком много участников";
   }
   return map[reason] ?? (reason || "ошибка");
-}
-
-function tryOpenExternal(url: string): boolean {
-  const u = String(url || "").trim();
-  if (!u) return false;
-  try {
-    const opened = window.open(u, "_blank", "noopener,noreferrer");
-    return Boolean(opened);
-  } catch {
-    return false;
-  }
 }
 
 function callTitleForTarget(
@@ -201,6 +191,8 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
   const { store, send, showToast, tabNotifier, formatTargetLabel, formatSenderLabel } = deps;
   let callCreateLocalId: string | null = null;
   let callCreateTimeoutTimer: number | null = null;
+  let callRingingTimeoutTimer: number | null = null;
+  let callRingingTimeoutCallId = "";
   let mediaAccessInFlight = false;
   const abortedLocalIds = new Map<string, number>();
 
@@ -233,6 +225,46 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     if (callCreateTimeoutTimer === null) return;
     window.clearTimeout(callCreateTimeoutTimer);
     callCreateTimeoutTimer = null;
+  }
+
+  function clearCallRingingTimeout(callIdRaw?: string) {
+    const callId = String(callIdRaw || "").trim();
+    if (callId && callRingingTimeoutCallId && callRingingTimeoutCallId !== callId) return;
+    if (callRingingTimeoutTimer !== null) {
+      try {
+        window.clearTimeout(callRingingTimeoutTimer);
+      } catch {
+        // ignore
+      }
+    }
+    callRingingTimeoutTimer = null;
+    callRingingTimeoutCallId = "";
+  }
+
+  function startCallRingingTimeout(callIdRaw: string, incoming: boolean) {
+    const callId = String(callIdRaw || "").trim();
+    if (!callId) return;
+    clearCallRingingTimeout();
+    callRingingTimeoutCallId = callId;
+    callRingingTimeoutTimer = window.setTimeout(() => {
+      if (callRingingTimeoutCallId !== callId) return;
+      callRingingTimeoutTimer = null;
+      callRingingTimeoutCallId = "";
+      const stNow = store.get();
+      const modal = stNow.modal;
+      if (!modal || modal.kind !== "call" || String(modal.callId || "").trim() !== callId) return;
+      const phase = modal.phase ?? (modal.roomName ? "ringing" : "creating");
+      if (phase !== "ringing") return;
+      if (stNow.conn === "connected" && stNow.authed) {
+        try {
+          send({ type: incoming ? "call_reject" : "call_end", call_id: callId });
+        } catch {
+          // ignore
+        }
+      }
+      store.set({ modal: null, status: incoming ? "Вызов пропущен" : "Нет ответа" });
+      showToast(incoming ? "Вызов пропущен" : "Нет ответа", { kind: "warn", timeoutMs: 7000 });
+    }, CALL_RING_TIMEOUT_MS);
   }
 
   function markAbortedLocalId(localId: string) {
@@ -634,6 +666,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
   async function acceptCallInternal(callIdRaw: string, opts?: { skipMediaAccess?: boolean }) {
     const callId = String(callIdRaw || "").trim();
     if (!callId) return;
+    clearCallRingingTimeout(callId);
     const stBefore = store.get();
     const modal = stBefore.modal;
     if (!modal || modal.kind !== "call" || String(modal.callId || "").trim() !== callId) return;
@@ -670,18 +703,6 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
       }
     }
 
-    if (isMobileLikeUi()) {
-      if (tryOpenExternal(joinUrl)) {
-        store.set({ modal: null, status: "Звонок открыт в новой вкладке" });
-        showToast("Звонок открыт в новой вкладке", { kind: "success", timeoutMs: 6000 });
-        return;
-      }
-      showToast("Браузер заблокировал новую вкладку. Используйте кнопку «Открыть отдельно».", {
-        kind: "warn",
-        timeoutMs: 7000,
-      });
-    }
-
     store.set((prev) => {
       if (prev.modal?.kind !== "call" || String(prev.modal.callId || "").trim() !== callId) return prev;
       return { ...prev, modal: { ...prev.modal, phase: "active", phaseAt: Date.now() }, status: "Звонок…" };
@@ -694,6 +715,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     const stNow = store.get();
     const modal = stNow.modal;
     if (!modal || modal.kind !== "call" || String(modal.callId || "").trim() !== callId) return;
+    clearCallRingingTimeout(callId);
     if (stNow.conn === "connected" && stNow.authed) {
       try {
         send({ type: "call_reject", call_id: callId });
@@ -724,6 +746,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
     const modal = st.modal;
     if (!modal || modal.kind !== "call") return;
     const callId = String(modal.callId || "").trim();
+    clearCallRingingTimeout(callId);
     const incoming = Boolean(modal.incoming);
     const phase = modal.phase ?? (callId && modal.roomName ? "active" : modal.roomName ? "ringing" : "creating");
     if (callId && st.conn === "connected" && st.authed) {
@@ -823,6 +846,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         },
         status: "Звонок…",
       });
+      startCallRingingTimeout(callId, false);
       if (tabNotifier.shouldShowToast(`call_ringing:${callId}`)) {
         const targetLabel = target ? formatTargetLabel(st, target) : "";
         showToast(targetLabel ? `Вызываем: ${targetLabel}` : "Вызываем…", {
@@ -862,6 +886,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
               },
             };
           });
+          startCallRingingTimeout(callId, true);
           return true;
         }
         if (stNow.conn === "connected" && stNow.authed) {
@@ -916,6 +941,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
         },
         status: title,
       });
+      startCallRingingTimeout(callId, true);
       if (tabNotifier.shouldShowToast(`call_invite_toast:${callId}`)) {
         showToast(title, {
           kind: "info",
@@ -939,13 +965,16 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
 
       if (stNow.modal?.kind === "call" && stNow.modal.callId === callId) {
         if (state === "ended") {
+          clearCallRingingTimeout(callId);
           store.set({ modal: null });
         } else if (state === "active") {
+          clearCallRingingTimeout(callId);
           store.set((prev) => {
             if (prev.modal?.kind !== "call" || prev.modal.callId !== callId) return prev;
             return { ...prev, modal: { ...prev.modal, phase: "active", phaseAt: Date.now() }, status: "В звонке" };
           });
         } else if (state === "ringing") {
+          startCallRingingTimeout(callId, Boolean(stNow.modal.incoming));
           store.set((prev) => {
             if (prev.modal?.kind !== "call" || prev.modal.callId !== callId) return prev;
             return { ...prev, modal: { ...prev.modal, phase: "ringing", phaseAt: Date.now() } };

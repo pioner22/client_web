@@ -1,4 +1,5 @@
 import { APP_VERSION } from "../../../config/app";
+import { stashSessionTokenForReload } from "../../../helpers/auth/session";
 import { buildClientInfoTags } from "../../../helpers/device/clientTags";
 import { storeActiveBuildId } from "../../../helpers/pwa/buildIdStore";
 import { getPwaStabilityHoldRemainingMs, readPwaStabilityHold } from "../../../helpers/pwa/stabilityHold";
@@ -197,6 +198,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   }
 
   function navigateForUpdateReload(reason?: string) {
+    stashSessionTokenForReload(reason || "pwa_update");
     try {
       sessionStorage.setItem("yagodka_updating", "1");
     } catch {
@@ -313,6 +315,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
 
   async function resetPwaCachesAndServiceWorkers(reason: string): Promise<void> {
     logPwaUpdate("manual_pwa_reset", reason || "unknown");
+    stashSessionTokenForReload(`pwa_reset:${reason || "unknown"}`);
     try {
       const regs = await navigator.serviceWorker.getRegistrations();
       await Promise.all(

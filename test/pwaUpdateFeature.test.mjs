@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -72,6 +72,13 @@ function makeEventTarget() {
     },
   };
 }
+
+test("pwaUpdateFeature: update reload stashes runtime session before navigation", async () => {
+  const src = await readFile(path.resolve("src/app/features/pwa/pwaUpdateFeature.ts"), "utf8");
+  assert.match(src, /stashSessionTokenForReload/);
+  assert.match(src, /stashSessionTokenForReload\(reason \|\| "pwa_update"\)/);
+  assert.match(src, /stashSessionTokenForReload\(`pwa_reset:\$\{reason \|\| "unknown"\}`\)/);
+});
 
 test("pwaUpdateFeature: новый BUILD_ID не подменяет clientVersion до реального reload", async () => {
   const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");

@@ -65,11 +65,30 @@ test("calls: client sends call_invite_ack and dedupes same call invite", async (
   assert.match(src, /currentCallId === callId/);
 });
 
-test("calls: popup-blocked mobile accept does not report false success", async () => {
+test("calls: accepted call stays in the in-app call surface", async () => {
   const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
-  assert.match(src, /const opened = window\.open\(u, "_blank", "noopener,noreferrer"\);/);
-  assert.match(src, /return Boolean\(opened\);/);
-  assert.match(src, /Браузер заблокировал новую вкладку/);
+  assert.doesNotMatch(src, /isMobileLikeUi/);
+  assert.doesNotMatch(src, /window\.open\(u, "_blank", "noopener,noreferrer"\)/);
+  assert.match(src, /phase:\s*"active"/);
+});
+
+test("calls: ringing calls have a bounded cleanup timeout", async () => {
+  const src = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
+  assert.match(src, /CALL_RING_TIMEOUT_MS = 45_000/);
+  assert.match(src, /startCallRingingTimeout\(callId, false\)/);
+  assert.match(src, /startCallRingingTimeout\(callId, true\)/);
+  assert.match(src, /clearCallRingingTimeout\(callId\)/);
+  assert.match(src, /Вызов пропущен/);
+});
+
+test("calls: modal exposes speaker route control with iPhone fallback", async () => {
+  const modalSrc = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
+  const css = await readCssWithImports("src/scss/modal.css");
+  assert.match(modalSrc, /data-icon": "speaker"/);
+  assert.match(modalSrc, /setAudioOutputDevice/);
+  assert.match(modalSrc, /На iPhone аудиовывод переключается системно/);
+  assert.match(css, /\.call-ctl\[data-icon="speaker"\]::before/);
+  assert.match(css, /\.call-ctl-route-unsupported/);
 });
 
 test("calls: jitsi external API uses configured meet host", async () => {

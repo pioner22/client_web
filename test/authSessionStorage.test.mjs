@@ -163,6 +163,53 @@ test("auth/session: normalizeToken отбрасывает мусор и не п�
   }
 });
 
+test("auth/session: update reload carry переживает техническую перезагрузку без localStorage/cookie", async () => {
+  const localStorage = mkStorage();
+  const sessionStorage = mkStorage();
+  const { doc } = mkCookieDoc();
+  const token = "C".repeat(32);
+
+  const first = await loadSessionModule();
+  try {
+    withGlobals(
+      {
+        document: doc,
+        localStorage,
+        sessionStorage,
+        window: { location: { protocol: "https:", hostname: "yagodka.org" } },
+      },
+      () => {
+        first.mod.storeSessionToken(token);
+        assert.equal(first.mod.stashSessionTokenForReload("pwa_update"), true);
+        assert.equal(localStorage.getItem("yagodka_auth_session"), null);
+        assert.equal(sessionStorage.getItem("yagodka_auth_session"), null);
+        assert.ok(sessionStorage.getItem("yagodka_session_reload_v1"));
+      }
+    );
+  } finally {
+    await first.cleanup();
+  }
+
+  const second = await loadSessionModule();
+  try {
+    withGlobals(
+      {
+        document: doc,
+        localStorage,
+        sessionStorage,
+        window: { location: { protocol: "https:", hostname: "yagodka.org" } },
+      },
+      () => {
+        assert.equal(second.mod.getStoredSessionToken(), token);
+        second.mod.storeSessionToken("D".repeat(32));
+        assert.equal(sessionStorage.getItem("yagodka_session_reload_v1"), null);
+      }
+    );
+  } finally {
+    await second.cleanup();
+  }
+});
+
 test("auth/session: legacy persistent token больше не мигрирует и сразу очищается", async () => {
   const { mod, cleanup } = await loadSessionModule();
   try {
