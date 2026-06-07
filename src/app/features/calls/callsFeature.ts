@@ -880,7 +880,7 @@ export function createCallsFeature(deps: CallsFeatureDeps): CallsFeature {
           const title = "Ягодка: звонок";
           const body = roomId ? `Чат: ${formatTargetLabel(stNow, { kind: "group", id: roomId })}` : `От: ${formatSenderLabel(stNow, fromId)}`;
           const tag = roomId ? `yagodka:room:${roomId}` : `yagodka:dm:${fromId}`;
-          new Notification(title, { body, tag, silent: true });
+          new Notification(title, { body, tag, silent: false });
         }
       } catch {
         // ignore

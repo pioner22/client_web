@@ -782,11 +782,11 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-item {
-  min-height: 50px;
-  padding: 8px 18px 8px 17px;
+  min-height: 44px;
+  padding: 7px 16px;
   border-radius: 0;
-  font-size: 18px;
-  gap: 14px;
+  font-size: 17px;
+  gap: 12px;
   background: transparent;
   color: rgba(250, 250, 252, 0.94);
 }
@@ -868,7 +868,7 @@
 
 .ctx-menu.ctx-menu-message-action-list .ctx-list {
   width: min(var(--ctx-action-list-w, 286px), calc(100vw - 32px));
-  max-height: min(var(--ctx-list-max-h, 380px), calc(100dvh - 126px));
+  max-height: min(var(--ctx-list-max-h, 318px), calc(100dvh - 156px));
   gap: 0;
   padding: 10px 0;
   border: 1px solid var(--ctx-menu-message-glass-border);
@@ -877,6 +877,27 @@
   -webkit-backdrop-filter: blur(30px) saturate(1.22);
   backdrop-filter: blur(30px) saturate(1.22);
   box-shadow: var(--ctx-menu-message-shadow);
+}
+
+.ctx-menu.ctx-menu-message-action-list .ctx-selected-preview {
+  width: min(var(--ctx-action-list-w, 286px), calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  min-height: 42px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding: 9px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 17px;
+  background: rgba(42, 36, 49, 0.78);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-weight: 640;
+  line-height: 1.25;
+  box-shadow: var(--ctx-menu-message-shadow);
+  -webkit-backdrop-filter: blur(26px) saturate(1.18);
+  backdrop-filter: blur(26px) saturate(1.18);
 }
 
 .ctx-list::-webkit-scrollbar {
@@ -941,9 +962,9 @@
 }
 
 .ctx-menu.ctx-menu-message-action-list .ctx-react {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   border: 0;
   background: transparent;
   font-size: 25px;

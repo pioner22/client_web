@@ -327,8 +327,8 @@ test("context menu/pin remediation source guards: modern sheet, compact message 
   assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-reacts\s*\{[\s\S]*border-radius:\s*999px;/);
   assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-reacts\s*\{[\s\S]*width:\s*min\(var\(--ctx-react-pill-w,\s*286px\),\s*calc\(100vw - 24px\)\)/);
   assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-react\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
-  assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-item\s*\{[\s\S]*min-height:\s*50px;/);
-  assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-label\s*\{[\s\S]*font-size:\s*18px;/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-item\s*\{[\s\S]*min-height:\s*44px;/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-item\s*\{[\s\S]*font-size:\s*17px;/);
   assert.match(modalCss, /--ctx-menu-message-glass-bg:\s*rgba\(21,\s*19,\s*27,\s*0\.82\)/);
   assert.match(modalCss, /\.overlay\.overlay-context\.overlay-context-message\s*\{[\s\S]*backdrop-filter:\s*none;/);
   assert.match(modalCss, /\.ctx-close::before\s*\{[\s\S]*display:\s*block;/);

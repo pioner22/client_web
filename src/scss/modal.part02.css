@@ -583,13 +583,18 @@ input.modal-input[type="file"]::file-selector-button:active {
   pointer-events: auto;
 }
 
-.call-jitsi-ready .call-live-backdrop,
-.call-iframe-ready .call-live-backdrop {
+.call-iframe-loaded iframe {
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.call-jitsi-ready .call-live-backdrop {
   opacity: 0;
   visibility: hidden;
 }
 
 .call-jitsi-failed .call-live-backdrop,
+.call-iframe-loaded .call-live-backdrop,
 .call-iframe-failed .call-live-backdrop {
   opacity: 1;
   visibility: visible;
@@ -636,6 +641,7 @@ input.modal-input[type="file"]::file-selector-button:active {
     0 1px 0 rgba(255, 255, 255, 0.12) inset;
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   backdrop-filter: blur(20px) saturate(150%);
+  pointer-events: auto;
 }
 
 .call-live-avatar {
@@ -693,6 +699,32 @@ input.modal-input[type="file"]::file-selector-button:active {
   font-weight: 780;
   line-height: 1;
   white-space: nowrap;
+}
+
+.call-live-open {
+  min-height: 38px;
+  max-width: 100%;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 820;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+.call-live-open:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.call-live-open:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .call-live-progress {

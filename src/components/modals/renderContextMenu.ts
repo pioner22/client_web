@@ -179,10 +179,14 @@ function applyCompactMessageGeometry(root: HTMLElement, payload: ContextMenuPayl
   const viewportH = Math.max(320, Number(window.innerHeight || 0));
   const pad = 12;
   const rect = root.getBoundingClientRect();
+  const actionCount = payload.items.filter((item) => !item.separator).length;
+  const sepCount = payload.items.filter((item) => item.separator).length;
   const stackWidth = Math.min(286, viewportW - pad * 2);
   const actionWidth = Math.min(286, viewportW - 32);
   const width = Math.max(260, Math.min(rect.width || stackWidth, viewportW - pad * 2));
-  const height = Math.max(250, Math.min(rect.height || 430, viewportH - pad * 2));
+  const actionListHeight = Math.min(318, 18 + actionCount * 44 + sepCount * 9);
+  const previewHeight = payload.anchorPreview ? 54 : 0;
+  const height = Math.max(190, Math.min(rect.height || actionListHeight + previewHeight + 62, viewportH - pad * 2));
   const messageRect = findMessageAnchorRect(payload);
   const composerRect = composerAvoidRect();
   const bottomLimit =
@@ -216,8 +220,8 @@ function applyCompactMessageGeometry(root: HTMLElement, payload: ContextMenuPayl
   root.style.top = `${Math.round(top)}px`;
   root.style.setProperty("--ctx-react-pill-w", `${Math.round(stackWidth)}px`);
   root.style.setProperty("--ctx-action-list-w", `${Math.round(actionWidth)}px`);
-  root.style.setProperty("--ctx-list-max-h", `${Math.max(220, Math.min(380, height - 66))}px`);
-  root.style.maxHeight = `${Math.max(280, Math.min(480, bottomLimit - pad))}px`;
+  root.style.setProperty("--ctx-list-max-h", `${Math.max(132, Math.min(318, actionListHeight))}px`);
+  root.style.maxHeight = `${Math.max(228, Math.min(420, bottomLimit - pad))}px`;
   root.setAttribute("data-anchor", messageRect ? "message-row" : "tap");
   root.setAttribute("data-align", rightLeaning ? "end" : "start");
   root.setAttribute("data-stack-position", preferAbove ? "above-message" : "below-message");
@@ -305,6 +309,11 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
         })()
       : null;
 
+  const anchorPreview =
+    compactMessage && payload.anchorPreview
+      ? el("div", { class: "ctx-selected-preview", "aria-hidden": "true" }, [String(payload.anchorPreview).trim()])
+      : null;
+
   const nodes = payload.items.map((it) => {
     if (it.separator) {
       return el("div", { class: "ctx-sep", role: "separator", "aria-hidden": "true" });
@@ -338,7 +347,12 @@ export function renderContextMenu(payload: ContextMenuPayload, actions: ContextM
     return btn;
   });
 
-  root.append(...(header ? [header] : []), ...(reactionBar ? [reactionBar] : []), el("div", { class: "ctx-list" }, nodes));
+  root.append(
+    ...(header ? [header] : []),
+    ...(reactionBar ? [reactionBar] : []),
+    ...(anchorPreview ? [anchorPreview] : []),
+    el("div", { class: "ctx-list" }, nodes)
+  );
 
   root.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {

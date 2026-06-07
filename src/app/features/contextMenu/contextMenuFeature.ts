@@ -438,6 +438,7 @@ export function createContextMenuFeature(deps: ContextMenuFeatureDeps): ContextM
           title,
           target,
           items,
+          ...(target.kind === "message" && title ? { anchorPreview: title } : {}),
           ...(reactionBar ? { reactionBar } : {}),
         },
       },

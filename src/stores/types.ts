@@ -109,6 +109,7 @@ export interface ContextMenuPayload {
   title: string;
   target: ContextMenuTarget;
   items: ContextMenuItem[];
+  anchorPreview?: string;
   reactionBar?: { emojis: string[]; active?: string | null };
 }
 

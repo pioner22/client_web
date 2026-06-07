@@ -11,6 +11,7 @@ let loadedNotifier: RealTabNotifier | null = null;
 let loadPromise: Promise<RealTabNotifier | null> | null = null;
 let installRequested = false;
 let resolveInstanceId: (() => string) | null = null;
+const fallbackNotified = new Map<string, number>();
 
 function docHidden(): boolean {
   try {
@@ -27,6 +28,28 @@ function docFocused(): boolean {
   } catch {
     return false;
   }
+}
+
+function notificationPermissionGranted(): boolean {
+  try {
+    return typeof Notification !== "undefined" && Notification.permission === "granted";
+  } catch {
+    return false;
+  }
+}
+
+function shouldAndMarkFallback(kind: string, notifKey: string, ttlMs = 120_000): boolean {
+  const key = `${kind}:${String(notifKey || "").trim()}`;
+  if (!key || key.endsWith(":")) return false;
+  const now = Date.now();
+  const prev = fallbackNotified.get(key) || 0;
+  if (prev && now - prev < ttlMs) return false;
+  fallbackNotified.set(key, now);
+  if (fallbackNotified.size > 80) {
+    const entries = Array.from(fallbackNotified.entries()).sort((a, b) => a[1] - b[1]);
+    for (const [oldKey] of entries.slice(0, Math.max(0, entries.length - 80))) fallbackNotified.delete(oldKey);
+  }
+  return true;
 }
 
 function fallbackSnapshot(): ReturnType<TabNotifierLike["getSnapshot"]> {
@@ -90,9 +113,9 @@ export function getTabNotifier(getInstanceId: () => string): TabNotifierLike {
     shouldShowSystemNotification(notifKey, ttlMs) {
       if (loadedNotifier) return loadedNotifier.shouldShowSystemNotification(notifKey, ttlMs);
       primeNotifier();
-      void notifKey;
-      void ttlMs;
-      return false;
+      if (!notificationPermissionGranted()) return false;
+      if (docFocused()) return false;
+      return shouldAndMarkFallback("system", notifKey, ttlMs);
     },
   };
   return singleton;

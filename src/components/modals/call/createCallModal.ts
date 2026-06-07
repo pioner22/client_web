@@ -115,6 +115,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
   const liveTitleEl = el("div", { class: "call-live-title" }, ["Звонок"]);
   const liveSubEl = el("div", { class: "call-live-sub" }, [""]);
   const liveStatusEl = el("div", { class: "call-live-status" }, ["Подключаемся…"]);
+  const liveOpenBtn = el("button", { class: "call-live-open hidden", type: "button" }, ["Открыть видеомост"]) as HTMLButtonElement;
   const liveBackdrop = el("div", { class: "call-live-backdrop", "aria-hidden": "true" }, [
     el("div", { class: "call-live-card" }, [
       liveAvatarEl,
@@ -122,6 +123,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       liveSubEl,
       el("div", { class: "call-live-progress", "aria-hidden": "true" }, [""]),
       liveStatusEl,
+      liveOpenBtn,
     ]),
   ]);
 
@@ -237,7 +239,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     audioMuted = null;
     videoMuted = null;
     jitsiHost.classList.remove("call-jitsi-ready", "call-jitsi-failed");
-    iframeHost.classList.remove("call-iframe-ready", "call-iframe-failed");
+    iframeHost.classList.remove("call-iframe-ready", "call-iframe-loaded", "call-iframe-failed");
     micBtn.disabled = true;
     camBtn.disabled = true;
     micBtn.classList.remove("call-ctl-off", "call-ctl-on");
@@ -274,6 +276,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     updateLiveStatus(status);
     attachLiveBackdrop(iframeHost);
     iframeHost.classList.remove("call-iframe-ready", "call-iframe-failed");
+    iframeHost.classList.remove("call-iframe-loaded");
     if (surface.firstElementChild !== iframeHost) surface.replaceChildren(iframeHost);
   }
 
@@ -302,8 +305,8 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       iframe.addEventListener("load", () => {
         window.setTimeout(() => {
           fallbackIframeReady = true;
-          iframeHost.classList.add("call-iframe-ready");
-          updateLiveStatus("Открыт резервный видеомост");
+          iframeHost.classList.add("call-iframe-loaded");
+          updateLiveStatus("Видеомост открыт. Если экран пустой, откройте отдельно");
         }, 420);
       });
       iframe.addEventListener("error", () => {
@@ -316,7 +319,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     }
     showIframeHost("Открываем резервный видеомост…");
     if (!iframeHost.contains(iframe)) iframeHost.append(iframe);
-    if (fallbackIframeReady) iframeHost.classList.add("call-iframe-ready");
+    if (fallbackIframeReady) iframeHost.classList.add("call-iframe-loaded");
   }
 
   function showHero() {
@@ -518,6 +521,11 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       copyBtn.setAttribute("aria-label", copyDefaultLabel);
     }, 2000);
   });
+  liveOpenBtn.addEventListener("click", () => {
+    const url = String(lastJoinUrl || "").trim();
+    if (!url) return;
+    actions.onOpenExternal(url);
+  });
   permissionPrimaryBtn.addEventListener("click", () => {
     actions.onRequestMediaAccess();
   });
@@ -597,6 +605,8 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     // Open/copy availability.
     openExternalBtn.disabled = !joinUrl;
     copyBtn.disabled = !joinUrl;
+    liveOpenBtn.disabled = !joinUrl;
+    liveOpenBtn.classList.toggle("hidden", !joinUrl);
 
     // Preload the Jitsi External API early so join is fast when the call becomes active.
     if (joinUrl) {
@@ -661,9 +671,9 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       return;
     }
 
-    // Show meeting as early as possible for outgoing calls: once room exists and we are already "ringing".
-    // Incoming ringing still stays on the hero screen until user accepts.
-    const shouldShowMeeting = Boolean(joinUrl) && (phase === "active" || (!incoming && phase === "ringing"));
+    // Keep ringing on a stable call card; the meeting surface starts only after accept/active.
+    // This avoids iOS/PWA showing an empty Jitsi iframe while the peer has not answered yet.
+    const shouldShowMeeting = Boolean(joinUrl) && phase === "active";
     if (!shouldShowMeeting) {
       showHero();
       return;

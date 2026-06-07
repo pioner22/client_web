@@ -26,9 +26,10 @@ test("calls: CSS contains modal-call layout", async () => {
   assert.match(css, /\.call-jitsi-ready iframe/);
 });
 
-test("calls: outgoing ringing shows Jitsi surface without waiting active", async () => {
+test("calls: ringing stays on call card until peer accepts", async () => {
   const src = await readFile(path.resolve("src/components/modals/call/createCallModal.ts"), "utf8");
-  assert.match(src, /const shouldShowMeeting = Boolean\(joinUrl\) && \(phase === "active" \|\| \(!incoming && phase === "ringing"\)\);/);
+  assert.match(src, /const shouldShowMeeting = Boolean\(joinUrl\) && phase === "active";/);
+  assert.match(src, /showHero\(\);\n\s*return;/);
 });
 
 test("calls: call_invite is not blocked by toast dedupe", async () => {
@@ -109,4 +110,28 @@ test("calls: modal keeps a dark live backdrop until Jitsi is ready", async () =>
   assert.match(css, /\.call-jitsi iframe,\n\.call-iframe-shell iframe/);
   assert.match(css, /opacity:\s*0;\n\s*pointer-events:\s*none;/);
   assert.match(css, /\.call-jitsi-ready \.call-live-backdrop/);
+  assert.match(css, /\.call-iframe-loaded \.call-live-backdrop/);
+  assert.doesNotMatch(css, /\.call-jitsi-ready \.call-live-backdrop,\n\.call-iframe-ready \.call-live-backdrop/);
+  assert.match(modalSrc, /call-iframe-loaded/);
+  assert.match(modalSrc, /Открыть видеомост/);
+});
+
+test("calls: incoming notification fallback works before lazy tab notifier loads", async () => {
+  const lazySrc = await readFile(path.resolve("src/helpers/notify/tabNotifierLazy.ts"), "utf8");
+  const callsSrc = await readFile(path.resolve("src/app/features/calls/callsFeature.ts"), "utf8");
+  assert.match(lazySrc, /notificationPermissionGranted/);
+  assert.match(lazySrc, /shouldAndMarkFallback\("system", notifKey, ttlMs\)/);
+  assert.doesNotMatch(lazySrc, /return false;\n\s*},\n\s*\};\n\s*return singleton;/);
+  assert.match(callsSrc, /new Notification\(title, \{ body, tag, silent: false \}\)/);
+});
+
+test("calls: message context menu has selected preview and compact action height", async () => {
+  const rendererSrc = await readFile(path.resolve("src/components/modals/renderContextMenu.ts"), "utf8");
+  const featureSrc = await readFile(path.resolve("src/app/features/contextMenu/contextMenuFeature.ts"), "utf8");
+  const css = await readCssWithImports("src/scss/modal.css");
+  assert.match(featureSrc, /anchorPreview/);
+  assert.match(rendererSrc, /ctx-selected-preview/);
+  assert.match(rendererSrc, /actionCount \* 44/);
+  assert.match(css, /\.ctx-menu\.ctx-menu-message-action-list \.ctx-selected-preview/);
+  assert.match(css, /min-height:\s*44px;/);
 });
