@@ -24,3 +24,15 @@ test("messenger surface polish: media cards keep explicit mobile constraints", a
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.file-progress-candy/);
   assert.match(css, /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?--chat-media-frame-width:\s*min\(82%,\s*var\(--chat-media-frame-max\),\s*var\(--msg-body-max-width\)\)/);
 });
+
+test("messenger surface polish: W-0976 keeps media stable on mobile", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+
+  assert.match(css, /W-0976:\s*media stability repair/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-media-progress\s*\{[\s\S]*?inset:\s*50%\s*auto\s*auto\s*50%;[\s\S]*?transform:\s*translate\(-50%,\s*-50%\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-file-preview\s+\.chat-media-state-active\s*\{[\s\S]*?display:\s*none/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-file-preview\.chat-file-preview-video-note\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?clip-path:\s*none/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-attach\s+\.file-row-chat\.file-row-audio[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none/);
+  assert.match(css, /W-0976:\s*visual stability repair/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg:not\(\.msg-sys\)\s+\.msg-body\s*\{[\s\S]*?background-color\s+120ms\s+ease/);
+});

@@ -445,3 +445,50 @@ html[data-theme="dark"] .chat:not(.chat-board) {
     padding: 14px 12px;
   }
 }
+
+/* W-0976: visual stability repair after W-0975 real-device screenshots. */
+.chat:not(.chat-board) .msg:not(.msg-sys) .msg-body {
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.chat:not(.chat-board) .msg-context-active .msg-body,
+.chat:not(.chat-board) .msg-selected .msg-body {
+  border-color: color-mix(in srgb, var(--focus), transparent 42%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--focus), transparent 38%),
+    0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+.chat:not(.chat-board) .msg-hit-active .msg-body {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--warn), transparent 26%),
+    0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
+.chat:not(.chat-board) .msg-sep-pill {
+  min-height: 26px;
+  padding: 0 10px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 5px 14px rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme="dark"] .chat:not(.chat-board) .msg-sep-pill {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 7px 16px rgba(0, 0, 0, 0.18);
+}
+
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --chat-line-gap: 6px;
+    --msg-body-max-width: min(82%, calc(100vw - 52px));
+  }
+
+  .chat.chat-dm {
+    --msg-body-max-width: min(82%, calc(100vw - 44px));
+  }
+}

@@ -461,3 +461,150 @@ html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-
     font-size: 15px;
   }
 }
+
+/* W-0976: media stability repair after real-device screenshots. */
+.chat:not(.chat-board) {
+  --chat-media-frame-max: 390px;
+  --chat-album-frame-max: 390px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview,
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .chat-album-grid {
+  border-color: color-mix(in srgb, var(--line), transparent 76%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview {
+  aspect-ratio: 4 / 3;
+  contain: layout paint;
+  transform: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: cover;
+}
+
+.chat:not(.chat-board) .chat-file-preview-empty {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--panel2), #ffffff 3%), color-mix(in srgb, var(--panel), transparent 6%));
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio,
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-voice {
+  min-height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)),
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-voice:has(.chat-voice:not(.chat-voice-placeholder)) {
+  display: block;
+  width: min(380px, 100%);
+  max-width: min(380px, calc(100vw - 42px));
+  padding: 0;
+  gap: 0;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)) .file-actions,
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-voice:has(.chat-voice:not(.chat-voice-placeholder)) .file-actions {
+  justify-self: auto;
+  justify-content: flex-start;
+}
+
+.chat:not(.chat-board) .file-row-chat.file-row-image.file-row-video-note,
+.chat:not(.chat-board) .chat-file-preview.chat-file-preview-video-note {
+  width: min(220px, 56vw);
+}
+
+.chat:not(.chat-board) .chat-file-preview.chat-file-preview-video-note {
+  border-radius: 999px;
+  clip-path: none;
+}
+
+.chat:not(.chat-board) .chat-file-preview:hover,
+.chat:not(.chat-board) .msg-selected .file-row-chat.file-row-image > .chat-file-preview,
+.chat:not(.chat-board) .msg-selected .file-row-chat:not(.file-row-image) {
+  transform: none;
+}
+
+.chat:not(.chat-board) .file-row-chat.file-row-image.file-row-progress .file-progress,
+.chat:not(.chat-board) .chat-media-progress {
+  width: 76px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  -webkit-backdrop-filter: blur(12px) saturate(125%);
+  backdrop-filter: blur(12px) saturate(125%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.chat:not(.chat-board) .chat-media-progress {
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+}
+
+.chat:not(.chat-board) .file-row-chat.file-row-image.file-row-progress .file-progress {
+  display: grid;
+  place-items: center;
+}
+
+.chat:not(.chat-board) .file-row-chat.file-row-image.file-row-progress .file-progress-candy,
+.chat:not(.chat-board) .chat-media-progress .file-progress-candy {
+  width: 48px;
+  height: 5px;
+  border-radius: 999px;
+  animation: none;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--focus), #ffffff 18%));
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .file-row-chat.file-row-image.file-row-progress .file-progress-candy::after,
+.chat:not(.chat-board) .chat-media-progress .file-progress-candy::after {
+  content: none;
+}
+
+.chat:not(.chat-board) .chat-file-preview .chat-media-state-active {
+  display: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .msg-body,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .msg-body {
+  width: min(var(--chat-media-frame-width), var(--chat-media-frame-max), var(--msg-body-max-width));
+}
+
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --chat-media-frame-max: 340px;
+    --chat-album-frame-max: 340px;
+    --chat-media-frame-width: min(78%, var(--chat-media-frame-max), var(--msg-body-max-width));
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-album="1"] .msg-body,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .msg-body,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"] .msg-body {
+    max-width: min(100%, calc(100vw - 34px));
+  }
+
+  .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio,
+  .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-voice {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-audio:has(.chat-voice:not(.chat-voice-placeholder)),
+  .chat:not(.chat-board) .msg-attach .file-row-chat.file-row-voice:has(.chat-voice:not(.chat-voice-placeholder)) {
+    width: min(330px, 100%);
+    max-width: calc(100vw - 36px);
+  }
+}
