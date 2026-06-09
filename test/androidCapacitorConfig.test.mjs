@@ -53,6 +53,8 @@ test("android native project has required app files and permissions", () => {
   assert.match(launcherBackground, /#090D13/);
   assert.match(mainActivity, /setDownloadListener/);
   assert.match(mainActivity, /Intent\.ACTION_VIEW/);
+  assert.match(mainActivity, /url\.startsWith\("blob:"\)/);
+  assert.match(mainActivity, /url\.startsWith\("data:"\)/);
   assert.match(mainActivity, /setStatusBarColor/);
   assert.match(mainActivity, /setNavigationBarColor/);
   assert.match(styles, /android:statusBarColor">#090D13/);
@@ -97,6 +99,6 @@ test("android update prompt opens current APK download instead of reloading bund
   assert.match(viteConfig, /loadAndroidAppVersionMeta/);
   assert.match(viteConfig, /__ANDROID_APP_VERSION_NAME__/);
   assert.match(viteConfig, /__ANDROID_APP_VERSION_CODE__/);
-  assert.match(gradle, /versionCode 24/);
-  assert.match(gradle, /versionName "1\.0\.23"/);
+  assert.match(gradle, /versionCode 25/);
+  assert.match(gradle, /versionName "1\.0\.24"/);
 });

@@ -492,3 +492,38 @@ html[data-theme="dark"] .chat:not(.chat-board) .msg-sep-pill {
     --msg-body-max-width: min(82%, calc(100vw - 44px));
   }
 }
+
+/* W-0978: Android WebView message fallback for stale layout metrics and wide media captions. */
+html.env-os-android .chat:not(.chat-board) .msg {
+  min-width: 0;
+  max-width: 100%;
+}
+
+html.env-os-android .chat:not(.chat-board) .msg-body {
+  min-width: 0;
+  max-width: min(100%, var(--msg-body-max-width));
+  overflow-wrap: anywhere;
+}
+
+html.env-os-android .chat:not(.chat-board) .msg-content-shell,
+html.env-os-android .chat:not(.chat-board) .msg-text,
+html.env-os-android .chat:not(.chat-board) .msg-caption,
+html.env-os-android .chat:not(.chat-board) .chat-file-preview,
+html.env-os-android .chat:not(.chat-board) .file-row-chat {
+  max-width: 100%;
+}
+
+html.env-os-android .chat:not(.chat-board) .msg-meta,
+html.env-os-android .chat:not(.chat-board) .msg-forward,
+html.env-os-android .chat:not(.chat-board) .msg-reply {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+html.env-os-android .ctx-menu.ctx-menu-message-action-list {
+  max-width: min(276px, calc(100dvw - 28px));
+}
+
+html.env-os-android .ctx-menu.ctx-menu-message-action-list .ctx-list {
+  max-height: min(var(--ctx-list-max-h, 292px), calc(100dvh - 168px));
+}

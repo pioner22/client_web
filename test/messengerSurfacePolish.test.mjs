@@ -51,3 +51,13 @@ test("messenger surface polish: W-0977 shrink-wraps desktop captioned media", as
   assert.match(previewShared, /export const CHAT_MEDIA_PREVIEW_SCALE = 0\.5;/);
   assert.match(previewShared, /const w = info\.mediaW \|\| info\.thumbW \|\| CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX;/);
 });
+
+test("messenger surface polish: W-0978 keeps Android bubbles and context menu bounded", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+
+  assert.match(css, /W-0978:\s*Android WebView message fallback/);
+  assert.match(css, /html\.env-os-android\s+\.chat:not\(\.chat-board\)\s+\.msg-body\s*\{[\s\S]*?overflow-wrap:\s*anywhere/);
+  assert.match(css, /html\.env-os-android\s+\.chat:not\(\.chat-board\)\s+\.chat-file-preview/);
+  assert.match(css, /html\.env-os-android\s+\.ctx-menu\.ctx-menu-message-action-list\s*\{[\s\S]*?max-width:\s*min\(276px,\s*calc\(100dvw - 28px\)\)/);
+  assert.match(css, /html\.env-os-android\s+\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-list\s*\{[\s\S]*?max-height:\s*min\(var\(--ctx-list-max-h,\s*292px\),\s*calc\(100dvh - 168px\)\)/);
+});

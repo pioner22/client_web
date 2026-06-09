@@ -160,6 +160,10 @@ test("calls: modal keeps a dark live backdrop until Jitsi is ready", async () =>
   assert.match(modalSrc, /scheduleJitsiReadyWatchdog/);
   assert.match(modalSrc, /camera \*; microphone \*/);
   assert.match(modalSrc, /call-jitsi-ready/);
+  assert.match(modalSrc, /isAndroidNativeCallSurface/);
+  assert.match(modalSrc, /JITSI_ANDROID_NATIVE_FALLBACK_DELAY_MS = 7200/);
+  assert.match(modalSrc, /if \(nativeAndroid\) \{\s*updateLiveStatus\("Ждём видеомост…"\);\s*return;\s*\}/);
+  assert.match(modalSrc, /if \(nativeAndroid\) \{\s*markMeetingFailed\("Видеомост не загрузился"\);\s*return;\s*\}/);
   assert.match(css, /\.call-jitsi iframe,\n\.call-iframe-shell iframe/);
   assert.match(css, /opacity:\s*0;\n\s*pointer-events:\s*none;/);
   assert.match(css, /\.call-jitsi-ready \.call-live-backdrop/);

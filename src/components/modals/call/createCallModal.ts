@@ -14,6 +14,7 @@ import {
 import { buildJitsiMediaPolicy } from "../../../helpers/calls/jitsiMediaPolicy";
 import { copyText } from "../../../helpers/dom/copyText";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../../helpers/avatar/avatarStore";
+import { getCapacitorPlatform, isCapacitorNativeRuntime } from "../../../helpers/runtime/nativeRuntime";
 
 export interface CallModalActions {
   onHangup: () => void;
@@ -92,6 +93,12 @@ function formatDuration(ms: number): string {
 const CALL_IFRAME_ALLOW = "camera *; microphone *; fullscreen; display-capture *; autoplay *; speaker-selection *";
 const CONTROL_FEEDBACK_MS = 520;
 const CONTROL_STATUS_MS = 2600;
+const JITSI_FALLBACK_DELAY_MS = 1800;
+const JITSI_ANDROID_NATIVE_FALLBACK_DELAY_MS = 7200;
+
+function isAndroidNativeCallSurface(): boolean {
+  return isCapacitorNativeRuntime() && getCapacitorPlatform() === "android";
+}
 
 export function createCallModal(actions: CallModalActions): CallModalController {
   const titleEl = el("div", { class: "call-peer-title" }, ["Звонок"]);
@@ -522,12 +529,23 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     const base = getMeetBaseUrl();
     const domain = resolveJitsiApiDomain(base);
     const scriptUrl = resolveJitsiExternalApiScriptUrl(base);
+    const nativeAndroid = isAndroidNativeCallSurface();
     if (!domain || !scriptUrl) {
+      if (nativeAndroid) {
+        showJitsiHost("Видеомост не настроен");
+        markMeetingFailed("Видеомост не настроен");
+        return;
+      }
       ensureIframe(joinUrl, title);
       return;
     }
     const key = `${domain}:${roomName}:${mode}`;
     if (jitsiDisabledKey === key) {
+      if (nativeAndroid) {
+        showJitsiHost("Видеомост не загрузился");
+        markMeetingFailed("Видеомост не загрузился");
+        return;
+      }
       ensureIframe(joinUrl, title);
       return;
     }
@@ -540,24 +558,33 @@ export function createCallModal(actions: CallModalActions): CallModalController 
     jitsiKey = key;
     jitsiDisabledKey = null;
     const token = jitsiInitToken;
+    showJitsiHost(mode === "video" ? "Подключаем видео…" : "Подключаем аудио…");
 
-    // If the External API doesn't load quickly (CSP/network), fall back to plain iframe to keep calls usable.
+    // Android WebView must stay inside the External API surface; plain iframe fallback can open Jitsi externally.
     clearJitsiFallbackTimer();
     jitsiFallbackTimer = window.setTimeout(() => {
       if (token !== jitsiInitToken) return;
-      if (!jitsiApi && joinUrl) ensureIframe(joinUrl, title);
-    }, 1800);
+      if (jitsiApi) return;
+      if (nativeAndroid) {
+        updateLiveStatus("Ждём видеомост…");
+        return;
+      }
+      if (joinUrl) ensureIframe(joinUrl, title);
+    }, nativeAndroid ? JITSI_ANDROID_NATIVE_FALLBACK_DELAY_MS : JITSI_FALLBACK_DELAY_MS);
 
     const Ctor = await loadJitsiExternalApi(scriptUrl);
     if (token !== jitsiInitToken) return;
     if (!Ctor) {
       jitsiDisabledKey = key;
+      if (nativeAndroid) {
+        markMeetingFailed("Видеомост не загрузился");
+        return;
+      }
       ensureIframe(joinUrl, title);
       return;
     }
 
     try {
-      showJitsiHost(mode === "video" ? "Подключаем видео…" : "Подключаем аудио…");
       const configOverwrite = {
         ...buildJitsiMediaPolicy(mode),
         defaultLocalDisplayName: displayName,
@@ -593,6 +620,7 @@ export function createCallModal(actions: CallModalActions): CallModalController 
       jitsiApi = null;
       jitsiDisabledKey = key;
       markMeetingFailed("Видеомост не загрузился");
+      if (nativeAndroid) return;
       ensureIframe(joinUrl, title);
       return;
     } finally {

@@ -52,6 +52,10 @@ public class MainActivity extends BridgeActivity {
     private void openExternalUrl(String rawUrl) {
         String url = rawUrl == null ? "" : rawUrl.trim();
         if (url.isEmpty()) return;
+        if (url.startsWith("blob:") || url.startsWith("data:")) {
+            Toast.makeText(this, "Файл готов внутри Ягодки. Откройте просмотр и используйте «Поделиться».", Toast.LENGTH_LONG).show();
+            return;
+        }
 
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
