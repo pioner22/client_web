@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.876",
+    date: "2026-06-09",
+    improved: [
+      "Контакт-лист с большим количеством пользователей стал стабильнее: обновления истории больше не пересобирают открытую вкладку контактов и не сбрасывают позицию прокрутки.",
+      "Прокрутка сайдбара в mobile/PWA/desktop теперь сохраняется при безопасной перерисовке, включая WebKit-сценарии, где `replaceChildren` мог обнулять scrollTop.",
+    ],
+    fixed: [
+      "Runtime-сессия больше не переносится через browser storage при обновлении PWA; legacy reload-token очищается, а рабочий token остаётся только в runtime/защищенном desktop-хранилище.",
+      "Boot recovery screen больше не использует HTML string sink: экран восстановления собирается через DOM API и `textContent`.",
+    ],
+  },
+  {
     version: "0.1.875",
     date: "2026-06-08",
     improved: [

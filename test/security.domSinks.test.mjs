@@ -3,7 +3,8 @@ import test from "node:test";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-const ROOT = path.resolve("src");
+const SOURCE_ROOT = path.resolve("src");
+const EXTRA_SECURITY_FILES = [path.resolve("public/boot.js")];
 
 const BANNED = [
   { name: "innerHTML", re: /\binnerHTML\b/ },
@@ -32,8 +33,8 @@ async function listFiles(dir) {
   return out;
 }
 
-test("security: в src нет опасных DOM-sinks/JS-eval", async () => {
-  const files = await listFiles(ROOT);
+test("security: в src и boot loader нет опасных DOM-sinks/JS-eval", async () => {
+  const files = [...(await listFiles(SOURCE_ROOT)), ...EXTRA_SECURITY_FILES];
   const hits = [];
 
   for (const file of files) {
@@ -52,4 +53,3 @@ test("security: в src нет опасных DOM-sinks/JS-eval", async () => {
 
   assert.deepEqual(hits, []);
 });
-

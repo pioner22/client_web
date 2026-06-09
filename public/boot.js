@@ -26,12 +26,11 @@
     } catch {}
   }
 
-  function escapeHtml(text) {
-    return String(text == null ? "" : text)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+  function createRecoveryElement(tag, className, text) {
+    var el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text != null) el.textContent = String(text);
+    return el;
   }
 
   function readVersionText() {
@@ -120,19 +119,36 @@
     if (!root) return;
     var versionText = readVersionText();
     try {
-      root.innerHTML =
-        '<main class="' +
-        RECOVERY_CLASS +
-        '" role="status" aria-live="polite">' +
-        '<div class="boot-recovery__mark" aria-hidden="true">!</div>' +
-        '<h1 class="boot-recovery__title">Не удалось завершить обновление</h1>' +
-        '<p class="boot-recovery__text">Автоматический перезапуск остановлен. Откройте приложение сейчас или повторите очистку кэша.</p>' +
-        (versionText ? '<p class="boot-recovery__version">' + escapeHtml(versionText) + "</p>" : "") +
-        '<div class="boot-recovery__actions">' +
-        '<button class="boot-recovery__button boot-recovery__button--primary" type="button" data-boot-action="open">Открыть приложение</button>' +
-        '<button class="boot-recovery__button" type="button" data-boot-action="retry">Повторить обновление</button>' +
-        "</div>" +
-        "</main>";
+      var main = createRecoveryElement("main", RECOVERY_CLASS);
+      main.setAttribute("role", "status");
+      main.setAttribute("aria-live", "polite");
+
+      var mark = createRecoveryElement("div", "boot-recovery__mark", "!");
+      mark.setAttribute("aria-hidden", "true");
+      main.appendChild(mark);
+      main.appendChild(createRecoveryElement("h1", "boot-recovery__title", "Не удалось завершить обновление"));
+      main.appendChild(
+        createRecoveryElement(
+          "p",
+          "boot-recovery__text",
+          "Автоматический перезапуск остановлен. Откройте приложение сейчас или повторите очистку кэша."
+        )
+      );
+      if (versionText) main.appendChild(createRecoveryElement("p", "boot-recovery__version", versionText));
+
+      var actions = createRecoveryElement("div", "boot-recovery__actions");
+      var openButton = createRecoveryElement("button", "boot-recovery__button boot-recovery__button--primary", "Открыть приложение");
+      openButton.setAttribute("type", "button");
+      openButton.setAttribute("data-boot-action", "open");
+      actions.appendChild(openButton);
+      var retryButton = createRecoveryElement("button", "boot-recovery__button", "Повторить обновление");
+      retryButton.setAttribute("type", "button");
+      retryButton.setAttribute("data-boot-action", "retry");
+      actions.appendChild(retryButton);
+      main.appendChild(actions);
+
+      root.textContent = "";
+      root.appendChild(main);
       var style = document.createElement("style");
       style.textContent =
         "html,body,#app{background:#f7fafc!important;background-color:#f7fafc!important}" +

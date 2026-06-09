@@ -17,6 +17,18 @@ import { clearDeferredSidebarDesktopTabs, renderSidebarDesktopTabsDeferred } fro
 import { clearDeferredSidebarMobile, renderSidebarMobileDeferred } from "./renderSidebarMobileRuntime";
 import { clearDeferredSidebarStandalone, renderSidebarStandaloneDeferred } from "./renderSidebarStandaloneRuntime";
 import { createSidebarRenderTools } from "./renderSidebarUiTools";
+import { preserveSidebarScrollDuring } from "./sidebarScrollStability";
+
+type SidebarRenderSurface = "contacts" | "groups" | "boards" | "menu";
+
+function normalizeSidebarRenderSurface(tab: MobileSidebarTab): SidebarRenderSurface {
+  return tab === "groups" || tab === "boards" || tab === "menu" ? tab : "contacts";
+}
+
+function resolveSidebarRenderSurface(tab: MobileSidebarTab, isMobile: boolean): SidebarRenderSurface {
+  const surface = normalizeSidebarRenderSurface(tab);
+  return !isMobile && surface === "menu" ? "contacts" : surface;
+}
 
 export function renderSidebar(
   target: HTMLElement,
@@ -38,6 +50,7 @@ export function renderSidebar(
 ) {
   const isMobile =
     typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 600px)").matches : false;
+  const standaloneDisplay = isStandaloneDisplayMode();
   const mobileUi = isMobileLikeUi();
   const disableSearchWhileTyping = (() => {
     try {
@@ -71,11 +84,11 @@ export function renderSidebar(
         groupsRef: AppState["groups"];
         boardsRef: AppState["boards"];
         profilesRef: AppState["profiles"];
-	        conversationsRef: AppState["conversations"];
-	        pinnedRef: AppState["pinned"];
-	        archivedRef: AppState["archived"];
-	        mutedRef: AppState["muted"];
-	        pendingInRef: AppState["pendingIn"];
+        conversationsRef: AppState["conversations"] | null;
+        pinnedRef: AppState["pinned"];
+        archivedRef: AppState["archived"];
+        mutedRef: AppState["muted"];
+        pendingInRef: AppState["pendingIn"];
         pendingOutRef: AppState["pendingOut"];
         pendingGroupInvitesRef: AppState["pendingGroupInvites"];
         pendingGroupJoinRequestsRef: AppState["pendingGroupJoinRequests"];
@@ -86,6 +99,8 @@ export function renderSidebar(
   const selectedKind = projection.selectedKind;
   const selectedId = projection.selectedId;
   const sidebarQueryRaw = projection.sidebarQueryRaw;
+  const sidebarRenderSurface = resolveSidebarRenderSurface(projection.mobileTab, isMobile);
+  const conversationsRefForRender = sidebarRenderSurface === "contacts" || sidebarRenderSurface === "menu" ? null : state.conversations;
   const renderState = {
     page: state.page,
     selectedKind,
@@ -104,12 +119,12 @@ export function renderSidebar(
     friendsRef: state.friends,
     groupsRef: state.groups,
     boardsRef: state.boards,
-	    profilesRef: state.profiles,
-	    conversationsRef: state.conversations,
-	    pinnedRef: state.pinned,
-	    archivedRef: state.archived,
-	    mutedRef: state.muted,
-	    pendingInRef: state.pendingIn,
+    profilesRef: state.profiles,
+    conversationsRef: conversationsRefForRender,
+    pinnedRef: state.pinned,
+    archivedRef: state.archived,
+    mutedRef: state.muted,
+    pendingInRef: state.pendingIn,
     pendingOutRef: state.pendingOut,
     pendingGroupInvitesRef: state.pendingGroupInvites,
     pendingGroupJoinRequestsRef: state.pendingGroupJoinRequests,
@@ -136,10 +151,10 @@ export function renderSidebar(
     prevRender.groupsRef === renderState.groupsRef &&
     prevRender.boardsRef === renderState.boardsRef &&
     prevRender.profilesRef === renderState.profilesRef &&
-	    prevRender.conversationsRef === renderState.conversationsRef &&
-	    prevRender.pinnedRef === renderState.pinnedRef &&
-	    prevRender.archivedRef === renderState.archivedRef &&
-	    prevRender.mutedRef === renderState.mutedRef &&
+    prevRender.conversationsRef === renderState.conversationsRef &&
+    prevRender.pinnedRef === renderState.pinnedRef &&
+    prevRender.archivedRef === renderState.archivedRef &&
+    prevRender.mutedRef === renderState.mutedRef &&
     prevRender.pendingInRef === renderState.pendingInRef &&
     prevRender.pendingOutRef === renderState.pendingOutRef &&
     prevRender.pendingGroupInvitesRef === renderState.pendingGroupInvitesRef &&
@@ -231,7 +246,7 @@ export function renderSidebar(
   const currentSelectedKey = projection.currentSelectedKey;
   const prevSelectedKey = String((target as any)._sidebarPrevSelectedKey || "").trim();
   const shouldResetOnReturn = Boolean(
-    (isMobile || isStandaloneDisplayMode()) && prevSelectedKey && !currentSelectedKey && state.page === "main"
+    (isMobile || standaloneDisplay) && prevSelectedKey && !currentSelectedKey && state.page === "main"
   );
   if (shouldResetOnReturn) {
     try {
@@ -301,7 +316,7 @@ export function renderSidebar(
 
   // PWA (standalone/fullscreen): tabs should behave like mobile (separate views),
   // not just as "scroll-to" shortcuts.
-  if (isStandaloneDisplayMode()) {
+  if (standaloneDisplay) {
     clearDeferredSidebarDesktopTabs(target);
     clearDeferredSidebarMenu(target);
     renderSidebarStandaloneDeferred({
@@ -522,32 +537,15 @@ export function renderSidebar(
   }
 
   const mountDesktop = (children: HTMLElement[]) => {
-    setBodyChatlistClass(children);
-    body.replaceChildren(...children);
-    const nodes: HTMLElement[] = [header, body];
-    if (shouldShowDesktopDock && sidebarDock) nodes.push(sidebarDock);
-    target.replaceChildren(...nodes);
-    bindHeaderScroll(header);
-    (target as any)._desktopSidebarPrevTab = activeDesktopTab;
-    if (!forceTopTab) return;
-    try {
-      body.scrollTop = 0;
-      body.scrollLeft = 0;
-    } catch {
-      // ignore
-    }
-    try {
-      window.requestAnimationFrame(() => {
-        try {
-          body.scrollTop = 0;
-          body.scrollLeft = 0;
-        } catch {
-          // ignore
-        }
-      });
-    } catch {
-      // ignore
-    }
+    preserveSidebarScrollDuring(body, forceTopTab, () => {
+      setBodyChatlistClass(children);
+      body.replaceChildren(...children);
+      const nodes: HTMLElement[] = [header, body];
+      if (shouldShowDesktopDock && sidebarDock) nodes.push(sidebarDock);
+      target.replaceChildren(...nodes);
+      bindHeaderScroll(header);
+      (target as any)._desktopSidebarPrevTab = activeDesktopTab;
+    });
   };
 
   if (activeDesktopTab === "menu") {

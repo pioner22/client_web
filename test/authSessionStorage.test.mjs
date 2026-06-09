@@ -121,6 +121,7 @@ test("auth/session: storeSessionToken держит token только в пам�
         storeSessionToken("A".repeat(32));
         assert.equal(getStoredSessionToken(), "A".repeat(32));
         assert.equal(sessionStorage.getItem("yagodka_auth_session"), null);
+        assert.equal(sessionStorage.getItem("yagodka_session_reload_v1"), null);
         assert.equal(localStorage.getItem("yagodka_auth_session"), null);
         assert.ok(writes.length >= 1);
         assert.ok(writes.some((x) => x.includes("SameSite=Strict")));
@@ -163,7 +164,7 @@ test("auth/session: normalizeToken отбрасывает мусор и не п�
   }
 });
 
-test("auth/session: update reload carry переживает техническую перезагрузку без localStorage/cookie", async () => {
+test("auth/session: update reload carry не пишет token в browser storage", async () => {
   const localStorage = mkStorage();
   const sessionStorage = mkStorage();
   const { doc } = mkCookieDoc();
@@ -179,11 +180,13 @@ test("auth/session: update reload carry переживает техническ�
         window: { location: { protocol: "https:", hostname: "yagodka.org" } },
       },
       () => {
+        sessionStorage.setItem("yagodka_session_reload_v1", JSON.stringify({ token, ts: Date.now(), reason: "legacy" }));
         first.mod.storeSessionToken(token);
-        assert.equal(first.mod.stashSessionTokenForReload("pwa_update"), true);
+        assert.equal(first.mod.stashSessionTokenForReload("pwa_update"), false);
+        assert.equal(first.mod.getStoredSessionToken(), token);
         assert.equal(localStorage.getItem("yagodka_auth_session"), null);
         assert.equal(sessionStorage.getItem("yagodka_auth_session"), null);
-        assert.ok(sessionStorage.getItem("yagodka_session_reload_v1"));
+        assert.equal(sessionStorage.getItem("yagodka_session_reload_v1"), null);
       }
     );
   } finally {
@@ -200,7 +203,7 @@ test("auth/session: update reload carry переживает техническ�
         window: { location: { protocol: "https:", hostname: "yagodka.org" } },
       },
       () => {
-        assert.equal(second.mod.getStoredSessionToken(), token);
+        assert.equal(second.mod.getStoredSessionToken(), null);
         second.mod.storeSessionToken("D".repeat(32));
         assert.equal(sessionStorage.getItem("yagodka_session_reload_v1"), null);
       }

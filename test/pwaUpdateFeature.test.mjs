@@ -73,7 +73,7 @@ function makeEventTarget() {
   };
 }
 
-test("pwaUpdateFeature: update reload stashes runtime session before navigation", async () => {
+test("pwaUpdateFeature: update reload clears browser session carry before navigation", async () => {
   const src = await readFile(path.resolve("src/app/features/pwa/pwaUpdateFeature.ts"), "utf8");
   assert.match(src, /stashSessionTokenForReload/);
   assert.match(src, /stashSessionTokenForReload\(reason \|\| "pwa_update"\)/);

@@ -59,6 +59,12 @@ async function withDomStubs(run, opts = {}) {
       this._children = [];
       this._listeners = new Map();
       this.style = new StyleStub();
+      this.scrollTop = 0;
+      this.scrollLeft = 0;
+      this.scrollHeight = 0;
+      this.clientHeight = 0;
+      this.scrollWidth = 0;
+      this.clientWidth = 0;
     }
     setAttribute(name, value) {
       const k = String(name);
@@ -86,6 +92,14 @@ async function withDomStubs(run, opts = {}) {
       const list = this._listeners.get(key) || [];
       list.push(handler);
       this._listeners.set(key, list);
+    }
+    removeEventListener(type, handler) {
+      const key = String(type);
+      const list = this._listeners.get(key) || [];
+      this._listeners.set(
+        key,
+        list.filter((h) => h !== handler)
+      );
     }
     dispatchEvent(event) {
       const ev = event || {};
@@ -149,6 +163,8 @@ async function withDomStubs(run, opts = {}) {
       return 1;
     },
     cancelAnimationFrame: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
   };
 
   try {
@@ -254,6 +270,67 @@ function mkState(tab) {
     conversations: { "dm:123-456-789": [] },
     drafts: {},
   };
+}
+
+function paddedContactId(index) {
+  const s = String(index).padStart(3, "0");
+  return `100-000-${s}`;
+}
+
+function mkLargeContactState(count = 120) {
+  const friends = [];
+  const profiles = {};
+  const conversations = {};
+  for (let i = 0; i < count; i += 1) {
+    const id = paddedContactId(i + 1);
+    friends.push({ id, online: i % 2 === 0, friend: true, unread: 0 });
+    profiles[id] = { id, display_name: `Контакт ${i + 1}` };
+    conversations[`dm:${id}`] = [{ ts: i + 1, from: id, text: `сообщение ${i + 1}`, kind: "in" }];
+  }
+  return {
+    friends,
+    profiles,
+    groups: [],
+    boards: [],
+    pinned: [],
+    archived: [],
+    muted: [],
+    pendingIn: [],
+    pendingOut: [],
+    pendingGroupInvites: [],
+    pendingGroupJoinRequests: [],
+    pendingBoardInvites: [],
+    fileOffersIn: [],
+    selected: null,
+    page: "main",
+    mobileSidebarTab: "contacts",
+    sidebarQuery: "",
+    conversations,
+    drafts: {},
+  };
+}
+
+function findSidebarBody(target) {
+  return findAll(target, (n) => n.tagName === "DIV" && String(n.className || "").includes("sidebar-body"))[0] || null;
+}
+
+function renderSidebarForTest(helper, target, state) {
+  helper.renderSidebar(
+    target,
+    state,
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {}
+  );
 }
 
 test("mobile sidebar: 4 вкладки (Контакты/Группы/Каналы/Меню), старое chats открывает Контакты", async () => {
@@ -690,6 +767,99 @@ test("mobile sidebar: Контакты показывают превью лич�
         assert.equal(groupChatlists.length > 0, true);
         assert.deepEqual(sidebarRowsInSection(groupChatlists[0], "Группы"), ["room:g-1"]);
         assert.equal(hasText(groupsTarget, "c"), true);
+      },
+      { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("mobile sidebar: список контактов не пересобирается от обновления истории", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    await withDomStubs(
+      async () => {
+        const target = document.createElement("div");
+        const state = mkLargeContactState();
+
+        renderSidebarForTest(helper, target, state);
+        await flushLazySidebarRender();
+
+        const body = findSidebarBody(target);
+        assert.ok(body, "sidebar body must exist");
+        body.scrollHeight = 4800;
+        body.clientHeight = 720;
+        body.scrollTop = 840;
+
+        let replaceCalls = 0;
+        const originalReplaceChildren = body.replaceChildren.bind(body);
+        body.replaceChildren = (...nodes) => {
+          replaceCalls += 1;
+          originalReplaceChildren(...nodes);
+          body.scrollTop = 0;
+        };
+
+        const nextState = {
+          ...state,
+          conversations: {
+            ...state.conversations,
+            [`dm:${paddedContactId(1)}`]: [{ ts: 999, from: paddedContactId(1), text: "новая история", kind: "in" }],
+          },
+        };
+
+        renderSidebarForTest(helper, target, nextState);
+        await flushLazySidebarRender();
+
+        assert.equal(replaceCalls, 0);
+        assert.equal(body.scrollTop, 840);
+      },
+      { isMobile: true }
+    );
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("mobile sidebar: список контактов сохраняет прокрутку при обновлении профилей", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    await withDomStubs(
+      async () => {
+        const target = document.createElement("div");
+        const state = mkLargeContactState();
+
+        renderSidebarForTest(helper, target, state);
+        await flushLazySidebarRender();
+
+        const body = findSidebarBody(target);
+        assert.ok(body, "sidebar body must exist");
+        body.scrollHeight = 4800;
+        body.clientHeight = 720;
+        body.scrollTop = 960;
+
+        let replaceCalls = 0;
+        const originalReplaceChildren = body.replaceChildren.bind(body);
+        body.replaceChildren = (...nodes) => {
+          replaceCalls += 1;
+          originalReplaceChildren(...nodes);
+          body.scrollTop = 0;
+        };
+
+        const renamedId = paddedContactId(2);
+        const nextState = {
+          ...state,
+          profiles: {
+            ...state.profiles,
+            [renamedId]: { id: renamedId, display_name: "Переименованный контакт" },
+          },
+        };
+
+        renderSidebarForTest(helper, target, nextState);
+        await flushLazySidebarRender();
+
+        assert.equal(replaceCalls > 0, true);
+        assert.equal(body.scrollTop, 960);
       },
       { isMobile: true }
     );

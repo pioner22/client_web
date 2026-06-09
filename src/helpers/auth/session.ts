@@ -2,8 +2,7 @@ const USER_ID_STORAGE_KEY = "yagodka_user_id";
 const LEGACY_BROWSER_SLOT_KEY = ["yagodka", ["au", "th"].join(""), ["ses", "sion"].join("")].join("_");
 const RESUME_BLOCK_STORAGE_KEY = "yagodka_resume_block_v1";
 const LEGACY_RESUME_BLOCK_KEY = ["yagodka", ["auto", ["au", "th"].join("")].join(""), "block", "v1"].join("_");
-const RELOAD_SESSION_TOKEN_KEY = "yagodka_session_reload_v1";
-const RELOAD_SESSION_TOKEN_TTL_MS = 10 * 60 * 1000;
+const LEGACY_RELOAD_CARRY_STORAGE_KEY = ["yagodka", "session", "reload", "v1"].join("_");
 
 const MAX_TOKEN_LEN = 512;
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,512}$/;
@@ -72,34 +71,11 @@ function clearLegacySessionPersistence(): void {
   clearLegacySessionCookie();
 }
 
-function clearReloadSessionToken(): void {
+function clearLegacyReloadCarry(): void {
   try {
-    sessionStorage.removeItem(RELOAD_SESSION_TOKEN_KEY);
+    sessionStorage.removeItem(LEGACY_RELOAD_CARRY_STORAGE_KEY);
   } catch {
     // ignore
-  }
-}
-
-function readReloadSessionToken(): string | null {
-  try {
-    const raw = sessionStorage.getItem(RELOAD_SESSION_TOKEN_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      clearReloadSessionToken();
-      return null;
-    }
-    const token = normalizeToken((parsed as { token?: unknown }).token);
-    const tsRaw = Number((parsed as { ts?: unknown }).ts);
-    const ts = Number.isFinite(tsRaw) ? Math.max(0, Math.trunc(tsRaw)) : 0;
-    if (!token || !ts || Date.now() - ts > RELOAD_SESSION_TOKEN_TTL_MS) {
-      clearReloadSessionToken();
-      return null;
-    }
-    return token;
-  } catch {
-    clearReloadSessionToken();
-    return null;
   }
 }
 
@@ -149,16 +125,16 @@ export function clearStoredAuthId(): void {
 }
 
 export function getStoredSessionToken(): string | null {
+  clearLegacyReloadCarry();
   clearLegacySessionPersistence();
-  const runtime = normalizeToken(runtimeSessionToken);
-  return runtime || readReloadSessionToken();
+  return normalizeToken(runtimeSessionToken);
 }
 
 export function storeSessionToken(token: string): void {
   const v = normalizeToken(token);
   if (!v) return;
   runtimeSessionToken = v;
-  clearReloadSessionToken();
+  clearLegacyReloadCarry();
   clearLegacySessionPersistence();
   try {
     void desktopBridge()?.saveSessionToken?.(v);
@@ -169,7 +145,7 @@ export function storeSessionToken(token: string): void {
 
 export function clearStoredSessionToken(): void {
   runtimeSessionToken = null;
-  clearReloadSessionToken();
+  clearLegacyReloadCarry();
   try {
     void desktopBridge()?.clearSessionToken?.();
   } catch {
@@ -179,22 +155,10 @@ export function clearStoredSessionToken(): void {
 }
 
 export function stashSessionTokenForReload(reason = "reload"): boolean {
-  const token = normalizeToken(runtimeSessionToken) || readReloadSessionToken();
-  if (!token) return false;
-  try {
-    sessionStorage.setItem(
-      RELOAD_SESSION_TOKEN_KEY,
-      JSON.stringify({
-        token,
-        ts: Date.now(),
-        reason: String(reason || "reload").slice(0, 80),
-      })
-    );
-    clearLegacySessionPersistence();
-    return true;
-  } catch {
-    return false;
-  }
+  void reason;
+  clearLegacyReloadCarry();
+  clearLegacySessionPersistence();
+  return false;
 }
 
 export function clearStoredAuthAll(): void {
@@ -246,7 +210,7 @@ export async function unlockDesktopBiometricSession(reason = "Войти в Яг
     const token = normalizeToken(result?.token);
     if (!result?.ok || !token) return null;
     runtimeSessionToken = token;
-    clearReloadSessionToken();
+    clearLegacyReloadCarry();
     clearLegacySessionPersistence();
     return token;
   } catch {

@@ -3,6 +3,7 @@ import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { buildAppShellProjection } from "../../helpers/navigation/appShellProjection";
 import type { AppState, BoardEntry, FriendEntry, GroupEntry, MobileSidebarTab, PageKind, TargetRef } from "../../stores/types";
 import { attentionHintForPeer, friendRow, isRowMenuOpen, previewForConversation, roomRow } from "./renderSidebarHelpers";
+import { preserveSidebarScrollDuring } from "./sidebarScrollStability";
 
 export type RenderSidebarMobileCtx = {
   target: HTMLElement;
@@ -201,30 +202,13 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
   const sticky = el("div", { class: "sidebar-mobile-sticky" }, topChildren);
   const passesChatFilter = (_opts: { kind: "dm" | "group"; unread: number; mention?: boolean; attention?: boolean }): boolean => true;
   const mountMobile = (children: HTMLElement[]) => {
-    setBodyChatlistClass(children);
-    body.replaceChildren(...children);
-    target.replaceChildren(sticky, body, bottomDock);
-    bindHeaderScroll(sticky);
-    (target as any)._mobileSidebarPrevTab = activeTab;
-    if (!forceTopTab) return;
-    try {
-      body.scrollTop = 0;
-      body.scrollLeft = 0;
-    } catch {
-      // ignore
-    }
-    try {
-      window.requestAnimationFrame(() => {
-        try {
-          body.scrollTop = 0;
-          body.scrollLeft = 0;
-        } catch {
-          // ignore
-        }
-      });
-    } catch {
-      // ignore
-    }
+    preserveSidebarScrollDuring(body, forceTopTab, () => {
+      setBodyChatlistClass(children);
+      body.replaceChildren(...children);
+      target.replaceChildren(sticky, body, bottomDock);
+      bindHeaderScroll(sticky);
+      (target as any)._mobileSidebarPrevTab = activeTab;
+    });
   };
 
   const pinnedBoardRows: HTMLElement[] = [];

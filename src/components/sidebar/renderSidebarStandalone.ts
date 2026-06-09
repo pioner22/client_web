@@ -9,6 +9,7 @@ import {
   previewForConversation,
   roomRow,
 } from "./renderSidebarHelpers";
+import { preserveSidebarScrollDuring } from "./sidebarScrollStability";
 
 export type RenderSidebarStandaloneCtx = {
   target: HTMLElement;
@@ -264,31 +265,14 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
   }
 
   const mountPwa = (children: HTMLElement[]) => {
-    setBodyChatlistClass(children);
-    body.replaceChildren(...children);
-    const nodes: HTMLElement[] = [header, tabs, body];
-    target.replaceChildren(...nodes);
-    bindHeaderScroll(header);
-    (target as any)._pwaSidebarPrevTab = activeTab;
-    if (!forceTopTab) return;
-    try {
-      body.scrollTop = 0;
-      body.scrollLeft = 0;
-    } catch {
-      // ignore
-    }
-    try {
-      window.requestAnimationFrame(() => {
-        try {
-          body.scrollTop = 0;
-          body.scrollLeft = 0;
-        } catch {
-          // ignore
-        }
-      });
-    } catch {
-      // ignore
-    }
+    preserveSidebarScrollDuring(body, forceTopTab, () => {
+      setBodyChatlistClass(children);
+      body.replaceChildren(...children);
+      const nodes: HTMLElement[] = [header, tabs, body];
+      target.replaceChildren(...nodes);
+      bindHeaderScroll(header);
+      (target as any)._pwaSidebarPrevTab = activeTab;
+    });
   };
 
   if (activeTab === "groups") {
