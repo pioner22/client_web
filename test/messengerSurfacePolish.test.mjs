@@ -87,3 +87,27 @@ test("messenger surface polish: W-0986 matches reference media scale, sharp date
   assert.match(css, /\.overlay\.overlay-viewer\s+\.viewer-author,[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header-actions\s+\.btn\s*\{[\s\S]*?opacity:\s*1;/);
   assert.match(css, /\.overlay\.overlay-viewer\s+\.viewer-header-actions\s+\.btn,[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-switcher-btn\s*\{[\s\S]*?background:\s*rgba\(0,\s*0,\s*0,\s*0\.46\)/);
 });
+
+test("messenger surface polish: W-0987 separates history item layers", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+  const contracts = await readFile(new URL("../src/components/chat/historyLayerContracts.ts", import.meta.url), "utf8");
+  const sysRuntime = await readFile(new URL("../src/components/chat/chatSpecialMessageRuntime.ts", import.meta.url), "utf8");
+
+  assert.match(contracts, /HISTORY_ITEM_LAYER_CONTRACTS/);
+  for (const layer of ["layout", "text", "media", "audio", "date", "system", "interaction", "theme"]) {
+    assert.match(contracts, new RegExp(`id:\\s*"${layer}"`));
+  }
+  assert.match(contracts, /isNoisySystemMessageText/);
+  assert.match(contracts, /classifyHistorySystemMessageLayer/);
+  assert.match(sysRuntime, /data-msg-system-layer/);
+  assert.match(sysRuntime, /msg-sys-noise/);
+  assert.match(css, /W-0987:\s*layered history item contracts/);
+  assert.match(css, /--history-layer-rail-max:\s*min\(100%,\s*1040px\)/);
+  assert.match(css, /--history-layer-gap:\s*4px/);
+  assert.match(css, /--history-audio-frame-width:\s*min\(430px,\s*74%\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-lines\s*\{[\s\S]*?max-width:\s*var\(--history-layer-rail-max\);[\s\S]*?box-sizing:\s*border-box/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg:not\(\.msg-sys\):not\(\.msg-attach\)\s+\.msg-body\s*\{[\s\S]*?padding:\s*var\(--msg-in-pad-y\)\s+var\(--msg-in-pad-x\)\s+var\(--msg-in-pad-bottom\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-attach\[data-msg-file="audio"\]\s+\.msg-body\s*\{[\s\S]*?width:\s*var\(--history-audio-frame-width\)/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-date\s*\{[\s\S]*?position:\s*relative\s*!important;[\s\S]*?top:\s*auto\s*!important/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-sys-noise\s*\{[\s\S]*?display:\s*none/);
+});

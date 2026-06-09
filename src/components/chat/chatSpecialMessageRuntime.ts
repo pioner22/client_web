@@ -1,6 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { renderRichText } from "../../helpers/chat/richText";
 import type { ChatMessage } from "../../stores/types";
+import { classifyHistorySystemMessageLayer } from "./historyLayerContracts";
 
 type ChatSpecialMessageModule = typeof import("./chatSpecialMessageSurface");
 
@@ -83,7 +84,15 @@ function renderSysMessagePlaceholder(message: ChatMessage): HTMLElement {
 }
 
 export function renderDeferredSysMessage(options: RenderDeferredSysMessageOptions): HTMLElement {
-  const mount = el("div", { class: "msg msg-sys" }, [renderSysMessagePlaceholder(options.message)]);
+  const systemLayer = classifyHistorySystemMessageLayer(options.message.text || "", options.message.attachment?.kind);
+  const mount = el(
+    "div",
+    {
+      class: `msg msg-sys${systemLayer === "noise" ? " msg-sys-noise" : ""}${systemLayer === "action" ? " msg-sys-action" : ""}`,
+      "data-msg-system-layer": systemLayer,
+    },
+    [renderSysMessagePlaceholder(options.message)]
+  );
   if (specialMessageModule) {
     specialMessageModule.renderDeferredSysMessageSurface({ mount, message: options.message });
     return mount;
