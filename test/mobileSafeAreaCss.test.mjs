@@ -79,7 +79,8 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.match(css, /--mobile-bottom-nav-fill:\s*var\(--app-bottom-live-pad\);/);
   assert.match(css, /--mobile-bottom-nav-row-h:\s*74px;/);
   assert.match(css, /--mobile-bottom-nav-h:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--mobile-bottom-nav-fill\)\);/);
-  assert.match(css, /--mobile-bottom-nav-scroll-pad:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--sp-2\)\);/);
+  assert.match(css, /--mobile-bottom-nav-scroll-pad:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*24px\);/);
+  assert.match(css, /\.sidebar-body\s*>\s*\.chatlist::after\s*\{[\s\S]*?height:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*12px\);[\s\S]*?min-height:\s*96px;/);
   assert.match(css, /--mobile-bottom-nav-bottom-offset:\s*0px;/);
   assert.match(css, /--mobile-bottom-nav-glass-bg:\s*rgba\(24,\s*24,\s*32,\s*0\.58\);/);
   assert.match(css, /--mobile-bottom-nav-glass-border:\s*rgba\(255,\s*255,\s*255,\s*0\.14\);/);

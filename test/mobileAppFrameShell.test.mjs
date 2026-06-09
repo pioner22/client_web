@@ -70,7 +70,7 @@ test("mobile app frame: contact list owns the full fixed mobile frame without a 
     /\.sidebar\.sidebar-mobile-open\s*\{[\s\S]*?transform:\s*none;[\s\S]*?visibility:\s*visible;[\s\S]*?pointer-events:\s*auto;/
   );
   assert.match(css, /--mobile-bottom-nav-h:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--mobile-bottom-nav-fill\)\);/);
-  assert.match(css, /--mobile-bottom-nav-scroll-pad:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--sp-2\)\);/);
+  assert.match(css, /--mobile-bottom-nav-scroll-pad:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*24px\);/);
   assert.match(css, /--mobile-bottom-nav-bottom-offset:\s*0px;/);
   assert.match(css, /--mobile-bottom-nav-glass-bg:\s*rgba\(24,\s*24,\s*32,\s*0\.58\);/);
   assert.match(css, /--mobile-bottom-nav-active-bg:\s*rgba\(255,\s*255,\s*255,\s*0\.16\);/);
@@ -88,6 +88,7 @@ test("mobile app frame: contact list owns the full fixed mobile frame without a 
   assert.match(css, /html\.env-os-android\s+\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s+\.sidebar-tab\s*\{[\s\S]*?font-size:\s*11px;/);
   assert.match(css, /\.sidebar-bottom-dock:not\(\.sidebar-mobile-bottom\)\s*\{[\s\S]*?display:\s*none;/);
   assert.match(css, /\.sidebar-body\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?height:\s*auto;[\s\S]*?padding-top:\s*var\(--mobile-sidebar-sticky-h\);[\s\S]*?padding-bottom:\s*var\(--mobile-bottom-nav-scroll-pad\);/);
+  assert.match(css, /\.sidebar-body\s*>\s*\.chatlist::after\s*\{[\s\S]*?height:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*12px\);[\s\S]*?min-height:\s*96px;/);
   assert.match(css, /\.sidebar\[data-sidebar-tab="menu"\]\s+\.sidebar-body\s*\{[\s\S]*?padding-top:\s*var\(--mobile-sidebar-menu-sticky-h\);/);
   assert.match(
     css,

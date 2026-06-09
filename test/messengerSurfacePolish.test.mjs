@@ -136,3 +136,14 @@ test("messenger surface polish: W-0988 tightens history, profile and menu chrome
   assert.match(menuSrc, /"Справка"/);
   assert.doesNotMatch(menuSrc, /"Info"/);
 });
+
+test("messenger surface polish: W-0989 keeps lazy media and audio geometry stable", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+
+  assert.match(css, /W-0989:\s*stable history media geometry/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-album-loading\s*\{[\s\S]*?contain:\s*layout style paint/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-album-loading\s+\.chat-album-grid-loading\s*\{[\s\S]*?min-height:\s*180px/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-album-loading\s+\.chat-album-footer-loading\s*\{[\s\S]*?position:\s*absolute/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-deferred-voice-mount\s*\{[\s\S]*?min-height:\s*32px;[\s\S]*?contain:\s*layout style/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-attach\[data-msg-file="audio"\]\s+\.chat-voice,[\s\S]*?\.chat-deferred-voice-mount\s+\.chat-voice\s*\{[\s\S]*?grid-template-columns:\s*30px minmax\(104px,\s*1fr\) 42px 28px/);
+});

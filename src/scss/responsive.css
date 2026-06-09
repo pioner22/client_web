@@ -7,7 +7,7 @@
     --mobile-bottom-nav-fill: var(--app-bottom-live-pad);
     --mobile-bottom-nav-row-h: 74px;
     --mobile-bottom-nav-h: calc(var(--mobile-bottom-nav-row-h) + var(--mobile-bottom-nav-fill));
-    --mobile-bottom-nav-scroll-pad: calc(var(--mobile-bottom-nav-row-h) + var(--sp-2));
+    --mobile-bottom-nav-scroll-pad: calc(var(--mobile-bottom-nav-h) + 24px);
     --mobile-bottom-nav-bottom-offset: 0px;
     --mobile-bottom-nav-glass-bg: rgba(24, 24, 32, 0.58);
     --mobile-bottom-nav-glass-border: rgba(255, 255, 255, 0.14);
@@ -510,6 +510,15 @@
 
   .sidebar-body > .chatlist {
     min-height: 100%;
+  }
+
+  .sidebar-body > .chatlist::after {
+    content: "";
+    display: block;
+    flex: 0 0 auto;
+    height: calc(var(--mobile-bottom-nav-h) + 12px);
+    min-height: 96px;
+    pointer-events: none;
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .sidebar-body {

@@ -167,11 +167,11 @@ function applySheetGeometry(root: HTMLElement) {
   );
   const composerOffset = composerVisible ? Math.max(0, viewportH - Math.max(0, composerRect!.top) + 8) : 0;
   const bottomOffset = Math.min(Math.round(viewportH * 0.42), Math.round(composerOffset));
-  const maxHeight = Math.max(200, Math.min(480, viewportH - bottomOffset - pad * 2, Math.round(viewportH * (bottomOffset ? 0.52 : 0.56))));
+  const maxHeight = Math.max(172, Math.min(360, viewportH - bottomOffset - pad * 2, Math.round(viewportH * (bottomOffset ? 0.44 : 0.48))));
   root.style.maxHeight = `${maxHeight}px`;
   root.style.setProperty("--ctx-sheet-bottom-offset", `${bottomOffset}px`);
   root.style.setProperty("--ctx-sheet-max-h", `${maxHeight}px`);
-  root.style.setProperty("--ctx-list-max-h", `${Math.max(120, maxHeight - 102)}px`);
+  root.style.setProperty("--ctx-list-max-h", `${Math.max(112, maxHeight - 72)}px`);
   root.setAttribute("data-composer-avoid", composerVisible ? "1" : "0");
 }
 

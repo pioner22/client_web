@@ -681,16 +681,17 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  outline: 0;
 }
 
 .ctx-menu.ctx-menu-sheet {
   position: relative;
   min-width: 0;
-  width: min(380px, calc(100vw - 28px));
+  width: min(320px, calc(100vw - 28px));
   max-width: calc(100vw - 28px);
-  max-height: var(--ctx-sheet-max-h, min(56dvh, 480px));
-  border-radius: 22px;
-  padding: 7px;
+  max-height: var(--ctx-sheet-max-h, min(48dvh, 360px));
+  border-radius: 18px;
+  padding: 6px;
   margin-bottom: calc(var(--safe-bottom-pad) + 8px + var(--ctx-sheet-bottom-offset, 0px));
   background: color-mix(in srgb, var(--modal-bg), transparent 4%);
   backdrop-filter: blur(22px) saturate(1.2);
@@ -760,16 +761,17 @@
 }
 
 .ctx-menu.ctx-menu-sheet .ctx-header {
-  padding: 0 2px 4px 8px;
+  min-height: 30px;
+  padding: 0 0 3px 7px;
   border-bottom: 0;
   margin-bottom: 0;
 }
 
 .ctx-menu.ctx-menu-sheet .ctx-item {
-  min-height: 42px;
-  padding: 6px 9px;
-  font-size: 14px;
-  border-radius: 13px;
+  min-height: 38px;
+  padding: 5px 8px;
+  font-size: 13px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--modal-bg), transparent 72%);
 }
 
@@ -821,11 +823,11 @@
   flex: 1 1 auto;
   min-width: 0;
   margin-bottom: 0;
-  padding: 4px 2px 4px 4px;
+  padding: 3px 2px 3px 3px;
   border-bottom: 0;
   color: color-mix(in srgb, var(--muted), var(--text) 28%);
-  font-size: 12px;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 
 .ctx-close {
@@ -839,6 +841,9 @@
   font-size: 0;
   white-space: nowrap;
   color: color-mix(in srgb, var(--muted), var(--text) 32%);
+  display: grid;
+  place-items: center;
+  line-height: 1;
 }
 
 .ctx-close::before {
@@ -846,6 +851,7 @@
   display: block;
   width: 14px;
   height: 14px;
+  margin: auto;
   background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M6.4 5L12 10.6L17.6 5L19 6.4L13.4 12L19 17.6L17.6 19L12 13.4L6.4 19L5 17.6L10.6 12L5 6.4L6.4 5Z'/%3E%3C/svg%3E") no-repeat center / contain;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M6.4 5L12 10.6L17.6 5L19 6.4L13.4 12L19 17.6L17.6 19L12 13.4L6.4 19L5 17.6L10.6 12L5 6.4L6.4 5Z'/%3E%3C/svg%3E") no-repeat center / contain;

@@ -320,7 +320,8 @@ test("context menu/pin remediation source guards: modern sheet, compact message 
   ]);
 
   assert.match(modalCss, /\.ctx-menu\s*\{[\s\S]*overflow:\s*hidden;/);
-  assert.match(modalCss, /\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*width:\s*min\(380px,\s*calc\(100vw - 28px\)\)/);
+  assert.match(modalCss, /\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*width:\s*min\(320px,\s*calc\(100vw - 28px\)\)/);
+  assert.match(modalCss, /\.ctx-menu\s*\{[\s\S]*outline:\s*0;/);
   assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s*\{[\s\S]*width:\s*min\(276px,\s*calc\(100vw - 24px\)\)/);
   assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s*\{[\s\S]*background:\s*transparent;/);
   assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-list\s*\{[\s\S]*width:\s*min\(var\(--ctx-action-list-w,\s*276px\),\s*calc\(100vw - 32px\)\)/);
@@ -331,19 +332,21 @@ test("context menu/pin remediation source guards: modern sheet, compact message 
   assert.match(modalCss, /\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-item\s*\{[\s\S]*font-size:\s*16px;/);
   assert.match(modalCss, /--ctx-menu-message-glass-bg:\s*rgba\(18,\s*18,\s*24,\s*0\.84\)/);
   assert.match(modalCss, /\.overlay\.overlay-context\.overlay-context-message\s*\{[\s\S]*backdrop-filter:\s*none;/);
+  assert.match(modalCss, /\.ctx-close\s*\{[\s\S]*display:\s*grid;[\s\S]*place-items:\s*center;/);
   assert.match(modalCss, /\.ctx-close::before\s*\{[\s\S]*display:\s*block;/);
   assert.match(modalCss, /--ctx-sheet-bottom-offset/);
   assert.match(modalCss, /\.ctx-icon::before\s*\{[\s\S]*mask:\s*var\(--ctx-icon-mask,\s*var\(--ctx-icon-dot\)\)/);
   assert.match(modalCss, /--ctx-list-max-h/);
   assert.match(responsiveCss, /\.sidebar-tabs\.sidebar-tabs-mobile\.sidebar-tabs-bottom-nav\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(responsiveCss, /\.app-frame\.has-message-context-menu\s+\.chat-lines\s+\[data-msg-idx\]\.msg-context-active\s*\{[\s\S]*filter:\s*none !important;/);
-  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*max-height:\s*var\(--ctx-sheet-max-h,\s*min\(56dvh,\s*480px\)\)/);
+  assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-sheet\s*\{[\s\S]*max-height:\s*var\(--ctx-sheet-max-h,\s*min\(48dvh,\s*360px\)\)/);
   assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-message-action-list\s*\{[\s\S]*width:\s*min\(276px,\s*calc\(100vw - 24px\)\)/);
   assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-list\s*\{[\s\S]*border-radius:\s*19px;/);
   assert.match(skinCss, /html\[data-skin="yagodka-modern"\]\s+\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-react\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
   assert.match(renderSrc, /composerAvoidRect/);
   assert.match(renderSrc, /applyPopoverGeometry/);
   assert.match(renderSrc, /applySheetGeometry/);
+  assert.match(renderSrc, /Math\.min\(360,\s*viewportH/);
   assert.match(renderSrc, /applyCompactMessageGeometry/);
   assert.match(renderSrc, /findMessageAnchorRect/);
   assert.match(renderSrc, /data-ctx-icon/);

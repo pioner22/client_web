@@ -849,12 +849,12 @@ html[data-skin="yagodka-modern"][data-theme="dark"] .ctx-menu {
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-sheet {
-  width: min(380px, calc(100vw - 28px));
+  width: min(320px, calc(100vw - 28px));
   max-width: calc(100vw - 28px);
-  max-height: var(--ctx-sheet-max-h, min(56dvh, 480px));
+  max-height: var(--ctx-sheet-max-h, min(48dvh, 360px));
   margin-bottom: calc(var(--safe-bottom-pad) + 8px + var(--ctx-sheet-bottom-offset, 0px));
-  border-radius: 22px;
-  padding: 7px;
+  border-radius: 18px;
+  padding: 6px;
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-compact {
@@ -901,8 +901,9 @@ html[data-skin="yagodka-modern"] .ctx-item {
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-sheet .ctx-item {
-  min-height: 42px;
-  border-radius: 13px;
+  min-height: 38px;
+  padding: 5px 8px;
+  border-radius: 12px;
 }
 
 html[data-skin="yagodka-modern"] .ctx-menu.ctx-menu-message-compact .ctx-item {

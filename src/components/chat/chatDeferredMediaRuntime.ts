@@ -2,6 +2,7 @@ import { el } from "../../helpers/dom/el";
 import type { AppState } from "../../stores/types";
 import type { AlbumItem } from "./renderChatHelpers";
 import { recoverFromLazyImportError } from "../../app/bootstrap/lazyImportRecovery";
+import { layoutTelegramAlbum, RectPart } from "../../helpers/chat/telegramGroupedLayout";
 
 type ChatDeferredMediaModule = typeof import("./chatDeferredMediaSurface");
 
@@ -35,6 +36,14 @@ type RenderDeferredVoicePlayerCtx = {
 
 type RenderDeferredAlbumLineCtx = RenderDeferredAlbumLineOptions & {
   mount: HTMLElement;
+};
+
+type AlbumPlaceholderGeometry = {
+  albumFileKind: "image" | "video";
+  albumW: number | null;
+  albumH: number | null;
+  layout: ReturnType<typeof layoutTelegramAlbum> | null;
+  layoutOk: boolean;
 };
 
 let deferredMediaModule: ChatDeferredMediaModule | null = null;
@@ -85,6 +94,7 @@ function renderDeferredVoicePlaceholder(opts: RenderDeferredVoicePlayerOptions, 
       el("button", { class: "btn chat-voice-play", type: "button", "aria-label": message, disabled: "true" }, [""]),
       track,
       el("div", { class: "chat-voice-time" }, ["—"]),
+      el("button", { class: "btn chat-voice-speed", type: "button", "aria-hidden": "true", tabindex: "-1", disabled: "true" }, ["1x"]),
     ]
   );
   wrap.style.setProperty("--voice-progress", "0%");
@@ -95,12 +105,83 @@ function renderDeferredVoicePlaceholder(opts: RenderDeferredVoicePlayerOptions, 
   return wrap;
 }
 
-function renderDeferredAlbumPlaceholder(kind: string, message: string) {
+function albumEdgeAttrs(sides?: number | null): Record<string, string | undefined> {
+  const mask = typeof sides === "number" && Number.isFinite(sides) ? sides : 0;
+  return {
+    "data-album-edge-top": mask & RectPart.Top ? "1" : undefined,
+    "data-album-edge-right": mask & RectPart.Right ? "1" : undefined,
+    "data-album-edge-bottom": mask & RectPart.Bottom ? "1" : undefined,
+    "data-album-edge-left": mask & RectPart.Left ? "1" : undefined,
+  };
+}
+
+function resolveAlbumPlaceholderGeometry(options: RenderDeferredAlbumLineOptions): AlbumPlaceholderGeometry {
+  const items = Array.isArray(options.items) ? options.items : [];
+  const layoutCfg = options.opts?.albumLayout ?? { maxWidth: 420, minWidth: 100, spacing: 1 };
+  const sizes = items.map((item) => {
+    const w = Number(item?.info?.thumbW || item?.info?.mediaW || 0);
+    const h = Number(item?.info?.thumbH || item?.info?.mediaH || 0);
+    return w > 0 && h > 0 ? { w, h } : { w: 1000, h: 1000 };
+  });
+  const albumFileKind = items.length && items.every((item) => item?.info?.isVideo) ? "video" : "image";
+  const layout = (() => {
+    try {
+      return layoutTelegramAlbum(sizes, layoutCfg);
+    } catch {
+      return null;
+    }
+  })();
+  const albumW = layout && Number.isFinite(layout.width) && layout.width > 0 ? layout.width : null;
+  const albumH = layout && Number.isFinite(layout.height) && layout.height > 0 ? layout.height : null;
+  const layoutOk = Boolean(albumW && albumH && layout && Array.isArray(layout.layout) && layout.layout.length === items.length);
+  return { albumFileKind, albumW, albumH, layout, layoutOk };
+}
+
+function renderDeferredAlbumPlaceholder(options: RenderDeferredAlbumLineOptions, message: string) {
+  const geometry = resolveAlbumPlaceholderGeometry(options);
+  const gridItems = options.items.map((item, index) => {
+    const lay = geometry.layoutOk && geometry.layout ? geometry.layout.layout[index] : null;
+    const style =
+      lay && geometry.albumW && geometry.albumH
+        ? `width: ${(lay.geometry.width / geometry.albumW) * 100}%; height: ${(lay.geometry.height / geometry.albumH) * 100}%; top: ${(lay.geometry.y / geometry.albumH) * 100}%; left: ${(lay.geometry.x / geometry.albumW) * 100}%;`
+        : "";
+    const fileKind = item?.info?.isVideo ? "video" : "image";
+    return el(
+      "div",
+      {
+        class: "chat-album-item chat-album-placeholder-item",
+        "data-msg-idx": String(item?.idx ?? index),
+        ...albumEdgeAttrs(lay?.sides),
+        ...(style ? { style } : {}),
+      },
+      [
+        el("div", { class: "chat-file-preview chat-file-preview-album chat-file-preview-empty chat-file-preview-loading", "data-file-kind": fileKind }, [
+          el("span", { class: "chat-file-placeholder", "aria-hidden": "true" }, [""]),
+        ]),
+      ]
+    );
+  });
+  const grid = el(
+    "div",
+    {
+      class: geometry.layoutOk ? "chat-album-grid chat-album-grid-mosaic chat-album-grid-loading" : "chat-album-grid chat-album-grid-loading",
+      "data-count": String(Math.max(1, options.items.length)),
+    },
+    gridItems
+  );
+  if (geometry.layoutOk && geometry.albumW && geometry.albumH) {
+    grid.style.width = `${Math.round(geometry.albumW)}px`;
+    grid.style.height = `${Math.round(geometry.albumH)}px`;
+  }
   return [
     el("div", { class: "msg-avatar" }, [el("span", { class: "avatar avatar-skel", "aria-hidden": "true" }, [""])]),
     el("div", { class: "msg-body" }, [
+      el("div", { class: "msg-from msg-from-placeholder", "aria-hidden": "true" }, [el("span", { class: "msg-from-name" }, [""])]),
       el("div", { class: "chat-album-surface chat-album-surface-loading", role: "status", "aria-live": "polite", "aria-busy": "true" }, [
-        el("div", { class: `msg msg-${kind} msg-sys chat-album-loading-text` }, [message]),
+        grid,
+        el("div", { class: "msg-attach-footer msg-attach-footer-media msg-attach-footer-meta-only chat-album-footer-loading" }, [
+          el("div", { class: "msg-meta chat-album-loading-meta", title: message }, [""]),
+        ]),
       ]),
     ]),
   ];
@@ -136,13 +217,21 @@ export function renderDeferredAlbumLine(options: RenderDeferredAlbumLineOptions)
   const kind = String(first?.msg?.kind || "in");
   const mount = el("div", { class: `msg msg-${kind} msg-attach msg-album msg-album-loading` });
   const ctx: RenderDeferredAlbumLineCtx = { mount, ...options };
+  const geometry = resolveAlbumPlaceholderGeometry(options);
+  mount.setAttribute("data-msg-kind", kind);
+  mount.setAttribute("data-msg-attach", first?.msg?.attachment?.kind ? String(first.msg.attachment.kind) : "file");
+  mount.setAttribute("data-msg-file", geometry.albumFileKind);
+  mount.setAttribute("data-msg-album", "1");
+  mount.setAttribute("data-msg-footer", "stacked");
+  mount.setAttribute("data-msg-album-layout", geometry.layoutOk ? "mosaic" : "grid");
+  if (geometry.layoutOk && geometry.albumW) mount.style.setProperty("--chat-album-shell-width", `${Math.round(geometry.albumW)}px`);
   if (deferredMediaModule) {
     deferredMediaModule.renderDeferredAlbumLineSurface(ctx);
     return mount;
   }
   mount.replaceChildren(
     ...renderDeferredAlbumPlaceholder(
-      kind,
+      options,
       deferredMediaRecovering ? "Обновляем приложение..." : deferredMediaLoadFailed ? "Не удалось загрузить альбом" : "Загрузка альбома..."
     )
   );
@@ -154,7 +243,7 @@ export function renderDeferredAlbumLine(options: RenderDeferredAlbumLineOptions)
     .catch(() => {
       if (!canRenderMount(mount)) return;
       mount.replaceChildren(
-        ...renderDeferredAlbumPlaceholder(kind, deferredMediaRecovering ? "Обновляем приложение..." : "Не удалось загрузить альбом")
+        ...renderDeferredAlbumPlaceholder(options, deferredMediaRecovering ? "Обновляем приложение..." : "Не удалось загрузить альбом")
       );
     });
   return mount;

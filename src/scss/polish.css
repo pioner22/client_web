@@ -1398,3 +1398,141 @@ html[data-theme="dark"] .chat:not(.chat-board) {
     min-height: 56px;
   }
 }
+
+/* W-0989: stable history media geometry + compact mobile action sheet polish. */
+.chat:not(.chat-board) .msg-album-loading,
+.chat:not(.chat-board) .chat-deferred-media-mount,
+.chat:not(.chat-board) .chat-file-preview,
+.chat:not(.chat-board) .chat-voice {
+  overflow-anchor: none;
+}
+
+.chat:not(.chat-board) .msg-album-loading {
+  contain: layout style paint;
+}
+
+.chat:not(.chat-board) .msg-album-loading .msg-body {
+  width: min(100%, var(--chat-album-shell-width, var(--chat-album-frame-max)), var(--msg-body-max-width));
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-album-loading .msg-from-placeholder {
+  min-height: 18px;
+  margin: 0 0 4px;
+  visibility: hidden;
+}
+
+.chat:not(.chat-board) .msg-album-loading .chat-album-surface-loading {
+  position: relative;
+  width: min(100%, var(--chat-album-shell-width, var(--chat-album-frame-max)), var(--msg-body-max-width));
+  max-width: 100%;
+  display: grid;
+  gap: 0;
+  border-radius: var(--chat-history-media-radius, 16px);
+  overflow: hidden;
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-album-loading .chat-album-grid-loading {
+  width: min(100%, var(--chat-album-shell-width, var(--chat-album-frame-max)), var(--msg-body-max-width));
+  min-height: 180px;
+  aspect-ratio: 1 / 1;
+  border-radius: inherit;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--panel2), transparent 24%);
+}
+
+.chat:not(.chat-board) .msg-album-loading[data-msg-album-layout="mosaic"] .chat-album-grid-loading {
+  aspect-ratio: auto;
+}
+
+.chat:not(.chat-board) .chat-album-grid-loading .chat-album-placeholder-item {
+  background: color-mix(in srgb, var(--panel2), transparent 16%);
+}
+
+.chat:not(.chat-board) .chat-album-grid-loading .chat-file-preview-loading {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+  transform: none !important;
+}
+
+.chat:not(.chat-board) .chat-album-grid-loading .chat-file-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: block;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--text), transparent 92%), transparent),
+    color-mix(in srgb, var(--panel2), transparent 18%);
+  background-size: 180% 100%, 100% 100%;
+  animation: skel-shimmer 1.8s ease-in-out infinite;
+}
+
+.chat:not(.chat-board) .msg-album-loading .chat-album-footer-loading {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: auto;
+  min-width: 44px;
+  max-width: calc(100% - 12px);
+  padding: 0;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-album-loading .chat-album-loading-meta {
+  width: 44px;
+  min-width: 44px;
+  min-height: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--chat-history-media-meta-bg);
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .chat-deferred-voice-mount {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  contain: layout style;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-audio,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-voice {
+  min-height: 42px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice,
+.chat:not(.chat-board) .chat-deferred-voice-mount .chat-voice {
+  height: 32px;
+  min-height: 32px;
+  grid-template-columns: 30px minmax(104px, 1fr) 42px 28px;
+  align-items: center;
+}
+
+.chat:not(.chat-board) .chat-deferred-voice-mount .chat-voice-placeholder .chat-voice-speed {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-time {
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-speed {
+  min-width: 24px;
+  justify-self: end;
+}

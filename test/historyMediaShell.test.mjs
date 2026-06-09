@@ -448,6 +448,56 @@ test("history media shell: album line uses stacked footer shell even without cap
   }
 });
 
+test("history media shell: deferred album reserves final mosaic geometry before lazy surface loads", async () => {
+  const helper = await loadRenderChat();
+  try {
+    await withDomStubs(async () => {
+      const layout = createLayout();
+      const state = createState([
+        {
+          kind: "in",
+          from: "123-456-789",
+          to: "854-432-319",
+          room: null,
+          text: "",
+          ts: 1700000000,
+          id: 1,
+          attachment: { kind: "file", name: "01.jpg", size: 111, mime: "image/jpeg", fileId: "501" },
+        },
+        {
+          kind: "in",
+          from: "123-456-789",
+          to: "854-432-319",
+          room: null,
+          text: "",
+          ts: 1700000001,
+          id: 2,
+          attachment: { kind: "file", name: "02.mp4", size: 112, mime: "video/mp4", fileId: "502" },
+        },
+      ]);
+
+      helper.renderChat(layout, state);
+
+      const albumLine = findFirst(layout.chatHost, (n) => hasClass(n, "msg-album-loading"));
+      assert.ok(albumLine, "до lazy import должен быть стабильный loading album line");
+      assert.equal(albumLine.getAttribute("data-msg-album"), "1");
+      assert.equal(albumLine.getAttribute("data-msg-footer"), "stacked");
+      assert.equal(albumLine.getAttribute("data-msg-album-layout"), "mosaic");
+      assert.equal(albumLine.style._props.get("--chat-album-shell-width"), "420px");
+      const grid = findFirst(albumLine, (n) => hasClass(n, "chat-album-grid-loading"));
+      assert.ok(grid, "loading surface должен сразу резервировать album grid");
+      assert.equal(grid.style.width, "420px");
+      assert.ok(grid.style.height, "album grid должен иметь inline height до загрузки финального surface");
+      assert.equal(findAll(albumLine, (n) => hasClass(n, "chat-album-placeholder-item")).length, 2);
+      assert.ok(findFirst(albumLine, (n) => hasClass(n, "msg-from-placeholder")), "loading album должен резервировать строку автора");
+      assert.ok(findFirst(albumLine, (n) => hasClass(n, "chat-album-footer-loading")), "loading album должен резервировать footer/meta");
+      await flushDeferredChatMedia();
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("history media shell: image selection + action controls use unified overlay shell", async () => {
   const helper = await loadRenderChat();
   try {
@@ -581,6 +631,12 @@ test("history media shell polish: source and CSS guards present", async () => {
   assert.match(deferredSurfaceSrc, /data-msg-album-layout/);
   assert.match(deferredSurfaceSrc, /data-album-edge-top/);
   assert.match(deferredSurfaceSrc, /--chat-album-shell-width/);
+
+  const deferredRuntimeSrc = await readFile(path.resolve("src/components/chat/chatDeferredMediaRuntime.ts"), "utf8");
+  assert.match(deferredRuntimeSrc, /layoutTelegramAlbum/);
+  assert.match(deferredRuntimeSrc, /chat-album-grid-loading/);
+  assert.match(deferredRuntimeSrc, /chat-album-footer-loading/);
+  assert.match(deferredRuntimeSrc, /msg-from-placeholder/);
 
   const shellSrc = await readFile(path.resolve("src/components/chat/attachmentFooterShell.ts"), "utf8");
   assert.match(shellSrc, /msg-attach-footer/);
