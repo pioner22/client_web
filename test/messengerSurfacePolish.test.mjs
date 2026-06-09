@@ -111,3 +111,28 @@ test("messenger surface polish: W-0987 separates history item layers", async () 
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-date\s*\{[\s\S]*?position:\s*relative\s*!important;[\s\S]*?top:\s*auto\s*!important/);
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-sys-noise\s*\{[\s\S]*?display:\s*none/);
 });
+
+test("messenger surface polish: W-0988 tightens history, profile and menu chrome", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+  const profileSrc = await readFile(new URL("../src/pages/profile/createProfilePage.ts", import.meta.url), "utf8");
+  const menuSrc = await readFile(new URL("../src/components/sidebar/renderSidebarMenuSurface.ts", import.meta.url), "utf8");
+
+  assert.match(css, /W-0988:\s*screenshot-guided refinement for history,\s*profile and menu/);
+  assert.match(css, /--history-layer-rail-max:\s*min\(100%,\s*900px\)/);
+  assert.match(css, /--history-audio-frame-width:\s*min\(360px,\s*62%\)/);
+  assert.match(css, /\.msg-attach\[data-msg-footer="stacked"\]\[data-msg-file="image"\]\s+\.msg-attach-footer-media\.msg-attach-footer-caption,[\s\S]*?border-radius:\s*0\s+0\s+var\(--chat-history-media-radius\)\s+var\(--chat-history-media-radius\)/);
+  assert.match(css, /\.hdr-action,[\s\S]*?\.composer-actions\s+\.btn,[\s\S]*?transform:\s*none\s*!important/);
+  assert.match(css, /\.sidebar\[data-sidebar-tab="menu"\]\s+\.sidebar-menu-row\s+\.row-prefix\s*\{[\s\S]*?width:\s*32px;[\s\S]*?animation:\s*none\s*!important/);
+  assert.match(css, /\.sidebar-menu-row\[data-menu-icon="profile"\]\s+\.row-prefix\s*\{[\s\S]*?--menu-icon-mask:\s*var\(--menu-icon-profile\)/);
+
+  assert.match(profileSrc, /profileId\.textContent\s*=\s*h\s*\?\s*"Публичный профиль"\s*:\s*"Логин поможет друзьям найти вас"/);
+  assert.doesNotMatch(profileSrc, /ID:\s*\$\{me\?\.id\}/);
+  assert.match(profileSrc, /profileCompletenessValue\.textContent\s*=\s*completion\s*>=\s*100\s*\?\s*"Готов"/);
+  assert.match(profileSrc, /profileNotifyValue\.textContent\s*=\s*subscribed\s*\?\s*"Включены"/);
+  assert.match(profileSrc, /profileSessionsPill\.textContent\s*=\s*sessionEntries\.length\s*\?\s*`Устройств:/);
+
+  assert.match(menuSrc, /function markMenuRow/);
+  assert.match(menuSrc, /dataset\.menuIcon/);
+  assert.match(menuSrc, /"Справка"/);
+  assert.doesNotMatch(menuSrc, /"Info"/);
+});

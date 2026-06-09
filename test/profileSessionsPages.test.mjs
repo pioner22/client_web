@@ -172,7 +172,7 @@ test("profile page: session management moved out of main profile body", async ()
         onForcePwaUpdate() {},
       });
       const text = getText(page.root);
-      assert.ok(text.includes("Открыть сессии"));
+      assert.ok(text.includes("Открыть устройства"));
       assert.ok(!text.includes("Другие устройства"));
       assert.ok(!text.includes("Активные сессии"));
     });

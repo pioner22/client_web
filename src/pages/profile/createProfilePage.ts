@@ -51,17 +51,17 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const profileDevicesDetail = el("div", { class: "profile-insight-detail" }, ["Устройства"]);
   const profileInsightGrid = el("div", { class: "profile-insight-grid", "aria-label": "Ключевые настройки профиля" }, [
     el("div", { class: "profile-insight-card profile-insight-card-primary" }, [
-      el("div", { class: "profile-insight-label" }, ["Профиль"]),
+      el("div", { class: "profile-insight-label" }, ["Карточка"]),
       profileCompletenessValue,
       profileCompletenessDetail,
     ]),
     el("div", { class: "profile-insight-card" }, [
-      el("div", { class: "profile-insight-label" }, ["Связь"]),
+      el("div", { class: "profile-insight-label" }, ["Уведомления"]),
       profileNotifyValue,
       profileNotifyDetail,
     ]),
     el("div", { class: "profile-insight-card" }, [
-      el("div", { class: "profile-insight-label" }, ["Сессии"]),
+      el("div", { class: "profile-insight-label" }, ["Устройства"]),
       profileDevicesValue,
       profileDevicesDetail,
     ]),
@@ -92,7 +92,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     enterkeyhint: "done",
   }) as HTMLInputElement;
 
-  const handleLabel = el("label", { class: "modal-label", for: "profile-handle" }, ["Логин (@name)"]);
+  const handleLabel = el("label", { class: "modal-label", for: "profile-handle" }, ["Логин"]);
   const handleInput = el("input", {
     class: "modal-input",
     type: "text",
@@ -135,9 +135,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     enterkeyhint: "done",
   }) as HTMLTextAreaElement;
 
-  const skinLabel = el("label", { class: "modal-label", for: "profile-skin" }, ["Скин интерфейса"]);
+  const skinLabel = el("label", { class: "modal-label", for: "profile-skin" }, ["Стиль интерфейса"]);
   const skinSelect = el("select", { class: "modal-input", id: "profile-skin" }, []) as HTMLSelectElement;
-  const skinHint = el("div", { class: "profile-hint" }, ["Скин хранится локально в браузере и применяется сразу"]);
+  const skinHint = el("div", { class: "profile-hint" }, ["Оформление применяется сразу и не меняет ваши сообщения."]);
 
   const themeLabel = el("div", { class: "modal-label" }, ["Тема"]);
   const btnLight = el("button", { class: "btn", type: "button", "data-theme": "light" }, ["Светлый"]);
@@ -163,14 +163,14 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const btnNotifySoundOff = el("button", { class: "btn", type: "button" }, ["Выкл"]);
   const notifySoundActions = el("div", { class: "profile-actions" }, [btnNotifySoundOn, btnNotifySoundOff]);
 
-  const pwaUpdateLabel = el("div", { class: "modal-label" }, ["Обновление PWA"]);
+  const pwaUpdateLabel = el("div", { class: "modal-label" }, ["Обновления приложения"]);
   const pwaUpdateHint = el("div", { class: "profile-hint" }, ["—"]);
-  const btnPwaUpdate = el("button", { class: "btn btn-primary", type: "button" }, ["Принудительно обновить PWA"]);
+  const btnPwaUpdate = el("button", { class: "btn btn-primary", type: "button" }, ["Проверить обновление"]);
   const pwaUpdateActions = el("div", { class: "profile-actions" }, [btnPwaUpdate]);
 
-  const sessionsHint = el("div", { class: "profile-hint" }, ["Список устройств и управление сессиями открываются отдельно, чтобы профиль оставался компактным."]);
-  const sessionsSummary = el("div", { class: "profile-hint" }, ["Откройте отдельную страницу, чтобы посмотреть устройства и при необходимости завершить другие сессии."]);
-  const btnOpenSessions = el("button", { class: "btn", type: "button" }, ["Открыть сессии"]);
+  const sessionsHint = el("div", { class: "profile-hint" }, ["Список устройств открывается отдельно, чтобы профиль оставался компактным."]);
+  const sessionsSummary = el("div", { class: "profile-hint" }, ["Откройте список устройств, чтобы проверить входы и завершить лишние."]);
+  const btnOpenSessions = el("button", { class: "btn", type: "button" }, ["Открыть устройства"]);
   const sessionsActions = el("div", { class: "profile-actions" }, [btnOpenSessions]);
 
   const btnSave = el("button", { class: "btn btn-primary", type: "button" }, ["Сохранить"]);
@@ -222,7 +222,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   ]);
 
   const sessionsCard = el("div", { class: "profile-card" }, [
-    el("div", { class: "profile-card-title" }, ["Сессии"]),
+    el("div", { class: "profile-card-title" }, ["Устройства"]),
     sessionsHint,
     sessionsSummary,
     sessionsActions,
@@ -301,7 +301,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     profileName.textContent = me?.display_name ? me.display_name : "Без имени";
     const h = me?.handle ? String(me.handle).trim() : "";
     profileHandle.textContent = h ? (h.startsWith("@") ? h : `@${h}`) : "Логин не задан";
-    profileId.textContent = me?.id ? `ID: ${me.id}` : "";
+    profileId.textContent = h ? "Публичный профиль" : "Логин поможет друзьям найти вас";
     const statusRaw = String(me?.status || state.profileDraftStatus || "").trim();
     profileStatusPill.textContent = statusRaw ? `Статус: ${statusRaw}` : "Статус не задан";
     profileStatusPill.classList.toggle("is-muted", !statusRaw);
@@ -313,9 +313,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
       String(me?.bio || state.profileDraftBio || "").trim(),
     ];
     const completion = Math.round((profileFields.filter(Boolean).length / profileFields.length) * 100);
-    profileCompletenessValue.textContent = `${completion}%`;
+    profileCompletenessValue.textContent = completion >= 100 ? "Готов" : completion >= 75 ? "Почти" : "Черновик";
     profileCompletenessDetail.textContent =
-      completion >= 100 ? "Заполнено всё" : completion >= 75 ? "Почти готово" : completion >= 50 ? "Нужно чуть больше" : "Добавьте имя, логин и статус";
+      completion >= 100 ? "Профиль заполнен" : completion >= 75 ? "Осталось чуть-чуть" : completion >= 50 ? "Добавьте пару деталей" : "Добавьте имя, логин и статус";
 
     const myId = state.selfId || "";
     const url = myId ? getStoredAvatar("dm", myId) : null;
@@ -377,8 +377,8 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
       pushText = `${pushText} · ${state.pwaPushStatus}`;
     }
     pushStatus.textContent = pushText;
-    profileNotifyValue.textContent = subscribed ? "Push" : state.notifyInAppEnabled ? "In-app" : "Тихо";
-    profileNotifyDetail.textContent = subscribed ? "Push включен" : state.notifyInAppEnabled ? "Уведомления в приложении" : "Уведомления выключены";
+    profileNotifyValue.textContent = subscribed ? "Включены" : state.notifyInAppEnabled ? "В приложении" : "Тихий режим";
+    profileNotifyDetail.textContent = subscribed ? "Push готов" : state.notifyInAppEnabled ? "Показываем внутри" : "Уведомления выключены";
     btnPushEnable.disabled = !pushSupported || !serverKey || subscribed;
     btnPushDisable.disabled = !pushSupported || !subscribed;
 
@@ -392,25 +392,25 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     btnNotifySoundOff.classList.toggle("btn-active", !Boolean(state.notifySoundEnabled));
 
     const swSupported = typeof navigator !== "undefined" && "serviceWorker" in navigator;
-    let updateText = "Принудительно проверяет обновления и перезапускает PWA";
+    let updateText = "Проверяет свежую версию и применяет её после подтверждения.";
     if (!swSupported) updateText = "PWA обновления не поддерживаются в этом браузере";
-    else if (state.pwaUpdateAvailable) updateText = "Доступно обновление PWA — нажмите, чтобы применить";
+    else if (state.pwaUpdateAvailable) updateText = "Доступно обновление — нажмите, чтобы применить.";
     pwaUpdateHint.textContent = updateText;
     btnPwaUpdate.disabled = !swSupported;
 
     const sessionEntries = Array.isArray(state.sessionDevices) ? state.sessionDevices : [];
     const otherCount = sessionEntries.filter((entry) => !entry.current).length;
-    profileSessionsPill.textContent = sessionEntries.length ? `Сессий: ${sessionEntries.length}` : "Сессии: нет данных";
-    profileDevicesValue.textContent = sessionEntries.length ? String(sessionEntries.length) : "—";
-    profileDevicesDetail.textContent = otherCount ? `Других устройств: ${otherCount}` : sessionEntries.length ? "Только текущее" : "Нет данных";
+    profileSessionsPill.textContent = sessionEntries.length ? `Устройств: ${sessionEntries.length}` : "Устройства";
+    profileDevicesValue.textContent = sessionEntries.length ? String(sessionEntries.length) : "Проверить";
+    profileDevicesDetail.textContent = otherCount ? `Других: ${otherCount}` : sessionEntries.length ? "Только текущее" : "Откройте список";
     sessionsHint.textContent =
-      state.sessionDevicesStatus || "Список устройств и управление сессиями открываются отдельно, чтобы профиль оставался компактным.";
+      state.sessionDevicesStatus || "Список устройств открывается отдельно, чтобы профиль оставался компактным.";
     if (!sessionEntries.length) {
-      sessionsSummary.textContent = "Откройте отдельную страницу, чтобы посмотреть устройства и при необходимости завершить другие сессии.";
+      sessionsSummary.textContent = "Откройте список устройств, чтобы проверить входы и завершить лишние.";
     } else if (!otherCount) {
-      sessionsSummary.textContent = "Сейчас известна только текущая сессия. Подробности и управление доступны на отдельной странице.";
+      sessionsSummary.textContent = "Сейчас известно только текущее устройство. Подробности доступны отдельно.";
     } else {
-      sessionsSummary.textContent = `Сейчас известно сессий: ${sessionEntries.length}. Других устройств: ${otherCount}. Подробности и управление доступны на отдельной странице.`;
+      sessionsSummary.textContent = `Устройств: ${sessionEntries.length}. Других: ${otherCount}. Подробности и управление доступны отдельно.`;
     }
     btnOpenSessions.disabled = !(state.authed && state.conn === "connected");
   }

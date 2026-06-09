@@ -30,71 +30,76 @@ function toggleClass(node: HTMLElement | null | undefined, cls: string, enabled:
   (node as any).className = parts.join(" ");
 }
 
+function markMenuRow(row: HTMLElement, icon: string): HTMLElement {
+  row.classList.add("sidebar-menu-row");
+  row.dataset.menuIcon = icon;
+  return row;
+}
+
 export function renderSidebarMenuSurface(ctx: RenderSidebarMenuCtx) {
   const { state, mobileUi, onSetPage, onCreateGroup, onCreateBoard, onAuthOpen, onAuthLogout, mountDesktop } = ctx;
   const shell = buildAppShellProjection(state);
 
-  const profileRow = roomRow("☺", "Профиль", shell.profileAreaOpen, () => onSetPage("profile"), undefined, {
-    sub: "Имя, @handle, аватар",
+  const profileRow = markMenuRow(roomRow(" ", "Профиль", shell.profileAreaOpen, () => onSetPage("profile"), undefined, {
+    sub: "Имя, фото и оформление",
     time: null,
     hasDraft: false,
-  });
+  }), "profile");
   toggleClass(profileRow, "row-settings", true);
   profileRow.setAttribute("title", "Настройки профиля и интерфейса");
 
-  const searchRow = roomRow("🔍", "Поиск", shell.isSearchPage, () => onSetPage("search"), undefined, {
-    sub: "Глобальный поиск",
+  const searchRow = markMenuRow(roomRow(" ", "Поиск", shell.isSearchPage, () => onSetPage("search"), undefined, {
+    sub: "Сообщения, люди и медиа",
     time: null,
     hasDraft: false,
-  });
+  }), "search");
   searchRow.setAttribute("title", "Глобальный поиск");
 
-  const filesRow = roomRow("▦", "Файлы", shell.isFilesPage, () => onSetPage("files"), undefined, {
-    sub: "История и загрузки",
+  const filesRow = markMenuRow(roomRow(" ", "Файлы", shell.isFilesPage, () => onSetPage("files"), undefined, {
+    sub: "Медиа и загрузки",
     time: null,
     hasDraft: false,
-  });
-  filesRow.setAttribute("title", "Передача файлов и история");
+  }), "files");
+  filesRow.setAttribute("title", "Медиа, файлы и загрузки");
   const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
 
-  const createGroupRow = roomRow("+", "Создать группу", shell.isGroupCreatePage, () => onCreateGroup(), undefined, {
-    sub: "Группа с приглашёнными участниками",
+  const createGroupRow = markMenuRow(roomRow(" ", "Новая группа", shell.isGroupCreatePage, () => onCreateGroup(), undefined, {
+    sub: "Чат с участниками",
     time: null,
     hasDraft: false,
-  });
+  }), "create-group");
   createGroupRow.setAttribute("title", "Создать новую группу");
 
-  const createBoardRow = roomRow("+", "Создать канал", shell.isBoardCreatePage, () => onCreateBoard(), undefined, {
-    sub: "Канал новостей и информации",
+  const createBoardRow = markMenuRow(roomRow(" ", "Новый канал", shell.isBoardCreatePage, () => onCreateBoard(), undefined, {
+    sub: "Новости и объявления",
     time: null,
     hasDraft: false,
-  });
+  }), "create-board");
   createBoardRow.setAttribute("title", "Создать новый канал");
   const createRows: HTMLElement[] = [createGroupRow, createBoardRow];
 
-  const infoRow = roomRow("?", "Info", shell.isHelpPage, () => onSetPage("help"), undefined, {
-    sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
+  const infoRow = markMenuRow(roomRow(" ", "Справка", shell.isHelpPage, () => onSetPage("help"), undefined, {
+    sub: mobileUi ? "Версии и изменения" : "Помощь, версии и изменения",
     time: null,
     hasDraft: false,
-  });
+  }), "help");
   infoRow.setAttribute("title", mobileUi ? "Справка и журнал обновлений" : "Подсказки по клавишам и журнал обновлений");
 
   const accountRows: HTMLElement[] = [];
   if (shell.canLogin) {
-    const loginRow = roomRow("→", "Войти", false, () => onAuthOpen(), undefined, {
+    const loginRow = markMenuRow(roomRow(" ", "Войти", false, () => onAuthOpen(), undefined, {
       sub: "Вход или регистрация",
       time: null,
       hasDraft: false,
-    });
+    }), "login");
     loginRow.setAttribute("title", "Войти или зарегистрироваться");
     accountRows.push(loginRow);
   } else if (shell.canLogout) {
-    const logoutIcon = mobileUi ? "⏻" : "⎋";
-    const logoutRow = roomRow(logoutIcon, mobileUi ? "Выход" : "Выход (F10)", false, () => onAuthLogout(), undefined, {
+    const logoutRow = markMenuRow(roomRow(" ", mobileUi ? "Выход" : "Выход (F10)", false, () => onAuthLogout(), undefined, {
       sub: "Завершить сессию",
       time: null,
       hasDraft: false,
-    });
+    }), "logout");
     logoutRow.setAttribute("title", mobileUi ? "Выйти из аккаунта" : "Выйти из аккаунта (F10)");
     accountRows.push(logoutRow);
   }
