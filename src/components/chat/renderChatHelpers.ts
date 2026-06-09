@@ -30,7 +30,7 @@ import { renderAttachmentFooterShell } from "./attachmentFooterShell";
 import { renderDeferredVoicePlayer } from "./chatDeferredMediaRuntime";
 import { renderDeferredSysMessage } from "./chatSpecialMessageRuntime";
 import { renderDeferredVisualPreview } from "./chatVisualPreviewRuntime";
-import { CHAT_MEDIA_PREVIEW_SCALE, type FileAttachmentInfo, isVideoNoteName, resolvePreviewBaseWidthPx } from "./chatVisualPreviewShared";
+import { type FileAttachmentInfo, isVideoNoteName } from "./chatVisualPreviewShared";
 import { renderChatFileActions, renderChatFilePills, resolveChatFileSurfaceInfo } from "./chatFileAttachmentSurface";
 import { renderMediaOverlayControls } from "./mediaOverlayControls";
 import { renderMessageContentShell } from "./messageContentShell";
@@ -855,17 +855,6 @@ export function messageLine(
     if (!isVisualMedia) rowChildren.push(el("div", { class: "file-actions" }, actions));
     else visualMediaActions = actions;
     fileRowEl = el("div", { class: fileRowClass }, rowChildren);
-    if (isVisualMedia && !opts?.mobileUi) {
-      if (!stickerCandidate && !roundVideoCandidate) {
-        const baseW = resolvePreviewBaseWidthPx(info);
-        if (baseW) {
-          const scaled = Math.round(baseW * CHAT_MEDIA_PREVIEW_SCALE);
-          if (scaled > 0) {
-            (fileRowEl as any).style.maxWidth = `${scaled}px`;
-          }
-        }
-      }
-    }
     bodyChildren.push(fileRowEl);
     let captionNode: HTMLElement | null = null;
     if (viewerCaption) {

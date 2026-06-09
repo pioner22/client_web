@@ -561,9 +561,12 @@ test("history media shell polish: source and CSS guards present", async () => {
   assert.match(css, /data-msg-album-layout="mosaic"/);
   assert.match(css, /data-album-edge-top="1"/);
   assert.match(mediaOverridesCss, /W-0984: frameless photo\/video history media/);
+  assert.match(mediaOverridesCss, /W-0985: stable frameless history media surfaces/);
   assert.match(mediaOverridesCss, /\.msg-attach\[data-msg-file="image"\]\s+\.chat-file-preview:not\(\.chat-file-preview-empty\)[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;[\s\S]*background:\s*transparent;/);
   assert.match(mediaOverridesCss, /\.msg-attach\[data-msg-footer="overlay"\]\s+\.msg-meta\s*\{[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;[\s\S]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.34\);/);
   assert.match(mediaOverridesCss, /\.msg-attach\[data-msg-album="1"\]\s+\.msg-attach-footer-media\.msg-attach-footer-meta-only\s*\{[\s\S]*position:\s*absolute;[\s\S]*background:\s*transparent;/);
+  assert.match(mediaOverridesCss, /\.msg-attach\[data-msg-file="image"\]\s+\.msg-body,[\s\S]*?\.msg-attach\[data-msg-file="video"\]\s+\.msg-body,[\s\S]*?\.msg-attach\.msg-album\[data-msg-album="1"\]\s+\.msg-body[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/);
+  assert.match(mediaOverridesCss, /\.msg-attach\s+\.msg-attach-footer-media\.msg-attach-footer-caption\s+\.msg-meta\s*\{[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
 
   const helperSrc = await readFile(path.resolve("src/components/chat/renderChatHelpers.ts"), "utf8");
   assert.match(helperSrc, /renderAttachmentFooterShell/);
@@ -571,6 +574,8 @@ test("history media shell polish: source and CSS guards present", async () => {
   assert.match(helperSrc, /footerKind = "overlay"/);
   assert.match(helperSrc, /renderMediaOverlayControls/);
   assert.match(helperSrc, /renderMessageSelectionControl/);
+  assert.doesNotMatch(helperSrc, /resolvePreviewBaseWidthPx\(info\)/);
+  assert.doesNotMatch(helperSrc, /style\.maxWidth\s*=\s*`\$\{scaled\}px`/);
 
   const deferredSurfaceSrc = await readFile(path.resolve("src/components/chat/chatDeferredMediaSurface.ts"), "utf8");
   assert.match(deferredSurfaceSrc, /data-msg-album-layout/);

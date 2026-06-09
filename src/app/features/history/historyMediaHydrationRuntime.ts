@@ -42,10 +42,8 @@ export function resolveStablePreviewAspectRatio(options: {
   sourceTagName?: string | null;
 }): number {
   const next = clampMediaAspectRatio(options.nextRatio);
-  const fileKind = String(options.fileKind || "").trim().toLowerCase();
-  const sourceTagName = String(options.sourceTagName || "").trim().toLowerCase();
   const current = parseAspectRatioValue(options.currentAspectRatio);
-  if (current !== null && fileKind === "video" && sourceTagName === "video") return current;
+  if (current !== null) return current;
   return next;
 }
 
@@ -68,8 +66,9 @@ function applyMediaAspectRatio(el: HTMLElement, ratio: number, meta?: { duration
   if (ratioChanged) button.style.aspectRatio = String(clamped);
   const fileId = String(button.getAttribute("data-file-id") || "").trim();
   const localId = String(button.getAttribute("data-local-id") || "").trim();
-  if (localId) setCachedLocalMediaAspectRatio(localId, clamped);
-  if (fileId) setCachedMediaAspectRatio(fileId, clamped);
+  const measured = clampMediaAspectRatio(ratio);
+  if (localId) setCachedLocalMediaAspectRatio(localId, measured);
+  if (fileId) setCachedMediaAspectRatio(fileId, measured);
 
   const msg = button.closest("div.msg") as HTMLElement | null;
   if (!msg) return ratioChanged;
@@ -79,7 +78,7 @@ function applyMediaAspectRatio(el: HTMLElement, ratio: number, meta?: { duration
   const mime = String(button.getAttribute("data-mime") || "").trim().toLowerCase();
   const size = Number(button.getAttribute("data-size") || 0) || 0;
   const fileKind = String(button.getAttribute("data-file-kind") || "").trim();
-  const isSquare = clamped >= 0.85 && clamped <= 1.18;
+  const isSquare = measured >= 0.85 && measured <= 1.18;
   let flagsChanged = false;
   const setFlag = (attr: string, ok: boolean) => {
     const has = msg.getAttribute(attr) === "1";

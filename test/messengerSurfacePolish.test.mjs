@@ -61,3 +61,15 @@ test("messenger surface polish: W-0978 keeps Android bubbles and context menu bo
   assert.match(css, /html\.env-os-android\s+\.ctx-menu\.ctx-menu-message-action-list\s*\{[\s\S]*?max-width:\s*min\(276px,\s*calc\(100dvw - 28px\)\)/);
   assert.match(css, /html\.env-os-android\s+\.ctx-menu\.ctx-menu-message-action-list\s+\.ctx-list\s*\{[\s\S]*?max-height:\s*min\(var\(--ctx-list-max-h,\s*292px\),\s*calc\(100dvh - 168px\)\)/);
 });
+
+test("messenger surface polish: W-0985 keeps history media stable and date pills non-sticky", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+  const helperSrc = await readFile(new URL("../src/components/chat/renderChatHelpers.ts", import.meta.url), "utf8");
+
+  assert.match(css, /W-0985:\s*stable frameless history media surfaces/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-attach\[data-msg-file="image"\]\s+\.msg-body,[\s\S]*?\.msg-attach\.msg-album\[data-msg-album="1"\]\s+\.msg-body\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none/);
+  assert.match(css, /W-0985:\s*history typography and date separator anti-overlap/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-date\s*\{[\s\S]*?position:\s*relative;[\s\S]*?top:\s*auto/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-date\s+\.msg-sep-line\s*\{[\s\S]*?display:\s*none/);
+  assert.doesNotMatch(helperSrc, /resolvePreviewBaseWidthPx\(info\)/);
+});

@@ -93,7 +93,7 @@ test("chatHostDeferredEvents: stable inline video metadata does not request late
   }
 });
 
-test("chatHostDeferredEvents: image and empty previews still adopt measured media ratio", async () => {
+test("chatHostDeferredEvents: visible media keeps existing ratio and empty previews adopt measured ratio", async () => {
   const { resolveStablePreviewAspectRatio, didPreviewGeometryChange, cleanup } = await loadHelper();
   try {
     assert.equal(
@@ -103,7 +103,7 @@ test("chatHostDeferredEvents: image and empty previews still adopt measured medi
         fileKind: "image",
         sourceTagName: "img",
       }),
-      4 / 3
+      0.5625
     );
 
     assert.equal(
@@ -123,7 +123,7 @@ test("chatHostDeferredEvents: image and empty previews still adopt measured medi
         fileKind: "image",
         sourceTagName: "img",
       }),
-      true
+      false
     );
 
     assert.equal(

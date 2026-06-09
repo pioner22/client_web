@@ -389,7 +389,7 @@ test("renderChat: PDF file-attachment рендерит open/download actions и 
   }
 });
 
-test("renderChat: desktop превью медиа ограничивает max-width (50% от доступной геометрии)", async () => {
+test("renderChat: desktop media preview keeps geometry in CSS instead of inline max-width", async () => {
   const helper = await loadRenderChat();
   try {
     withDomStubs(() => {
@@ -448,7 +448,7 @@ test("renderChat: desktop превью медиа ограничивает max-w
 
       const fileRow = findFirst(chatHost, (n) => hasClass(n, "file-row-chat"));
       assert.ok(fileRow, "должен быть file-row-chat");
-      assert.equal(fileRow.style.maxWidth, "150px");
+      assert.equal(fileRow.style.maxWidth, undefined);
     });
   } finally {
     await helper.cleanup();

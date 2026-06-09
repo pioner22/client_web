@@ -527,3 +527,52 @@ html.env-os-android .ctx-menu.ctx-menu-message-action-list {
 html.env-os-android .ctx-menu.ctx-menu-message-action-list .ctx-list {
   max-height: min(var(--ctx-list-max-h, 292px), calc(100dvh - 168px));
 }
+
+/* W-0985: history typography and date separator anti-overlap.
+ * Date separators are inline instead of per-item sticky pills, so they cannot
+ * stack over each other while old history batches are added.
+ */
+.chat:not(.chat-board) .msg-text,
+.chat:not(.chat-board) .msg-caption {
+  letter-spacing: 0;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+
+.chat:not(.chat-board) .msg-meta,
+.chat:not(.chat-board) .msg-time,
+.chat:not(.chat-board) .msg-status,
+.chat:not(.chat-board) .msg-edited {
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat:not(.chat-board) .msg-date {
+  position: relative;
+  top: auto;
+  z-index: 1;
+  isolation: isolate;
+  margin: 8px 0;
+  padding: 3px 0;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-date .msg-sep-line {
+  display: none;
+}
+
+.chat:not(.chat-board) .msg-date .msg-sep-pill {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 58%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel), transparent 22%);
+  color: color-mix(in srgb, var(--text), var(--muted) 18%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
