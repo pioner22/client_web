@@ -634,3 +634,72 @@ html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-
     min-width: min(260px, var(--chat-media-frame-width));
   }
 }
+
+/* W-0984: frameless photo/video history media.
+ * Time/status stays readable as a soft overlay, but it no longer draws a
+ * separate framed card around the media surface.
+ */
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty),
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty),
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .chat-album-grid {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty):hover,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty):hover,
+.chat:not(.chat-board) .msg-selected.msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty),
+.chat:not(.chat-board) .msg-selected.msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty),
+.chat:not(.chat-board) .msg-selected.msg-attach[data-msg-album="1"] .chat-album-grid {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="overlay"] .msg-meta {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: rgba(0, 0, 0, 0.34);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="image"] .msg-attach-footer,
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="video"] .msg-attach-footer,
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .msg-attach-footer {
+  border-top: 0;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .chat-album-surface {
+  position: relative;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .msg-attach-footer-media.msg-attach-footer-meta-only {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  z-index: 3;
+  display: inline-flex;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .msg-attach-footer-media.msg-attach-footer-meta-only .msg-meta {
+  min-height: 24px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.34);
+  color: #ffffff;
+  box-shadow: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(8px) saturate(125%);
+  backdrop-filter: blur(8px) saturate(125%);
+}

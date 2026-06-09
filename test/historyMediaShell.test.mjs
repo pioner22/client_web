@@ -550,6 +550,7 @@ test("history media shell: album partial selection uses unified overlay shell", 
 
 test("history media shell polish: source and CSS guards present", async () => {
   const css = await readCssWithImports("src/scss/components.css");
+  const mediaOverridesCss = await readFile(path.resolve("src/scss/messenger_media_overrides.css"), "utf8");
   assert.match(css, /\.msg-attach-footer\b/);
   assert.match(css, /data-msg-footer="overlay"/);
   assert.match(css, /data-msg-footer="stacked"/);
@@ -559,6 +560,10 @@ test("history media shell polish: source and CSS guards present", async () => {
   assert.match(css, /\.chat-album-surface\b/);
   assert.match(css, /data-msg-album-layout="mosaic"/);
   assert.match(css, /data-album-edge-top="1"/);
+  assert.match(mediaOverridesCss, /W-0984: frameless photo\/video history media/);
+  assert.match(mediaOverridesCss, /\.msg-attach\[data-msg-file="image"\]\s+\.chat-file-preview:not\(\.chat-file-preview-empty\)[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;[\s\S]*background:\s*transparent;/);
+  assert.match(mediaOverridesCss, /\.msg-attach\[data-msg-footer="overlay"\]\s+\.msg-meta\s*\{[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;[\s\S]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.34\);/);
+  assert.match(mediaOverridesCss, /\.msg-attach\[data-msg-album="1"\]\s+\.msg-attach-footer-media\.msg-attach-footer-meta-only\s*\{[\s\S]*position:\s*absolute;[\s\S]*background:\s*transparent;/);
 
   const helperSrc = await readFile(path.resolve("src/components/chat/renderChatHelpers.ts"), "utf8");
   assert.match(helperSrc, /renderAttachmentFooterShell/);
