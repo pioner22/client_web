@@ -73,3 +73,17 @@ test("messenger surface polish: W-0985 keeps history media stable and date pills
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-date\s+\.msg-sep-line\s*\{[\s\S]*?display:\s*none/);
   assert.doesNotMatch(helperSrc, /resolvePreviewBaseWidthPx\(info\)/);
 });
+
+test("messenger surface polish: W-0986 matches reference media scale, sharp dates and viewer chrome", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+
+  assert.match(css, /W-0986:\s*Telegram-reference history media cleanup/);
+  assert.match(css, /--chat-media-frame-width:\s*min\(70%,\s*var\(--chat-media-frame-max\),\s*var\(--msg-body-max-width\)\)/);
+  assert.match(css, /@media\s*\(min-width:\s*901px\)\s*\{[\s\S]*?--chat-media-frame-width:\s*min\(390px,\s*var\(--msg-body-max-width\)\)/);
+  assert.match(css, /\.msg-attach\[data-msg-file="image"\]:not\(\[data-msg-album="1"\]\)\s+\.chat-file-preview\s*>\s*\.chat-file-img,[\s\S]*?\.msg-attach\[data-msg-file="video"\]:not\(\[data-msg-album="1"\]\)\s+\.chat-file-preview\s*>\s*\.chat-file-video\s*\{[\s\S]*?object-fit:\s*contain;/);
+  assert.match(css, /\.msg-attach\[data-msg-footer="stacked"\]\[data-msg-file="image"\]\s+\.msg-attach-footer-media,[\s\S]*?\.msg-attach\[data-msg-footer="stacked"\]\[data-msg-file="video"\]\s+\.msg-attach-footer-media\s*\{[\s\S]*?width:\s*100%;[\s\S]*?background:\s*transparent;/);
+  assert.match(css, /W-0986:\s*reference cleanup for message density, sharp date pills and viewer chrome/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-date\s+\.msg-sep-pill\s*\{[\s\S]*?box-shadow:\s*none;[\s\S]*?backdrop-filter:\s*none;/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.viewer-author,[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-header-actions\s+\.btn\s*\{[\s\S]*?opacity:\s*1;/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.viewer-header-actions\s+\.btn,[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-switcher-btn\s*\{[\s\S]*?background:\s*rgba\(0,\s*0,\s*0,\s*0\.46\)/);
+});

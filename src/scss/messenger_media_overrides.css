@@ -834,3 +834,162 @@ html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg-out[data-msg-emoji-
   outline: 0;
   box-shadow: none;
 }
+
+/* W-0986: Telegram-reference history media cleanup.
+ * Keep the geometry stable, but stop forcing every visual attachment into a
+ * cropped 4:3 card. Captioned media, overlay media and albums now share one
+ * compact width contract so captions/meta cannot create a wide empty frame.
+ */
+.chat:not(.chat-board) {
+  --chat-media-frame-max: 390px;
+  --chat-media-frame-width: min(70%, var(--chat-media-frame-max), var(--msg-body-max-width));
+  --chat-album-frame-max: 390px;
+  --chat-history-media-radius: 15px;
+  --chat-history-media-meta-bg: rgba(0, 0, 0, 0.38);
+  --chat-history-media-meta-color: rgba(255, 255, 255, 0.92);
+}
+
+html[data-theme="light"] .chat:not(.chat-board) {
+  --chat-history-media-meta-bg: rgba(30, 42, 52, 0.42);
+}
+
+html[data-theme="dark"] .chat:not(.chat-board) {
+  --chat-history-media-meta-bg: rgba(0, 0, 0, 0.44);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .msg-body,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .msg-body {
+  width: min(var(--chat-media-frame-width), var(--chat-media-frame-max), var(--msg-body-max-width));
+  max-width: 100%;
+  align-items: stretch;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .file-row-chat.file-row-image,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .file-row-chat.file-row-image {
+  width: 100%;
+  max-width: 100%;
+  border-radius: var(--chat-history-media-radius);
+}
+
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-file="image"] .file-row-chat.file-row-image,
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-file="video"] .file-row-chat.file-row-image {
+  margin-left: 0;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .file-row-chat.file-row-image > .chat-file-preview,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .file-row-chat.file-row-image > .chat-file-preview {
+  width: 100%;
+  max-width: 100%;
+  border-radius: inherit;
+  aspect-ratio: var(--chat-media-frame-ratio, 4 / 3);
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-video {
+  background: #000;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="image"] .msg-attach-footer-media,
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="video"] .msg-attach-footer-media {
+  width: 100%;
+  max-width: 100%;
+  padding: 6px 2px 0;
+  border: 0;
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-attach .msg-attach-footer-media.msg-attach-footer-caption .msg-text.msg-caption {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.28;
+  color: var(--text);
+}
+
+.chat:not(.chat-board) .msg-attach .msg-attach-footer-media.msg-attach-footer-caption .msg-meta {
+  align-self: flex-end;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.1;
+  color: color-mix(in srgb, var(--muted), var(--text) 10%);
+  text-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="overlay"] .msg-meta,
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .msg-attach-footer-media.msg-attach-footer-meta-only .msg-meta {
+  min-height: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--chat-history-media-meta-bg);
+  color: var(--chat-history-media-meta-color);
+  box-shadow: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.52);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  font-size: 11.5px;
+  line-height: 1;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="overlay"]:not(.msg-album) .chat-file-preview::after {
+  height: 30px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.26));
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-image .file-actions,
+.chat:not(.chat-board) .chat-media-overlay-controls {
+  top: 7px;
+  right: 7px;
+}
+
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-image .file-action,
+.chat:not(.chat-board) .chat-media-overlay-controls .btn {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.36);
+  color: #ffffff;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .msg-body,
+.chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-surface,
+.chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"][data-msg-album-layout="mosaic"] .chat-album-grid {
+  width: min(100%, var(--chat-album-frame-max), var(--msg-body-max-width));
+  max-width: 100%;
+}
+
+.chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-grid {
+  border-radius: var(--chat-history-media-radius);
+}
+
+@media (min-width: 901px) {
+  .chat:not(.chat-board) {
+    --chat-media-frame-width: min(390px, var(--msg-body-max-width));
+  }
+}
+
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --chat-media-frame-max: 340px;
+    --chat-album-frame-max: 340px;
+    --chat-media-frame-width: min(78vw, var(--chat-media-frame-max), var(--msg-body-max-width));
+    --chat-history-media-radius: 14px;
+  }
+}
