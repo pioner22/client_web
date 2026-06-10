@@ -1537,6 +1537,33 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   justify-self: end;
 }
 
+/* W-0992: rigid history media slots before lazy media loads. */
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"],
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: var(--chat-media-slot-ratio, 4 / 3);
+  flex: 0 0 auto;
+  contain: layout style paint;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-placeholder,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-placeholder,
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-video {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-audio,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-voice,
+.chat:not(.chat-board) .chat-deferred-voice-mount {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
 /* W-0990: mobile media/viewer containment.
  * Album mosaics may carry inline width/height from Telegram layout geometry.
  * On narrow screens the container, not that inline number, must own the width.

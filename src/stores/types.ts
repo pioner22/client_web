@@ -294,6 +294,11 @@ export type ChatAttachment =
       name: string;
       size: number;
       mime?: string | null;
+      thumbW?: number | null;
+      thumbH?: number | null;
+      mediaW?: number | null;
+      mediaH?: number | null;
+      durationS?: number | null;
     }
   | {
       kind: "action";

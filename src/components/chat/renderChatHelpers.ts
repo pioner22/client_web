@@ -454,6 +454,10 @@ export function renderReactions(m: ChatMessage): HTMLElement | null {
 export function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { mobileUi: boolean }): FileAttachmentInfo | null {
   const att = m.attachment;
   if (!att || att.kind !== "file") return null;
+  const positiveInt = (value: unknown): number | null => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+  };
   const transfer =
     (att.localId ? state.fileTransfers.find((t) => t.localId === att.localId) : null) ||
     (att.fileId ? state.fileTransfers.find((t) => t.id === att.fileId) : null) ||
@@ -497,12 +501,10 @@ export function getFileAttachmentInfo(state: AppState, m: ChatMessage, opts?: { 
       ? safeUrl(state.fileThumbs[fileId].url, { base, allowedProtocols: ["http:", "https:", "blob:"] })
       : null;
   const thumbMeta = fileId ? state.fileThumbs?.[fileId] ?? null : null;
-  const thumbW = typeof thumbMeta?.w === "number" && Number.isFinite(thumbMeta.w) && thumbMeta.w > 0 ? Math.trunc(thumbMeta.w) : null;
-  const thumbH = typeof thumbMeta?.h === "number" && Number.isFinite(thumbMeta.h) && thumbMeta.h > 0 ? Math.trunc(thumbMeta.h) : null;
-  const mediaW =
-    typeof thumbMeta?.mediaW === "number" && Number.isFinite(thumbMeta.mediaW) && thumbMeta.mediaW > 0 ? Math.trunc(thumbMeta.mediaW) : null;
-  const mediaH =
-    typeof thumbMeta?.mediaH === "number" && Number.isFinite(thumbMeta.mediaH) && thumbMeta.mediaH > 0 ? Math.trunc(thumbMeta.mediaH) : null;
+  const thumbW = positiveInt(thumbMeta?.w) ?? positiveInt(att.thumbW);
+  const thumbH = positiveInt(thumbMeta?.h) ?? positiveInt(att.thumbH);
+  const mediaW = positiveInt(thumbMeta?.mediaW) ?? positiveInt(att.mediaW);
+  const mediaH = positiveInt(thumbMeta?.mediaH) ?? positiveInt(att.mediaH);
   return {
     name,
     size,

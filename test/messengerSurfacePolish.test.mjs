@@ -52,6 +52,21 @@ test("messenger surface polish: W-0977 shrink-wraps desktop captioned media", as
   assert.match(previewShared, /const w = info\.mediaW \|\| info\.thumbW \|\| CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX;/);
 });
 
+test("messenger surface polish: W-0992 reserves rigid history media slots", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+  const previewShared = await readFile(new URL("../src/components/chat/chatVisualPreviewShared.ts", import.meta.url), "utf8");
+  const previewRuntime = await readFile(new URL("../src/components/chat/chatVisualPreviewRuntime.ts", import.meta.url), "utf8");
+  const previewSurface = await readFile(new URL("../src/components/chat/chatVisualPreviewSurface.ts", import.meta.url), "utf8");
+
+  assert.match(css, /W-0992:\s*rigid history media slots before lazy media loads/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-attach\[data-msg-file="image"\]:not\(\[data-msg-album="1"\]\)\s+\.chat-file-preview\[data-history-geometry="reserved"\]/);
+  assert.match(css, /aspect-ratio:\s*var\(--chat-media-slot-ratio,\s*4 \/ 3\)/);
+  assert.match(previewShared, /const historyMediaSlotRatios = new Map<string,\s*number>\(\);/);
+  assert.match(previewShared, /export function resolveHistoryMediaSlotSize/);
+  assert.match(previewRuntime, /data-history-geometry/);
+  assert.match(previewSurface, /applyReservedHistoryMediaSlot/);
+});
+
 test("messenger surface polish: W-0978 keeps Android bubbles and context menu bounded", async () => {
   const css = await readCssWithImports("src/scss/style.css");
 

@@ -124,7 +124,37 @@ export function parseAttachment(raw: any): ChatAttachment | null {
   const size = Number((raw as any).size ?? 0) || 0;
   const mimeRaw = (raw as any).mime;
   const mime = typeof mimeRaw === "string" && mimeRaw.trim() ? String(mimeRaw) : null;
-  return { kind: "file", fileId, name, size, mime };
+  const positiveInt = (...values: unknown[]): number | null => {
+    for (const value of values) {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) return Math.trunc(n);
+    }
+    return null;
+  };
+  const positiveFloat = (...values: unknown[]): number | null => {
+    for (const value of values) {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  };
+  const thumbW = positiveInt((raw as any).thumb_w, (raw as any).thumbW, (raw as any).w);
+  const thumbH = positiveInt((raw as any).thumb_h, (raw as any).thumbH, (raw as any).h);
+  const mediaW = positiveInt((raw as any).media_w, (raw as any).mediaW);
+  const mediaH = positiveInt((raw as any).media_h, (raw as any).mediaH);
+  const durationS = positiveFloat((raw as any).duration_s, (raw as any).durationS);
+  return {
+    kind: "file",
+    fileId,
+    name,
+    size,
+    mime,
+    ...(thumbW ? { thumbW } : {}),
+    ...(thumbH ? { thumbH } : {}),
+    ...(mediaW ? { mediaW } : {}),
+    ...(mediaH ? { mediaH } : {}),
+    ...(durationS ? { durationS } : {}),
+  };
 }
 
 export function parseMessageRef(raw: any): ChatMessageRef | null {

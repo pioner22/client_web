@@ -1,13 +1,11 @@
 import { el } from "../../helpers/dom/el";
-import { getCachedMediaAspectRatio } from "../../helpers/chat/mediaAspectCache";
-import { getCachedLocalMediaAspectRatio } from "../../helpers/chat/localMediaAspectCache";
 import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../helpers/files/fileMissingState";
 import type { FileTransferEntry } from "../../stores/types";
 import {
   type ChatVisualPreviewOptions,
   type FileAttachmentInfo,
   isVideoNoteName,
-  resolveFallbackPreviewAspectRatio,
+  resolveHistoryMediaSlotAspectRatio,
 } from "./chatVisualPreviewShared";
 
 type RenderDeferredVisualPreviewSurfaceCtx = {
@@ -15,18 +13,6 @@ type RenderDeferredVisualPreviewSurfaceCtx = {
   info: FileAttachmentInfo;
   opts?: ChatVisualPreviewOptions;
 };
-
-function resolveKnownPreviewAspectRatio(info: FileAttachmentInfo): number | null {
-  const previewRatio =
-    info.thumbW && info.thumbH ? info.thumbW / info.thumbH : info.mediaW && info.mediaH ? info.mediaW / info.mediaH : null;
-  const cachedRatio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
-  const cachedLocalRatio = !cachedRatio && info.transfer?.localId ? getCachedLocalMediaAspectRatio(info.transfer.localId) : null;
-  // Server-provided thumb/media geometry is more stable for inline video previews than
-  // runtime video metadata, especially for rotated mobile MP4 files on desktop engines.
-  const ratio = info.isVideo ? previewRatio ?? cachedRatio ?? cachedLocalRatio : cachedRatio ?? cachedLocalRatio ?? previewRatio;
-  if (typeof ratio === "number" && Number.isFinite(ratio) && ratio > 0) return ratio;
-  return null;
-}
 
 function renderMediaProgressOverlay(transfer: FileTransferEntry): HTMLElement | null {
   if (transfer.status !== "uploading" && transfer.status !== "downloading") return null;
@@ -47,6 +33,15 @@ function renderMediaProgressOverlay(transfer: FileTransferEntry): HTMLElement | 
     },
     [candy]
   );
+}
+
+function applyReservedHistoryMediaSlot(btn: HTMLButtonElement, info: FileAttachmentInfo, fixedAspect: boolean): void {
+  if (fixedAspect) return;
+  const ratio = resolveHistoryMediaSlotAspectRatio(info);
+  if (!ratio) return;
+  btn.style.aspectRatio = ratio;
+  btn.style.setProperty("--chat-media-slot-ratio", ratio);
+  btn.setAttribute("data-history-geometry", "reserved");
 }
 
 function renderMediaState(label: string, tone: "idle" | "active" | "error"): HTMLElement {
@@ -106,10 +101,7 @@ export function renderImagePreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   }
   if (progressOverlay) btnChildren.push(progressOverlay);
   const btn = el("button", attrs, btnChildren) as HTMLButtonElement;
-  if (!fixedAspect) {
-    const ratio = resolveKnownPreviewAspectRatio(info);
-    btn.style.aspectRatio = ratio ? String(ratio) : (resolveFallbackPreviewAspectRatio(info) ?? "");
-  }
+  applyReservedHistoryMediaSlot(btn, info, fixedAspect);
   return btn;
 }
 
@@ -199,14 +191,7 @@ export function renderVideoPreviewButton(info: FileAttachmentInfo, opts?: ChatVi
   }
   if (progressOverlay) children.push(progressOverlay);
   const btn = el("button", attrs, children) as HTMLButtonElement;
-  if (!fixedAspect) {
-    if (videoNote) {
-      btn.style.aspectRatio = "1 / 1";
-    } else {
-      const ratio = resolveKnownPreviewAspectRatio(info);
-      btn.style.aspectRatio = ratio ? String(ratio) : (resolveFallbackPreviewAspectRatio(info) ?? "");
-    }
-  }
+  applyReservedHistoryMediaSlot(btn, info, fixedAspect);
   return btn;
 }
 
@@ -235,6 +220,7 @@ function syncPreviewMount(mount: HTMLButtonElement, finalNode: HTMLButtonElement
     "data-msg-idx",
     "data-caption",
     "data-local-id",
+    "data-history-geometry",
     "disabled",
     "title",
     "aria-label",
@@ -252,6 +238,12 @@ function syncPreviewMount(mount: HTMLButtonElement, finalNode: HTMLButtonElement
     mount.setAttribute(name, value);
   }
   mount.replaceChildren(...getMountChildren(finalNode));
+  try {
+    const ratio = finalNode.style.getPropertyValue("--chat-media-slot-ratio");
+    if (ratio) mount.style.setProperty("--chat-media-slot-ratio", ratio);
+  } catch {
+    // ignore stub limitations
+  }
   try {
     mount.disabled = finalNode.disabled;
   } catch {

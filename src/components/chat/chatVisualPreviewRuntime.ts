@@ -1,7 +1,7 @@
 import { el } from "../../helpers/dom/el";
 import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../helpers/files/fileMissingState";
 import type { ChatVisualPreviewOptions, FileAttachmentInfo } from "./chatVisualPreviewShared";
-import { isVideoNoteName, resolveFallbackPreviewAspectRatio } from "./chatVisualPreviewShared";
+import { isVideoNoteName, resolveHistoryMediaSlotAspectRatio } from "./chatVisualPreviewShared";
 
 type ChatVisualPreviewModule = typeof import("./chatVisualPreviewSurface");
 
@@ -140,10 +140,12 @@ function renderDeferredVisualPlaceholder(options: RenderDeferredVisualPreviewOpt
   const mount = el("button", attrs, children) as HTMLButtonElement;
 
   if (!fixedAspect) {
-    if (videoNote) mount.style.aspectRatio = "1 / 1";
-    else if (info.thumbW && info.thumbH) mount.style.aspectRatio = String(info.thumbW / info.thumbH);
-    else if (info.mediaW && info.mediaH) mount.style.aspectRatio = String(info.mediaW / info.mediaH);
-    else mount.style.aspectRatio = resolveFallbackPreviewAspectRatio(info) || "";
+    const ratio = resolveHistoryMediaSlotAspectRatio(info);
+    if (ratio) {
+      mount.style.aspectRatio = ratio;
+      mount.style.setProperty("--chat-media-slot-ratio", ratio);
+      mount.setAttribute("data-history-geometry", "reserved");
+    }
   }
 
   return mount;

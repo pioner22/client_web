@@ -44,7 +44,15 @@ function withDomStubs(run) {
   };
 
   class StyleStub {
-    setProperty() {}
+    constructor() {
+      this._props = new Map();
+    }
+    setProperty(name, value) {
+      this._props.set(String(name), String(value));
+    }
+    getPropertyValue(name) {
+      return this._props.get(String(name)) || "";
+    }
   }
 
   class ClassListStub {
@@ -226,6 +234,88 @@ test("chatVisualPreviewRuntime: fallback ratios reserve stable media slots", asy
       assert.equal(imagePreview.style.aspectRatio, String(4 / 3));
       assert.equal(videoPreview.style.aspectRatio, String(16 / 9));
       assert.equal(videoNotePreview.style.aspectRatio, "1 / 1");
+      assert.equal(imagePreview.getAttribute("data-history-geometry"), "reserved");
+    });
+  } finally {
+    await cleanup();
+  }
+});
+
+test("chatVisualPreviewRuntime: reserved fallback ratio does not jump when media dimensions arrive later", async () => {
+  const { renderDeferredVisualPreview, cleanup } = await loadRuntime();
+  try {
+    await withDomStubs(async () => {
+      const first = renderDeferredVisualPreview({
+        info: {
+          name: "late-photo.jpg",
+          size: 1024,
+          mime: "image/jpeg",
+          fileId: "img-late-ratio",
+          url: null,
+          thumbUrl: null,
+          thumbW: null,
+          thumbH: null,
+          mediaW: null,
+          mediaH: null,
+          transfer: null,
+          offer: null,
+          statusLine: "",
+          isImage: true,
+          isVideo: false,
+          isAudio: false,
+          hasProgress: false,
+        },
+        opts: {},
+      });
+      const second = renderDeferredVisualPreview({
+        info: {
+          name: "late-photo.jpg",
+          size: 1024,
+          mime: "image/jpeg",
+          fileId: "img-late-ratio",
+          url: null,
+          thumbUrl: null,
+          thumbW: 1200,
+          thumbH: 600,
+          mediaW: 1200,
+          mediaH: 600,
+          transfer: null,
+          offer: null,
+          statusLine: "",
+          isImage: true,
+          isVideo: false,
+          isAudio: false,
+          hasProgress: false,
+        },
+        opts: {},
+      });
+      const explicit = renderDeferredVisualPreview({
+        info: {
+          name: "known-photo.jpg",
+          size: 1024,
+          mime: "image/jpeg",
+          fileId: "img-known-ratio",
+          url: null,
+          thumbUrl: null,
+          thumbW: 1200,
+          thumbH: 600,
+          mediaW: 1200,
+          mediaH: 600,
+          transfer: null,
+          offer: null,
+          statusLine: "",
+          isImage: true,
+          isVideo: false,
+          isAudio: false,
+          hasProgress: false,
+        },
+        opts: {},
+      });
+
+      assert.equal(first.style.aspectRatio, String(4 / 3));
+      assert.equal(second.style.aspectRatio, String(4 / 3));
+      assert.equal(explicit.style.aspectRatio, "2");
+      assert.equal(second.style.getPropertyValue("--chat-media-slot-ratio"), String(4 / 3));
     });
   } finally {
     await cleanup();

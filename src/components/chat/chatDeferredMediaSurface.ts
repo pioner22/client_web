@@ -14,6 +14,7 @@ import { renderAttachmentFooterShell } from "./attachmentFooterShell";
 import { renderMediaOverlayControls } from "./mediaOverlayControls";
 import { renderMessageSelectionControl } from "./messageSelectionControl";
 import { renderImagePreviewButton, renderVideoPreviewButton } from "./chatVisualPreviewSurface";
+import { resolveHistoryMediaSlotSize } from "./chatVisualPreviewShared";
 import {
   AlbumItem,
   avatar,
@@ -342,12 +343,7 @@ export function renderDeferredAlbumLineSurface(ctx: RenderDeferredAlbumLineCtx) 
   const emojiOnly = hasCaption ? isEmojiOnlyText(albumCaption) : false;
   const albumFileKind = items.every((item) => item && item.info && item.info.isVideo) ? "video" : "image";
   const layoutCfg = ctx.opts?.albumLayout ?? { maxWidth: 420, minWidth: 100, spacing: 1 };
-  const sizes = items.map((item) => {
-    const w = item.info.thumbW || item.info.mediaW;
-    const h = item.info.thumbH || item.info.mediaH;
-    if (w && h) return { w, h };
-    return { w: 1000, h: 1000 };
-  });
+  const sizes = items.map((item) => resolveHistoryMediaSlotSize(item.info));
   const layout = (() => {
     try {
       return layoutTelegramAlbum(sizes, layoutCfg);

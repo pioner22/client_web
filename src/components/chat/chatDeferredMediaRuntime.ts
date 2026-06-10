@@ -3,6 +3,7 @@ import type { AppState } from "../../stores/types";
 import type { AlbumItem } from "./renderChatHelpers";
 import { recoverFromLazyImportError } from "../../app/bootstrap/lazyImportRecovery";
 import { layoutTelegramAlbum, RectPart } from "../../helpers/chat/telegramGroupedLayout";
+import { resolveHistoryMediaSlotSize } from "./chatVisualPreviewShared";
 
 type ChatDeferredMediaModule = typeof import("./chatDeferredMediaSurface");
 
@@ -119,9 +120,7 @@ function resolveAlbumPlaceholderGeometry(options: RenderDeferredAlbumLineOptions
   const items = Array.isArray(options.items) ? options.items : [];
   const layoutCfg = options.opts?.albumLayout ?? { maxWidth: 420, minWidth: 100, spacing: 1 };
   const sizes = items.map((item) => {
-    const w = Number(item?.info?.thumbW || item?.info?.mediaW || 0);
-    const h = Number(item?.info?.thumbH || item?.info?.mediaH || 0);
-    return w > 0 && h > 0 ? { w, h } : { w: 1000, h: 1000 };
+    return item?.info ? resolveHistoryMediaSlotSize(item.info) : { w: 1000, h: 1000 };
   });
   const albumFileKind = items.length && items.every((item) => item?.info?.isVideo) ? "video" : "image";
   const layout = (() => {

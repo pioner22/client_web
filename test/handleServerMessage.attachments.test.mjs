@@ -63,7 +63,7 @@ test("handleServerMessage: message парсит file attachment", async () => {
         text: "[file] a.png (123 bytes)",
         ts: 1,
         id: 10,
-        attachment: { kind: "file", file_id: "f-1", name: "a.png", size: 123 },
+        attachment: { kind: "file", file_id: "f-1", name: "a.png", size: 123, thumb_w: 320, thumb_h: 180, media_w: 1280, media_h: 720 },
       },
       getState(),
       { send() {} },
@@ -72,7 +72,17 @@ test("handleServerMessage: message парсит file attachment", async () => {
 
     const st = getState();
     assert.equal(st.conversations[key].length, 1);
-    assert.deepEqual(st.conversations[key][0].attachment, { kind: "file", fileId: "f-1", name: "a.png", size: 123, mime: null });
+    assert.deepEqual(st.conversations[key][0].attachment, {
+      kind: "file",
+      fileId: "f-1",
+      name: "a.png",
+      size: 123,
+      mime: null,
+      thumbW: 320,
+      thumbH: 180,
+      mediaW: 1280,
+      mediaH: 720,
+    });
   } finally {
     await cleanup();
   }
