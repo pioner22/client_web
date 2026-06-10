@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.884",
+    date: "2026-06-10",
+    improved: [
+      "Групповые фото и альбомы на мобильном экране снова используют отдельный крупный Telegram-like rail: они больше не наследуют узкую ширину текстовых пузырей.",
+      "Mobile album mosaic сохраняет защиту от выхода за экран, но масштабируется ближе к эталону Telegram: крупнее, ровнее и без превращения группы фото в маленькую миниатюру.",
+    ],
+    fixed: [
+      "Исправлено чрезмерное уменьшение grouped photo preview после предыдущего containment-фикса.",
+      "Lazy и финальные album surfaces используют один и тот же safe viewport clamp, чтобы подгрузка не меняла ширину альбома рывком.",
+    ],
+  },
+  {
     version: "0.1.883",
     date: "2026-06-10",
     improved: [

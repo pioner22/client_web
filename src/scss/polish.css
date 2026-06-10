@@ -1634,3 +1634,37 @@ html[data-theme="dark"] .chat:not(.chat-board) {
     box-sizing: border-box;
   }
 }
+
+/* W-0991: Telegram-like mobile album scale.
+ * W-0990 correctly stopped album overflow, but reused the text bubble max-width.
+ * Grouped photos need their own media rail so they stay large while still clamped
+ * by the phone viewport.
+ */
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --history-mobile-album-gutter: 36px;
+    --chat-album-frame-max: 372px;
+    --history-mobile-album-max: min(var(--chat-album-frame-max), calc(100dvw - var(--history-mobile-album-gutter)));
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] {
+    --chat-album-shell-width-resolved: min(
+      var(--chat-album-shell-width, var(--chat-album-frame-max)),
+      var(--history-mobile-album-max)
+    );
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .msg-body {
+    width: var(--chat-album-shell-width-resolved);
+    max-width: min(100%, calc(100dvw - var(--history-mobile-album-gutter)));
+    overflow: hidden;
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-surface,
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-grid,
+  .chat:not(.chat-board) .msg-album-loading .chat-album-surface-loading,
+  .chat:not(.chat-board) .msg-album-loading .chat-album-grid-loading {
+    width: var(--chat-album-shell-width-resolved) !important;
+    max-width: min(100%, calc(100dvw - var(--history-mobile-album-gutter)));
+  }
+}

@@ -158,3 +158,14 @@ test("messenger surface polish: W-0990 bounds mobile media and viewer width", as
   assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\s*\{[\s\S]*?width:\s*100dvw;[\s\S]*?max-width:\s*100dvw/);
   assert.match(css, /\.overlay\.overlay-viewer\s+\.viewer-media\s+\.viewer-img,[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-media\s+\.viewer-video\s*\{[\s\S]*?max-width:\s*min\(100dvw,\s*100%\);/);
 });
+
+test("messenger surface polish: W-0991 keeps mobile albums Telegram-sized without overflow", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+
+  assert.match(css, /W-0991:\s*Telegram-like mobile album scale/);
+  assert.match(css, /--history-mobile-album-gutter:\s*36px/);
+  assert.match(css, /--chat-album-frame-max:\s*372px/);
+  assert.match(css, /--history-mobile-album-max:\s*min\(var\(--chat-album-frame-max\),\s*calc\(100dvw - var\(--history-mobile-album-gutter\)\)\)/);
+  assert.match(css, /\.msg-attach\.msg-album\[data-msg-album="1"\]\s*\{[\s\S]*?--chat-album-shell-width-resolved:\s*min\([\s\S]*?var\(--chat-album-shell-width,\s*var\(--chat-album-frame-max\)\),[\s\S]*?var\(--history-mobile-album-max\)[\s\S]*?\)/);
+  assert.match(css, /\.msg-attach\.msg-album\[data-msg-album="1"\]\s+\.msg-body\s*\{[\s\S]*?width:\s*var\(--chat-album-shell-width-resolved\);[\s\S]*?max-width:\s*min\(100%,\s*calc\(100dvw - var\(--history-mobile-album-gutter\)\)\)/);
+});
