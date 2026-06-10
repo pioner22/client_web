@@ -446,6 +446,7 @@ export function renderDeferredAlbumLineSurface(ctx: RenderDeferredAlbumLineCtx) 
   }
   mount.setAttribute("data-msg-album-layout", layoutOk ? "mosaic" : "grid");
   if (layoutOk && albumW) mount.style.setProperty("--chat-album-shell-width", `${Math.round(albumW)}px`);
+  if (layoutOk && albumW && albumH) mount.style.setProperty("--chat-album-shell-ratio", `${Math.round(albumW)} / ${Math.round(albumH)}`);
   const accent = resolveUserAccent(accentId);
   if (accent) {
     mount.style.setProperty("--msg-accent", accent);

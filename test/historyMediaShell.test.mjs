@@ -428,6 +428,7 @@ test("history media shell: album line uses stacked footer shell even without cap
       assert.equal(albumLine.getAttribute("data-msg-footer"), "stacked");
       assert.equal(albumLine.getAttribute("data-msg-album-layout"), "mosaic");
       assert.equal(albumLine.style._props.get("--chat-album-shell-width"), "420px");
+      assert.match(albumLine.style._props.get("--chat-album-shell-ratio") || "", /^420 \/ \d+$/);
       const surface = findFirst(albumLine, (n) => hasClass(n, "chat-album-surface"));
       assert.ok(surface, "album должен собираться через единый surface");
       const footer = findFirst(albumLine, (n) => hasClass(n, "msg-attach-footer"));
@@ -484,6 +485,7 @@ test("history media shell: deferred album reserves final mosaic geometry before 
       assert.equal(albumLine.getAttribute("data-msg-footer"), "stacked");
       assert.equal(albumLine.getAttribute("data-msg-album-layout"), "mosaic");
       assert.equal(albumLine.style._props.get("--chat-album-shell-width"), "420px");
+      assert.match(albumLine.style._props.get("--chat-album-shell-ratio") || "", /^420 \/ \d+$/);
       const grid = findFirst(albumLine, (n) => hasClass(n, "chat-album-grid-loading"));
       assert.ok(grid, "loading surface должен сразу резервировать album grid");
       assert.equal(grid.style.width, "420px");
@@ -631,11 +633,13 @@ test("history media shell polish: source and CSS guards present", async () => {
   assert.match(deferredSurfaceSrc, /data-msg-album-layout/);
   assert.match(deferredSurfaceSrc, /data-album-edge-top/);
   assert.match(deferredSurfaceSrc, /--chat-album-shell-width/);
+  assert.match(deferredSurfaceSrc, /--chat-album-shell-ratio/);
 
   const deferredRuntimeSrc = await readFile(path.resolve("src/components/chat/chatDeferredMediaRuntime.ts"), "utf8");
   assert.match(deferredRuntimeSrc, /layoutTelegramAlbum/);
   assert.match(deferredRuntimeSrc, /chat-album-grid-loading/);
   assert.match(deferredRuntimeSrc, /chat-album-footer-loading/);
+  assert.match(deferredRuntimeSrc, /--chat-album-shell-ratio/);
   assert.match(deferredRuntimeSrc, /msg-from-placeholder/);
 
   const shellSrc = await readFile(path.resolve("src/components/chat/attachmentFooterShell.ts"), "utf8");

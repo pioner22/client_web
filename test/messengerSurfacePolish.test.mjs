@@ -147,3 +147,14 @@ test("messenger surface polish: W-0989 keeps lazy media and audio geometry stabl
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-deferred-voice-mount\s*\{[\s\S]*?min-height:\s*32px;[\s\S]*?contain:\s*layout style/);
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.msg-attach\[data-msg-file="audio"\]\s+\.chat-voice,[\s\S]*?\.chat-deferred-voice-mount\s+\.chat-voice\s*\{[\s\S]*?grid-template-columns:\s*30px minmax\(104px,\s*1fr\) 42px 28px/);
 });
+
+test("messenger surface polish: W-0990 bounds mobile media and viewer width", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+
+  assert.match(css, /W-0990:\s*mobile media\/viewer containment/);
+  assert.match(css, /--history-mobile-media-max:\s*min\(100%,\s*calc\(100dvw - var\(--history-mobile-media-gutter\)\),\s*var\(--msg-body-max-width\)\)/);
+  assert.match(css, /\.msg-attach\.msg-album\[data-msg-album="1"\]\s+\.chat-album-surface,[\s\S]*?\.msg-album-loading\s+\.chat-album-grid-loading\s*\{[\s\S]*?width:\s*var\(--chat-album-shell-width-resolved\)\s*!important;/);
+  assert.match(css, /\.msg-attach\.msg-album\[data-msg-album="1"\]\[data-msg-album-layout="mosaic"\]\s+\.chat-album-grid,[\s\S]*?\.msg-album-loading\[data-msg-album-layout="mosaic"\]\s+\.chat-album-grid-loading\s*\{[\s\S]*?height:\s*auto\s*!important;[\s\S]*?aspect-ratio:\s*var\(--chat-album-shell-ratio,\s*1 \/ 1\)/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\s*\{[\s\S]*?width:\s*100dvw;[\s\S]*?max-width:\s*100dvw/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.viewer-media\s+\.viewer-img,[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-media\s+\.viewer-video\s*\{[\s\S]*?max-width:\s*min\(100dvw,\s*100%\);/);
+});

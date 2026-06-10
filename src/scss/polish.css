@@ -1536,3 +1536,101 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   min-width: 24px;
   justify-self: end;
 }
+
+/* W-0990: mobile media/viewer containment.
+ * Album mosaics may carry inline width/height from Telegram layout geometry.
+ * On narrow screens the container, not that inline number, must own the width.
+ */
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --history-mobile-media-gutter: 34px;
+    --history-mobile-media-max: min(100%, calc(100dvw - var(--history-mobile-media-gutter)), var(--msg-body-max-width));
+    --chat-media-frame-max: min(340px, calc(100dvw - var(--history-mobile-media-gutter)));
+    --chat-album-frame-max: min(340px, calc(100dvw - var(--history-mobile-media-gutter)));
+    --chat-media-frame-width: min(78vw, var(--chat-media-frame-max), var(--history-mobile-media-max));
+  }
+
+  .chat:not(.chat-board) .chat-lines,
+  .chat:not(.chat-board) .msg,
+  .chat:not(.chat-board) .msg-body {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .msg-body,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"] .msg-body,
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .msg-body {
+    width: min(var(--history-mobile-media-max), var(--chat-media-frame-max));
+    max-width: min(100%, calc(100dvw - var(--history-mobile-media-gutter)));
+    overflow: hidden;
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] {
+    --chat-album-shell-width-resolved: min(
+      var(--chat-album-shell-width, var(--chat-album-frame-max)),
+      var(--chat-album-frame-max),
+      var(--history-mobile-media-max)
+    );
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-surface,
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-grid,
+  .chat:not(.chat-board) .msg-album-loading .chat-album-surface-loading,
+  .chat:not(.chat-board) .msg-album-loading .chat-album-grid-loading {
+    width: var(--chat-album-shell-width-resolved) !important;
+    max-width: min(100%, calc(100dvw - var(--history-mobile-media-gutter)));
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"][data-msg-album-layout="mosaic"] .chat-album-grid,
+  .chat:not(.chat-board) .msg-album-loading[data-msg-album-layout="mosaic"] .chat-album-grid-loading {
+    height: auto !important;
+    aspect-ratio: var(--chat-album-shell-ratio, 1 / 1);
+  }
+
+  .chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-surface,
+  .chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-grid {
+    justify-self: end;
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .file-row-chat.file-row-image,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"] .file-row-chat.file-row-image,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview,
+  .chat:not(.chat-board) .msg-attach .msg-attach-footer-media {
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual {
+    width: 100dvw;
+    max-width: 100dvw;
+    overflow: hidden;
+  }
+
+  .overlay.overlay-viewer .viewer-stage,
+  .overlay.overlay-viewer .viewer-media,
+  .overlay.overlay-viewer .viewer-img-scroll {
+    width: 100%;
+    max-width: 100dvw;
+    min-width: 0;
+  }
+
+  .overlay.overlay-viewer .viewer-media .viewer-img,
+  .overlay.overlay-viewer .viewer-media .viewer-video {
+    max-width: min(100dvw, 100%);
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-main,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption {
+    max-width: 100dvw;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}

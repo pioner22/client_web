@@ -225,6 +225,9 @@ export function renderDeferredAlbumLine(options: RenderDeferredAlbumLineOptions)
   mount.setAttribute("data-msg-footer", "stacked");
   mount.setAttribute("data-msg-album-layout", geometry.layoutOk ? "mosaic" : "grid");
   if (geometry.layoutOk && geometry.albumW) mount.style.setProperty("--chat-album-shell-width", `${Math.round(geometry.albumW)}px`);
+  if (geometry.layoutOk && geometry.albumW && geometry.albumH) {
+    mount.style.setProperty("--chat-album-shell-ratio", `${Math.round(geometry.albumW)} / ${Math.round(geometry.albumH)}`);
+  }
   if (deferredMediaModule) {
     deferredMediaModule.renderDeferredAlbumLineSurface(ctx);
     return mount;

@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.883",
+    date: "2026-06-10",
+    improved: [
+      "Мобильная история сообщений получила жёсткий containment для фото, видео и альбомов: visual media теперь рассчитывают ширину от доступного viewport/rail, а не от внутренней mosaic-геометрии.",
+      "Просмотр фото/видео на телефоне дополнительно ограничен шириной viewport: stage, media и caption/footer больше не должны выталкивать изображение или подпись за экран.",
+    ],
+    fixed: [
+      "Исправлен overflow альбомов на мобильных скринах: outgoing media grid больше не уезжает вправо за границу экрана.",
+      "Lazy и финальные album mosaic поверхности сохраняют исходное соотношение сторон через общий ratio-контракт при мобильном уменьшении ширины.",
+    ],
+  },
+  {
     version: "0.1.882",
     date: "2026-06-09",
     improved: [
