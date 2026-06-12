@@ -126,6 +126,14 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
     openBoardPage,
     requestMoreHistory,
     retryHistoryForSelected,
+    closeMobileSidebar,
+    authRequestsActions,
+    groupBoardJoinActions,
+    roomInviteResponsesActions,
+    send,
+    showToast,
+    fileOffersAccept,
+    beginFileDownload,
     closeChatSearch,
     stepChatSearch,
     setChatSearchDate,
@@ -153,6 +161,92 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
       return false;
     }
     return true;
+  };
+
+  const blockPeerInline = (peer: string): boolean => {
+    const id = String(peer || "").trim();
+    if (!id) return false;
+    const st = store.get();
+    if (!requireConnectedAndAuthed(st)) return false;
+    send({ type: "block_set", peer: id, value: true });
+    showToast(`Заблокировано: ${id}`, { kind: "warn" });
+    return true;
+  };
+
+  const handleCriticalActionClick = (event: MouseEvent, target: HTMLElement | null): boolean => {
+    const actionEl = target?.closest("[data-action]") as HTMLElement | null;
+    const action = String(actionEl?.getAttribute("data-action") || "").trim();
+    if (!actionEl || !action) return false;
+
+    const stop = () => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const attr = (name: string) => String(actionEl.getAttribute(name) || "").trim();
+
+    if (action === "auth-accept" || action === "auth-decline" || action === "auth-cancel") {
+      const peer = attr("data-peer");
+      if (!peer) return false;
+      stop();
+      closeMobileSidebar();
+      if (action === "auth-accept") authRequestsActions.acceptAuth(peer);
+      else if (action === "auth-decline") authRequestsActions.declineAuth(peer);
+      else authRequestsActions.cancelAuth(peer);
+      return true;
+    }
+
+    if (action === "group-invite-accept" || action === "group-invite-decline" || action === "group-invite-block") {
+      const groupId = attr("data-group-id");
+      if (!groupId) return false;
+      const fromAttr = attr("data-from");
+      const from = fromAttr || String(store.get().pendingGroupInvites.find((x) => x.groupId === groupId)?.from || "").trim();
+      stop();
+      closeMobileSidebar();
+      if (action === "group-invite-accept") groupBoardJoinActions.acceptGroupInvite(groupId, from);
+      else {
+        if (action === "group-invite-block" && from) blockPeerInline(from);
+        groupBoardJoinActions.declineGroupInvite(groupId, from);
+      }
+      return true;
+    }
+
+    if (action === "group-join-accept" || action === "group-join-decline") {
+      const groupId = attr("data-group-id");
+      const peer = attr("data-peer");
+      if (!groupId || !peer) return false;
+      stop();
+      closeMobileSidebar();
+      if (action === "group-join-accept") roomInviteResponsesActions.acceptGroupJoin(groupId, peer);
+      else roomInviteResponsesActions.declineGroupJoin(groupId, peer);
+      return true;
+    }
+
+    if (action === "board-invite-accept" || action === "board-invite-decline" || action === "board-invite-block") {
+      const boardId = attr("data-board-id");
+      if (!boardId) return false;
+      const fromAttr = attr("data-from");
+      const from = fromAttr || String(store.get().pendingBoardInvites.find((x) => x.boardId === boardId)?.from || "").trim();
+      stop();
+      closeMobileSidebar();
+      if (action === "board-invite-accept") roomInviteResponsesActions.joinBoardFromInvite(boardId);
+      else {
+        if (action === "board-invite-block" && from) blockPeerInline(from);
+        roomInviteResponsesActions.declineBoardInvite(boardId);
+      }
+      return true;
+    }
+
+    if (action === "file-accept" || action === "file-download") {
+      const fileId = attr("data-file-id");
+      if (!fileId) return false;
+      stop();
+      closeMobileSidebar();
+      if (action === "file-accept") fileOffersAccept(fileId);
+      else beginFileDownload(fileId);
+      return true;
+    }
+
+    return false;
   };
 
   const deferredRuntime = createLazyChatSurfaceDeferredRuntime({
@@ -334,6 +428,7 @@ export function createChatSurfaceEventsFeature(deps: ChatSurfaceEventsFeatureDep
         return;
       }
 
+      if (handleCriticalActionClick(e, target)) return;
       if (deferredRuntime.maybeHandleChatClick(e, target)) return;
 
       const jumpBtn = target?.closest("button[data-action='chat-jump-bottom']") as HTMLButtonElement | null;

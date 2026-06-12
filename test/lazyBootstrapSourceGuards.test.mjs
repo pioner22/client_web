@@ -132,6 +132,9 @@ test("lazy bootstrap: mountApp and late wiring keep debug/PWA runtime behind laz
   assert.match(chatSurfaceEventsSrc, /deferredRuntime\.maybeHandleChatClick/);
   assert.match(chatSurfaceEventsSrc, /deferredRuntime\.maybeHandleSelectionBarClick/);
   assert.match(chatSurfaceEventsSrc, /mediaRuntime\.maybeHandleChatClick/);
+  assert.match(chatSurfaceEventsSrc, /handleCriticalActionClick/);
+  assert.match(chatSurfaceEventsSrc, /group-invite-accept/);
+  assert.match(chatSurfaceEventsSrc, /file-download/);
   assert.doesNotMatch(chatSurfaceEventsSrc, /ensureChatMessageLoadedById/);
   assert.doesNotMatch(chatSurfaceEventsSrc, /formatTime/);
   assert.doesNotMatch(chatSurfaceEventsSrc, /requestVoiceAutoplay/);

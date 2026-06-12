@@ -55,6 +55,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const PWA_AUTO_APPLY_MAX_TRIES = 3;
   const PWA_AUTO_APPLY_RETRY_MS = 20 * 1000;
   const PWA_AUTO_APPLY_LOG_LIMIT = 24;
+  const PWA_AUTO_APPLY_STATUS = "Получено обновление веб-клиента. Откройте обновление вручную, когда приложение не используется.";
   let pwaPendingBuildId = "";
   let pwaAutoApplySuppressed = false;
   let pwaBootReconcileStarted = false;
@@ -533,6 +534,10 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     setPendingPwaBuild(liveBuildId, "Получено обновление веб-клиента (применится автоматически)");
     if (!swBuildId || swBuildId !== liveBuildId) {
       logPwaUpdate("bootstrap_reconcile_stale", `${swBuildId || "none"}->${liveBuildId}`);
+      if (shouldDisableAutoApplyUpdate()) {
+        scheduleAutoApplyPwaUpdate(PWA_AUTO_APPLY_RETRY_MS);
+        return;
+      }
       void forcePwaUpdate();
       return;
     }
@@ -574,7 +579,25 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     return true;
   }
 
+  function shouldDisableAutoApplyUpdate(): boolean {
+    return isIOS() || isStandaloneDisplayMode();
+  }
+
   function scheduleAutoApplyPwaUpdate(delayMs = 800) {
+    if (shouldDisableAutoApplyUpdate()) {
+      const buildId = pwaPendingBuildId || String(store.get().updateLatest || "").trim();
+      logPwaUpdate("auto_disabled", buildId || "unknown");
+      if (pwaAutoApplyTimer !== null) {
+        try {
+          window.clearTimeout(pwaAutoApplyTimer);
+        } catch {
+          // ignore
+        }
+        pwaAutoApplyTimer = null;
+      }
+      store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, status: PWA_AUTO_APPLY_STATUS } : prev));
+      return;
+    }
     if (pwaAutoApplyTimer !== null) return;
     pwaAutoApplyTimer = window.setTimeout(() => {
       pwaAutoApplyTimer = null;

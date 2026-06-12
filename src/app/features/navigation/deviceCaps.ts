@@ -1,4 +1,5 @@
 import { isMobileLikeUi } from "../../../helpers/ui/mobileLike";
+import { isIOS } from "../../../helpers/ui/iosInputAssistant";
 
 export interface DeviceCaps {
   constrained: boolean;
@@ -44,28 +45,27 @@ export function createDeviceCaps(): DeviceCaps {
   const saveData = Boolean(connection && (connection as any).saveData);
   const effectiveType = String((connection as any)?.effectiveType || "").toLowerCase();
   const slowNetwork = saveData || effectiveType.includes("2g") || effectiveType.includes("3g");
+  const ios = isIOS();
   const mobileLike = isMobileLikeUi();
   const constrained = mobileLike || memoryGb <= 4 || slowNetwork;
   const fileGetMax = constrained ? (slowNetwork ? 5 : 7) : 10;
   const fileGetPrefetch = clamp(slowNetwork ? 3 : 5, Math.round(fileGetMax * 0.7), slowNetwork ? 4 : 7);
-  const historyWarmupConcurrency = clamp(
-    slowNetwork ? 3 : 5,
-    Math.round(cores * (constrained ? 0.6 : 0.75)),
-    slowNetwork ? 5 : 7
-  );
+  const historyWarmupConcurrency = ios
+    ? 1
+    : clamp(slowNetwork ? 3 : 5, Math.round(cores * (constrained ? 0.6 : 0.75)), slowNetwork ? 5 : 7);
   return {
     constrained,
     saveData,
     slowNetwork,
-    prefetchAllowed: !saveData,
+    prefetchAllowed: !saveData && !ios,
     fileGetMax,
     fileGetPrefetch,
     fileGetTimeoutMs: slowNetwork ? 45_000 : constrained ? 35_000 : 25_000,
-    historyPrefetchLimit: slowNetwork ? 180 : constrained ? 240 : 320,
-    historyWarmupLimit: slowNetwork ? 220 : constrained ? 280 : 360,
+    historyPrefetchLimit: ios ? 80 : slowNetwork ? 180 : constrained ? 240 : 320,
+    historyWarmupLimit: ios ? 80 : slowNetwork ? 220 : constrained ? 280 : 360,
     historyWarmupConcurrency,
-    historyWarmupQueueMax: slowNetwork ? 40 : constrained ? 60 : 80,
-    historyWarmupDelayMs: slowNetwork ? 160 : constrained ? 110 : 70,
+    historyWarmupQueueMax: ios ? 8 : slowNetwork ? 40 : constrained ? 60 : 80,
+    historyWarmupDelayMs: ios ? 700 : slowNetwork ? 160 : constrained ? 110 : 70,
     historyRequestTimeoutMs: slowNetwork ? 18_000 : constrained ? 14_000 : 12_000,
   };
 }

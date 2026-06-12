@@ -161,6 +161,38 @@ test("requiredUpdateGate: current version stores live build and lets app mount",
   await gate.cleanup();
 });
 
+test("requiredUpdateGate: current hashed bundle ignores stale stored build from same version", async () => {
+  const gate = await loadGate("0.1.810-abcdef123456");
+  await withBrowserStubs(async () => {
+    const localStorage = makeStorage([["yagodka_active_build_id_v1", "0.1.810-111111111111"]]);
+    const sessionStorage = makeStorage();
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        localStorage,
+        sessionStorage,
+        location: { href: "https://yagodka.org/web/" },
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", { value: { createElement: makeElement }, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+    globalThis.fetch = async () => ({ ok: true, text: async () => 'const BUILD_ID = "0.1.810-abcdef123456";' });
+
+    const root = makeElement("div");
+    const result = await gate.runRequiredUpdateGate(root);
+    assert.deepEqual(result, { blocked: false, liveBuildId: "0.1.810-abcdef123456", reason: "current" });
+    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), "0.1.810-abcdef123456");
+    assert.equal(sessionStorage.getItem("yagodka_required_update_gate_bypass_v1"), null);
+    assert.equal(root.children.length, 0);
+  });
+  await gate.cleanup();
+});
+
 test("requiredUpdateGate: opens current app and updates stale PWA in background", async () => {
   const gate = await loadGate("0.1.809");
   await withBrowserStubs(async () => {

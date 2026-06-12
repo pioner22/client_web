@@ -13,6 +13,10 @@ export function loadStoredBuildIdForCurrentVersion(currentVersion: string): stri
       localStorage.removeItem(ACTIVE_BUILD_ID_KEY);
       return null;
     }
+    if (current.build && stored.build !== current.build) {
+      localStorage.removeItem(ACTIVE_BUILD_ID_KEY);
+      return null;
+    }
     return raw;
   } catch {
     return null;

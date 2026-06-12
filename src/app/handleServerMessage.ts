@@ -40,6 +40,50 @@ import { handleSessionDevicesMessage } from "./handleServerMessage/sessions";
 import { handleUpdateRequiredMessage } from "./handleServerMessage/updateRequired";
 import { handleProfileAvatarMessage } from "./handleServerMessage/profileAvatar";
 
+type RoomInviteActionKind = "group" | "board";
+
+function invitePayloadRoomId(payload: any, kind: RoomInviteActionKind): string {
+  if (!payload || typeof payload !== "object") return "";
+  if (kind === "group") {
+    if (String(payload.kind || "") !== "group_invite") return "";
+    return String(payload.groupId ?? payload.group_id ?? "").trim();
+  }
+  if (String(payload.kind || "") !== "board_invite") return "";
+  return String(payload.boardId ?? payload.board_id ?? "").trim();
+}
+
+function clearAcceptedRoomInviteActions(prev: AppState, kind: RoomInviteActionKind, roomId: string, text: string): AppState {
+  const id = String(roomId || "").trim();
+  if (!id) return prev;
+
+  let conversations = prev.conversations;
+  let conversationsChanged = false;
+  for (const [key, conv] of Object.entries(prev.conversations || {})) {
+    if (!Array.isArray(conv) || !conv.length) continue;
+    let nextConv: ChatMessage[] | null = null;
+    for (let idx = 0; idx < conv.length; idx += 1) {
+      const msg = conv[idx];
+      const payload = msg?.attachment?.kind === "action" ? msg.attachment.payload : null;
+      if (invitePayloadRoomId(payload, kind) !== id) continue;
+      if (!nextConv) nextConv = [...conv];
+      nextConv[idx] = { ...msg, text, attachment: null };
+    }
+    if (!nextConv) continue;
+    if (!conversationsChanged) conversations = { ...prev.conversations };
+    conversations[key] = nextConv;
+    conversationsChanged = true;
+  }
+
+  const modalPayload = prev.modal?.kind === "action" ? prev.modal.payload : null;
+  const modal = invitePayloadRoomId(modalPayload, kind) === id ? null : prev.modal;
+  if (!conversationsChanged && modal === prev.modal) return prev;
+  return {
+    ...prev,
+    ...(conversationsChanged ? { conversations } : {}),
+    ...(modal !== prev.modal ? { modal } : {}),
+  };
+}
+
 export function handleServerMessage(
   msg: any,
   state: AppState,
@@ -114,7 +158,8 @@ export function handleServerMessage(
       const next = prev.groups.filter((x) => x.id !== upd.id);
       next.push(upd);
       next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
-      return { ...prev, groups: next, pendingGroupInvites: prev.pendingGroupInvites.filter((inv) => inv.groupId !== upd.id) };
+      const base = clearAcceptedRoomInviteActions(prev, "group", upd.id, `Приглашение принято: ${upd.id}`);
+      return { ...base, groups: next, pendingGroupInvites: base.pendingGroupInvites.filter((inv) => inv.groupId !== upd.id) };
     });
     return;
   }
@@ -277,7 +322,8 @@ export function handleServerMessage(
       const next = prev.boards.filter((x) => x.id !== upd.id);
       next.push(upd);
       next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
-      return { ...prev, boards: next, pendingBoardInvites: prev.pendingBoardInvites.filter((inv) => inv.boardId !== upd.id) };
+      const base = clearAcceptedRoomInviteActions(prev, "board", upd.id, `Приглашение принято: ${upd.id}`);
+      return { ...base, boards: next, pendingBoardInvites: base.pendingBoardInvites.filter((inv) => inv.boardId !== upd.id) };
     });
     return;
   }

@@ -168,6 +168,110 @@ test("handleServerMessage: group_join_request создаёт pending request и 
   }
 });
 
+test("handleServerMessage: group_added закрывает stale group_invite action из локального DM", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const { getState, patch } = createPatchHarness({
+      groups: [],
+      boards: [],
+      pendingGroupInvites: [{ kind: "group_invite", groupId: "grp-0001", from: "111-111-111", name: "Чат" }],
+      pendingBoardInvites: [],
+      pendingGroupJoinRequests: [],
+      conversations: {
+        "dm:111-111-111": [
+          {
+            kind: "sys",
+            from: "111-111-111",
+            text: "Приглашение в чат: Чат",
+            ts: 1,
+            id: null,
+            localId: "action:group_invite:grp-0001:111-111-111",
+            attachment: {
+              kind: "action",
+              payload: { kind: "group_invite", groupId: "grp-0001", from: "111-111-111", name: "Чат" },
+            },
+          },
+        ],
+      },
+      modal: { kind: "action", payload: { kind: "group_invite", groupId: "grp-0001", from: "111-111-111", name: "Чат" } },
+      status: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "group_added",
+        group: { id: "grp-0001", name: "Чат", owner_id: "111-111-111", members: ["517-048-184", "111-111-111"] },
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.pendingGroupInvites.length, 0);
+    assert.equal(st.modal, null);
+    const msg = st.conversations["dm:111-111-111"][0];
+    assert.equal(msg.text, "Приглашение принято: grp-0001");
+    assert.equal(msg.attachment, null);
+    assert.equal(st.groups.length, 1);
+    assert.equal(st.groups[0].id, "grp-0001");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: board_added закрывает stale board_invite action из локального DM", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const { getState, patch } = createPatchHarness({
+      groups: [],
+      boards: [],
+      pendingGroupInvites: [],
+      pendingBoardInvites: [{ kind: "board_invite", boardId: "b-abcdef12", from: "111-111-111", name: "Новости" }],
+      pendingGroupJoinRequests: [],
+      conversations: {
+        "dm:111-111-111": [
+          {
+            kind: "sys",
+            from: "111-111-111",
+            text: "Приглашение в доску: Новости",
+            ts: 1,
+            id: null,
+            localId: "action:board_invite:b-abcdef12:111-111-111",
+            attachment: {
+              kind: "action",
+              payload: { kind: "board_invite", boardId: "b-abcdef12", from: "111-111-111", name: "Новости" },
+            },
+          },
+        ],
+      },
+      modal: { kind: "action", payload: { kind: "board_invite", boardId: "b-abcdef12", from: "111-111-111", name: "Новости" } },
+      status: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "board_added",
+        board: { id: "b-abcdef12", name: "Новости", owner_id: "111-111-111", members: ["517-048-184", "111-111-111"] },
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.pendingBoardInvites.length, 0);
+    assert.equal(st.modal, null);
+    const msg = st.conversations["dm:111-111-111"][0];
+    assert.equal(msg.text, "Приглашение принято: b-abcdef12");
+    assert.equal(msg.attachment, null);
+    assert.equal(st.boards.length, 1);
+    assert.equal(st.boards[0].id, "b-abcdef12");
+  } finally {
+    await cleanup();
+  }
+});
+
 test("handleServerMessage: update_required открывает экран обновления", async () => {
   const { handleServerMessage, cleanup } = await loadHandleServerMessage();
   try {

@@ -62,6 +62,13 @@ test("buildIdStore: хранит активный buildId и возвращае�
     assert.equal(helper.loadActiveBuildId("0.1.99"), "0.1.99");
     localStorage.setItem("yagodka_active_build_id_v1", "0.1.99-abcdef123456");
     assert.equal(helper.loadActiveBuildId("0.1.99"), "0.1.99-abcdef123456");
+    assert.equal(helper.loadActiveBuildId("0.1.99-abcdef123456"), "0.1.99-abcdef123456");
+    localStorage.setItem("yagodka_active_build_id_v1", "0.1.99-abcdef123456");
+    assert.equal(helper.loadActiveBuildId("0.1.99-fedcba654321"), "0.1.99-fedcba654321");
+    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), null);
+    localStorage.setItem("yagodka_active_build_id_v1", "0.1.99");
+    assert.equal(helper.loadActiveBuildId("0.1.99-abcdef123456"), "0.1.99-abcdef123456");
+    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), null);
     assert.equal(helper.loadActiveBuildId("0.1.98"), "0.1.98");
     assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), null);
 

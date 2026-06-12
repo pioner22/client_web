@@ -91,6 +91,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const HISTORY_WARMUP_TIMEOUT_MS = 12_000;
   const HISTORY_WARMUP_QUEUE_MAX = deviceCaps.historyWarmupQueueMax;
   const HISTORY_WARMUP_DELAY_MS = deviceCaps.historyWarmupDelayMs;
+  const HISTORY_PREVIEW_QUEUE_MAX = deviceCaps.slowNetwork ? 30 : deviceCaps.constrained ? 50 : 80;
   const historyHasMoreBypassUntil = new Map<string, number>();
   const historyHasMoreBypassCount = new Map<string, number>();
   const historyRequestTimers = new Map<string, number>();
@@ -142,6 +143,8 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       // ignore
     }
   };
+
+  const canRunBackgroundHistory = (): boolean => deviceCaps.prefetchAllowed && document.visibilityState !== "hidden";
 
   const historyRequestTimerKey = (key: string, mode: HistoryRequestMode) => `${key}:${mode}`;
 
@@ -455,7 +458,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
     send({ ...deltaTarget, limit });
 
     if (!opts?.prefetchBefore) return;
-    if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") return;
+    if (!canRunBackgroundHistory()) return;
     if (!opts?.force && !canLoadOlderHistory(st, key, "prefetch")) {
       debugHook("history.blocked", { key, mode: "prefetch", reason: "hasMore=false", limit: HISTORY_PREFETCH_LIMIT });
       return;
@@ -772,7 +775,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       const selectedSync = getConversationHistorySyncState(st, selectedKey);
       if (!selectedSync.loaded || selectedSync.loading) return;
     }
-    if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") {
+    if (!canRunBackgroundHistory()) {
       if (historyBackfillQueue.length) {
         historyBackfillTimer = window.setTimeout(drainHistoryBackfillQueue, HISTORY_BACKFILL_DELAY_MS);
       }
@@ -859,7 +862,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       if (!st.authed || st.conn !== "connected") return;
       if (!st.netLeader) return;
       if (!st.selfId) return;
-      if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") return;
+      if (!canRunBackgroundHistory()) return;
 
       const uid = st.selfId;
       const cached = await getHistoryLatestMessages(uid, key, { limit: 1 });
@@ -911,7 +914,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
       const selectedSync = getConversationHistorySyncState(st, selectedKey);
       if (!selectedSync.loaded || selectedSync.loading) return;
     }
-    if (!deviceCaps.prefetchAllowed || document.visibilityState === "hidden") {
+    if (!canRunBackgroundHistory()) {
       if (historyWarmupQueue.length) {
         historyWarmupTimer = window.setTimeout(drainHistoryWarmupQueue, HISTORY_WARMUP_DELAY_MS);
       }
@@ -946,6 +949,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const requestHistoryPreview = (t: TargetRef) => {
     const st = store.get();
     if (!st.authed || st.conn !== "connected") return;
+    if (!canRunBackgroundHistory()) return;
     const key = conversationKey(t);
     if (!key) return;
     if (historyPreviewRequested.has(key)) return;
@@ -984,6 +988,8 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   };
 
   const enqueueHistoryPreview: HistoryFeature["enqueueHistoryPreview"] = (t) => {
+    if (!canRunBackgroundHistory()) return;
+    if (historyPreviewQueue.length >= HISTORY_PREVIEW_QUEUE_MAX) return;
     historyPreviewQueue.push(t);
     if (historyPreviewTimer !== null) return;
     historyPreviewTimer = window.setTimeout(drainHistoryPreviewQueue, 120);
@@ -1388,6 +1394,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
 
   const maybeBootstrapPrefetch: HistoryFeature["maybeBootstrapPrefetch"] = (st) => {
     if (!st.authed || !st.selfId || !st.selected) return;
+    if (!canRunBackgroundHistory()) return;
     const key = conversationKey(st.selected);
     const cursor = key ? getConversationHistorySyncState(st, key).cursor : null;
     if (

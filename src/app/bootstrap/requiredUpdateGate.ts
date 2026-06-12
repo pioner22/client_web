@@ -1,5 +1,5 @@
 import { APP_VERSION } from "../../config/app";
-import { storeActiveBuildId } from "../../helpers/pwa/buildIdStore";
+import { loadActiveBuildId, storeActiveBuildId } from "../../helpers/pwa/buildIdStore";
 import { splitBuildId } from "../../helpers/version/buildId";
 
 export interface RequiredUpdateGateResult {
@@ -187,10 +187,7 @@ function cleanupUpdateQueryParams(): void {
 
 function activeBuildIdForGate(): string {
   try {
-    const raw = String(window.localStorage.getItem("yagodka_active_build_id_v1") || "").trim();
-    const stored = splitBuildId(raw);
-    const current = splitBuildId(APP_VERSION);
-    if (stored.version && current.version && stored.version === current.version) return raw;
+    return loadActiveBuildId(APP_VERSION);
   } catch {
     // ignore
   }

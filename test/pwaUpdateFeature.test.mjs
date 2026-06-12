@@ -337,6 +337,93 @@ test("pwaUpdateFeature: active full BUILD_ID is treated as current and does not 
   }
 });
 
+test("pwaUpdateFeature: standalone PWA keeps updates manual and does not auto-reload", async () => {
+  const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const helper = await loadFeature();
+  try {
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    const pendingTimers = [];
+    const windowStub = {
+      localStorage,
+      sessionStorage,
+      location: { href: "https://yagodka.org/web/" },
+      matchMedia(query) {
+        return { matches: String(query).includes("display-mode: standalone") };
+      },
+      setTimeout(fn, _ms) {
+        pendingTimers.push(fn);
+        return pendingTimers.length;
+      },
+      clearTimeout() {},
+    };
+    Object.defineProperty(globalThis, "window", { value: windowStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: { visibilityState: "visible", activeElement: null },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+
+    const store = {
+      state: {
+        authed: true,
+        conn: "connected",
+        selfId: "111",
+        clientVersion: "0.1.791-27ef803b5f72",
+        updateLatest: "0.1.792-abcdef123456",
+        pwaUpdateAvailable: true,
+        status: "",
+        fileTransfers: [],
+        historyLoading: {},
+        modal: null,
+        editing: null,
+        replyDraft: null,
+        forwardDraft: null,
+        chatSelection: null,
+      },
+      get() {
+        return this.state;
+      },
+      set(patch) {
+        this.state =
+          typeof patch === "function"
+            ? patch(this.state)
+            : {
+                ...this.state,
+                ...patch,
+              };
+      },
+    };
+
+    const feature = helper.createPwaUpdateFeature({
+      store,
+      send: () => {},
+      flushBeforeReload: () => {},
+      getLastUserInputAt: () => 0,
+      hasPendingHistoryActivityForUpdate: () => false,
+      hasPendingPreviewActivityForUpdate: () => false,
+      hasPendingFileActivityForUpdate: () => false,
+    });
+
+    feature.scheduleAutoApplyPwaUpdate(1);
+    assert.equal(pendingTimers.length, 0);
+    assert.equal(store.state.pwaUpdateAvailable, true);
+    assert.match(store.state.status, /Откройте обновление вручную/);
+    assert.equal(localStorage.getItem("yagodka_active_build_id_v1"), null);
+  } finally {
+    if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
+    else delete globalThis.window;
+    if (prevDocumentDesc) Object.defineProperty(globalThis, "document", prevDocumentDesc);
+    else delete globalThis.document;
+    if (prevNavigatorDesc) Object.defineProperty(globalThis, "navigator", prevNavigatorDesc);
+    else delete globalThis.navigator;
+    await helper.cleanup();
+  }
+});
+
 test("pwaUpdateFeature: auto-apply waits while recent media failures keep PWA stability hold active", async () => {
   const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
   const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
