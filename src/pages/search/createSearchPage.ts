@@ -42,8 +42,11 @@ function inferTarget(entry: SearchResultEntry): TargetRef {
 }
 
 function resultLabel(r: SearchResultEntry): string {
-  if (r.board) return `# ${r.id}`;
-  if (r.group) return `# ${r.id}`;
+  const name = String(r.name || "").trim();
+  const handle = String(r.handle || "").trim();
+  const roomLabel = name || (handle ? (handle.startsWith("@") ? handle : `@${handle}`) : `# ${r.id}`);
+  if (r.board) return roomLabel;
+  if (r.group) return roomLabel;
   const dot = r.online ? "●" : "○";
   const star = r.friend ? "★" : " ";
   return `${star} ${dot} ${r.id}`;
@@ -1312,6 +1315,9 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
           const key = serverKey(r);
           const isSelected = selectionMode && selectionScope === "server" && selectedServer.has(key);
           const disableRow = !canOpen && !(selectionMode && selectionScope === "server");
+          const displayName = String(r.name || "").trim();
+          const displayHandleRaw = String(r.handle || "").trim();
+          const displayHandle = displayHandleRaw ? (displayHandleRaw.startsWith("@") ? displayHandleRaw : `@${displayHandleRaw}`) : "";
 
           const typeLabel = isGroup ? "Группа" : isBoard ? "Доска" : isFriend ? "Контакт" : "Пользователь";
           const stateLabel = pendingIn
@@ -1319,16 +1325,17 @@ export function createSearchPage(actions: SearchPageActions): SearchPage {
             : pendingOut
               ? "Ожидает подтверждения"
               : isGroup && !inGroup
-                ? "Доступ по запросу"
+              ? "Доступ по запросу"
                 : isBoard && !inBoard
                   ? "Открытая доска"
                   : typeLabel;
-          const rowTitle = isGroup || isBoard ? `# ${r.id}` : r.id;
+          const rowTitle = isGroup || isBoard ? displayName || displayHandle || `# ${r.id}` : r.id;
+          const rowSub = isGroup || isBoard ? [displayHandle, r.id, stateLabel].filter(Boolean).join(" · ") : stateLabel;
           const rowChildren: Array<string | HTMLElement> = [
             avatar(info.kind, r.id),
             el("span", { class: "row-main" }, [
               el("span", { class: "row-title" }, [rowTitle]),
-              el("span", { class: "row-sub" }, [stateLabel]),
+              el("span", { class: "row-sub" }, [rowSub]),
             ]),
             isGroup || isBoard
               ? el("span", { class: "search-result-badge" }, [typeLabel])

@@ -424,6 +424,8 @@ export interface BoardEntry {
 
 export interface SearchResultEntry {
   id: string;
+  name?: string | null;
+  handle?: string | null;
   online?: boolean;
   friend?: boolean;
   group?: boolean;

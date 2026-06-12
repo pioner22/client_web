@@ -24,6 +24,7 @@ test("handleServerMessage: action/invite conversation domain is delegated to a d
     "authz_declined",
     "authz_cancelled",
     "group_invite",
+    "group_invite_response_result",
     "group_join_request",
     "board_invite",
     "board_invite_response_result",

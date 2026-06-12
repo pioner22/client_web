@@ -52,7 +52,7 @@ test("handleServerMessage: search_result не перезаписывает searc
     });
 
     handleServerMessage(
-      { type: "search_result", query: "@pioner", results: [{ id: "123-45", online: true, friend: false }] },
+      { type: "search_result", query: "@pioner", results: [{ id: "123-45", name: "Pioner", handle: "@pioner", online: true, friend: false }] },
       getState(),
       gateway,
       patch
@@ -62,6 +62,8 @@ test("handleServerMessage: search_result не перезаписывает searc
     assert.equal(st.searchQuery, "Pioner");
     assert.equal(st.searchResults.length, 1);
     assert.equal(st.searchResults[0].id, "123-45");
+    assert.equal(st.searchResults[0].name, "Pioner");
+    assert.equal(st.searchResults[0].handle, "@pioner");
   } finally {
     await cleanup();
   }
@@ -90,4 +92,3 @@ test("handleServerMessage: stale search_result игнорируется", async 
     await cleanup();
   }
 });
-

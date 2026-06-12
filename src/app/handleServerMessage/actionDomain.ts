@@ -234,6 +234,45 @@ export function handleActionConversationMessage(t: string, msg: any, state: AppS
     return true;
   }
 
+  if (
+    t === "group_invite_response_result" ||
+    (t === "group_invite_result" &&
+      (Object.prototype.hasOwnProperty.call(msg || {}, "accept") || Boolean(msg?.response)))
+  ) {
+    const ok = Boolean(msg?.ok);
+    const gid = String(msg?.group_id ?? "").trim();
+    const accept = msg?.accept === undefined ? null : Boolean(msg.accept);
+    if (!ok) {
+      const reason = String(msg?.reason ?? "ошибка");
+      const friendly =
+        reason === "no_invite"
+          ? "Нет активного приглашения (возможно, уже обработано)"
+          : reason === "not_found"
+            ? "Чат не найден"
+            : reason === "bad_args"
+              ? "Некорректные данные"
+              : reason;
+      patch((prev) => ({
+        ...prev,
+        pendingGroupInvites: gid ? prev.pendingGroupInvites.filter((inv) => inv.groupId !== gid) : prev.pendingGroupInvites,
+        status: `Не удалось обработать приглашение: ${friendly}`,
+      }));
+      return true;
+    }
+    const status =
+      gid && accept === true
+        ? `Приглашение принято: ${gid}`
+        : gid && accept === false
+          ? `Приглашение отклонено: ${gid}`
+          : "Приглашение обработано";
+    patch((prev) => ({
+      ...prev,
+      pendingGroupInvites: gid ? prev.pendingGroupInvites.filter((inv) => inv.groupId !== gid) : prev.pendingGroupInvites,
+      status,
+    }));
+    return true;
+  }
+
   if (t === "group_invite_result") {
     const ok = Boolean(msg?.ok);
     if (!ok) {

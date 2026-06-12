@@ -778,6 +778,8 @@ export function handleServerMessage(
     const results: SearchResultEntry[] = raw
       .map((r: any) => ({
         id: String(r?.id ?? ""),
+        name: r?.name == null ? undefined : String(r.name),
+        handle: r?.handle == null ? undefined : String(r.handle),
         online: r?.online === undefined ? undefined : Boolean(r.online),
         friend: r?.friend === undefined ? undefined : Boolean(r.friend),
         group: r?.group === undefined ? undefined : Boolean(r.group),
