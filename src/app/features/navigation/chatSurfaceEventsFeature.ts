@@ -67,8 +67,8 @@ export interface ChatSurfaceEventsFeatureDeps {
     cancelAuth: (peer: string) => void;
   };
   groupBoardJoinActions: {
-    acceptGroupInvite: (groupId: string) => void;
-    declineGroupInvite: (groupId: string) => void;
+    acceptGroupInvite: (groupId: string, fromHint?: string) => void;
+    declineGroupInvite: (groupId: string, fromHint?: string) => void;
   };
   roomInviteResponsesActions: {
     acceptGroupJoin: (groupId: string, peer: string) => void;

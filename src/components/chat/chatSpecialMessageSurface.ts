@@ -8,6 +8,27 @@ type RenderDeferredSysMessageSurfaceCtx = {
 };
 
 const EMOJI_SEGMENT_RE = /\p{Extended_Pictographic}/u;
+const SYS_TEXT_MAX_CHARS = 1800;
+const INVITE_TEXT_MAX_CHARS = 1200;
+const INVITE_TEXT_MAX_LINES = 12;
+
+function clampText(value: unknown, maxChars: number, maxLines: number): string {
+  const raw = String(value || "").replace(/\u0000/g, "").trim();
+  if (!raw) return "";
+  const lines = raw.split(/\r?\n/);
+  let out = lines.slice(0, Math.max(1, maxLines)).join("\n");
+  let clipped = lines.length > maxLines;
+  if (out.length > maxChars) {
+    out = out.slice(0, maxChars);
+    clipped = true;
+  }
+  out = out.trimEnd();
+  return clipped ? `${out}…` : out;
+}
+
+function clampOneLine(value: unknown, maxChars: number): string {
+  return clampText(value, maxChars, 1).replace(/\s+/g, " ").trim();
+}
 
 function isEmojiOnlyText(text: string): boolean {
   const raw = String(text || "").trim();
@@ -45,14 +66,14 @@ function renderInviteCard(payload: any, text: string): HTMLElement | null {
   const kind = String(payload.kind || "");
   if (kind !== "group_invite" && kind !== "board_invite") return null;
   const isGroup = kind === "group_invite";
-  const roomId = String(payload.groupId || payload.group_id || payload.boardId || payload.board_id || "").trim();
+  const roomId = clampOneLine(payload.groupId || payload.group_id || payload.boardId || payload.board_id || "", 128);
   if (!roomId) return null;
-  const name = String(payload.name || "").trim() || null;
-  const handle = String(payload.handle || "").trim() || null;
-  const from = String(payload.from || "").trim();
-  const description = String(payload.description || "").trim();
-  const rules = String(payload.rules || "").trim();
-  const title = text || (isGroup ? "Приглашение в чат" : "Приглашение в доску");
+  const name = clampOneLine(payload.name || "", 160) || null;
+  const handle = clampOneLine(payload.handle || "", 160) || null;
+  const from = clampOneLine(payload.from || "", 128);
+  const description = clampText(payload.description || "", INVITE_TEXT_MAX_CHARS, INVITE_TEXT_MAX_LINES);
+  const rules = clampText(payload.rules || "", INVITE_TEXT_MAX_CHARS, INVITE_TEXT_MAX_LINES);
+  const title = clampOneLine(text || "", 180) || (isGroup ? "Приглашение в чат" : "Приглашение в доску");
   const label = roomLabel(name, roomId, handle);
 
   const metaLines: HTMLElement[] = [];
@@ -114,9 +135,12 @@ function renderSysActions(payload: any): HTMLElement | null {
     if (peer) buttons.push(actionBtn("Отменить", { "data-action": "auth-cancel", "data-peer": peer }, "btn-danger"));
   } else if (kind === "group_invite") {
     const groupId = String(payload.groupId || payload.group_id || "").trim();
+    const from = String(payload.from || "").trim();
+    const attrs: Record<string, string> = { "data-group-id": groupId };
+    if (from) attrs["data-from"] = from;
     if (groupId) {
-      buttons.push(actionBtn("Принять", { "data-action": "group-invite-accept", "data-group-id": groupId }, "btn-primary"));
-      buttons.push(actionBtn("Отклонить", { "data-action": "group-invite-decline", "data-group-id": groupId }, "btn-danger"));
+      buttons.push(actionBtn("Принять", { ...attrs, "data-action": "group-invite-accept" }, "btn-primary"));
+      buttons.push(actionBtn("Отклонить", { ...attrs, "data-action": "group-invite-decline" }, "btn-danger"));
     }
   } else if (kind === "group_join_request") {
     const groupId = String(payload.groupId || payload.group_id || "").trim();
@@ -138,21 +162,27 @@ function renderSysActions(payload: any): HTMLElement | null {
 }
 
 export function renderDeferredSysMessageSurface(ctx: RenderDeferredSysMessageSurfaceCtx) {
-  const { mount, message } = ctx;
-  const bodyChildren: HTMLElement[] = [];
-  if (message.attachment?.kind === "action") {
-    const card = renderInviteCard(message.attachment.payload, message.text);
-    if (card) {
-      bodyChildren.push(card);
-      mount.replaceChildren(el("div", { class: "msg-body" }, bodyChildren));
-      return;
+  try {
+    const { mount, message } = ctx;
+    const bodyChildren: HTMLElement[] = [];
+    if (message.attachment?.kind === "action") {
+      const card = renderInviteCard(message.attachment.payload, message.text);
+      if (card) {
+        bodyChildren.push(card);
+        mount.replaceChildren(el("div", { class: "msg-body" }, bodyChildren));
+        return;
+      }
     }
+    const safeText = clampText(message.text || "", SYS_TEXT_MAX_CHARS, 18);
+    const emojiOnlySys = isEmojiOnlyText(safeText);
+    bodyChildren.push(el("div", { class: `msg-text${emojiOnlySys ? " msg-emoji-only" : ""}` }, renderRichText(safeText)));
+    if (message.attachment?.kind === "action") {
+      const actions = renderSysActions(message.attachment.payload);
+      if (actions) bodyChildren.push(actions);
+    }
+    mount.replaceChildren(el("div", { class: "msg-body" }, bodyChildren));
+  } catch {
+    const safeText = clampText(ctx.message.text || "", SYS_TEXT_MAX_CHARS, 18) || "Системное сообщение";
+    ctx.mount.replaceChildren(el("div", { class: "msg-body" }, [el("div", { class: "msg-text" }, [safeText])]));
   }
-  const emojiOnlySys = isEmojiOnlyText(message.text || "");
-  bodyChildren.push(el("div", { class: `msg-text${emojiOnlySys ? " msg-emoji-only" : ""}` }, renderRichText(String(message.text || ""))));
-  if (message.attachment?.kind === "action") {
-    const actions = renderSysActions(message.attachment.payload);
-    if (actions) bodyChildren.push(actions);
-  }
-  mount.replaceChildren(el("div", { class: "msg-body" }, bodyChildren));
 }

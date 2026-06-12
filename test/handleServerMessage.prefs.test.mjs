@@ -119,3 +119,45 @@ test("handleServerMessage: prefs переводит sidebar folders в loaded/se
     await cleanup();
   }
 });
+
+test("handleServerMessage: chat_cleared вычищает диалог и history sync state", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      conversations: {
+        [key]: [{ kind: "in", from: peer, to: selfId, text: "old", ts: 1, id: 7 }],
+      },
+      friends: [{ id: peer, unread: 3 }],
+      historyLoaded: { [key]: true },
+      historyCursor: { [key]: 7 },
+      historyHasMore: { [key]: false },
+      historySync: { [key]: { loaded: true, source: "server" } },
+      status: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "chat_cleared",
+        ok: true,
+        peer,
+        deleted: 1,
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.conversations[key], undefined);
+    assert.equal(st.friends[0].unread, 0);
+    assert.equal(st.historyLoaded[key], undefined);
+    assert.equal(st.historyCursor[key], undefined);
+    assert.equal(st.historyHasMore[key], undefined);
+  } finally {
+    await cleanup();
+  }
+});

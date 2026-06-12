@@ -12,6 +12,20 @@ type RenderDeferredSysMessageOptions = {
 let specialMessageModule: ChatSpecialMessageModule | null = null;
 let specialMessagePromise: Promise<ChatSpecialMessageModule> | null = null;
 
+function clampSysText(value: unknown): string {
+  const raw = String(value || "").replace(/\u0000/g, "").trim();
+  if (!raw) return "";
+  const lines = raw.split(/\r?\n/);
+  let out = lines.slice(0, 18).join("\n");
+  let clipped = lines.length > 18;
+  if (out.length > 1800) {
+    out = out.slice(0, 1800);
+    clipped = true;
+  }
+  out = out.trimEnd();
+  return clipped ? `${out}…` : out;
+}
+
 function canRenderMount(mount: HTMLElement | null): mount is HTMLElement {
   if (!mount) return false;
   return (mount as HTMLElement & { isConnected?: boolean }).isConnected !== false;
@@ -51,9 +65,12 @@ function renderSysActionsPlaceholder(payload: any): HTMLElement | null {
     if (peer) buttons.push(actionBtn("Отменить", { "data-action": "auth-cancel", "data-peer": peer }, "btn-danger"));
   } else if (kind === "group_invite") {
     const groupId = String(payload.groupId || payload.group_id || "").trim();
+    const from = String(payload.from || "").trim();
+    const attrs: Record<string, string> = { "data-group-id": groupId };
+    if (from) attrs["data-from"] = from;
     if (groupId) {
-      buttons.push(actionBtn("Принять", { "data-action": "group-invite-accept", "data-group-id": groupId }, "btn-primary"));
-      buttons.push(actionBtn("Отклонить", { "data-action": "group-invite-decline", "data-group-id": groupId }, "btn-danger"));
+      buttons.push(actionBtn("Принять", { ...attrs, "data-action": "group-invite-accept" }, "btn-primary"));
+      buttons.push(actionBtn("Отклонить", { ...attrs, "data-action": "group-invite-decline" }, "btn-danger"));
     }
   } else if (kind === "group_join_request") {
     const groupId = String(payload.groupId || payload.group_id || "").trim();
@@ -75,7 +92,7 @@ function renderSysActionsPlaceholder(payload: any): HTMLElement | null {
 }
 
 function renderSysMessagePlaceholder(message: ChatMessage): HTMLElement {
-  const bodyChildren: HTMLElement[] = [el("div", { class: "msg-text" }, renderRichText(String(message.text || "")))];
+  const bodyChildren: HTMLElement[] = [el("div", { class: "msg-text" }, renderRichText(clampSysText(message.text || "")))];
   if (message.attachment?.kind === "action") {
     const actions = renderSysActionsPlaceholder(message.attachment.payload);
     if (actions) bodyChildren.push(actions);

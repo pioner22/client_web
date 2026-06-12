@@ -335,15 +335,17 @@ export function createChatSurfaceDeferredActions(deps: ChatSurfaceDeferredDeps) 
     if (action === "group-invite-accept") {
       const groupId = String(actionEl.getAttribute("data-group-id") || "").trim();
       if (!groupId) return;
+      const from = String(actionEl.getAttribute("data-from") || "").trim();
       closeMobileSidebar();
-      groupBoardJoinActions.acceptGroupInvite(groupId);
+      groupBoardJoinActions.acceptGroupInvite(groupId, from);
       return;
     }
     if (action === "group-invite-decline") {
       const groupId = String(actionEl.getAttribute("data-group-id") || "").trim();
       if (!groupId) return;
+      const from = String(actionEl.getAttribute("data-from") || "").trim();
       closeMobileSidebar();
-      groupBoardJoinActions.declineGroupInvite(groupId);
+      groupBoardJoinActions.declineGroupInvite(groupId, from);
       return;
     }
     if (action === "group-invite-block") {
@@ -353,7 +355,7 @@ export function createChatSurfaceDeferredActions(deps: ChatSurfaceDeferredDeps) 
       const from = fromAttr || String(store.get().pendingGroupInvites.find((x) => x.groupId === groupId)?.from || "").trim();
       closeMobileSidebar();
       if (from) blockPeer(from);
-      groupBoardJoinActions.declineGroupInvite(groupId);
+      groupBoardJoinActions.declineGroupInvite(groupId, from);
       return;
     }
 

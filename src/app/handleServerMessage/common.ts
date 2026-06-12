@@ -113,9 +113,96 @@ export function humanizeError(raw: string): string {
   return map[code] ?? code;
 }
 
+const ACTION_STRING_MAX = 1600;
+
+function actionString(value: unknown, max = ACTION_STRING_MAX): string {
+  if (value === null || value === undefined) return "";
+  const text = String(value).trim();
+  if (!text) return "";
+  return text.length > max ? text.slice(0, max) : text;
+}
+
+function actionStringOrNull(value: unknown, max = ACTION_STRING_MAX): string | null {
+  const text = actionString(value, max);
+  return text ? text : null;
+}
+
+function parseActionPayload(raw: any): ActionModalPayload | null {
+  if (!raw || typeof raw !== "object") return null;
+  const kind = actionString((raw as any).kind, 48);
+  if (kind === "auth_in") {
+    const peer = actionString((raw as any).peer, 128);
+    if (!peer) return null;
+    return { kind, peer, note: actionStringOrNull((raw as any).note, 400) };
+  }
+  if (kind === "auth_out") {
+    const peer = actionString((raw as any).peer, 128);
+    return peer ? { kind, peer } : null;
+  }
+  if (kind === "group_invite") {
+    const groupId = actionString((raw as any).groupId ?? (raw as any).group_id, 128);
+    const from = actionString((raw as any).from, 128);
+    if (!groupId || !from) return null;
+    return {
+      kind,
+      groupId,
+      from,
+      name: actionStringOrNull((raw as any).name, 180),
+      handle: actionStringOrNull((raw as any).handle, 180),
+      description: actionStringOrNull((raw as any).description, 1400),
+      rules: actionStringOrNull((raw as any).rules, 1400),
+    };
+  }
+  if (kind === "group_join_request") {
+    const groupId = actionString((raw as any).groupId ?? (raw as any).group_id, 128);
+    const from = actionString((raw as any).from ?? (raw as any).peer, 128);
+    if (!groupId || !from) return null;
+    return {
+      kind,
+      groupId,
+      from,
+      name: actionStringOrNull((raw as any).name, 180),
+      handle: actionStringOrNull((raw as any).handle, 180),
+    };
+  }
+  if (kind === "board_invite") {
+    const boardId = actionString((raw as any).boardId ?? (raw as any).board_id, 128);
+    const from = actionString((raw as any).from, 128);
+    if (!boardId || !from) return null;
+    return {
+      kind,
+      boardId,
+      from,
+      name: actionStringOrNull((raw as any).name, 180),
+      handle: actionStringOrNull((raw as any).handle, 180),
+      description: actionStringOrNull((raw as any).description, 1400),
+      rules: actionStringOrNull((raw as any).rules, 1400),
+    };
+  }
+  if (kind === "file_offer") {
+    const fileId = actionString((raw as any).fileId ?? (raw as any).file_id, 180);
+    const from = actionString((raw as any).from, 128);
+    if (!fileId || !from) return null;
+    const sizeRaw = Number((raw as any).size ?? 0);
+    return {
+      kind,
+      fileId,
+      from,
+      name: actionString((raw as any).name, 240) || "файл",
+      size: Number.isFinite(sizeRaw) && sizeRaw > 0 ? Math.trunc(sizeRaw) : 0,
+      room: actionStringOrNull((raw as any).room, 128),
+    };
+  }
+  return null;
+}
+
 export function parseAttachment(raw: any): ChatAttachment | null {
   if (!raw || typeof raw !== "object") return null;
   const kind = String((raw as any).kind ?? "");
+  if (kind === "action") {
+    const payload = parseActionPayload((raw as any).payload);
+    return payload ? { kind: "action", payload } : null;
+  }
   if (kind !== "file") return null;
   const fileIdRaw = (raw as any).file_id ?? (raw as any).fileId ?? (raw as any).id ?? null;
   const fileIdText = fileIdRaw === null || fileIdRaw === undefined ? "" : String(fileIdRaw).trim();

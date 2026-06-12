@@ -10,8 +10,8 @@ export interface GroupBoardJoinFeatureDeps {
 export interface GroupBoardJoinFeature {
   joinGroup: (groupId: string) => void;
   joinBoard: (boardId: string) => void;
-  acceptGroupInvite: (groupId: string) => void;
-  declineGroupInvite: (groupId: string) => void;
+  acceptGroupInvite: (groupId: string, fromHint?: string) => void;
+  declineGroupInvite: (groupId: string, fromHint?: string) => void;
 }
 
 function replaceGroupInviteActionMessage(
@@ -73,11 +73,11 @@ export function createGroupBoardJoinFeature(deps: GroupBoardJoinFeatureDeps): Gr
     store.set({ status: `Вступление в доску: ${boardId}` });
   };
 
-  const acceptGroupInvite = (groupId: string) => {
+  const acceptGroupInvite = (groupId: string, fromHint = "") => {
     send({ type: "group_invite_response", group_id: groupId, accept: true });
     store.set((prev) => {
       const invite = prev.pendingGroupInvites.find((item) => item.groupId === groupId);
-      const from = String(invite?.from || "").trim();
+      const from = String(fromHint || invite?.from || "").trim();
       const patched = replaceGroupInviteActionMessage(prev, groupId, from, `Приглашение принято: ${groupId}`);
       return {
         ...prev,
@@ -89,11 +89,11 @@ export function createGroupBoardJoinFeature(deps: GroupBoardJoinFeatureDeps): Gr
     });
   };
 
-  const declineGroupInvite = (groupId: string) => {
+  const declineGroupInvite = (groupId: string, fromHint = "") => {
     send({ type: "group_invite_response", group_id: groupId, accept: false });
     store.set((prev) => {
       const invite = prev.pendingGroupInvites.find((item) => item.groupId === groupId);
-      const from = String(invite?.from || "").trim();
+      const from = String(fromHint || invite?.from || "").trim();
       const patched = replaceGroupInviteActionMessage(prev, groupId, from, `Приглашение отклонено: ${groupId}`);
       return {
         ...prev,

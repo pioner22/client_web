@@ -972,8 +972,8 @@ export function mountApp(root: HTMLElement) {
       cancelAuth: (peer) => authRequestsFeature.cancelAuth(peer),
     },
     groupBoardJoinActions: {
-      acceptGroupInvite: (groupId) => groupBoardJoinFeature.acceptGroupInvite(groupId),
-      declineGroupInvite: (groupId) => groupBoardJoinFeature.declineGroupInvite(groupId),
+      acceptGroupInvite: (groupId, fromHint) => groupBoardJoinFeature.acceptGroupInvite(groupId, fromHint),
+      declineGroupInvite: (groupId, fromHint) => groupBoardJoinFeature.declineGroupInvite(groupId, fromHint),
     },
     roomInviteResponsesActions: {
       acceptGroupJoin: (groupId, peer) => roomInviteResponsesFeature.acceptGroupJoin(groupId, peer),

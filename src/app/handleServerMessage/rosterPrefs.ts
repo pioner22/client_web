@@ -1,6 +1,7 @@
 import type { GatewayTransport } from "../../lib/net/gatewayClient";
 import type { AppState, FriendEntry } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
+import { clearHistoryConvo } from "../../helpers/chat/historyIdb";
 import { dropConversationHistorySyncState } from "../../helpers/chat/historySync";
 import { applyRosterSnapshot, applyRosterSyncState, setFriendPresence } from "../../helpers/roster/rosterSync";
 import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatarRev } from "../../helpers/avatar/avatarStore";
@@ -227,6 +228,7 @@ export function handleRosterPrefsMessage(
     }
     patch((prev) => {
       const key = dmKey(peer);
+      if (prev.selfId) void clearHistoryConvo(prev.selfId, key);
       const next = dropConversationHistorySyncState(
         {
           ...prev,
@@ -252,6 +254,7 @@ export function handleRosterPrefsMessage(
     }
     patch((prev) => {
       const key = roomKey(room);
+      if (prev.selfId) void clearHistoryConvo(prev.selfId, key);
       const next = dropConversationHistorySyncState(
         {
           ...prev,

@@ -344,6 +344,42 @@ export async function deleteHistoryMessageById(
   }
 }
 
+export async function clearHistoryConvo(userId: string | null | undefined, convo: string): Promise<void> {
+  const uid = userId ? normalizeId(userId) : null;
+  const key = normalizeConvo(convo);
+  if (!uid || !key) return;
+  const pkey = pruneKey(uid, key);
+  clearPruneTimer(pkey);
+  pruneInFlight.delete(pkey);
+  const db = await openDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction([STORE_MESSAGES, STORE_CONVOS], "readwrite");
+    const msgStore = tx.objectStore(STORE_MESSAGES);
+    const cursorReq = msgStore.index(INDEX_BY_CONVO_ID).openCursor(convoRange(uid, key));
+    await new Promise<void>((resolve) => {
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        try {
+          cursor.delete();
+        } catch {
+          // ignore individual stale rows
+        }
+        cursor.continue();
+      };
+      cursorReq.onerror = () => resolve();
+    });
+    tx.objectStore(STORE_CONVOS).delete([uid, key]);
+    await waitTx(tx);
+  } catch {
+    // ignore
+  }
+}
+
 async function cursorToMessages(cursorReq: IDBRequest<IDBCursorWithValue | null>, limit: number): Promise<ChatMessage[]> {
   const out: ChatMessage[] = [];
   return await new Promise((resolve) => {

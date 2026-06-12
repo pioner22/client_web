@@ -122,6 +122,60 @@ test("handleServerMessage: history_result прокидывает room из ве�
   }
 });
 
+test("handleServerMessage: history_result парсит action attachment из истории", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const longDescription = "описание ".repeat(400);
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      conversations: {},
+      historyLoaded: {},
+    });
+
+    handleServerMessage(
+      {
+        type: "history_result",
+        peer,
+        since_id: 0,
+        rows: [
+          {
+            id: 5,
+            from: peer,
+            to: selfId,
+            text: "Приглашение в чат",
+            ts: 1,
+            attachment: {
+              kind: "action",
+              payload: {
+                kind: "group_invite",
+                groupId: "grp-001",
+                from: peer,
+                name: "Команда",
+                description: longDescription,
+              },
+            },
+          },
+        ],
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const att = getState().conversations[key][0].attachment;
+    assert.equal(att.kind, "action");
+    assert.equal(att.payload.kind, "group_invite");
+    assert.equal(att.payload.groupId, "grp-001");
+    assert.equal(att.payload.from, peer);
+    assert.ok(att.payload.description.length <= 1400);
+  } finally {
+    await cleanup();
+  }
+});
+
 test("handleServerMessage: message_deleted вычищает orphaned file transfer и thumb state", async () => {
   const { handleServerMessage, cleanup } = await loadHandleServerMessage();
   const prevUrl = globalThis.URL;
