@@ -22,6 +22,7 @@ import { removeOutboxEntry } from "../helpers/chat/outbox";
 import { applyFileTransferSnapshot, applyOutboxSnapshot } from "../helpers/runtime/deliverySync";
 import { saveLastReadMarkers } from "../helpers/ui/lastReadMarkers";
 import { deriveServerSearchQuery } from "../helpers/search/serverSearchQuery";
+import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatarRev, type AvatarTargetKind } from "../helpers/avatar/avatarStore";
 import {
   humanizeError,
   isDocHidden,
@@ -41,6 +42,39 @@ import { handleUpdateRequiredMessage } from "./handleServerMessage/updateRequire
 import { handleProfileAvatarMessage } from "./handleServerMessage/profileAvatar";
 
 type RoomInviteActionKind = "group" | "board";
+
+function hasOwn(payload: any, key: string): boolean {
+  return Boolean(payload && Object.prototype.hasOwnProperty.call(payload, key));
+}
+
+function normalizedAvatarRev(payload: any, fallback?: number | null): number | null {
+  if (!hasOwn(payload, "avatar_rev")) return fallback === undefined ? null : fallback;
+  return Math.max(0, Math.trunc(Number(payload?.avatar_rev ?? 0) || 0));
+}
+
+function normalizedAvatarMime(payload: any, fallback?: string | null): string | null {
+  if (!hasOwn(payload, "avatar_mime")) return fallback === undefined ? null : fallback;
+  const raw = payload?.avatar_mime;
+  return typeof raw === "string" && raw.trim() ? String(raw).trim() : null;
+}
+
+function syncRoomAvatarFromMeta(kind: Extract<AvatarTargetKind, "group" | "board">, id: string, payload: any, gateway: GatewayTransport): boolean {
+  if (!id || !hasOwn(payload, "avatar_rev")) return false;
+  const rev = normalizedAvatarRev(payload, 0) || 0;
+  const mime = normalizedAvatarMime(payload, null);
+  const storedRev = getStoredAvatarRev(kind, id);
+  const storedUrl = getStoredAvatar(kind, id);
+  if (!mime) {
+    if (storedUrl || storedRev !== rev) {
+      clearStoredAvatar(kind, id);
+      storeAvatarRev(kind, id, rev);
+      return Boolean(storedUrl);
+    }
+    return false;
+  }
+  if (storedRev !== rev || !storedUrl) gateway.send({ type: "avatar_get", kind, id });
+  return false;
+}
 
 function invitePayloadRoomId(payload: any, kind: RoomInviteActionKind): string {
   if (!payload || typeof payload !== "object") return "";
@@ -101,14 +135,21 @@ export function handleServerMessage(
   if (handleProfileAvatarMessage(t, msg, state, gateway, patch)) return;
   if (t === "groups") {
     const raw = Array.isArray(msg?.groups) ? msg.groups : [];
+    let avatarBumped = false;
+    for (const g of raw) {
+      const id = String(g?.id ?? "");
+      if (syncRoomAvatarFromMeta("group", id, g, gateway)) avatarBumped = true;
+    }
     patch((prev) => {
       const prevMap = new Map(prev.groups.map((g) => [g.id, g]));
       const groups: GroupEntry[] = raw
         .map((g: any) => {
           const id = String(g?.id ?? "");
           const prevEntry = prevMap.get(id);
-          const hasDescription = g && Object.prototype.hasOwnProperty.call(g, "description");
-          const hasRules = g && Object.prototype.hasOwnProperty.call(g, "rules");
+          const hasDescription = hasOwn(g, "description");
+          const hasRules = hasOwn(g, "rules");
+          const avatarRev = normalizedAvatarRev(g, prevEntry?.avatar_rev ?? 0);
+          const avatarMime = normalizedAvatarMime(g, prevEntry?.avatar_mime ?? null);
           const description = hasDescription ? (g?.description ?? null) : (prevEntry?.description ?? null);
           const rules = hasRules ? (g?.rules ?? null) : (prevEntry?.rules ?? null);
           const nextMembers = Array.isArray(g?.members) ? (g.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
@@ -122,22 +163,26 @@ export function handleServerMessage(
             handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
             description,
             rules,
+            avatar_rev: avatarRev,
+            avatar_mime: avatarMime,
             ...(nextMembers ? { members: nextMembers } : prevEntry?.members ? { members: prevEntry.members } : {}),
             ...(nextPostBanned ? { post_banned: nextPostBanned } : prevEntry?.post_banned ? { post_banned: prevEntry.post_banned } : {}),
           } as GroupEntry;
         })
         .filter((g: GroupEntry) => g.id);
-      return { ...prev, groups };
+      return { ...prev, groups, ...(avatarBumped ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}) };
     });
     return;
   }
   if (t === "group_added" || t === "group_updated") {
     const g = msg?.group ?? null;
+    const groupId = g ? String(g?.id ?? "") : "";
+    const avatarBumped = syncRoomAvatarFromMeta("group", groupId, g, gateway);
     patch((prev) => {
-      const id = g ? String(g?.id ?? "") : "";
+      const id = groupId;
       if (!id) return prev;
-      const hasDescription = g && Object.prototype.hasOwnProperty.call(g, "description");
-      const hasRules = g && Object.prototype.hasOwnProperty.call(g, "rules");
+      const hasDescription = hasOwn(g, "description");
+      const hasRules = hasOwn(g, "rules");
       const hasMembers = Array.isArray(g?.members);
       const nextMembers = hasMembers ? (g.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
       const hasPostBanned = Array.isArray(g?.post_banned);
@@ -145,6 +190,8 @@ export function handleServerMessage(
       const prevEntry = prev.groups.find((x) => x.id === id);
       const description = hasDescription ? (g?.description ?? null) : (prevEntry?.description ?? null);
       const rules = hasRules ? (g?.rules ?? null) : (prevEntry?.rules ?? null);
+      const avatarRev = normalizedAvatarRev(g, prevEntry?.avatar_rev ?? 0);
+      const avatarMime = normalizedAvatarMime(g, prevEntry?.avatar_mime ?? null);
       const upd: GroupEntry = {
         id,
         name: (g?.name ?? prevEntry?.name ?? null) as any,
@@ -152,6 +199,8 @@ export function handleServerMessage(
         handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
         description,
         rules,
+        avatar_rev: avatarRev,
+        avatar_mime: avatarMime,
         ...(hasMembers ? { members: nextMembers || [] } : prevEntry?.members ? { members: prevEntry.members } : {}),
         ...(hasPostBanned ? { post_banned: nextPostBanned || [] } : prevEntry?.post_banned ? { post_banned: prevEntry.post_banned } : {}),
       };
@@ -159,7 +208,7 @@ export function handleServerMessage(
       next.push(upd);
       next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
       const base = clearAcceptedRoomInviteActions(prev, "group", upd.id, `Приглашение принято: ${upd.id}`);
-      return { ...base, groups: next, pendingGroupInvites: base.pendingGroupInvites.filter((inv) => inv.groupId !== upd.id) };
+      return { ...base, groups: next, pendingGroupInvites: base.pendingGroupInvites.filter((inv) => inv.groupId !== upd.id), ...(avatarBumped ? { avatarsRev: (base.avatarsRev || 0) + 1 } : {}) };
     });
     return;
   }
@@ -173,12 +222,15 @@ export function handleServerMessage(
       return;
     }
     if (!gid) return;
+    const avatarBumped = syncRoomAvatarFromMeta("group", gid, g, gateway);
     const members = Array.isArray(g?.members) ? g.members.map((m: any) => String(m || "").trim()).filter(Boolean) : [];
     const postBanned = Array.isArray(g?.post_banned) ? g.post_banned.map((m: any) => String(m || "").trim()).filter(Boolean) : [];
     patch((prev) => {
       const prevEntry = prev.groups.find((x) => x.id === gid);
-      const hasDescription = g && Object.prototype.hasOwnProperty.call(g, "description");
-      const hasRules = g && Object.prototype.hasOwnProperty.call(g, "rules");
+      const hasDescription = hasOwn(g, "description");
+      const hasRules = hasOwn(g, "rules");
+      const avatarRev = normalizedAvatarRev(g, prevEntry?.avatar_rev ?? 0);
+      const avatarMime = normalizedAvatarMime(g, prevEntry?.avatar_mime ?? null);
       const upd: GroupEntry = {
         id: gid,
         name: (g?.name ?? prevEntry?.name ?? null) as any,
@@ -186,13 +238,15 @@ export function handleServerMessage(
         handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
         description: (hasDescription ? g?.description : prevEntry?.description) as any,
         rules: (hasRules ? g?.rules : prevEntry?.rules) as any,
+        avatar_rev: avatarRev,
+        avatar_mime: avatarMime,
         members,
         post_banned: postBanned,
       };
       const next = prev.groups.filter((x) => x.id !== gid);
       next.push(upd);
       next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
-      return { ...prev, groups: next };
+      return { ...prev, groups: next, ...(avatarBumped ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}) };
     });
     return;
   }
@@ -278,10 +332,15 @@ export function handleServerMessage(
   }
   if (t === "boards") {
     const raw = Array.isArray(msg?.boards) ? msg.boards : [];
+    let avatarBumped = false;
+    for (const b of raw) {
+      const id = String(b?.id ?? "");
+      if (syncRoomAvatarFromMeta("board", id, b, gateway)) avatarBumped = true;
+    }
     const boards: BoardEntry[] = raw
       .map((b: any) => {
-        const hasDescription = b && Object.prototype.hasOwnProperty.call(b, "description");
-        const hasRules = b && Object.prototype.hasOwnProperty.call(b, "rules");
+        const hasDescription = hasOwn(b, "description");
+        const hasRules = hasOwn(b, "rules");
         return {
           id: String(b?.id ?? ""),
           name: (b?.name ?? null) as any,
@@ -289,27 +348,33 @@ export function handleServerMessage(
           handle: (b?.handle ?? null) as any,
           description: (hasDescription ? b?.description : null) as any,
           rules: (hasRules ? b?.rules : null) as any,
+          avatar_rev: normalizedAvatarRev(b, 0),
+          avatar_mime: normalizedAvatarMime(b, null),
           ...(Array.isArray(b?.members)
             ? { members: (b.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) }
             : {}),
         };
       })
       .filter((b: BoardEntry) => b.id);
-    patch({ boards });
+    patch((prev) => ({ ...prev, boards, ...(avatarBumped ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}) }));
     return;
   }
   if (t === "board_added" || t === "board_updated") {
     const b = msg?.board ?? null;
+    const boardId = b ? String(b?.id ?? "") : "";
+    const avatarBumped = syncRoomAvatarFromMeta("board", boardId, b, gateway);
     patch((prev) => {
-      const id = b ? String(b?.id ?? "") : "";
+      const id = boardId;
       if (!id) return prev;
-      const hasDescription = b && Object.prototype.hasOwnProperty.call(b, "description");
-      const hasRules = b && Object.prototype.hasOwnProperty.call(b, "rules");
+      const hasDescription = hasOwn(b, "description");
+      const hasRules = hasOwn(b, "rules");
       const hasMembers = Array.isArray(b?.members);
       const nextMembers = hasMembers ? (b.members as any[]).map((m) => String(m || "").trim()).filter(Boolean) : null;
       const prevEntry = prev.boards.find((x) => x.id === id);
       const description = hasDescription ? (b?.description ?? null) : (prevEntry?.description ?? null);
       const rules = hasRules ? (b?.rules ?? null) : (prevEntry?.rules ?? null);
+      const avatarRev = normalizedAvatarRev(b, prevEntry?.avatar_rev ?? 0);
+      const avatarMime = normalizedAvatarMime(b, prevEntry?.avatar_mime ?? null);
       const upd: BoardEntry = {
         id,
         name: (b?.name ?? prevEntry?.name ?? null) as any,
@@ -317,13 +382,15 @@ export function handleServerMessage(
         handle: (b?.handle ?? prevEntry?.handle ?? null) as any,
         description,
         rules,
+        avatar_rev: avatarRev,
+        avatar_mime: avatarMime,
         ...(hasMembers ? { members: nextMembers || [] } : prevEntry?.members ? { members: prevEntry.members } : {}),
       };
       const next = prev.boards.filter((x) => x.id !== upd.id);
       next.push(upd);
       next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
       const base = clearAcceptedRoomInviteActions(prev, "board", upd.id, `Приглашение принято: ${upd.id}`);
-      return { ...base, boards: next, pendingBoardInvites: base.pendingBoardInvites.filter((inv) => inv.boardId !== upd.id) };
+      return { ...base, boards: next, pendingBoardInvites: base.pendingBoardInvites.filter((inv) => inv.boardId !== upd.id), ...(avatarBumped ? { avatarsRev: (base.avatarsRev || 0) + 1 } : {}) };
     });
     return;
   }
@@ -337,11 +404,14 @@ export function handleServerMessage(
       return;
     }
     if (!bid) return;
+    const avatarBumped = syncRoomAvatarFromMeta("board", bid, b, gateway);
     const members = Array.isArray(b?.members) ? b.members.map((m: any) => String(m || "").trim()).filter(Boolean) : [];
     patch((prev) => {
       const prevEntry = prev.boards.find((x) => x.id === bid);
-      const hasDescription = b && Object.prototype.hasOwnProperty.call(b, "description");
-      const hasRules = b && Object.prototype.hasOwnProperty.call(b, "rules");
+      const hasDescription = hasOwn(b, "description");
+      const hasRules = hasOwn(b, "rules");
+      const avatarRev = normalizedAvatarRev(b, prevEntry?.avatar_rev ?? 0);
+      const avatarMime = normalizedAvatarMime(b, prevEntry?.avatar_mime ?? null);
       const upd: BoardEntry = {
         id: bid,
         name: (b?.name ?? prevEntry?.name ?? null) as any,
@@ -349,12 +419,14 @@ export function handleServerMessage(
         handle: (b?.handle ?? prevEntry?.handle ?? null) as any,
         description: (hasDescription ? b?.description : prevEntry?.description) as any,
         rules: (hasRules ? b?.rules : prevEntry?.rules) as any,
+        avatar_rev: avatarRev,
+        avatar_mime: avatarMime,
         members,
       };
       const next = prev.boards.filter((x) => x.id !== bid);
       next.push(upd);
       next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
-      return { ...prev, boards: next };
+      return { ...prev, boards: next, ...(avatarBumped ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}) };
     });
     return;
   }
@@ -442,12 +514,13 @@ export function handleServerMessage(
     }
     const g = msg?.group ?? null;
     if (g?.id) {
+      const avatarBumped = syncRoomAvatarFromMeta("group", String(g?.id ?? ""), g, gateway);
       patch((prev) => {
         const id = String(g?.id ?? "");
         if (!id) return prev;
         const prevEntry = prev.groups.find((x) => x.id === id);
-        const hasDescription = g && Object.prototype.hasOwnProperty.call(g, "description");
-        const hasRules = g && Object.prototype.hasOwnProperty.call(g, "rules");
+        const hasDescription = hasOwn(g, "description");
+        const hasRules = hasOwn(g, "rules");
         const upd: GroupEntry = {
           id,
           name: (g?.name ?? prevEntry?.name ?? null) as any,
@@ -455,13 +528,15 @@ export function handleServerMessage(
           handle: (g?.handle ?? prevEntry?.handle ?? null) as any,
           description: (hasDescription ? g?.description : prevEntry?.description) as any,
           rules: (hasRules ? g?.rules : prevEntry?.rules) as any,
+          avatar_rev: normalizedAvatarRev(g, prevEntry?.avatar_rev ?? 0),
+          avatar_mime: normalizedAvatarMime(g, prevEntry?.avatar_mime ?? null),
           members: prevEntry?.members,
           post_banned: prevEntry?.post_banned,
         };
         const next = prev.groups.filter((x) => x.id !== upd.id);
         next.push(upd);
         next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
-        return { ...prev, groups: next, status: "Информация чата обновлена" };
+        return { ...prev, groups: next, status: "Информация чата обновлена", ...(avatarBumped ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}) };
       });
       return;
     }
@@ -524,12 +599,13 @@ export function handleServerMessage(
     }
     const b = msg?.board ?? null;
     if (b?.id) {
+      const avatarBumped = syncRoomAvatarFromMeta("board", String(b?.id ?? ""), b, gateway);
       patch((prev) => {
         const id = String(b?.id ?? "");
         if (!id) return prev;
         const prevEntry = prev.boards.find((x) => x.id === id);
-        const hasDescription = b && Object.prototype.hasOwnProperty.call(b, "description");
-        const hasRules = b && Object.prototype.hasOwnProperty.call(b, "rules");
+        const hasDescription = hasOwn(b, "description");
+        const hasRules = hasOwn(b, "rules");
         const upd: BoardEntry = {
           id,
           name: (b?.name ?? prevEntry?.name ?? null) as any,
@@ -537,12 +613,14 @@ export function handleServerMessage(
           handle: (b?.handle ?? prevEntry?.handle ?? null) as any,
           description: (hasDescription ? b?.description : prevEntry?.description) as any,
           rules: (hasRules ? b?.rules : prevEntry?.rules) as any,
+          avatar_rev: normalizedAvatarRev(b, prevEntry?.avatar_rev ?? 0),
+          avatar_mime: normalizedAvatarMime(b, prevEntry?.avatar_mime ?? null),
           members: prevEntry?.members,
         };
         const next = prev.boards.filter((x) => x.id !== upd.id);
         next.push(upd);
         next.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
-        return { ...prev, boards: next, status: "Информация доски обновлена" };
+        return { ...prev, boards: next, status: "Информация доски обновлена", ...(avatarBumped ? { avatarsRev: (prev.avatarsRev || 0) + 1 } : {}) };
       });
       return;
     }

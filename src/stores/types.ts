@@ -408,6 +408,8 @@ export interface GroupEntry {
   handle?: string | null;
   description?: string | null;
   rules?: string | null;
+  avatar_rev?: number | null;
+  avatar_mime?: string | null;
   members?: string[];
   post_banned?: string[];
 }
@@ -419,6 +421,8 @@ export interface BoardEntry {
   handle?: string | null;
   description?: string | null;
   rules?: string | null;
+  avatar_rev?: number | null;
+  avatar_mime?: string | null;
   members?: string[];
 }
 

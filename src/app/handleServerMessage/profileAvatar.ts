@@ -1,9 +1,35 @@
 import type { GatewayTransport } from "../../lib/net/gatewayClient";
 import type { AppState, UserProfile } from "../../stores/types";
-import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatar, storeAvatarRev } from "../../helpers/avatar/avatarStore";
+import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatar, storeAvatarRev, type AvatarTargetKind } from "../../helpers/avatar/avatarStore";
 import { upsertProfile } from "../../helpers/roster/rosterSync";
 
 type PatchFn = (p: Partial<AppState> | ((prev: AppState) => AppState)) => void;
+
+function avatarKindFromMessage(msg: any): AvatarTargetKind {
+  const raw = String(msg?.kind ?? msg?.target_kind ?? "dm").trim().toLowerCase();
+  if (raw === "group" || raw === "board") return raw;
+  return "dm";
+}
+
+function patchRoomAvatar(prev: AppState, kind: "group" | "board", id: string, rev: number, mime: string | null): AppState {
+  if (kind === "group") {
+    const groups = (prev.groups || []).map((g) => (g.id === id ? { ...g, avatar_rev: rev, avatar_mime: mime } : g));
+    return { ...prev, groups };
+  }
+  const boards = (prev.boards || []).map((b) => (b.id === id ? { ...b, avatar_rev: rev, avatar_mime: mime } : b));
+  return { ...prev, boards };
+}
+
+function roomAvatarStatus(kind: "group" | "board", action: "set" | "clear"): string {
+  if (kind === "group") return action === "set" ? "Аватар чата обновлён" : "Аватар чата удалён";
+  return action === "set" ? "Аватар доски обновлён" : "Аватар доски удалён";
+}
+
+function restoreRoomAvatarAfterFailure(kind: "group" | "board", id: string, state: AppState, gateway: GatewayTransport) {
+  clearStoredAvatar(kind, id);
+  const entry = kind === "group" ? (state.groups || []).find((g) => g.id === id) : (state.boards || []).find((b) => b.id === id);
+  if ((entry?.avatar_rev || 0) > 0 && entry?.avatar_mime) gateway.send({ type: "avatar_get", kind, id });
+}
 
 export function handleProfileAvatarMessage(
   t: string,
@@ -153,6 +179,7 @@ export function handleProfileAvatarMessage(
   }
 
   if (t === "avatar") {
+    const kind = avatarKindFromMessage(msg);
     const id = String(msg?.id ?? "").trim();
     if (!id) return true;
     const rev = Math.max(0, Math.trunc(Number(msg?.rev ?? 0) || 0));
@@ -162,14 +189,19 @@ export function handleProfileAvatarMessage(
     if (mime && data) {
       const dataUrl = `data:${mime};base64,${data}`;
       try {
-        storeAvatar("dm", id, dataUrl);
+        storeAvatar(kind, id, dataUrl);
       } catch {
-        clearStoredAvatar("dm", id);
+        clearStoredAvatar(kind, id);
       }
     } else {
-      clearStoredAvatar("dm", id);
+      clearStoredAvatar(kind, id);
     }
-    storeAvatarRev("dm", id, rev);
+    storeAvatarRev(kind, id, rev);
+
+    if (kind === "group" || kind === "board") {
+      patch((prev) => ({ ...patchRoomAvatar(prev, kind, id, rev, mime), avatarsRev: (prev.avatarsRev || 0) + 1 }));
+      return true;
+    }
 
     patch((prev) => {
       const cur = prev.profiles[id] ?? { id };
@@ -185,7 +217,25 @@ export function handleProfileAvatarMessage(
   }
 
   if (t === "avatar_set_result") {
+    const kind = avatarKindFromMessage(msg);
     const ok = Boolean(msg?.ok);
+    if (kind === "group" || kind === "board") {
+      const id = String(msg?.id ?? (kind === "group" ? msg?.group_id : msg?.board_id) ?? "").trim();
+      if (!id) {
+        patch({ status: `Не удалось обновить аватар: ${String(msg?.reason ?? "bad_args")}` });
+        return true;
+      }
+      if (!ok) {
+        restoreRoomAvatarAfterFailure(kind, id, state, gateway);
+        patch((prev) => ({ ...prev, avatarsRev: (prev.avatarsRev || 0) + 1, status: `Не удалось обновить аватар: ${String(msg?.reason ?? "ошибка")}` }));
+        return true;
+      }
+      const rev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
+      const mime = typeof msg?.avatar_mime === "string" && msg.avatar_mime.trim() ? String(msg.avatar_mime).trim() : null;
+      storeAvatarRev(kind, id, rev);
+      patch((prev) => ({ ...patchRoomAvatar(prev, kind, id, rev, mime), avatarsRev: (prev.avatarsRev || 0) + 1, status: roomAvatarStatus(kind, "set") }));
+      return true;
+    }
     if (!ok) {
       const selfId = String(state.selfId || "").trim();
       if (selfId) {
@@ -213,7 +263,21 @@ export function handleProfileAvatarMessage(
   }
 
   if (t === "avatar_clear_result") {
+    const kind = avatarKindFromMessage(msg);
     const ok = Boolean(msg?.ok);
+    if (kind === "group" || kind === "board") {
+      const id = String(msg?.id ?? (kind === "group" ? msg?.group_id : msg?.board_id) ?? "").trim();
+      if (!ok) {
+        patch({ status: `Не удалось удалить аватар: ${String(msg?.reason ?? "ошибка")}` });
+        return true;
+      }
+      if (!id) return true;
+      const rev = Math.max(0, Math.trunc(Number(msg?.avatar_rev ?? 0) || 0));
+      clearStoredAvatar(kind, id);
+      storeAvatarRev(kind, id, rev);
+      patch((prev) => ({ ...patchRoomAvatar(prev, kind, id, rev, null), avatarsRev: (prev.avatarsRev || 0) + 1, status: roomAvatarStatus(kind, "clear") }));
+      return true;
+    }
     if (!ok) {
       patch({ status: `Не удалось удалить аватар: ${String(msg?.reason ?? "ошибка")}` });
       return true;

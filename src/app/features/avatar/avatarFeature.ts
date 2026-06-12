@@ -64,7 +64,13 @@ export function createAvatarFeature(deps: AvatarFeatureDeps): AvatarFeature {
           try {
             const dataUrl = await imageFileToAvatarDataUrl(file, 128);
             storeAvatar(kind, targetId, dataUrl);
-            bumpAvatars(`Аватар обновлён: ${targetId}`);
+            if (kind === "group" || kind === "board") {
+              const payload = avatarDataUrlToUploadPayload(dataUrl);
+              bumpAvatars("Аватар загружается…");
+              send({ type: "avatar_set", kind, id: targetId, mime: payload.mime, data: payload.base64 });
+            } else {
+              bumpAvatars(`Аватар обновлён: ${targetId}`);
+            }
           } catch (e) {
             bumpAvatars(`Не удалось загрузить аватар: ${String((e as any)?.message || "ошибка")}`);
           }
@@ -79,7 +85,12 @@ export function createAvatarFeature(deps: AvatarFeatureDeps): AvatarFeature {
     const targetId = String(id ?? "").trim();
     if (!targetId) return;
     clearStoredAvatar(kind, targetId);
-    bumpAvatars(`Аватар удалён: ${targetId}`);
+    if (kind === "group" || kind === "board") {
+      bumpAvatars("Удаляем аватар…");
+      send({ type: "avatar_clear", kind, id: targetId });
+    } else {
+      bumpAvatars(`Аватар удалён: ${targetId}`);
+    }
   }
 
   function setProfileAvatar(file: File | null) {

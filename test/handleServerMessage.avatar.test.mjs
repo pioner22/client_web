@@ -237,3 +237,104 @@ test("handleServerMessage: avatar_set_result с ошибкой откатыва�
     await cleanup();
   }
 });
+
+test("handleServerMessage: group_updated с avatar_rev запрашивает аватар чата", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = mkStorage();
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+
+    const sent = [];
+    const gateway = { send: (m) => sent.push(m) };
+    const { getState, patch } = createPatchHarness({
+      groups: [{ id: "grp-1", name: "Old", avatar_rev: 1, avatar_mime: null }],
+      boards: [],
+      conversations: {},
+      pendingGroupInvites: [],
+      pendingBoardInvites: [],
+      avatarsRev: 0,
+    });
+
+    handleServerMessage(
+      { type: "group_updated", group: { id: "grp-1", name: "Team", avatar_rev: 2, avatar_mime: "image/png" } },
+      getState(),
+      gateway,
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.groups[0].avatar_rev, 2);
+    assert.equal(st.groups[0].avatar_mime, "image/png");
+    assert.deepEqual(sent, [{ type: "avatar_get", kind: "group", id: "grp-1" }]);
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: avatar kind=group сохраняет кеш чата", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = mkStorage();
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+
+    const { getState, patch } = createPatchHarness({
+      groups: [{ id: "grp-1", name: "Team" }],
+      boards: [],
+      avatarsRev: 0,
+    });
+    const gateway = { send() {} };
+
+    handleServerMessage({ type: "avatar", kind: "group", id: "grp-1", rev: 3, mime: "image/png", data: "AA==" }, getState(), gateway, patch);
+
+    const st = getState();
+    assert.equal(st.avatarsRev, 1);
+    assert.equal(st.groups[0].avatar_rev, 3);
+    assert.equal(st.groups[0].avatar_mime, "image/png");
+    assert.equal(localStorage.getItem("yagodka_avatar:group:grp-1"), "data:image/png;base64,AA==");
+    assert.equal(localStorage.getItem("yagodka_avatar_rev:group:grp-1"), "3");
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: board_updated с avatar_mime=null очищает кеш доски", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const prevLs = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    const localStorage = mkStorage();
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+    localStorage.setItem("yagodka_avatar:board:b-1", "data:image/png;base64,AA==");
+    localStorage.setItem("yagodka_avatar_rev:board:b-1", "4");
+
+    const sent = [];
+    const gateway = { send: (m) => sent.push(m) };
+    const { getState, patch } = createPatchHarness({
+      groups: [],
+      boards: [{ id: "b-1", name: "Board", avatar_rev: 4, avatar_mime: "image/png" }],
+      conversations: {},
+      pendingGroupInvites: [],
+      pendingBoardInvites: [],
+      avatarsRev: 0,
+    });
+
+    handleServerMessage({ type: "board_updated", board: { id: "b-1", avatar_rev: 5, avatar_mime: null } }, getState(), gateway, patch);
+
+    const st = getState();
+    assert.equal(st.avatarsRev, 1);
+    assert.equal(st.boards[0].avatar_rev, 5);
+    assert.equal(st.boards[0].avatar_mime, null);
+    assert.equal(localStorage.getItem("yagodka_avatar:board:b-1"), null);
+    assert.equal(localStorage.getItem("yagodka_avatar_rev:board:b-1"), "5");
+    assert.deepEqual(sent, []);
+  } finally {
+    if (prevLs) Object.defineProperty(globalThis, "localStorage", prevLs);
+    else delete globalThis.localStorage;
+    await cleanup();
+  }
+});
