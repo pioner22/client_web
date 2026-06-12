@@ -1,5 +1,5 @@
 import { messageSelectionKey } from "../../helpers/chat/chatSelection";
-import type { AppState, ChatMessage } from "../../stores/types";
+import type { AppState, ChatMessage, ConversationHistoryEmptyNotice } from "../../stores/types";
 import { el } from "../../helpers/dom/el";
 import { applyHistoryGroupGeometry } from "./historyGroupGeometry";
 import { buildHistoryLayoutBlocks } from "./historyLayoutModel";
@@ -19,6 +19,7 @@ export interface BuildHistoryRenderSurfaceOptions {
   hitSet: Set<number> | null;
   activeMsgIdx: number | null;
   historyLoaded: boolean;
+  historyEmptyNotice?: ConversationHistoryEmptyNotice | null;
   hasMore: boolean;
   loadingMore: boolean;
   loadingMoreSlotCount: number;
@@ -67,6 +68,46 @@ function conversationKeyForState(state: AppState): string {
   return selected.kind === "dm" ? `dm:${selected.id}` : `room:${selected.id}`;
 }
 
+function renderHistoryEmptyNotice(state: AppState, notice: ConversationHistoryEmptyNotice): HTMLElement {
+  const selfId = String(state.selfId || "").trim();
+  const by = String(notice.by || "").trim();
+  const remote = Boolean(by && selfId && by !== selfId);
+  const scope = notice.scope;
+  const title =
+    notice.kind === "message_deleted"
+      ? scope === "room"
+        ? remote
+          ? "Сообщение удалено участником"
+          : "Сообщение удалено"
+        : remote
+          ? "Сообщение удалено собеседником"
+          : "Сообщение удалено"
+      : scope === "room"
+        ? remote
+          ? "История очищена участником"
+          : "История очищена"
+        : remote
+          ? "История очищена собеседником"
+          : "История очищена";
+  const sub = notice.kind === "message_deleted" ? "История чата сейчас пуста" : "Сообщения удалены с обеих сторон";
+  return el(
+    "div",
+    {
+      class: "chat-empty chat-empty-cleared",
+      role: "status",
+      "aria-live": "polite",
+      "data-empty-notice": notice.kind,
+    },
+    [
+      el("span", { class: "chat-empty-cleared-mark", "aria-hidden": "true" }, [""]),
+      el("span", { class: "chat-empty-copy" }, [
+        el("span", { class: "chat-empty-title" }, [title]),
+        el("span", { class: "chat-empty-sub" }, [sub]),
+      ]),
+    ]
+  );
+}
+
 export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions): HistoryRenderSurfaceResult {
   const {
     state,
@@ -80,6 +121,7 @@ export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions
     hitSet,
     activeMsgIdx,
     historyLoaded,
+    historyEmptyNotice,
     hasMore,
     loadingMore,
     loadingMoreSlotCount,
@@ -200,7 +242,10 @@ export function buildHistoryRenderSurface(opts: BuildHistoryRenderSurfaceOptions
 
   let isEmptyState = false;
   if (!lineItems.length) {
-    if (!historyLoaded) {
+    if (historyEmptyNotice) {
+      lines.push(renderHistoryEmptyNotice(state, historyEmptyNotice));
+      isEmptyState = true;
+    } else if (!historyLoaded) {
       if (loadingInitial) {
         for (let i = 0; i < 7; i += 1) {
           lines.push(skeletonMsg(i % 2 === 0 ? "in" : "out", i));

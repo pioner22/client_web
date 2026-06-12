@@ -1,8 +1,8 @@
 import type { GatewayTransport } from "../../lib/net/gatewayClient";
-import type { AppState, FriendEntry } from "../../stores/types";
+import type { AppState, ConversationHistoryEmptyNotice, FriendEntry } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { clearHistoryConvo } from "../../helpers/chat/historyIdb";
-import { dropConversationHistorySyncState } from "../../helpers/chat/historySync";
+import { applyConversationHistorySyncState } from "../../helpers/chat/historySync";
 import { applyRosterSnapshot, applyRosterSyncState, setFriendPresence } from "../../helpers/roster/rosterSync";
 import { clearStoredAvatar, getStoredAvatar, getStoredAvatarRev, storeAvatarRev } from "../../helpers/avatar/avatarStore";
 import { sanitizeArchived, saveArchivedForUser } from "../../helpers/chat/archives";
@@ -12,6 +12,19 @@ import { parseRoster } from "../../helpers/roster/parseRoster";
 import { applySidebarFolderSnapshot } from "../../helpers/sidebar/sidebarState";
 import { saveLastReadMarkers } from "../../helpers/ui/lastReadMarkers";
 import { prefsBootstrapDoneForUser, sysActionMessage, upsertConversationByLocalId } from "./common";
+
+function clearEventEmptyNotice(msg: any, scope: ConversationHistoryEmptyNotice["scope"]): ConversationHistoryEmptyNotice {
+  const by = typeof msg?.by === "string" ? msg.by.trim() : "";
+  const deletedRaw = Number(msg?.deleted ?? 0);
+  const deleted = Number.isFinite(deletedRaw) && deletedRaw > 0 ? Math.trunc(deletedRaw) : null;
+  return {
+    kind: "cleared",
+    scope,
+    by: by || null,
+    at: Date.now(),
+    deleted,
+  };
+}
 
 export function handleRosterPrefsMessage(
   t: string,
@@ -229,17 +242,41 @@ export function handleRosterPrefsMessage(
     patch((prev) => {
       const key = dmKey(peer);
       if (prev.selfId) void clearHistoryConvo(prev.selfId, key);
-      const next = dropConversationHistorySyncState(
+      const conversations = { ...prev.conversations };
+      delete conversations[key];
+      const pinnedMessages = { ...prev.pinnedMessages };
+      delete pinnedMessages[key];
+      const pinnedMessageActive = { ...prev.pinnedMessageActive };
+      delete pinnedMessageActive[key];
+      const next = applyConversationHistorySyncState(
         {
           ...prev,
-          conversations: Object.fromEntries(Object.entries(prev.conversations).filter(([entryKey]) => entryKey !== key)),
+          conversations,
+          pinnedMessages,
+          pinnedMessageActive,
         },
-        key
+        key,
+        {
+          loaded: true,
+          previewOnly: false,
+          cursor: null,
+          hasMore: false,
+          loading: false,
+          loadingSlots: 0,
+          virtualStart: 0,
+          source: "server",
+          reconcilePending: false,
+          lastServerAt: Date.now(),
+          emptyNotice: clearEventEmptyNotice(msg, "dm"),
+        }
       );
+      const selfId = String(prev.selfId || "").trim();
+      const by = String((msg as any)?.by || "").trim();
+      const remote = Boolean(by && selfId && by !== selfId);
       return {
         ...next,
         friends: prev.friends.map((f) => (f.id === peer ? { ...f, unread: 0 } : f)),
-        status: `История очищена: ${peer}`,
+        status: remote ? `История очищена собеседником: ${peer}` : `История очищена: ${peer}`,
       };
     });
     return true;
@@ -255,22 +292,40 @@ export function handleRosterPrefsMessage(
     patch((prev) => {
       const key = roomKey(room);
       if (prev.selfId) void clearHistoryConvo(prev.selfId, key);
-      const next = dropConversationHistorySyncState(
-        {
-          ...prev,
-          conversations: Object.fromEntries(Object.entries(prev.conversations).filter(([entryKey]) => entryKey !== key)),
-        },
-        key
-      );
+      const conversations = { ...prev.conversations };
+      delete conversations[key];
       const pinnedMessages = { ...prev.pinnedMessages };
       delete pinnedMessages[key];
       const pinnedMessageActive = { ...prev.pinnedMessageActive };
       delete pinnedMessageActive[key];
+      const next = applyConversationHistorySyncState(
+        {
+          ...prev,
+          conversations,
+          pinnedMessages,
+          pinnedMessageActive,
+        },
+        key,
+        {
+          loaded: true,
+          previewOnly: false,
+          cursor: null,
+          hasMore: false,
+          loading: false,
+          loadingSlots: 0,
+          virtualStart: 0,
+          source: "server",
+          reconcilePending: false,
+          lastServerAt: Date.now(),
+          emptyNotice: clearEventEmptyNotice(msg, "room"),
+        }
+      );
+      const selfId = String(prev.selfId || "").trim();
+      const by = String((msg as any)?.by || "").trim();
+      const remote = Boolean(by && selfId && by !== selfId);
       return {
         ...next,
-        pinnedMessages,
-        pinnedMessageActive,
-        status: `История очищена: ${room}`,
+        status: remote ? `История очищена участником: ${room}` : `История очищена: ${room}`,
       };
     });
     return true;

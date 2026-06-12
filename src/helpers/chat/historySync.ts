@@ -1,4 +1,12 @@
-import type { AppState, ChatMessage, ConversationHistorySyncState, HistorySyncSource } from "../../stores/types";
+import type {
+  AppState,
+  ChatMessage,
+  ConversationHistoryEmptyNotice,
+  ConversationHistoryEmptyNoticeKind,
+  ConversationHistoryEmptyNoticeScope,
+  ConversationHistorySyncState,
+  HistorySyncSource,
+} from "../../stores/types";
 
 export function newestServerMessageId(msgs: ChatMessage[]): number | null {
   let max: number | null = null;
@@ -35,6 +43,35 @@ function normalizeLastServerAt(raw: unknown): number | null {
   return n > 0 ? n : null;
 }
 
+function normalizeEmptyNoticeKind(raw: unknown): ConversationHistoryEmptyNoticeKind {
+  const value = String(raw || "").trim();
+  return value === "message_deleted" ? "message_deleted" : "cleared";
+}
+
+function normalizeEmptyNoticeScope(raw: unknown): ConversationHistoryEmptyNoticeScope {
+  const value = String(raw || "").trim();
+  return value === "dm" || value === "room" || value === "unknown" ? value : "unknown";
+}
+
+function normalizeDeletedCount(raw: unknown): number | null {
+  const n = typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : Math.trunc(Number(raw) || 0);
+  return n > 0 ? n : null;
+}
+
+export function createConversationHistoryEmptyNotice(
+  patch?: Partial<ConversationHistoryEmptyNotice> | null
+): ConversationHistoryEmptyNotice | null {
+  if (!patch || typeof patch !== "object") return null;
+  const byRaw = typeof patch.by === "string" ? patch.by.trim() : "";
+  return {
+    kind: normalizeEmptyNoticeKind(patch.kind),
+    scope: normalizeEmptyNoticeScope(patch.scope),
+    by: byRaw || null,
+    at: normalizeLastServerAt(patch.at),
+    deleted: normalizeDeletedCount(patch.deleted),
+  };
+}
+
 export function createConversationHistorySyncState(
   patch?: Partial<ConversationHistorySyncState> | null
 ): ConversationHistorySyncState {
@@ -55,6 +92,7 @@ export function createConversationHistorySyncState(
         (source === "cache" && (loaded || previewOnly))
     ),
     lastServerAt: normalizeLastServerAt(patch?.lastServerAt),
+    emptyNotice: createConversationHistoryEmptyNotice(patch?.emptyNotice),
   };
 }
 

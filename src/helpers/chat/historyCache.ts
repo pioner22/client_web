@@ -1,4 +1,11 @@
-import type { ChatAttachment, ChatMessage, ChatMessageRef, ConversationHistorySyncState, MessageReactions } from "../../stores/types";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  ChatMessageRef,
+  ConversationHistoryEmptyNotice,
+  ConversationHistorySyncState,
+  MessageReactions,
+} from "../../stores/types";
 import type { StorageLike } from "./drafts";
 import { APP_MSG_MAX_LEN } from "../../config/app";
 import { buildCacheHydratedHistorySyncMap, createConversationHistorySyncState } from "./historySync";
@@ -20,6 +27,7 @@ type HistoryCachePayload = {
   cursors: Record<string, number>;
   hasMore: Record<string, boolean>;
   loaded?: string[];
+  emptyNotices?: Record<string, ConversationHistoryEmptyNotice>;
 };
 
 export type HistoryCache = {
@@ -324,6 +332,19 @@ function sanitizeLoadedKeys(raw: unknown): string[] {
   return out;
 }
 
+function sanitizeEmptyNoticeMap(raw: unknown, allowed: Set<string>): Record<string, ConversationHistoryEmptyNotice> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, ConversationHistoryEmptyNotice> = {};
+  for (const [kRaw, vRaw] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof kRaw !== "string") continue;
+    const key = kRaw.trim();
+    if (!key || !allowed.has(key)) continue;
+    const notice = createConversationHistorySyncState({ emptyNotice: vRaw as any }).emptyNotice;
+    if (notice) out[key] = notice;
+  }
+  return out;
+}
+
 export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | null): HistoryCache {
   const key = storageKey(userId);
   if (!key) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
@@ -354,6 +375,13 @@ export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | 
     const historyCursor = sanitizeCursorMap(parsed.cursors, allowed);
     const historyHasMore = sanitizeHasMoreMap(parsed.hasMore, allowed);
     const historySync = buildCacheHydratedHistorySyncMap(historyLoaded, historyCursor, historyHasMore);
+    const emptyNotices = sanitizeEmptyNoticeMap(parsed.emptyNotices, allowed);
+    for (const [noticeKey, emptyNotice] of Object.entries(emptyNotices)) {
+      historySync[noticeKey] = createConversationHistorySyncState({
+        ...(historySync[noticeKey] || {}),
+        emptyNotice,
+      });
+    }
     return { conversations, historyCursor, historyHasMore, historyLoaded, historySync };
   } catch {
     return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
@@ -366,6 +394,7 @@ function buildEncodedHistoryCache(
     historyCursor: Record<string, number>;
     historyHasMore: Record<string, boolean>;
     historyLoaded: Record<string, boolean>;
+    historyEmptyNotices?: Record<string, ConversationHistoryEmptyNotice>;
   },
   limits: { maxConversations: number; maxMessages: number }
 ): HistoryCachePayload | null {
@@ -382,6 +411,7 @@ function buildEncodedHistoryCache(
   const conversations: Record<string, ChatMessage[]> = {};
   const cursors: Record<string, number> = {};
   const hasMore: Record<string, boolean> = {};
+  const emptyNotices: Record<string, ConversationHistoryEmptyNotice> = {};
   const loaded: string[] = [];
   const loadedSeen = new Set<string>();
   for (const entry of entries) {
@@ -410,6 +440,8 @@ function buildEncodedHistoryCache(
       if (typeof cursor === "number" && Number.isFinite(cursor) && cursor > 0) cursors[key] = Math.floor(cursor);
       const known = payload.historyHasMore[key];
       if (typeof known === "boolean") hasMore[key] = known;
+      const notice = (payload as any).historyEmptyNotices?.[key] as ConversationHistoryEmptyNotice | undefined;
+      if (notice) emptyNotices[key] = notice;
     }
   }
 
@@ -421,6 +453,7 @@ function buildEncodedHistoryCache(
     cursors,
     hasMore,
     loaded,
+    ...(Object.keys(emptyNotices).length ? { emptyNotices } : {}),
   };
 }
 
@@ -444,12 +477,14 @@ export function saveHistoryCacheForUser(
     const canonicalCursor: Record<string, number> = payload.historySync ? {} : { ...(payload.historyCursor || {}) };
     const canonicalHasMore: Record<string, boolean> = payload.historySync ? {} : { ...(payload.historyHasMore || {}) };
     const canonicalLoaded: Record<string, boolean> = payload.historySync ? {} : { ...(payload.historyLoaded || {}) };
+    const canonicalEmptyNotices: Record<string, ConversationHistoryEmptyNotice> = {};
     if (payload.historySync) {
       for (const [syncKey, raw] of Object.entries(payload.historySync)) {
         const sync = createConversationHistorySyncState(raw);
         if (sync.loaded) canonicalLoaded[syncKey] = true;
         if (sync.cursor) canonicalCursor[syncKey] = sync.cursor;
         if (typeof sync.hasMore === "boolean") canonicalHasMore[syncKey] = sync.hasMore;
+        if (sync.emptyNotice) canonicalEmptyNotices[syncKey] = sync.emptyNotice;
       }
     }
     for (const [legacyKey, value] of Object.entries(payload.historyLoaded || {})) {
@@ -469,6 +504,7 @@ export function saveHistoryCacheForUser(
       historyCursor: canonicalCursor,
       historyHasMore: canonicalHasMore,
       historyLoaded: canonicalLoaded,
+      historyEmptyNotices: canonicalEmptyNotices,
     };
     let limits = { maxConversations: baseLimits.maxConversations, maxMessages: baseLimits.maxMessages };
     let encoded = buildEncodedHistoryCache(canonicalPayload, limits);

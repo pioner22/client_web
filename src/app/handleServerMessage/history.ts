@@ -1,5 +1,5 @@
 import type { GatewayTransport } from "../../lib/net/gatewayClient";
-import type { AppState, ChatMessage, OutboxEntry } from "../../stores/types";
+import type { AppState, ChatMessage, ConversationHistoryEmptyNotice, OutboxEntry } from "../../stores/types";
 import { dmKey, roomKey } from "../../helpers/chat/conversationKey";
 import { applyConversationHistorySyncState, getConversationHistorySyncState } from "../../helpers/chat/historySync";
 import { shiftVirtualStartForPrepend } from "../../helpers/chat/historyViewportCoordinator";
@@ -20,6 +20,16 @@ function debugHook(kind: string, data?: any) {
   } catch {
     // ignore
   }
+}
+
+function deletedHistoryEmptyNotice(scope: ConversationHistoryEmptyNotice["scope"], deletedCount: number): ConversationHistoryEmptyNotice {
+  return {
+    kind: "cleared",
+    scope,
+    by: null,
+    at: Date.now(),
+    deleted: deletedCount > 0 ? deletedCount : null,
+  };
 }
 
 function attachmentFileId(msg: ChatMessage | null | undefined): string {
@@ -428,6 +438,11 @@ export function handleHistoryServerMessage(
       source: "server",
       reconcilePending: false,
       lastServerAt: Date.now(),
+      emptyNotice: incoming.length
+        ? null
+        : nextConv.length === 0 && deletedIds.length
+          ? deletedHistoryEmptyNotice(resultRoom ? "room" : "dm", deletedIds.length)
+          : prevSync.emptyNotice,
       virtualStart: shouldShiftVirtual && nextVirtualStart !== null ? nextVirtualStart : prevVirtualStart,
     });
     return lastReadChanged ? { ...base, lastRead: nextLastRead } : base;

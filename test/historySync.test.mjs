@@ -89,6 +89,49 @@ test("historySync: absent virtualStart не превращается в top-wind
   }
 });
 
+test("historySync: emptyNotice нормализуется, сохраняется и очищается явным null", async () => {
+  const { getConversationHistorySyncState, applyConversationHistorySyncState, cleanup } = await loadHistorySync();
+  try {
+    const key = "dm:peer-1";
+    let state = {
+      historySync: {},
+      historyLoaded: {},
+      historyPreviewOnly: {},
+      historyCursor: {},
+      historyHasMore: {},
+      historyLoading: {},
+      historyLoadingSlots: {},
+      historyVirtualStart: {},
+    };
+
+    state = applyConversationHistorySyncState(state, key, {
+      loaded: true,
+      emptyNotice: {
+        kind: "cleared",
+        scope: "dm",
+        by: "peer-1",
+        at: 123,
+        deleted: 2,
+      },
+    });
+
+    let sync = getConversationHistorySyncState(state, key);
+    assert.equal(sync.emptyNotice.kind, "cleared");
+    assert.equal(sync.emptyNotice.scope, "dm");
+    assert.equal(sync.emptyNotice.by, "peer-1");
+    assert.equal(sync.emptyNotice.deleted, 2);
+
+    state = applyConversationHistorySyncState(state, key, { loading: false });
+    sync = getConversationHistorySyncState(state, key);
+    assert.equal(sync.emptyNotice.by, "peer-1");
+
+    state = applyConversationHistorySyncState(state, key, { emptyNotice: null });
+    assert.equal(getConversationHistorySyncState(state, key).emptyNotice, null);
+  } finally {
+    await cleanup();
+  }
+});
+
 test("historySync: mixed historySync и legacy maps читаются по live legacy flags, а не по stale raw snapshot", async () => {
   const { getConversationHistorySyncState, cleanup } = await loadHistorySync();
   try {

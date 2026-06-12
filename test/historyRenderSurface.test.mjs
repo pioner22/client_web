@@ -175,6 +175,14 @@ function withDomStubs(run) {
   }
 }
 
+function textOf(node) {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (typeof node.textContent === "string") return node.textContent;
+  const kids = Array.isArray(node._children) ? node._children : [];
+  return kids.map((child) => textOf(child)).join("");
+}
+
 test("historyRenderSurface: loadingMore резервирует верхние skeleton-слоты", async () => {
   const helper = await loadHistoryRenderSurface();
   try {
@@ -215,6 +223,61 @@ test("historyRenderSurface: loadingMore резервирует верхние sk
       assert.equal(surface.lines.length, 5);
       assert.equal(surface.lines[0].className, "chat-history-more-wrap");
       assert.equal(surface.lines.slice(1).filter((node) => node.className.includes("chat-history-slot")).length, 4);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("historyRenderSurface: очищенная история показывает quiet empty-state без retry ошибки", async () => {
+  const helper = await loadHistoryRenderSurface();
+  try {
+    withDomStubs(() => {
+      const surface = helper.buildHistoryRenderSurface({
+        state: {
+          selfId: "111-111-111",
+          fileTransfers: [],
+          fileOffersIn: [],
+          fileThumbs: {},
+          friends: [],
+          lastRead: {},
+          selected: { kind: "dm", id: "222-222-222" },
+        },
+        msgs: [],
+        key: "dm:222-222-222",
+        mobileUi: false,
+        boardUi: false,
+        selectionCount: 0,
+        selectionSet: null,
+        hitSet: null,
+        activeMsgIdx: null,
+        historyLoaded: true,
+        historyEmptyNotice: {
+          kind: "cleared",
+          scope: "dm",
+          by: "222-222-222",
+          at: 1,
+          deleted: 3,
+        },
+        hasMore: false,
+        loadingMore: false,
+        loadingMoreSlotCount: 0,
+        loadingInitial: false,
+        virtualEnabled: false,
+        virtualStart: 0,
+        virtualEnd: 0,
+        topSpacerHeight: 0,
+        bottomSpacerHeight: 0,
+        unreadInsertIdx: -1,
+        unreadCount: 0,
+        albumLayout: { maxWidth: 420, minWidth: 100, spacing: 1 },
+      });
+
+      assert.equal(surface.isEmptyState, true);
+      assert.equal(surface.lines.length, 1);
+      assert.equal(surface.lines[0].getAttribute("data-empty-notice"), "cleared");
+      assert.match(textOf(surface.lines[0]), /История очищена собеседником/);
+      assert.doesNotMatch(textOf(surface.lines[0]), /История не загружена/);
     });
   } finally {
     await helper.cleanup();

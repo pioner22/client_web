@@ -240,6 +240,10 @@ test("handleServerMessage: message_deleted вычищает orphaned file transf
     assert.deepEqual(st.conversations[key], []);
     assert.deepEqual(st.fileTransfers, []);
     assert.deepEqual(st.fileThumbs, {});
+    assert.equal(st.historyLoaded[key], true);
+    assert.equal(st.historySync[key].emptyNotice.kind, "message_deleted");
+    assert.equal(st.historySync[key].emptyNotice.scope, "dm");
+    assert.equal(st.historySync[key].emptyNotice.by, peer);
   } finally {
     if (prevUrl === undefined) delete globalThis.URL;
     else globalThis.URL = prevUrl;
@@ -361,6 +365,54 @@ test("handleServerMessage: history_result.deleted_ids вычищает resurrect
   } finally {
     if (prevUrl === undefined) delete globalThis.URL;
     else globalThis.URL = prevUrl;
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: history_result.deleted_ids помечает пустую историю как очищенную", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      selected: { kind: "dm", id: peer },
+      conversations: {
+        [key]: [{ kind: "in", from: peer, to: selfId, text: "old", ts: 1, id: 10 }],
+      },
+      historyLoaded: { [key]: true },
+      historyPreviewOnly: {},
+      historyLoading: {},
+      outbox: {},
+      fileTransfers: [],
+      fileThumbs: {},
+      pinnedMessages: {},
+      pinnedMessageActive: {},
+      editing: null,
+      input: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "history_result",
+        peer,
+        since_id: 0,
+        deleted_ids: [10],
+        rows: [],
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.deepEqual(st.conversations[key], []);
+    assert.equal(st.historyLoaded[key], true);
+    assert.equal(st.historySync[key].emptyNotice.kind, "cleared");
+    assert.equal(st.historySync[key].emptyNotice.scope, "dm");
+    assert.equal(st.historySync[key].emptyNotice.deleted, 1);
+  } finally {
     await cleanup();
   }
 });

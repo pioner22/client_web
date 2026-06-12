@@ -481,6 +481,17 @@ export type MessageViewMode = "bubble" | "plain" | "compact";
 export type HistorySyncSource = "empty" | "cache" | "server";
 export type DomainSyncSource = "empty" | "cache" | "server";
 
+export type ConversationHistoryEmptyNoticeKind = "cleared" | "message_deleted";
+export type ConversationHistoryEmptyNoticeScope = "dm" | "room" | "unknown";
+
+export interface ConversationHistoryEmptyNotice {
+  kind: ConversationHistoryEmptyNoticeKind;
+  scope: ConversationHistoryEmptyNoticeScope;
+  by: string | null;
+  at: number | null;
+  deleted: number | null;
+}
+
 export interface ConversationHistorySyncState {
   loaded: boolean;
   previewOnly: boolean;
@@ -492,6 +503,7 @@ export interface ConversationHistorySyncState {
   source: HistorySyncSource;
   reconcilePending: boolean;
   lastServerAt: number | null;
+  emptyNotice: ConversationHistoryEmptyNotice | null;
 }
 
 export interface RosterSyncState {

@@ -7,7 +7,7 @@ import type {
   SearchResultEntry,
 } from "../stores/types";
 import { dmKey, roomKey } from "../helpers/chat/conversationKey";
-import { dropConversationHistorySyncState } from "../helpers/chat/historySync";
+import { applyConversationHistorySyncState, dropConversationHistorySyncState, getConversationHistorySyncState } from "../helpers/chat/historySync";
 import { deleteHistoryMessageById, ingestHistoryResult, patchHistoryMessageById } from "../helpers/chat/historyIdb";
 import { removeCachedFileBlob } from "../helpers/files/fileBlobCache";
 import {
@@ -1086,7 +1086,7 @@ export function handleServerMessage(
           }
         }
       }
-      const next = applyFileTransferSnapshot(
+      let next = applyFileTransferSnapshot(
         {
           ...prev,
           conversations: { ...prev.conversations, [key]: nextConv },
@@ -1097,6 +1097,30 @@ export function handleServerMessage(
         nextTransfers,
         { source: "server", reconcilePending: false }
       );
+      if (!nextConv.length) {
+        const prevSync = getConversationHistorySyncState(prev, key);
+        const hasOlderHistory = prevSync.hasMore === true || (prevSync.cursor !== null && prevSync.hasMore !== false);
+        if (hasOlderHistory) return next;
+        const deletedBy = String(from || "").trim();
+        next = applyConversationHistorySyncState(next, key, {
+          loaded: true,
+          previewOnly: false,
+          cursor: null,
+          hasMore: false,
+          loading: false,
+          loadingSlots: 0,
+          source: "server",
+          reconcilePending: false,
+          lastServerAt: Date.now(),
+          emptyNotice: {
+            kind: "message_deleted",
+            scope: room ? "room" : "dm",
+            by: deletedBy || null,
+            at: Date.now(),
+            deleted: 1,
+          },
+        });
+      }
       if (prev.editing && prev.editing.key === key && prev.editing.id === id) {
         return { ...next, editing: null, input: prev.editing.prevDraft || "" };
       }

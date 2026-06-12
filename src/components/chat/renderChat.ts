@@ -215,6 +215,7 @@ export function renderChat(layout: Layout, state: AppState) {
 
   const msgs = cachedMessages;
   const historyLoaded = Boolean(historySync?.loaded);
+  const historyEmptyNotice = historySync?.emptyNotice ?? null;
   const historyLoading = Boolean(historySync?.loading);
   const historyCursor = Number(historySync?.cursor ?? NaN);
   const rawHasMore = historySync?.hasMore ?? undefined;
@@ -240,6 +241,7 @@ export function renderChat(layout: Layout, state: AppState) {
         page: string;
         msgsRef: ChatMessage[];
         historyLoaded: boolean;
+        historyEmptyNoticeRef: typeof historyEmptyNotice;
         historyLoading: boolean;
         historyHasMore: boolean;
         historyLoadingSlots: number;
@@ -286,6 +288,7 @@ export function renderChat(layout: Layout, state: AppState) {
     page: state.page,
     msgsRef: msgs,
     historyLoaded,
+    historyEmptyNoticeRef: historyEmptyNotice,
     historyLoading,
     historyHasMore: hasMore,
     historyLoadingSlots,
@@ -319,6 +322,7 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.page === renderState.page &&
     prevRender.msgsRef === renderState.msgsRef &&
     prevRender.historyLoaded === renderState.historyLoaded &&
+    prevRender.historyEmptyNoticeRef === renderState.historyEmptyNoticeRef &&
     prevRender.historyLoading === renderState.historyLoading &&
     prevRender.historyHasMore === renderState.historyHasMore &&
     prevRender.historyLoadingSlots === renderState.historyLoadingSlots &&
@@ -350,6 +354,7 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.page === renderState.page &&
     prevRender.msgsRef === renderState.msgsRef &&
     prevRender.historyLoaded === renderState.historyLoaded &&
+    prevRender.historyEmptyNoticeRef === renderState.historyEmptyNoticeRef &&
     prevRender.historyLoading === renderState.historyLoading &&
     prevRender.historyHasMore === renderState.historyHasMore &&
     prevRender.historyLoadingSlots === renderState.historyLoadingSlots &&
@@ -450,6 +455,7 @@ export function renderChat(layout: Layout, state: AppState) {
     hitSet,
     activeMsgIdx,
     historyLoaded,
+    historyEmptyNotice,
     hasMore,
     loadingMore,
     loadingMoreSlotCount: loadingMore ? historyLoadingSlots : 0,

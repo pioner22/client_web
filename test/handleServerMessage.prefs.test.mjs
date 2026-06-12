@@ -144,6 +144,7 @@ test("handleServerMessage: chat_cleared вычищает диалог и history
         type: "chat_cleared",
         ok: true,
         peer,
+        by: selfId,
         deleted: 1,
       },
       getState(),
@@ -154,9 +155,14 @@ test("handleServerMessage: chat_cleared вычищает диалог и history
     const st = getState();
     assert.equal(st.conversations[key], undefined);
     assert.equal(st.friends[0].unread, 0);
-    assert.equal(st.historyLoaded[key], undefined);
+    assert.equal(st.historyLoaded[key], true);
     assert.equal(st.historyCursor[key], undefined);
-    assert.equal(st.historyHasMore[key], undefined);
+    assert.equal(st.historyHasMore[key], false);
+    assert.equal(st.historySync[key].loaded, true);
+    assert.equal(st.historySync[key].source, "server");
+    assert.equal(st.historySync[key].emptyNotice.kind, "cleared");
+    assert.equal(st.historySync[key].emptyNotice.scope, "dm");
+    assert.equal(st.historySync[key].emptyNotice.by, selfId);
   } finally {
     await cleanup();
   }
