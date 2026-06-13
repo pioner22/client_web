@@ -17,7 +17,9 @@ export class GatewayClient {
   private reconnectTimer: number | null = null;
   private stableTimer: number | null = null;
   private pingTimer: number | null = null;
+  private connectTimeoutTimer: number | null = null;
   private readonly pingIntervalMs = 10_000;
+  private readonly connectTimeoutMs = 12_000;
   private readonly reconnectBaseMs = 400;
   private readonly reconnectMaxMs = 30_000;
   private attempts = 0;
@@ -44,6 +46,7 @@ export class GatewayClient {
     this.clearReconnect();
     this.clearStable();
     this.clearPing();
+    this.clearConnectTimeout();
     this.clearWaiters();
     this.manualClose = false;
     if (this.deferIfOffline(true) || this.deferIfHidden(true)) return;
@@ -52,7 +55,22 @@ export class GatewayClient {
     try {
       const ws = new WebSocket(this.url);
       this.ws = ws;
+      this.connectTimeoutTimer = window.setTimeout(() => {
+        if (this.ws !== ws || ws.readyState !== WebSocket.CONNECTING) return;
+        this.ws = null;
+        this.clearConnectTimeout();
+        this.lastCloseAt = Date.now();
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+        this.onStatus("disconnected", "connect_timeout");
+        if (!this.manualClose) this.scheduleReconnect();
+      }, this.connectTimeoutMs);
       ws.onopen = () => {
+        if (this.ws !== ws) return;
+        this.clearConnectTimeout();
         this.lastOpenAt = Date.now();
         this.onStatus("connected");
         this.startPing();
@@ -63,7 +81,9 @@ export class GatewayClient {
         }, 10_000);
       };
       ws.onclose = (ev) => {
+        if (this.ws !== ws) return;
         this.ws = null;
+        this.clearConnectTimeout();
         this.clearStable();
         this.clearPing();
         this.lastCloseAt = Date.now();
@@ -118,6 +138,7 @@ export class GatewayClient {
     this.clearReconnect();
     this.clearStable();
     this.clearPing();
+    this.clearConnectTimeout();
     this.clearWaiters();
     try {
       this.ws?.close();
@@ -166,6 +187,13 @@ export class GatewayClient {
     if (this.pingTimer !== null) {
       window.clearInterval(this.pingTimer);
       this.pingTimer = null;
+    }
+  }
+
+  private clearConnectTimeout() {
+    if (this.connectTimeoutTimer !== null) {
+      window.clearTimeout(this.connectTimeoutTimer);
+      this.connectTimeoutTimer = null;
     }
   }
 

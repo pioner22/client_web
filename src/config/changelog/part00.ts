@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.910",
+    date: "2026-06-13",
+    improved: [
+      "Web/PWA подключение к серверу после обновления получило bounded WebSocket handshake watchdog: если WebView оставляет сокет в `CONNECTING` без `close/error`, клиент сам выходит из вечного подключения и запускает backoff reconnect.",
+      "Android debug APK пересобирается как отдельный клиент `1.0.50 (code 51)` для новой публикации на странице загрузок.",
+    ],
+    fixed: [
+      "Исправлен сценарий зависания после обновления, когда клиент не мог подключиться к серверу и оставался в подвисшем состоянии до полного закрытия приложения.",
+      "Поздний `onclose` от уже закрытого/заменённого WebSocket больше не может повторно переписать сетевой статус или поставить дублирующий reconnect timer.",
+    ],
+  },
+  {
     version: "0.1.909",
     date: "2026-06-13",
     improved: [
