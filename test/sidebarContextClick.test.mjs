@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -318,6 +318,62 @@ test("sidebar: avatarsRev инвалидирует рендер (локальн�
   } finally {
     await helper.cleanup();
   }
+});
+
+test("sidebar: presenceTick alone does not replace contact rows under hover", async () => {
+  const helper = await loadRenderSidebar();
+  try {
+    await withDomStubs(async () => {
+      const target = document.createElement("div");
+      const state = {
+        friends: [{ id: "123-456-789", online: true, unread: 0 }],
+        profiles: {},
+        groups: [],
+        boards: [],
+        pinned: [],
+        pendingIn: [],
+        pendingOut: [],
+        pendingGroupInvites: [],
+        pendingGroupJoinRequests: [],
+        pendingBoardInvites: [],
+        fileOffersIn: [],
+        selected: null,
+        page: "main",
+        mobileSidebarTab: "contacts",
+        conversations: { "dm:123-456-789": [{ ts: 1, from: "123-456-789", text: "привет", kind: "in" }] },
+        drafts: {},
+        presenceTick: 1,
+      };
+
+      helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+      await flushLazySidebarRender();
+
+      const body = target._sidebarBody;
+      const children = body?._children;
+      const btn = findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789");
+      assert.ok(body, "sidebar body not found");
+      assert.ok(Array.isArray(children), "sidebar body children not found");
+      assert.ok(btn, "row button not found");
+
+      state.presenceTick += 1;
+      helper.renderSidebar(target, state, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
+      await flushLazySidebarRender();
+
+      assert.equal(target._sidebarBody, body);
+      assert.equal(body._children, children);
+      assert.equal(
+        findFirst(target, (n) => typeof n.getAttribute === "function" && n.getAttribute("data-ctx-id") === "123-456-789"),
+        btn
+      );
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("sidebar: row descendants inherit cursor to keep PWA hover stable", async () => {
+  const css = await readFile(path.resolve("src/scss/components.part01.css"), "utf8");
+  assert.match(css, /\.sidebar\s+\.row\s+\*\s*\{[\s\S]*?cursor:\s*inherit;/);
 });
 
 test("sidebar: показывает display_name вместо ID (если известен профиль)", async () => {

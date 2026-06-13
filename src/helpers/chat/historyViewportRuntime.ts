@@ -3,6 +3,8 @@ import type { ChatStickyBottomState } from "./stickyBottom";
 
 export interface ChatHistoryViewportRuntimeState {
   stickyBottom: ChatStickyBottomState | null;
+  pendingBottomStickKey: string | null;
+  pendingBottomStickUntil: number;
   shiftAnchor: ChatShiftAnchor | null;
   compensatedAt: number;
   virtualAvgHeights: Map<string, number>;
@@ -20,6 +22,8 @@ type ChatHistoryViewportHost = HTMLElement & {
 function createRuntimeState(): ChatHistoryViewportRuntimeState {
   return {
     stickyBottom: null,
+    pendingBottomStickKey: null,
+    pendingBottomStickUntil: 0,
     shiftAnchor: null,
     compensatedAt: 0,
     virtualAvgHeights: new Map(),
@@ -31,10 +35,51 @@ function createRuntimeState(): ChatHistoryViewportRuntimeState {
   };
 }
 
+export const CHAT_PENDING_BOTTOM_STICK_MS = 1500;
+
+function normalizePendingBottomStickKey(key?: string | null): string {
+  return String(key || "").trim();
+}
+
 export function getChatHistoryViewportRuntime(host: HTMLElement): ChatHistoryViewportRuntimeState {
   const runtimeHost = host as ChatHistoryViewportHost;
   if (!runtimeHost.__chatHistoryViewportRuntime) runtimeHost.__chatHistoryViewportRuntime = createRuntimeState();
   return runtimeHost.__chatHistoryViewportRuntime;
+}
+
+export function markChatPendingBottomStick(
+  host: HTMLElement,
+  key: string,
+  now = Date.now(),
+  ttlMs = CHAT_PENDING_BOTTOM_STICK_MS
+): boolean {
+  const normalizedKey = normalizePendingBottomStickKey(key);
+  if (!normalizedKey) return false;
+  const ttl = Math.max(0, Math.trunc(Number(ttlMs) || 0));
+  const runtime = getChatHistoryViewportRuntime(host);
+  runtime.pendingBottomStickKey = normalizedKey;
+  runtime.pendingBottomStickUntil = Math.max(Number(runtime.pendingBottomStickUntil || 0), now + ttl);
+  return true;
+}
+
+export function clearChatPendingBottomStick(host: HTMLElement, key?: string | null): void {
+  const runtime = getChatHistoryViewportRuntime(host);
+  const normalizedKey = normalizePendingBottomStickKey(key);
+  if (normalizedKey && runtime.pendingBottomStickKey !== normalizedKey) return;
+  runtime.pendingBottomStickKey = null;
+  runtime.pendingBottomStickUntil = 0;
+}
+
+export function isChatPendingBottomStickActive(host: HTMLElement, key: string, now = Date.now()): boolean {
+  const normalizedKey = normalizePendingBottomStickKey(key);
+  const runtime = getChatHistoryViewportRuntime(host);
+  if (!normalizedKey || runtime.pendingBottomStickKey !== normalizedKey) return false;
+  const until = Number(runtime.pendingBottomStickUntil || 0);
+  if (!Number.isFinite(until) || until <= now) {
+    clearChatPendingBottomStick(host, normalizedKey);
+    return false;
+  }
+  return true;
 }
 
 export function captureAndStoreChatShiftAnchor(host: HTMLElement, key: string): ChatShiftAnchor | null {
@@ -60,6 +105,8 @@ export function resetChatHistoryViewportRuntime(host: HTMLElement): void {
   const runtime = getChatHistoryViewportRuntime(host);
   disconnectChatHistoryViewportObserver(host);
   runtime.stickyBottom = null;
+  runtime.pendingBottomStickKey = null;
+  runtime.pendingBottomStickUntil = 0;
   runtime.shiftAnchor = null;
   runtime.compensatedAt = 0;
   runtime.virtualAvgHeights.clear();

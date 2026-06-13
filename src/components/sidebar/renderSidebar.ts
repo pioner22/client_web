@@ -78,7 +78,6 @@ export function renderSidebar(
         isMobile: boolean;
         mobileUi: boolean;
         disableSearchWhileTyping: boolean;
-        presenceTick: number;
         avatarsRev: number;
         friendsRef: AppState["friends"];
         groupsRef: AppState["groups"];
@@ -114,7 +113,6 @@ export function renderSidebar(
     isMobile,
     mobileUi,
     disableSearchWhileTyping,
-    presenceTick: Math.max(0, Math.trunc(Number((state as any).presenceTick || 0) || 0)),
     avatarsRev: Math.max(0, Math.trunc(Number((state as any).avatarsRev || 0) || 0)),
     friendsRef: state.friends,
     groupsRef: state.groups,
@@ -145,7 +143,6 @@ export function renderSidebar(
     prevRender.isMobile === renderState.isMobile &&
     prevRender.mobileUi === renderState.mobileUi &&
     prevRender.disableSearchWhileTyping === renderState.disableSearchWhileTyping &&
-    prevRender.presenceTick === renderState.presenceTick &&
     prevRender.avatarsRev === renderState.avatarsRev &&
     prevRender.friendsRef === renderState.friendsRef &&
     prevRender.groupsRef === renderState.groupsRef &&

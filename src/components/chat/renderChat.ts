@@ -3,7 +3,13 @@ import { conversationKey } from "../../helpers/chat/conversationKey";
 import { getConversationHistorySyncState } from "../../helpers/chat/historySync";
 import { markHistoryViewportCompensation } from "../../helpers/chat/historyViewportCoordinator";
 import { type ChatShiftAnchor, type UnreadDividerAnchor, captureChatShiftAnchor, findChatShiftAnchorElement } from "../../helpers/chat/historyViewportAnchors";
-import { captureAndStoreChatShiftAnchor, disconnectChatHistoryViewportObserver, getChatHistoryViewportRuntime } from "../../helpers/chat/historyViewportRuntime";
+import {
+  captureAndStoreChatShiftAnchor,
+  clearChatPendingBottomStick,
+  disconnectChatHistoryViewportObserver,
+  getChatHistoryViewportRuntime,
+  isChatPendingBottomStickActive,
+} from "../../helpers/chat/historyViewportRuntime";
 import { messageSelectionKey } from "../../helpers/chat/chatSelection";
 import { isPinnedMessage } from "../../helpers/chat/pinnedMessages";
 import type { AppState, ChatMessage, ChatMessageRef, FileOfferIn, FileTransferEntry } from "../../stores/types";
@@ -176,12 +182,12 @@ export function renderChat(layout: Layout, state: AppState) {
   const viewportRuntime = getChatHistoryViewportRuntime(scrollHost);
   const sticky = viewportRuntime.stickyBottom;
   const stickyActive = isChatStickyBottomActive(scrollHost, sticky, key);
+  const pendingBottomStickActive = isChatPendingBottomStickActive(scrollHost, key);
   const cachedMessages = key ? (state.conversations?.[key] ?? EMPTY_CHAT) : EMPTY_CHAT;
   const historySync = key ? getConversationHistorySyncState(state, key) : null;
   const allowSticky = Boolean(key && ((historySync && historySync.loaded) || cachedMessages.length));
-  // NOTE: autoscroll-on-open/sent is handled in app/mountApp.ts (pendingChatAutoScroll).
-  // Here we only keep pinned-bottom stable during re-renders/content growth for the *current* chat.
-  const shouldStick = Boolean(key && !keyChanged && allowSticky && (stickyActive || atBottomBefore));
+  // Keep pinned-bottom stable during re-renders/content growth, including the first render after a sent-message autoscroll mark.
+  const shouldStick = Boolean(key && !keyChanged && allowSticky && (stickyActive || atBottomBefore || pendingBottomStickActive));
   const preShiftAnchor = key && !keyChanged && !shouldStick ? captureChatShiftAnchor(scrollHost, key) : null;
   if (keyChanged && viewportRuntime.stickyBottom) viewportRuntime.stickyBottom = null;
   if (keyChanged && viewportRuntime.shiftAnchor) viewportRuntime.shiftAnchor = null;
@@ -684,6 +690,7 @@ export function renderChat(layout: Layout, state: AppState) {
       if (!isChatStickyBottomActive(scrollHost, st, key)) return;
       scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
       viewportRuntime.stickyBottom = createChatStickyBottomState(scrollHost, key, true);
+      clearChatPendingBottomStick(scrollHost, key);
     };
     queueMicrotask(stickNow);
   }

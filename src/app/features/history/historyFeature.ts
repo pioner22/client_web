@@ -5,6 +5,7 @@ import { applyConversationHistorySyncState, getConversationHistorySyncState, new
 import { loadHistoryCachePrefs } from "../../../helpers/chat/historyCachePrefs";
 import { countHistoryMessagesForConvo, getHistoryConvoMeta, getHistoryLatestMessages, getHistoryMessagesBefore } from "../../../helpers/chat/historyIdb";
 import { historyViewportRecentlyCompensated, shiftVirtualStartForPrepend } from "../../../helpers/chat/historyViewportCoordinator";
+import { markChatPendingBottomStick } from "../../../helpers/chat/historyViewportRuntime";
 import { mergeMessages, prependedCount } from "../../../helpers/chat/mergeMessages";
 import { registerPwaReloadBlocker } from "../../../helpers/pwa/reloadSafety";
 
@@ -1117,6 +1118,7 @@ export function createHistoryFeature(deps: HistoryFeatureDeps): HistoryFeature {
   const markChatAutoScroll: HistoryFeature["markChatAutoScroll"] = (key: string, waitForHistory = false) => {
     const k = String(key || "").trim();
     if (!k) return;
+    if (!waitForHistory) markChatPendingBottomStick(chatHost, k);
     pendingChatAutoScroll = { key: k, waitForHistory };
   };
 

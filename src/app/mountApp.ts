@@ -20,7 +20,11 @@ import type {
 } from "../stores/types";
 import { conversationKey, dmKey, roomKey } from "../helpers/chat/conversationKey";
 import { convoSig } from "../helpers/chat/convoSig";
-import { getChatHistoryViewportRuntime } from "../helpers/chat/historyViewportRuntime";
+import {
+  clearChatPendingBottomStick,
+  getChatHistoryViewportRuntime,
+  markChatPendingBottomStick,
+} from "../helpers/chat/historyViewportRuntime";
 import { messageSelectionKey } from "../helpers/chat/chatSelection";
 import { getCachedMediaAspectRatio } from "../helpers/chat/mediaAspectCache";
 import { prefetchHistoryMediaFromHistoryResult } from "../helpers/chat/historyMediaPrefetch";
@@ -763,6 +767,7 @@ export function mountApp(root: HTMLElement) {
     if (!k) return;
     const host = layout.chatHost;
     const runtime = getChatHistoryViewportRuntime(host);
+    markChatPendingBottomStick(host, k);
     runtime.stickyBottom = createChatStickyBottomState(host, k, true);
     const stickNow = () => {
       if (String(host.getAttribute("data-chat-key") || "") !== k) return;
@@ -770,6 +775,7 @@ export function mountApp(root: HTMLElement) {
       if (!isChatStickyBottomActive(host, st, k)) return;
       host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
       runtime.stickyBottom = createChatStickyBottomState(host, k, true);
+      clearChatPendingBottomStick(host, k);
       maybeRecordLastRead(k);
     };
     queueMicrotask(stickNow);

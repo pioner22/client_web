@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -24,10 +24,16 @@ async function loadHelper() {
     const mod = await import(pathToFileURL(outfile).href);
     if (typeof mod.getChatHistoryViewportRuntime !== "function") throw new Error("getChatHistoryViewportRuntime export missing");
     if (typeof mod.captureAndStoreChatShiftAnchor !== "function") throw new Error("captureAndStoreChatShiftAnchor export missing");
+    if (typeof mod.markChatPendingBottomStick !== "function") throw new Error("markChatPendingBottomStick export missing");
+    if (typeof mod.isChatPendingBottomStickActive !== "function") throw new Error("isChatPendingBottomStickActive export missing");
+    if (typeof mod.clearChatPendingBottomStick !== "function") throw new Error("clearChatPendingBottomStick export missing");
     if (typeof mod.resetChatHistoryViewportRuntime !== "function") throw new Error("resetChatHistoryViewportRuntime export missing");
     return {
       getChatHistoryViewportRuntime: mod.getChatHistoryViewportRuntime,
       captureAndStoreChatShiftAnchor: mod.captureAndStoreChatShiftAnchor,
+      markChatPendingBottomStick: mod.markChatPendingBottomStick,
+      isChatPendingBottomStickActive: mod.isChatPendingBottomStickActive,
+      clearChatPendingBottomStick: mod.clearChatPendingBottomStick,
       resetChatHistoryViewportRuntime: mod.resetChatHistoryViewportRuntime,
       cleanup: () => rm(tempDir, { recursive: true, force: true }),
     };
@@ -83,6 +89,35 @@ test("historyViewportRuntime: keeps one shared runtime per host and stores captu
   }
 });
 
+test("historyViewportRuntime: pending bottom stick is scoped, expires, and can be cleared", async () => {
+  const {
+    getChatHistoryViewportRuntime,
+    markChatPendingBottomStick,
+    isChatPendingBottomStickActive,
+    clearChatPendingBottomStick,
+    cleanup,
+  } = await loadHelper();
+  try {
+    const host = {};
+    const key = "dm:456-356-735";
+
+    assert.equal(isChatPendingBottomStickActive(host, key, 1000), false);
+    assert.equal(markChatPendingBottomStick(host, key, 1000, 500), true);
+    assert.equal(isChatPendingBottomStickActive(host, key, 1200), true);
+    assert.equal(isChatPendingBottomStickActive(host, "dm:517-048-184", 1200), false);
+    assert.equal(isChatPendingBottomStickActive(host, key, 1501), false);
+    assert.equal(getChatHistoryViewportRuntime(host).pendingBottomStickKey, null);
+
+    assert.equal(markChatPendingBottomStick(host, key, 2000, 500), true);
+    clearChatPendingBottomStick(host, "dm:517-048-184");
+    assert.equal(isChatPendingBottomStickActive(host, key, 2100), true);
+    clearChatPendingBottomStick(host, key);
+    assert.equal(isChatPendingBottomStickActive(host, key, 2100), false);
+  } finally {
+    await cleanup();
+  }
+});
+
 test("historyViewportRuntime: reset clears sticky/anchor state and disconnects observer", async () => {
   const { getChatHistoryViewportRuntime, resetChatHistoryViewportRuntime, cleanup } = await loadHelper();
   try {
@@ -90,6 +125,8 @@ test("historyViewportRuntime: reset clears sticky/anchor state and disconnects o
     const runtime = getChatHistoryViewportRuntime(host);
     let disconnectCount = 0;
     runtime.stickyBottom = { key: "dm:123", active: true, at: 1000, scrollTop: 480 };
+    runtime.pendingBottomStickKey = "dm:123";
+    runtime.pendingBottomStickUntil = 2000;
     runtime.shiftAnchor = { key: "dm:123", msgKey: "msg:101", msgId: 101, rectTop: 40, scrollTop: 480 };
     runtime.compensatedAt = 123456;
     runtime.virtualAvgHeights.set("dm:123", 92);
@@ -106,6 +143,8 @@ test("historyViewportRuntime: reset clears sticky/anchor state and disconnects o
 
     assert.equal(disconnectCount, 1);
     assert.equal(runtime.stickyBottom, null);
+    assert.equal(runtime.pendingBottomStickKey, null);
+    assert.equal(runtime.pendingBottomStickUntil, 0);
     assert.equal(runtime.shiftAnchor, null);
     assert.equal(runtime.compensatedAt, 0);
     assert.equal(runtime.virtualAvgHeights.size, 0);
@@ -117,4 +156,18 @@ test("historyViewportRuntime: reset clears sticky/anchor state and disconnects o
   } finally {
     await cleanup();
   }
+});
+
+test("history autoscroll: sent-message pending bottom stick is wired into render path", async () => {
+  const [renderChatSrc, historyFeatureSrc, mountAppSrc] = await Promise.all([
+    readFile(path.resolve("src/components/chat/renderChat.ts"), "utf8"),
+    readFile(path.resolve("src/app/features/history/historyFeature.ts"), "utf8"),
+    readFile(path.resolve("src/app/mountApp.ts"), "utf8"),
+  ]);
+
+  assert.match(renderChatSrc, /isChatPendingBottomStickActive\(scrollHost,\s*key\)/);
+  assert.match(renderChatSrc, /stickyActive\s*\|\|\s*atBottomBefore\s*\|\|\s*pendingBottomStickActive/);
+  assert.match(renderChatSrc, /clearChatPendingBottomStick\(scrollHost,\s*key\)/);
+  assert.match(historyFeatureSrc, /markChatPendingBottomStick\(chatHost,\s*k\)/);
+  assert.match(mountAppSrc, /markChatPendingBottomStick\(host,\s*k\)/);
 });
