@@ -16,8 +16,10 @@ const HISTORY_CACHE_MAX_AGE_MS = 45 * DAY_MS;
 const HISTORY_CACHE_MAX_CONVERSATIONS = 400;
 const HISTORY_CACHE_MAX_MESSAGES = 2800;
 const IOS_HISTORY_CACHE_MAX_AGE_MS = 21 * DAY_MS;
-const IOS_HISTORY_CACHE_MAX_CONVERSATIONS = 180;
-const IOS_HISTORY_CACHE_MAX_MESSAGES = 900;
+const IOS_HISTORY_CACHE_MAX_CONVERSATIONS = 80;
+const IOS_HISTORY_CACHE_MAX_MESSAGES = 220;
+const HISTORY_CACHE_MAX_RAW_BYTES = 2_400_000;
+const IOS_HISTORY_CACHE_MAX_RAW_BYTES = 850_000;
 const HISTORY_CACHE_MAX_KEY_LEN = 96;
 
 type HistoryCachePayload = {
@@ -42,6 +44,7 @@ type HistoryCacheLimits = {
   maxAgeMs: number;
   maxConversations: number;
   maxMessages: number;
+  maxRawBytes: number;
 };
 
 function debugPush(kind: string, data?: any): void {
@@ -92,6 +95,7 @@ function cacheLimits(): HistoryCacheLimits {
     maxAgeMs: appleMobile ? IOS_HISTORY_CACHE_MAX_AGE_MS : HISTORY_CACHE_MAX_AGE_MS,
     maxConversations: appleMobile ? IOS_HISTORY_CACHE_MAX_CONVERSATIONS : HISTORY_CACHE_MAX_CONVERSATIONS,
     maxMessages: appleMobile ? IOS_HISTORY_CACHE_MAX_MESSAGES : HISTORY_CACHE_MAX_MESSAGES,
+    maxRawBytes: appleMobile ? IOS_HISTORY_CACHE_MAX_RAW_BYTES : HISTORY_CACHE_MAX_RAW_BYTES,
   };
 }
 
@@ -354,6 +358,20 @@ export function loadHistoryCacheForUser(userId: string, storage?: StorageLike | 
   try {
     const raw = st.getItem(key);
     if (!raw) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
+    if (raw.length > limits.maxRawBytes) {
+      debugPush("history_cache.load.skip_oversize", {
+        bytes: raw.length,
+        maxRawBytes: limits.maxRawBytes,
+        maxConversations: limits.maxConversations,
+        maxMessages: limits.maxMessages,
+      });
+      try {
+        st.removeItem(key);
+      } catch {
+        // ignore
+      }
+      return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
+    }
     const parsed = JSON.parse(raw) as HistoryCachePayload;
     if (!parsed || typeof parsed !== "object") return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };
     if (parsed.v !== HISTORY_CACHE_VERSION) return { conversations: {}, historyCursor: {}, historyHasMore: {}, historyLoaded: {}, historySync: {} };

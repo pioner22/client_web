@@ -98,10 +98,48 @@ export function installMainRenderSubscriptionFeature(deps: MainRenderSubscriptio
   let prevAutoFetchKey = initialSelected ? conversationKey(initialSelected) : "";
   let prevAutoFetchSig = prevAutoFetchKey ? convoSig(store.get().conversations[prevAutoFetchKey] ?? []) : "";
   let prevAutoFetchTransfersRef = store.get().fileTransfers;
+  let localHydrationAttemptedUser = "";
+  let localHydrationScheduledUser = "";
+
+  const scheduleLocalStateHydration = (userIdRaw: string): void => {
+    const userId = String(userIdRaw || "").trim();
+    if (!userId) return;
+    if (localHydrationAttemptedUser === userId || localHydrationScheduledUser === userId) return;
+    localHydrationScheduledUser = userId;
+    const run = () => {
+      const scheduledUser = localHydrationScheduledUser;
+      localHydrationScheduledUser = "";
+      const feature = getUserLocalStateHydrationFeature();
+      if (!feature || !scheduledUser) return;
+      feature.maybeHydrateLocalState();
+      localHydrationAttemptedUser = scheduledUser;
+    };
+    try {
+      if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => {
+          if (typeof window.setTimeout === "function") window.setTimeout(run, 0);
+          else run();
+        });
+        return;
+      }
+      if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+        window.setTimeout(run, 0);
+        return;
+      }
+    } catch {
+      // fall through
+    }
+    run();
+  };
 
   store.subscribe(() => {
     const st = store.get();
-    if (getUserLocalStateHydrationFeature()?.maybeHydrateLocalState()) return;
+    if (st.authed && st.selfId) {
+      scheduleLocalStateHydration(st.selfId);
+    } else if (!st.authed) {
+      localHydrationAttemptedUser = "";
+      localHydrationScheduledUser = "";
+    }
     if (getChatSearchSyncFeature()?.maybeSyncChatSearchState()) return;
     renderApp(layout, st, actions);
     syncNavOverlay();
