@@ -9,6 +9,7 @@ import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar
 import { fileBadge } from "../../helpers/files/fileBadge";
 import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../helpers/files/fileMissingState";
 import { isAudioLikeFile, isImageLikeFile, isVideoLikeFile, normalizeFileName } from "../../helpers/files/mediaKind";
+import { resolveProgressiveMediaUrl } from "../../helpers/files/progressiveMedia";
 import { safeUrl } from "../../helpers/security/safeUrl";
 import { renderRichText } from "../../helpers/chat/richText";
 import { renderBoardPost } from "../../helpers/boards/boardPost";
@@ -776,6 +777,7 @@ export function messageLine(
     const voice = isAudio && isVoiceNoteName(name);
     const videoNote = isVideo && isVideoNoteName(name);
     const isVisualMedia = isImage || isVideo;
+    const audioUrl = isAudio ? resolveProgressiveMediaUrl({ fileId: info.fileId, url, name: info.name, size: info.size, mime: info.mime }) : url;
     if (!isVisualMedia && transfer && (transfer.status === "uploading" || transfer.status === "downloading")) {
       const progress = Math.max(0, Math.min(100, Math.round(transfer.progress || 0)));
       const label = transfer.status === "uploading" ? `Загрузка ${progress}%` : `Скачивание ${progress}%`;
@@ -804,7 +806,7 @@ export function messageLine(
           1,
           0,
           renderDeferredVoicePlayer({
-            url: url || null,
+            url: audioUrl || null,
             fileId: info.fileId,
             name: info.name,
             size: info.size,
@@ -817,7 +819,7 @@ export function messageLine(
           1,
           0,
           renderDeferredVoicePlayer({
-            url: url || null,
+            url: audioUrl || null,
             fileId: info.fileId,
             name: info.name,
             size: info.size,

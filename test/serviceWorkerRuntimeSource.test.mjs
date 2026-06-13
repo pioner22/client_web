@@ -22,5 +22,9 @@ test("service worker inline media streams stay inline in generated PWA output", 
   for (const source of [sw, buildPwa]) {
     assert.match(source, /searchParams\.get\("inline"\)/);
     assert.match(source, /inline \? "inline" : "attachment"/);
+    assert.match(source, /PWA_MEDIA_SOURCE_REGISTER/);
+    assert.match(source, /MEDIA_PROXY_PATH_RE/);
+    assert.match(source, /Content-Range/);
+    assert.match(source, /upstreamHeaders\.set\(name, value\)/);
   }
 });

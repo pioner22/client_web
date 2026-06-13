@@ -778,7 +778,7 @@ test("pwaUpdateFeature: manual update does not blind-reload when new build is no
   }
 });
 
-test("pwaUpdateFeature: auto-apply waits while recent media failures keep PWA stability hold active", async () => {
+test("pwaUpdateFeature: media stability hold keeps update manual without auto-apply timer", async () => {
   const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
   const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
   const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
@@ -887,12 +887,11 @@ test("pwaUpdateFeature: auto-apply waits while recent media failures keep PWA st
     });
 
     feature.scheduleAutoApplyPwaUpdate(1);
-    assert.equal(pendingTimers.length, 1);
-    pendingTimers.shift()();
-
+    assert.equal(pendingTimers.length, 0);
     assert.deepEqual(replaceCalls, []);
     assert.equal(store.state.pwaUpdateAvailable, true);
-    assert.ok(pendingTimers.length >= 1);
+    assert.deepEqual(store.state.modal, { kind: "pwa_update" });
+    assert.match(store.state.status, /Откройте обновление вручную/);
   } finally {
     if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
     else delete globalThis.window;
@@ -908,7 +907,7 @@ test("pwaUpdateFeature: auto-apply waits while recent media failures keep PWA st
   }
 });
 
-test("pwaUpdateFeature: auto-apply waits while history file-get activity is pending", async () => {
+test("pwaUpdateFeature: pending file activity keeps update manual without auto-apply timer", async () => {
   const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
   const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
   const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
@@ -1049,15 +1048,15 @@ test("pwaUpdateFeature: auto-apply waits while history file-get activity is pend
     });
 
     feature.scheduleAutoApplyPwaUpdate(1);
-    assert.equal(pendingTimers.length, 1);
-    pendingTimers.shift()();
+    assert.equal(pendingTimers.length, 0);
     await Promise.resolve();
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.deepEqual(replaceCalls, []);
     assert.equal(store.state.pwaUpdateAvailable, true);
-    assert.ok(pendingTimers.length >= 1);
+    assert.deepEqual(store.state.modal, { kind: "pwa_update" });
+    assert.match(store.state.status, /Откройте обновление вручную/);
   } finally {
     if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
     else delete globalThis.window;

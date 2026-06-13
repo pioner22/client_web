@@ -612,11 +612,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
         logPwaUpdate("bootstrap_pending_prompt", liveBuildId);
         return;
       }
-      if (shouldDisableAutoApplyUpdate()) {
-        scheduleAutoApplyPwaUpdate(PWA_AUTO_APPLY_RETRY_MS);
-        return;
-      }
-      void forcePwaUpdate();
+      scheduleAutoApplyPwaUpdate(PWA_AUTO_APPLY_RETRY_MS);
       return;
     }
     logPwaUpdate("bootstrap_reconcile_pending", liveBuildId);
@@ -662,48 +658,42 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   }
 
   function scheduleAutoApplyPwaUpdate(delayMs = 800) {
-    if (shouldDisableAutoApplyUpdate()) {
-      const buildId = pwaPendingBuildId || String(store.get().updateLatest || "").trim();
-      logPwaUpdate("auto_disabled", buildId || "unknown");
-      if (pwaAutoApplyTimer !== null) {
-        try {
-          window.clearTimeout(pwaAutoApplyTimer);
-        } catch {
-          // ignore
-        }
-        pwaAutoApplyTimer = null;
+    if (pwaAutoApplyTimer !== null) {
+      try {
+        window.clearTimeout(pwaAutoApplyTimer);
+      } catch {
+        // ignore
       }
-      store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, status: PWA_AUTO_APPLY_STATUS } : prev));
-      return;
-    }
-    if (pwaAutoApplyTimer !== null) return;
-    pwaAutoApplyTimer = window.setTimeout(() => {
       pwaAutoApplyTimer = null;
-      const st = store.get();
-      if (!st.pwaUpdateAvailable) return;
-      if (pwaAutoApplySuppressed) return;
-      if (!isSafeToAutoApplyUpdate(st)) {
-        const remainingHoldMs = getPwaStabilityHoldRemainingMs();
-        if (remainingHoldMs > 0) {
-          const hold = readPwaStabilityHold();
-          logPwaUpdate("auto_hold", `${hold?.kind || "unknown"}:${remainingHoldMs}`);
-          scheduleAutoApplyPwaUpdate(Math.min(Math.max(remainingHoldMs + 1200, 4_000), 60_000));
-          return;
-        }
-        scheduleAutoApplyPwaUpdate();
-        return;
+    }
+    const buildId = pwaPendingBuildId || String(store.get().updateLatest || "").trim();
+    logPwaUpdate("manual_prompt_only", `${buildId || "unknown"}:${Math.max(0, delayMs || 0)}`);
+    clearPwaAutoApplyGuard();
+    store.set((prev) => {
+      if (!prev.pwaUpdateAvailable) return prev;
+      return {
+        ...prev,
+        status: PWA_AUTO_APPLY_STATUS,
+        ...(shouldOpenPwaUpdatePrompt(prev) ? { modal: { kind: "pwa_update" as const } } : {}),
+      };
+    });
+  }
+
+  function showManualPwaUpdatePromptForHold() {
+    if (pwaAutoApplyTimer !== null) {
+      try {
+        window.clearTimeout(pwaAutoApplyTimer);
+      } catch {
+        // ignore
       }
-      const buildId = pwaPendingBuildId || st.clientVersion || "";
-      if (shouldBlockPwaAutoApply(buildId)) {
-        logPwaUpdate("auto_backoff", buildId || "unknown");
-        clearPwaAutoApplyGuard();
-        store.set({ status: "Обновление ожидает применения. Повторим попытку автоматически.", pwaUpdateAvailable: true });
-        scheduleAutoApplyPwaUpdate(PWA_AUTO_APPLY_RETRY_MS);
-        return;
-      }
-      markPwaAutoApplyAttempt(buildId);
-      void applyPwaUpdateNow({ mode: "auto", buildId });
-    }, delayMs);
+      pwaAutoApplyTimer = null;
+    }
+    if (!store.get().pwaUpdateAvailable) return;
+    store.set((prev) => ({
+      ...prev,
+      status: PWA_AUTO_APPLY_STATUS,
+      ...(shouldOpenPwaUpdatePrompt(prev) ? { modal: { kind: "pwa_update" as const } } : {}),
+    }));
   }
 
   const onPwaBuild = (ev: Event) => {
@@ -774,7 +764,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     const remaining = getPwaStabilityHoldRemainingMs();
     if (remaining <= 0) return;
     if (!store.get().pwaUpdateAvailable) return;
-    scheduleAutoApplyPwaUpdate(Math.min(Math.max(remaining + 1200, 4_000), 60_000));
+    showManualPwaUpdatePromptForHold();
   };
 
   function installEventListeners() {

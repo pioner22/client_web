@@ -1679,6 +1679,16 @@
   cursor: not-allowed;
 }
 
+.modal-input.auth-secret-input {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+
+.modal-input.auth-secret-input[data-secret-visible="1"] {
+  -webkit-text-security: none;
+  text-security: none;
+}
+
 /* Input with trailing action button (e.g. show/hide password). */
 .field-with-action {
   position: relative;

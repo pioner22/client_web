@@ -2,6 +2,20 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.901",
+    date: "2026-06-13",
+    improved: [
+      "Окно авторизации переведено на ручной ввод без стандартной browser password-form семантики: визуальная маска пароля сохраняется, но клиент не предлагает запоминать пароль сам.",
+      "PWA/Web обновления теперь остаются под явным контролем пользователя: серверный build-сигнал открывает окно «Обновить/Позже», а не запускает фоновое auto-apply.",
+      "Голосовые и музыкальные вложения в истории получили progressive media URL через service worker proxy с поддержкой Range и Authorization, чтобы плеер мог начинать воспроизведение без полной загрузки файла.",
+      "Android debug APK пересобирается как отдельный клиент `1.0.41 (code 42)`, чтобы страница загрузок отдавала новый мобильный артефакт.",
+    ],
+    fixed: [
+      "Исправлен сценарий, где защищённый `file_url` для audio уходил в общий full-download pipeline и мог ломать воспроизведение голосовых сообщений.",
+      "Production service worker и fallback service worker синхронизированы по новому media proxy, включая route под `/web/` scope.",
+    ],
+  },
+  {
     version: "0.1.900",
     date: "2026-06-13",
     improved: [

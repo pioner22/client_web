@@ -556,6 +556,39 @@ test("renderAuthModal: primary CTA sends login via direct click fallback", async
   }
 });
 
+test("renderAuthModal: manual password input avoids browser credential form semantics", async () => {
+  const helper = await loadRenderAuthModal();
+  try {
+    withDomStubs(() => {
+      const modal = helper.renderAuthModal(
+        "login",
+        "854-432-319",
+        undefined,
+        [{ id: "telegram-exact", title: "Telegram (точный)" }],
+        "telegram-exact",
+        {
+          onLogin: () => {},
+          onRegister: () => {},
+          onModeChange: () => {},
+          onUseDifferentAccount: () => {},
+          onSkinChange: () => {},
+          onClose: () => {},
+        }
+      );
+
+      const passwordInput = findFirst(modal, (n) => typeof n?.getAttribute === "function" && n.getAttribute("id") === "auth-pw");
+      assert.ok(passwordInput, "password input not found");
+      assert.equal(passwordInput.getAttribute("type"), "text");
+      assert.equal(passwordInput.getAttribute("autocomplete"), "off");
+      assert.equal(passwordInput.getAttribute("data-auth-secret"), "1");
+      assert.equal(passwordInput.getAttribute("name"), "manual-passcode");
+      assert.equal(findFirst(modal, (n) => typeof n?.tagName === "string" && n.tagName === "FORM"), null);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("renderAuthModal: primary CTA sends register via direct click fallback", async () => {
   const helper = await loadRenderAuthModal();
   try {

@@ -8,6 +8,7 @@ import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../../h
 import { guessMimeTypeByName } from "../../../helpers/files/mimeGuess";
 import { getDeliveryRetryPolicy } from "../../../helpers/runtime/deliveryCoordinator";
 import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
+import { markProgressiveAudioTransferReady } from "./fileProgressiveAudio";
 import {
   createFileHttpDownloadRuntime,
   type FileHttpDownloadPriority,
@@ -80,7 +81,6 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
 
   const HTTP_MAX_CONCURRENCY = deviceCaps.slowNetwork ? 1 : deviceCaps.constrained ? 2 : 3;
   const HTTP_PREFETCH_CONCURRENCY = deviceCaps.slowNetwork ? 0 : 1;
-
   const debugHook = (kind: string, data?: any) => {
     try {
       const dbg = (globalThis as any).__yagodka_debug_monitor;
@@ -569,10 +569,18 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
       })();
     };
 
+    const userRequested = pendingFileDownloads.has(fileId);
+    const kindForUrl = resolveAutoDownloadKind(name, mime, msg?.kind ? String(msg.kind) : null);
+    const pendingStream = Boolean(downloadByFileId.get(fileId)?.streaming);
+    const progressiveAudioReady = url && kindForUrl === "audio" && !userRequested && !pendingStream
+      ? markProgressiveAudioTransferReady({ store, fileId, url, name, size, mime, silent, nextTransferId, scheduleSaveFileTransfers, clearSilentFileGet, finishFileGet, debugHook })
+      : false;
+    if (progressiveAudioReady) return true;
+
     if (silent) {
       try {
         const st = store.get();
-        const kind = resolveAutoDownloadKind(name, mime, null);
+        const kind = kindForUrl;
         const allowFullDownload = shouldHydrateSilentFullBlob({
           kind,
           name,
@@ -627,7 +635,6 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     updateTransferByFileId(fileId, (entry) => ({ ...entry, status: "downloading", progress: 0, ...(mime ? { mime } : {}) }));
     if (!silent) store.set({ status: `Скачивание: ${name || fileId}` });
 
-    const userRequested = pendingFileDownloads.has(fileId);
     const priority: FileHttpDownloadPriority = silent && !userRequested ? "prefetch" : "high";
     debugHook("file.http.enqueue", {
       fileId,

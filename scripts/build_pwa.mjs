@@ -305,9 +305,12 @@ const RUNTIME_SPECIAL = new Set(["/manifest.webmanifest", "/sw.js"]);
 const SHARE_PATH_RE = /\\/share\\/?$/i;
 const SHARE_FALLBACK_ID = "__broadcast__";
 const shareQueue = new Map();
-const STREAM_PATH_RE = /^\\/__yagodka_stream__\\/files\\/([^/?#]+)$/i;
+const STREAM_PATH_RE = /(?:^|\\/)__yagodka_stream__\\/files\\/([^/?#]+)$/i;
+const MEDIA_PROXY_PATH_RE = /(?:^|\\/)__yagodka_media__\\/files\\/([^/?#]+)$/i;
 const STREAM_TTL_MS = 2 * 60 * 1000;
+const MEDIA_SOURCE_TTL_MS = 15 * 60 * 1000;
 const streams = new Map();
+const mediaSources = new Map();
 const PREFS_CACHE = CACHE_PREFIX + "prefs";
 const PREFS_URL = "./__prefs__/notify.json";
 let notifyPrefs = null;
@@ -701,6 +704,53 @@ function cleanupStreams() {
   }
 }
 
+function cleanupMediaSources() {
+  const now = Date.now();
+  for (const [sid, info] of mediaSources.entries()) {
+    const age = now - Number(info?.createdAt || 0);
+    if (age > MEDIA_SOURCE_TTL_MS) mediaSources.delete(sid);
+  }
+}
+
+function safeMediaHeaders(raw) {
+  const headers = {};
+  if (!raw || typeof raw !== "object") return headers;
+  for (const [key, value] of Object.entries(raw)) {
+    const name = String(key || "").trim();
+    const lower = name.toLowerCase();
+    if (lower !== "authorization") continue;
+    const text = String(value || "").trim();
+    if (text) headers[name] = text;
+  }
+  return headers;
+}
+
+function registerMediaSource(data) {
+  const sourceId = String(data?.sourceId || "").trim();
+  const rawUrl = String(data?.url || "").trim();
+  if (!sourceId || !rawUrl) return false;
+  let resolved = "";
+  try {
+    const parsed = new URL(rawUrl, self.location.href);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    resolved = parsed.toString();
+  } catch {
+    return false;
+  }
+  cleanupMediaSources();
+  mediaSources.set(sourceId, {
+    sourceId,
+    fileId: String(data?.fileId || "media").trim() || "media",
+    url: resolved,
+    headers: safeMediaHeaders(data?.headers),
+    name: String(data?.name || "").trim(),
+    size: Number(data?.size || 0) || 0,
+    mime: String(data?.mime || "").trim(),
+    createdAt: Date.now(),
+  });
+  return true;
+}
+
 async function notifyStreamReady(streamId, fileId) {
   const payload = { type: "PWA_STREAM_READY", streamId, fileId };
   try {
@@ -743,6 +793,51 @@ async function handleStreamFetch(event) {
     },
   });
   return new Response(stream, { status: 200, headers });
+}
+
+async function handleMediaProxyFetch(event) {
+  const req = event.request;
+  const url = new URL(req.url);
+  const match = MEDIA_PROXY_PATH_RE.exec(url.pathname);
+  if (!match) return new Response("bad_request", { status: 400 });
+  const sourceId = String(url.searchParams.get("sid") || "").trim();
+  if (!sourceId) return new Response("missing_sid", { status: 400 });
+  cleanupMediaSources();
+  const source = mediaSources.get(sourceId);
+  if (!source) return new Response("media_source_expired", { status: 404, headers: { "Cache-Control": "no-store" } });
+
+  const upstreamHeaders = new Headers();
+  for (const [key, value] of Object.entries(source.headers || {})) {
+    if (value) upstreamHeaders.set(key, value);
+  }
+  for (const name of ["Range", "If-Range", "If-None-Match", "If-Modified-Since", "Accept"]) {
+    const value = req.headers.get(name);
+    if (value) upstreamHeaders.set(name, value);
+  }
+
+  try {
+    const upstream = await fetch(source.url, {
+      method: req.method === "HEAD" ? "HEAD" : "GET",
+      headers: upstreamHeaders,
+      cache: "no-store",
+      credentials: "omit",
+      redirect: "follow",
+    });
+    source.createdAt = Date.now();
+    const headers = new Headers();
+    for (const name of ["Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"]) {
+      const value = upstream.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    if (!headers.get("Content-Type")) headers.set("Content-Type", source.mime || "application/octet-stream");
+    if (!headers.get("Accept-Ranges") && upstream.status !== 416) headers.set("Accept-Ranges", "bytes");
+    headers.set("Cache-Control", "no-store");
+    headers.set("Content-Disposition", \`inline; filename="\${safeHeaderFilename(source.name || source.fileId || "media")}"\`);
+    headers.set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, ETag, Last-Modified");
+    return new Response(req.method === "HEAD" ? null : upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
+  } catch {
+    return new Response("media_proxy_failed", { status: 502, headers: { "Cache-Control": "no-store" } });
+  }
 }
 
 self.addEventListener("install", (event) => {
@@ -800,6 +895,10 @@ self.addEventListener("message", (event) => {
   if (!data || typeof data !== "object") return;
   if (data.type === "SKIP_WAITING") {
     self.skipWaiting();
+    return;
+  }
+  if (data.type === "PWA_MEDIA_SOURCE_REGISTER") {
+    registerMediaSource(data);
     return;
   }
   if (data.type === "PWA_OUTBOX_SYNC") {
@@ -934,6 +1033,13 @@ self.addEventListener("fetch", (event) => {
   if (STREAM_PATH_RE.test(url.pathname)) {
     if (req.method === "GET") {
       event.respondWith(handleStreamFetch(event));
+    }
+    return;
+  }
+
+  if (MEDIA_PROXY_PATH_RE.test(url.pathname)) {
+    if (req.method === "GET" || req.method === "HEAD") {
+      event.respondWith(handleMediaProxyFetch(event));
     }
     return;
   }

@@ -43,6 +43,15 @@ const AUTH_ENTRY_PANEL_SUBTITLE = "Введите данные аккаунта 
 const AUTH_ENTRY_HERO_TITLE = "Рабочий мессенджер для команды";
 const AUTH_ENTRY_HERO_COPY = "Общайтесь, отправляйте файлы и возвращайтесь к рабочим чатам без лишних шагов.";
 const AUTH_ENTRY_HELPER = "Для входа нужен ID и пароль. Если создаёте аккаунт, сохраните выданный ID после регистрации.";
+const AUTH_MANUAL_FIELD_ATTRS = {
+  autocomplete: "off",
+  "aria-autocomplete": "none",
+  "data-lpignore": "true",
+  "data-1p-ignore": "true",
+  "data-bwignore": "true",
+  "data-form-type": "other",
+  "data-protonpass-ignore": "true",
+};
 
 function isQuietStatus(status: string, connected: boolean, mode: AuthMode): boolean {
   if (!status) return true;
@@ -171,10 +180,14 @@ export function renderAuthModal(
     ) as HTMLButtonElement;
 
     const apply = (visible: boolean) => {
-      try {
-        input.type = visible ? "text" : "password";
-      } catch {
-        // ignore
+      if (input.getAttribute("data-auth-secret") === "1") {
+        input.setAttribute("data-secret-visible", visible ? "1" : "0");
+      } else {
+        try {
+          input.type = visible ? "text" : "password";
+        } catch {
+          // ignore
+        }
       }
       toggle.classList.toggle("on", visible);
       toggle.setAttribute("aria-pressed", visible ? "true" : "false");
@@ -183,11 +196,15 @@ export function renderAuthModal(
     };
 
     toggle.addEventListener("click", () => {
-      const visible = String(input.type || "").toLowerCase() === "password";
+      const visible =
+        input.getAttribute("data-auth-secret") === "1"
+          ? input.getAttribute("data-secret-visible") !== "1"
+          : String(input.type || "").toLowerCase() === "password";
       apply(visible);
       focusElement(input);
     });
 
+    apply(input.getAttribute("data-secret-visible") === "1");
     return el("div", { class: "field-with-action" }, [input, toggle]);
   }
 
@@ -257,14 +274,20 @@ export function renderAuthModal(
       ? null
       : (el(
           "button",
-          { class: "btn btn-primary auth-primary-cta", type: "submit", form: formId, ...(connected ? {} : { disabled: "true" }) },
+          { class: "btn btn-primary auth-primary-cta", type: "button", ...(connected ? {} : { disabled: "true" }) },
           [connected ? copy.primaryLabel : "Проверьте интернет"]
         ) as HTMLButtonElement);
 
   const body =
     mode === "auto"
       ? el("div", { class: "modal-body input-wrapper auth-entry-form auth-entry-form-auto" })
-      : (el("form", { class: "modal-body input-wrapper auth-entry-form auth-entry-form-fixed", id: formId, autocomplete: "off", method: "post" }) as HTMLFormElement);
+      : el("div", {
+          class: "modal-body input-wrapper auth-entry-form auth-entry-form-fixed",
+          id: formId,
+          autocomplete: "off",
+          "data-form-type": "other",
+          "data-auth-form": "manual-only",
+        });
 
   if (mode === "auto") {
     const useManualLogin = el("button", { class: "btn btn-primary auth-primary-cta", type: "button" }, [copy.primaryLabel]) as HTMLButtonElement;
@@ -280,12 +303,14 @@ export function renderAuthModal(
     );
   } else if (mode === "register") {
     const pw1Input = el("input", {
-      class: "modal-input",
+      class: "modal-input auth-secret-input",
       id: "auth-pw1",
-      name: "new-password",
-      type: "password",
+      name: "manual-passcode",
+      type: "text",
       placeholder: "Пароль",
-      autocomplete: "new-password",
+      ...AUTH_MANUAL_FIELD_ATTRS,
+      "data-auth-secret": "1",
+      "data-secret-visible": "0",
       autocorrect: "off",
       autocapitalize: "off",
       spellcheck: "false",
@@ -294,12 +319,14 @@ export function renderAuthModal(
       enterkeyhint: "next",
     }) as HTMLInputElement;
     const pw2Input = el("input", {
-      class: "modal-input",
+      class: "modal-input auth-secret-input",
       id: "auth-pw2",
-      name: "new-password-confirm",
-      type: "password",
+      name: "manual-passcode-repeat",
+      type: "text",
       placeholder: "Повторите пароль",
-      autocomplete: "new-password",
+      ...AUTH_MANUAL_FIELD_ATTRS,
+      "data-auth-secret": "1",
+      "data-secret-visible": "0",
       autocorrect: "off",
       autocapitalize: "off",
       spellcheck: "false",
@@ -323,12 +350,12 @@ export function renderAuthModal(
     const idInput = el("input", {
       class: "modal-input",
       id: "auth-id",
-      name: "username",
+      name: "manual-identity",
       placeholder: "517-048-184 или @login",
+      ...AUTH_MANUAL_FIELD_ATTRS,
       "data-ios-assistant": "off",
       "data-fancy-caret": "off",
       inputmode: "text",
-      autocomplete: "off",
       autocorrect: "off",
       autocapitalize: "off",
       spellcheck: "false",
@@ -351,14 +378,16 @@ export function renderAuthModal(
       applyLegacyIdMask(idInput);
     });
     const pwInput = el("input", {
-      class: "modal-input",
+      class: "modal-input auth-secret-input",
       id: "auth-pw",
-      name: "password",
-      type: "password",
+      name: "manual-passcode",
+      type: "text",
       placeholder: "Пароль",
+      ...AUTH_MANUAL_FIELD_ATTRS,
+      "data-auth-secret": "1",
+      "data-secret-visible": "0",
       "data-ios-assistant": "off",
       "data-fancy-caret": "off",
-      autocomplete: "current-password",
       autocorrect: "off",
       autocapitalize: "off",
       spellcheck: "false",
@@ -412,13 +441,15 @@ export function renderAuthModal(
       else actions.onLogin();
     };
 
-    (body as HTMLFormElement).addEventListener("submit", (e) => {
-      e.preventDefault();
+    body.addEventListener("keydown", (e) => {
+      const ev = e as KeyboardEvent;
+      if (ev.key !== "Enter" || ev.isComposing) return;
+      ev.preventDefault();
       submitCurrentMode();
     });
 
     if (primaryButton) {
-      // iOS Safari/PWA can miss linked-form submits. Keep a direct tap path.
+      // iOS Safari/PWA can miss linked form semantics. Keep a direct tap path.
       primaryButton.addEventListener("click", (e) => {
         e.preventDefault();
         submitCurrentMode();
