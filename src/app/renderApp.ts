@@ -660,9 +660,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   if (sidebarSearchNow) sidebarSearchNow.disabled = disableSidebarSearchForIosKbdNav;
 
   const prevAuthIdInput = authModalVisible ? (document.getElementById("auth-id") as HTMLInputElement | null) : null;
-  const prevAuthPwInput = authModalVisible ? (document.getElementById("auth-pw") as HTMLInputElement | null) : null;
-  const prevAuthPw1Input = authModalVisible ? (document.getElementById("auth-pw1") as HTMLInputElement | null) : null;
-  const prevAuthPw2Input = authModalVisible ? (document.getElementById("auth-pw2") as HTMLInputElement | null) : null;
+  const prevAuthPwInput = authModalVisible ? (document.getElementById("auth-code") as HTMLInputElement | null) : null;
+  const prevAuthPw1Input = authModalVisible ? (document.getElementById("auth-code-a") as HTMLInputElement | null) : null;
+  const prevAuthPw2Input = authModalVisible ? (document.getElementById("auth-code-b") as HTMLInputElement | null) : null;
   const prevAuthSkinSelect = authModalVisible ? (document.getElementById("auth-skin") as HTMLSelectElement | null) : null;
   const prevFileSendCaptionInput =
     state.modal?.kind === "file_send" ? (document.getElementById("file-send-caption") as HTMLTextAreaElement | null) : null;
@@ -1249,9 +1249,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   if (authModalVisible) {
     // Preserve typed credentials across re-renders (e.g. connection status updates, skin list load).
     const idEl = document.getElementById("auth-id") as HTMLInputElement | null;
-    const pwEl = document.getElementById("auth-pw") as HTMLInputElement | null;
-    const pw1El = document.getElementById("auth-pw1") as HTMLInputElement | null;
-    const pw2El = document.getElementById("auth-pw2") as HTMLInputElement | null;
+    const pwEl = document.getElementById("auth-code") as HTMLInputElement | null;
+    const pw1El = document.getElementById("auth-code-a") as HTMLInputElement | null;
+    const pw2El = document.getElementById("auth-code-b") as HTMLInputElement | null;
     preserveAuthModalInputs({
       hadAuthModal,
       prev: { id: prevAuthId, pw: prevAuthPw, pw1: prevAuthPw1, pw2: prevAuthPw2 },
@@ -1260,14 +1260,14 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
 
     queueMicrotask(() => {
       const id = document.getElementById("auth-id") as HTMLInputElement | null;
-      const pw = document.getElementById("auth-pw") as HTMLInputElement | null;
-      const pw1 = document.getElementById("auth-pw1") as HTMLInputElement | null;
-      const pw2 = document.getElementById("auth-pw2") as HTMLInputElement | null;
+      const pw = document.getElementById("auth-code") as HTMLInputElement | null;
+      const pw1 = document.getElementById("auth-code-a") as HTMLInputElement | null;
+      const pw2 = document.getElementById("auth-code-b") as HTMLInputElement | null;
       const skin = document.getElementById("auth-skin") as HTMLSelectElement | null;
       if (prevActiveId === "auth-skin" && skin) skin.focus();
-      else if (prevActiveId === "auth-pw2" && pw2) focusElement(pw2);
-      else if (prevActiveId === "auth-pw1" && pw1) focusElement(pw1);
-      else if (prevActiveId === "auth-pw" && pw) focusElement(pw);
+      else if (prevActiveId === "auth-code-b" && pw2) focusElement(pw2);
+      else if (prevActiveId === "auth-code-a" && pw1) focusElement(pw1);
+      else if (prevActiveId === "auth-code" && pw) focusElement(pw);
       else if (prevActiveId === "auth-id" && id) focusElement(id);
       else if (!hadAuthModal) {
         if (state.authMode === "register" && pw1) focusElement(pw1);

@@ -42,15 +42,14 @@ export function createChatSurfaceMediaActions(deps: ChatSurfaceDeferredDeps) {
     }
 
     const name = String(wrap.getAttribute("data-name") || "").trim();
-    store.set({ status: name ? `Загрузка: ${name}` : "Загрузка голосового…" });
     showToast("Загружаю голосовое…", { kind: "info", timeoutMs: 3200 });
 
     const isOffer = st.fileOffersIn.some((offer) => String(offer.id || "").trim() === fileId);
     if (isOffer) {
       fileOffersAccept(fileId);
-      window.setTimeout(() => enqueueFileGet(fileId, { priority: "high" }), 0);
+      window.setTimeout(() => enqueueFileGet(fileId, { priority: "high", silent: true }), 0);
     } else {
-      enqueueFileGet(fileId, { priority: "high" });
+      enqueueFileGet(fileId, { priority: "high", silent: true });
     }
     window.setTimeout(() => {
       try {

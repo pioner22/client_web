@@ -231,7 +231,7 @@ test("renderHeader: в неавторизованном login-режиме по�
         authRememberedId: "854-432-319",
         clientVersion: "0.1.751-test",
         serverVersion: "0.0.0",
-        status: "Соединение установлено. Введите пароль, чтобы продолжить.",
+        status: "Соединение установлено. Введите код доступа, чтобы продолжить.",
         selected: null,
       });
       const btn = findByClass(layout.headerRight, "hdr-auth");

@@ -104,6 +104,10 @@ export function isTerminalPreviewTransferError(entry: FileTransferEntry | null |
 }
 
 function ensurePreviewPlaceholder(node: HTMLButtonElement): void {
+  if (node.querySelector("img.chat-file-img, video.chat-file-video")) {
+    clearPreviewPlaceholder(node);
+    return;
+  }
   if (node.querySelector(".chat-file-placeholder")) return;
   const label = node.classList.contains("chat-file-preview-video") ? "Видео" : "Фото";
   const placeholder = document.createElement("div");
@@ -111,6 +115,13 @@ function ensurePreviewPlaceholder(node: HTMLButtonElement): void {
   placeholder.setAttribute("aria-hidden", "true");
   placeholder.textContent = label;
   node.appendChild(placeholder);
+}
+
+function clearPreviewPlaceholder(node: HTMLButtonElement): void {
+  for (const child of Array.from(node.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    if (child.classList.contains("chat-file-placeholder")) child.remove();
+  }
 }
 
 export function createPreviewAutoFetchFeature(
@@ -255,6 +266,9 @@ export function createPreviewAutoFetchFeature(
       const mediaFailed =
         (img instanceof HTMLImageElement && img.complete && img.naturalWidth === 0) ||
         (video instanceof HTMLVideoElement && Boolean(video.error));
+      if (!mediaFailed && (img instanceof HTMLImageElement || video instanceof HTMLVideoElement)) {
+        clearPreviewPlaceholder(node);
+      }
       const name = String(node.getAttribute("data-name") || "");
       const mimeRaw = node.getAttribute("data-mime");
       const mime = mimeRaw ? String(mimeRaw) : null;

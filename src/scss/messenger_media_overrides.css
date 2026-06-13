@@ -902,8 +902,12 @@ html[data-theme="dark"] .chat:not(.chat-board) {
 /* W-1006: stale lazy placeholders must never draw a strip over loaded media. */
 .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-file-placeholder,
 .chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-file-placeholder,
+.chat:not(.chat-board) .chat-file-preview:has(> img.chat-file-img) > .chat-file-placeholder,
+.chat:not(.chat-board) .chat-file-preview:has(> video.chat-file-video) > .chat-file-placeholder,
 .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-media-state,
-.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-media-state {
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-media-state,
+.chat:not(.chat-board) .chat-file-preview:has(> img.chat-file-img) > .chat-media-state-idle,
+.chat:not(.chat-board) .chat-file-preview:has(> video.chat-file-video) > .chat-media-state-idle {
   display: none !important;
 }
 

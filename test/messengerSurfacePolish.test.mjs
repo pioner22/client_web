@@ -91,10 +91,11 @@ test("messenger surface polish: W-1006 hides stale media placeholders over loade
   const css = await readCssWithImports("src/scss/style.css");
 
   assert.match(css, /W-1006:\s*stale lazy placeholders must never draw a strip over loaded media/);
-  assert.match(
-    css,
-    /\.chat:not\(\.chat-board\)\s+\.msg-attach\[data-msg-file="image"\]\s+\.chat-file-preview:not\(\.chat-file-preview-empty\):not\(\.chat-file-preview-missing\)\s*>\s*\.chat-file-placeholder,[\s\S]*?\.chat-media-state\s*\{[\s\S]*?display:\s*none\s*!important/
-  );
+  assert.ok(css.includes('.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-file-placeholder'));
+  assert.ok(css.includes(".chat:not(.chat-board) .chat-file-preview:has(> img.chat-file-img) > .chat-file-placeholder"));
+  assert.ok(css.includes(".chat:not(.chat-board) .chat-file-preview:has(> video.chat-file-video) > .chat-file-placeholder"));
+  assert.ok(css.includes(".chat:not(.chat-board) .chat-file-preview:has(> img.chat-file-img) > .chat-media-state-idle"));
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-file-preview:has\(>\s*video\.chat-file-video\)\s*>\s*\.chat-media-state-idle\s*\{[\s\S]*?display:\s*none\s*!important/);
 });
 
 test("messenger surface polish: W-0978 keeps Android bubbles and context menu bounded", async () => {

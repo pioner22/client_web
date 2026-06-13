@@ -153,6 +153,11 @@ test("lazy bootstrap: mountApp and late wiring keep debug/PWA runtime behind laz
   assert.match(chatSurfaceMediaRuntimeSrc, /handleMediaToggleClick/);
   assert.match(chatSurfaceMediaRuntimeSrc, /handleOpenFileViewerClick/);
 
+  const chatSurfaceMediaActionsSrc = await readSrc("src/app/features/navigation/chatSurfaceMediaActions.ts");
+  assert.match(chatSurfaceMediaActionsSrc, /requestVoiceAutoplay\(fileId\)/);
+  assert.match(chatSurfaceMediaActionsSrc, /enqueueFileGet\(fileId,\s*\{\s*priority:\s*"high",\s*silent:\s*true\s*\}\)/);
+  assert.doesNotMatch(chatSurfaceMediaActionsSrc, /status:\s*name\s*\?\s*`Загрузка:/);
+
   const chatHostEventsSrc = await readSrc("src/app/features/navigation/chatHostEventsFeature.ts");
   assert.match(chatHostEventsSrc, /createLazyChatHostDeferredRuntime/);
   assert.match(chatHostEventsSrc, /deferredRuntime\.startDeferredBoot\(\)/);

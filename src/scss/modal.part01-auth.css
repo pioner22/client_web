@@ -1679,12 +1679,12 @@
   cursor: not-allowed;
 }
 
-.modal-input.auth-secret-input {
+.modal-input.auth-manual-key-input {
   -webkit-text-security: disc;
   text-security: disc;
 }
 
-.modal-input.auth-secret-input[data-secret-visible="1"] {
+.modal-input.auth-manual-key-input[data-mask-visible="1"] {
   -webkit-text-security: none;
   text-security: none;
 }

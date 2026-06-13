@@ -87,11 +87,11 @@ test("appShellState: auth modal, create page and modal close использую�
         modal: null,
         status: "",
       },
-      { mode: "login", message: "Войдите снова", status: "Введите пароль" }
+      { mode: "login", message: "Войдите снова", status: "Введите код доступа" }
     );
     assert.equal(authedPrompt.authMode, "login");
     assert.deepEqual(authedPrompt.modal, { kind: "auth", message: "Войдите снова" });
-    assert.equal(authedPrompt.status, "Введите пароль");
+    assert.equal(authedPrompt.status, "Введите код доступа");
 
     const createPage = helper.openCreatePageState(
       {

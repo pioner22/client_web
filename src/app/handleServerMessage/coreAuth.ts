@@ -130,7 +130,7 @@ export function handleCoreAuthMessage(
         : reason === "bad_id_format"
           ? "Неверный формат ID/@логина"
         : reason === "bad_password"
-          ? "Неверный пароль"
+          ? "Неверный код доступа"
           : reason === "rate_limited"
           ? "Слишком много попыток. Попробуйте позже."
             : "Не удалось выполнить вход";
@@ -171,11 +171,11 @@ export function handleCoreAuthMessage(
     const reason = String(msg?.reason ?? "register_failed");
     const message =
       reason === "empty_password"
-        ? "Введите пароль для регистрации"
+        ? "Введите код доступа для регистрации"
         : reason === "password_too_short"
-          ? "Пароль слишком короткий"
+          ? "Код доступа слишком короткий"
           : reason === "password_too_long"
-            ? "Пароль слишком длинный"
+            ? "Код доступа слишком длинный"
             : reason === "rate_limited"
               ? "Слишком много попыток. Попробуйте позже."
               : "Регистрация не удалась";

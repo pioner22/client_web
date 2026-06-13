@@ -572,7 +572,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const userRequested = pendingFileDownloads.has(fileId);
     const kindForUrl = resolveAutoDownloadKind(name, mime, msg?.kind ? String(msg.kind) : null);
     const pendingStream = Boolean(downloadByFileId.get(fileId)?.streaming);
-    const progressiveAudioReady = url && kindForUrl === "audio" && !userRequested && !pendingStream
+    const progressiveAudioReady = url && kindForUrl === "audio" && !pendingStream && (!userRequested || silent)
       ? markProgressiveAudioTransferReady({ store, fileId, url, name, size, mime, silent, nextTransferId, scheduleSaveFileTransfers, clearSilentFileGet, finishFileGet, debugHook })
       : false;
     if (progressiveAudioReady) return true;

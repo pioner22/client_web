@@ -2170,6 +2170,18 @@ audio.viewer-audio {
   background: transparent;
 }
 
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual:not(.viewer-zoomed) .viewer-media .viewer-img {
+  width: auto !important;
+  height: auto !important;
+  max-width: min(100%, calc(100dvw - 24px));
+  max-height: calc(100dvh - 132px);
+  object-fit: contain;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail:not(.viewer-zoomed) .viewer-media .viewer-img {
+  max-height: calc(100dvh - 232px);
+}
+
 .overlay.overlay-viewer .viewer-media-image .viewer-img {
   opacity: 0;
   transition: opacity 180ms ease;

@@ -313,3 +313,115 @@ test("fileDownloadFeature: audio file_url becomes progressive media URL without 
     await helper.cleanup();
   }
 });
+
+test("fileDownloadFeature: silent voice file_url stays progressive instead of app download", async () => {
+  const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const prevLocationDesc = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const helper = await loadFeature();
+  try {
+    const messages = [];
+    Object.defineProperty(globalThis, "location", {
+      value: { href: "https://yagodka.org/web/" },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: { serviceWorker: { controller: { postMessage: (msg) => messages.push(msg) } } },
+      configurable: true,
+      writable: true,
+    });
+
+    const state = { authed: true, conn: "connected", netLeader: true, selfId: "u1", status: "idle", fileTransfers: [], fileThumbs: {} };
+    const downloadByFileId = new Map();
+    const calls = { save: 0, finish: 0, clearSilent: 0, browserDownload: 0 };
+    const store = {
+      get: () => state,
+      set: (patch) => Object.assign(state, typeof patch === "function" ? patch(state) : { ...state, ...patch }),
+      subscribe: () => {},
+    };
+    const noop = () => {};
+    const feature = helper.createFileDownloadFeature({
+      store,
+      send: noop,
+      deviceCaps: { constrained: false, slowNetwork: false, prefetchAllowed: true },
+      downloadByFileId,
+      disableFileHttp: noop,
+      nextTransferId: () => "ft-audio-silent",
+      updateTransferByFileId: noop,
+      scheduleSaveFileTransfers: () => {
+        calls.save += 1;
+      },
+      resolveFileMeta: () => ({ name: "voice_2.ogg", size: 8192, mime: "audio/ogg" }),
+      shouldCacheFile: () => false,
+      shouldCachePreview: () => false,
+      enforceFileCachePolicy: async () => {},
+      thumbCacheId: (fileId) => `thumb:${fileId}`,
+      canAutoDownloadFullFile: () => true,
+      resolveAutoDownloadKind: () => "audio",
+      isSilentFileGet: () => true,
+      clearSilentFileGet: () => {
+        calls.clearSilent += 1;
+      },
+      clearFileAcceptRetry: noop,
+      clearFileGetNotFoundRetry: noop,
+      scheduleFileGetNotFoundRetry: () => false,
+      finishFileGet: () => {
+        calls.finish += 1;
+      },
+      touchFileGetTimeout: noop,
+      dropFileGetQueue: noop,
+      tryResolveHttpFileUrlWaiter: () => false,
+      requestFreshHttpDownloadUrl: async () => ({ url: "https://example.invalid/file" }),
+      rejectHttpFileUrlWaiter: noop,
+      scheduleThumbPollRetry: noop,
+      clearThumbPollRetry: noop,
+      setFileThumb: noop,
+      maybeSetVideoPosterFromBlob: noop,
+      probeImageDimensions: async () => ({ w: null, h: null }),
+      pendingFileDownloads: new Map(),
+      triggerBrowserDownload: () => {
+        calls.browserDownload += 1;
+      },
+      takePendingFileViewer: () => null,
+      clearPendingFileViewer: noop,
+      buildFileViewerModalState: () => ({ kind: "file_viewer" }),
+      postStreamChunk: () => true,
+      postStreamEnd: noop,
+      postStreamError: noop,
+      clearCachedPreviewAttempt: noop,
+      clearPreviewPrefetchAttempt: noop,
+      isUploadActive: () => false,
+      abortUploadByFileId: noop,
+    });
+
+    assert.equal(
+      feature.handleMessage({
+        type: "file_url",
+        file_id: "aud-2",
+        url: "https://yagodka.org/files/aud-2",
+        auth_token: "secret-token-2",
+        name: "voice_2.ogg",
+        size: 8192,
+        mime: "audio/ogg",
+      }),
+      true
+    );
+
+    assert.equal(downloadByFileId.size, 0);
+    assert.equal(calls.browserDownload, 0);
+    assert.equal(calls.save, 1);
+    assert.equal(calls.finish, 1);
+    assert.equal(calls.clearSilent, 1);
+    assert.equal(state.status, "idle");
+    assert.equal(state.fileTransfers[0]?.status, "complete");
+    assert.match(state.fileTransfers[0]?.url || "", /\/web\/__yagodka_media__\/files\/aud-2\?sid=/);
+    assert.equal(messages[0]?.type, "PWA_MEDIA_SOURCE_REGISTER");
+    assert.equal(messages[0]?.headers?.Authorization, "Bearer secret-token-2");
+  } finally {
+    if (prevNavigatorDesc) Object.defineProperty(globalThis, "navigator", prevNavigatorDesc);
+    else delete globalThis.navigator;
+    if (prevLocationDesc) Object.defineProperty(globalThis, "location", prevLocationDesc);
+    else delete globalThis.location;
+    await helper.cleanup();
+  }
+});

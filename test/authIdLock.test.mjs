@@ -333,9 +333,9 @@ test("renderAuthModal: login/register keep a stable corporate heading and reserv
       assert.ok(hasClass(loginNotice, "auth-entry-notice-empty"));
       assert.ok(hasClass(registerNotice, "auth-entry-notice-empty"));
 
-      const failed = helper.renderAuthModal("login", null, "Введите пароль", skins, "telegram-exact", actions);
+      const failed = helper.renderAuthModal("login", null, "Введите код доступа", skins, "telegram-exact", actions);
       const failedNotice = findFirst(failed, (n) => hasClass(n, "auth-entry-notice"));
-      assert.equal(collectText(failedNotice), "Введите пароль");
+      assert.equal(collectText(failedNotice), "Введите код доступа");
       assert.equal(hasClass(failedNotice, "auth-entry-notice-empty"), false);
 
       const loginForm = findFirst(login, (n) => hasClass(n, "auth-entry-form-fixed"));
@@ -381,7 +381,7 @@ test("renderAuthModal: auto-resume screen keeps manual and different-account act
       assert.doesNotMatch(collectText(modal), /Автовход|Подключение|Сессия|Готовим защищённый канал/i);
       const manualBtn = findFirst(
         modal,
-        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Ввести пароль/.test(collectText(n))
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Ввести код/.test(collectText(n))
       );
       const switchBtn = findFirst(
         modal,
@@ -556,7 +556,7 @@ test("renderAuthModal: primary CTA sends login via direct click fallback", async
   }
 });
 
-test("renderAuthModal: manual password input avoids browser credential form semantics", async () => {
+test("renderAuthModal: manual access-code input avoids browser credential form semantics", async () => {
   const helper = await loadRenderAuthModal();
   try {
     withDomStubs(() => {
@@ -576,12 +576,14 @@ test("renderAuthModal: manual password input avoids browser credential form sema
         }
       );
 
-      const passwordInput = findFirst(modal, (n) => typeof n?.getAttribute === "function" && n.getAttribute("id") === "auth-pw");
-      assert.ok(passwordInput, "password input not found");
-      assert.equal(passwordInput.getAttribute("type"), "text");
-      assert.equal(passwordInput.getAttribute("autocomplete"), "off");
-      assert.equal(passwordInput.getAttribute("data-auth-secret"), "1");
-      assert.equal(passwordInput.getAttribute("name"), "manual-passcode");
+      const keyInput = findFirst(modal, (n) => typeof n?.getAttribute === "function" && n.getAttribute("id") === "auth-code");
+      assert.ok(keyInput, "manual key input not found");
+      assert.equal(keyInput.getAttribute("type"), "text");
+      assert.equal(keyInput.getAttribute("autocomplete"), "off");
+      assert.equal(keyInput.getAttribute("data-manual-mask"), "1");
+      assert.equal(keyInput.getAttribute("name"), "manual-entry");
+      assert.equal(findFirst(modal, (n) => typeof n?.getAttribute === "function" && /pw|pass|secret|password/i.test(String(n.getAttribute("id") || ""))), null);
+      assert.equal(findFirst(modal, (n) => typeof n?.getAttribute === "function" && /pw|pass|secret|password/i.test(String(n.getAttribute("name") || ""))), null);
       assert.equal(findFirst(modal, (n) => typeof n?.tagName === "string" && n.tagName === "FORM"), null);
     });
   } finally {

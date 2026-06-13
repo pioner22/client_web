@@ -42,7 +42,7 @@ const AUTH_ENTRY_PANEL_TITLE = "Вход в Ягодку";
 const AUTH_ENTRY_PANEL_SUBTITLE = "Введите данные аккаунта или создайте новый профиль.";
 const AUTH_ENTRY_HERO_TITLE = "Рабочий мессенджер для команды";
 const AUTH_ENTRY_HERO_COPY = "Общайтесь, отправляйте файлы и возвращайтесь к рабочим чатам без лишних шагов.";
-const AUTH_ENTRY_HELPER = "Для входа нужен ID и пароль. Если создаёте аккаунт, сохраните выданный ID после регистрации.";
+const AUTH_ENTRY_HELPER = "Для входа нужен ID и код доступа. Если создаёте аккаунт, сохраните выданный ID после регистрации.";
 const AUTH_MANUAL_FIELD_ATTRS = {
   autocomplete: "off",
   "aria-autocomplete": "none",
@@ -81,7 +81,7 @@ function resolveCopy(mode: AuthMode): EntryCopy {
       panelSubtitle: AUTH_ENTRY_PANEL_SUBTITLE,
       heroTitle: AUTH_ENTRY_HERO_TITLE,
       heroCopy: AUTH_ENTRY_HERO_COPY,
-      primaryLabel: "Ввести пароль",
+      primaryLabel: "Ввести код",
       helper: AUTH_ENTRY_HELPER,
     };
   }
@@ -172,16 +172,16 @@ export function renderAuthModal(
       {
         class: "btn field-action field-action-eye",
         type: "button",
-        "aria-label": "Показать пароль",
+        "aria-label": "Показать ввод",
         "aria-pressed": "false",
-        title: "Показать пароль",
+        title: "Показать ввод",
       },
       [""]
     ) as HTMLButtonElement;
 
     const apply = (visible: boolean) => {
-      if (input.getAttribute("data-auth-secret") === "1") {
-        input.setAttribute("data-secret-visible", visible ? "1" : "0");
+      if (input.getAttribute("data-manual-mask") === "1") {
+        input.setAttribute("data-mask-visible", visible ? "1" : "0");
       } else {
         try {
           input.type = visible ? "text" : "password";
@@ -191,20 +191,20 @@ export function renderAuthModal(
       }
       toggle.classList.toggle("on", visible);
       toggle.setAttribute("aria-pressed", visible ? "true" : "false");
-      toggle.setAttribute("aria-label", visible ? "Скрыть пароль" : "Показать пароль");
-      toggle.title = visible ? "Скрыть пароль" : "Показать пароль";
+      toggle.setAttribute("aria-label", visible ? "Скрыть ввод" : "Показать ввод");
+      toggle.title = visible ? "Скрыть ввод" : "Показать ввод";
     };
 
     toggle.addEventListener("click", () => {
       const visible =
-        input.getAttribute("data-auth-secret") === "1"
-          ? input.getAttribute("data-secret-visible") !== "1"
+        input.getAttribute("data-manual-mask") === "1"
+          ? input.getAttribute("data-mask-visible") !== "1"
           : String(input.type || "").toLowerCase() === "password";
       apply(visible);
       focusElement(input);
     });
 
-    apply(input.getAttribute("data-secret-visible") === "1");
+    apply(input.getAttribute("data-mask-visible") === "1");
     return el("div", { class: "field-with-action" }, [input, toggle]);
   }
 
@@ -303,14 +303,14 @@ export function renderAuthModal(
     );
   } else if (mode === "register") {
     const pw1Input = el("input", {
-      class: "modal-input auth-secret-input",
-      id: "auth-pw1",
-      name: "manual-passcode",
+      class: "modal-input auth-manual-key-input",
+      id: "auth-code-a",
+      name: "manual-entry-a",
       type: "text",
-      placeholder: "Пароль",
+      placeholder: "Код доступа",
       ...AUTH_MANUAL_FIELD_ATTRS,
-      "data-auth-secret": "1",
-      "data-secret-visible": "0",
+      "data-manual-mask": "1",
+      "data-mask-visible": "0",
       autocorrect: "off",
       autocapitalize: "off",
       spellcheck: "false",
@@ -319,14 +319,14 @@ export function renderAuthModal(
       enterkeyhint: "next",
     }) as HTMLInputElement;
     const pw2Input = el("input", {
-      class: "modal-input auth-secret-input",
-      id: "auth-pw2",
-      name: "manual-passcode-repeat",
+      class: "modal-input auth-manual-key-input",
+      id: "auth-code-b",
+      name: "manual-entry-b",
       type: "text",
-      placeholder: "Повторите пароль",
+      placeholder: "Повторите код",
       ...AUTH_MANUAL_FIELD_ATTRS,
-      "data-auth-secret": "1",
-      "data-secret-visible": "0",
+      "data-manual-mask": "1",
+      "data-mask-visible": "0",
       autocorrect: "off",
       autocapitalize: "off",
       spellcheck: "false",
@@ -336,11 +336,11 @@ export function renderAuthModal(
     }) as HTMLInputElement;
     body.append(
       el("div", { class: "auth-field-stack" }, [
-        el("label", { class: "modal-label", for: "auth-pw1" }, ["Пароль"]),
+        el("label", { class: "modal-label", for: "auth-code-a" }, ["Код доступа"]),
         wrapWithPasswordToggle(pw1Input),
       ]),
       el("div", { class: "auth-field-stack" }, [
-        el("label", { class: "modal-label", for: "auth-pw2" }, ["Подтверждение"]),
+        el("label", { class: "modal-label", for: "auth-code-b" }, ["Подтверждение"]),
         wrapWithPasswordToggle(pw2Input),
       ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
@@ -378,14 +378,14 @@ export function renderAuthModal(
       applyLegacyIdMask(idInput);
     });
     const pwInput = el("input", {
-      class: "modal-input auth-secret-input",
-      id: "auth-pw",
-      name: "manual-passcode",
+      class: "modal-input auth-manual-key-input",
+      id: "auth-code",
+      name: "manual-entry",
       type: "text",
-      placeholder: "Пароль",
+      placeholder: "Код доступа",
       ...AUTH_MANUAL_FIELD_ATTRS,
-      "data-auth-secret": "1",
-      "data-secret-visible": "0",
+      "data-manual-mask": "1",
+      "data-mask-visible": "0",
       "data-ios-assistant": "off",
       "data-fancy-caret": "off",
       autocorrect: "off",
@@ -402,7 +402,7 @@ export function renderAuthModal(
     body.append(
       manualIdBlock,
       el("div", { class: "auth-field-stack" }, [
-        el("label", { class: "modal-label", for: "auth-pw" }, ["Пароль"]),
+        el("label", { class: "modal-label", for: "auth-code" }, ["Код доступа"]),
         wrapWithPasswordToggle(pwInput),
       ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),

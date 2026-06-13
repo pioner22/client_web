@@ -2,6 +2,21 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.902",
+    date: "2026-06-13",
+    improved: [
+      "Голосовые сообщения в истории больше не оставляют верхний статус в состоянии «Загружаю голосовое...»: click-to-play запускает silent high-priority hydration и затем отдаёт URL плееру.",
+      "Фото и видео в истории дополнительно очищают устаревший lazy-placeholder после появления настоящего media element, чтобы над изображением не оставалась светлая полоска.",
+      "Просмотрщик фото открывается в fit-to-screen режиме с явной подписью «Вписано», а 100% используется только после ручного zoom.",
+      "Окно авторизации сильнее уходит от browser credential heuristics: поля названы как ручной код доступа и не используют password-like DOM identifiers.",
+      "Android debug APK пересобирается как отдельный клиент `1.0.42 (code 43)` для новой публикации на странице загрузок.",
+    ],
+    fixed: [
+      "Исправлен сценарий, где silent voice/audio file_url не переводился в progressive URL и мог оставлять голосовое вложение без нормального запуска.",
+      "Исправлен хрупкий Android config test: проверка больше не зашивает старый versionCode/versionName и не ломается при каждом релизном bump.",
+    ],
+  },
+  {
     version: "0.1.901",
     date: "2026-06-13",
     improved: [

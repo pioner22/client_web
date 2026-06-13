@@ -162,7 +162,7 @@ export function renderFileViewerModal(
         title: "Увеличить",
         "aria-label": "Увеличить",
       },
-      ["100%"]
+      ["Вписано"]
     );
     const zoomBtnIn = el(
       "button",
@@ -186,7 +186,7 @@ export function renderFileViewerModal(
     const updateZoomUi = () => {
       const zoomed = zoomScale > 1;
       box.classList.toggle("viewer-zoomed", zoomed);
-      zoomBtn.textContent = zoomLabel(zoomScale);
+      zoomBtn.textContent = zoomed ? zoomLabel(zoomScale) : "Вписано";
       zoomBtn.title = zoomed ? "Сбросить масштаб" : "Увеличить";
       zoomBtn.setAttribute("aria-label", zoomed ? "Сбросить масштаб" : "Увеличить");
       (zoomBtnOut as HTMLButtonElement).disabled = zoomScale <= 1;
@@ -208,6 +208,7 @@ export function renderFileViewerModal(
         img.style.removeProperty("height");
         img.style.removeProperty("max-width");
         img.style.removeProperty("max-height");
+        img.style.removeProperty("object-fit");
         zoomBaseW = 0;
         zoomBaseH = 0;
         try {
@@ -250,6 +251,7 @@ export function renderFileViewerModal(
       updateZoomUi();
       img.style.maxWidth = "none";
       img.style.maxHeight = "none";
+      img.style.objectFit = "contain";
       img.style.width = `${Math.max(1, Math.round(baseW * zoomScale))}px`;
       img.style.height = `${Math.max(1, Math.round(baseH * zoomScale))}px`;
 

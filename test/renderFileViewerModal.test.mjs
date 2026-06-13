@@ -297,6 +297,7 @@ test("renderFileViewerModal: footer shell helper and CSS hooks are present", asy
   assert.match(source, /isVideoLikeFile/);
   assert.match(source, /isAudioLikeFile/);
   assert.match(source, /resetImageViewport/);
+  assert.match(source, /"Вписано"/);
   assert.match(helperSource, /viewer-footer-shell/);
   assert.match(helperSource, /viewer-footer-counter/);
   assert.match(mediaKindSource, /resolveMediaKind/);
@@ -309,6 +310,7 @@ test("renderFileViewerModal: footer shell helper and CSS hooks are present", asy
   assert.match(css, /\.viewer-footer-shell:not\(\.viewer-footer-shell-has-rail\)\s+\.viewer-footer-main\s*\{[\s\S]*?var\(--viewer-frame-bottom-pad\)/);
   assert.match(css, /\.viewer-rail\s*\{[\s\S]*?var\(--viewer-frame-bottom-pad,\s*var\(--safe-bottom-pad\)\)/);
   assert.match(css, /\.overlay\.overlay-viewer\s+\.viewer-media\s+\.viewer-img,\s*[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-media\s+\.viewer-video\s*\{[\s\S]*?max-width:\s*min\(100vw,\s*100%\);[\s\S]*?max-height:\s*100%;/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual:not\(\.viewer-zoomed\)\s+\.viewer-media\s+\.viewer-img\s*\{[\s\S]*?max-height:\s*calc\(100dvh - 132px\);/);
   assert.doesNotMatch(css, /max-height:\s*min\(calc\(var\(--app-vh,\s*100vh\)\s*\*\s*0\.8\),\s*100%\)/);
   assert.match(css, /video\.viewer-video\s*\{/);
   assert.match(css, /audio\.viewer-audio\s*\{/);

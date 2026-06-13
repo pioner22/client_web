@@ -60,7 +60,7 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
         store.set((prev) => ({
           ...prev,
           authMode: prev.authRememberedId ? "login" : "register",
-          status: "Соединение установлено. Можно войти по Touch ID или паролю.",
+          status: "Соединение установлено. Можно войти по Touch ID или коду доступа.",
         }));
       });
     }
@@ -68,7 +68,7 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
       ...prev,
       authMode: prev.authRememberedId ? "login" : "register",
       status: prev.authRememberedId
-        ? "Соединение установлено. Введите пароль, чтобы продолжить вход."
+        ? "Соединение установлено. Введите код доступа, чтобы продолжить вход."
         : "Соединение установлено. Можно войти в существующий аккаунт или создать новый.",
     }));
   }
@@ -79,13 +79,13 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
       return;
     }
     const id = (document.getElementById("auth-id") as HTMLInputElement | null)?.value?.trim() ?? "";
-    const pw = (document.getElementById("auth-pw") as HTMLInputElement | null)?.value ?? "";
+    const pw = (document.getElementById("auth-code") as HTMLInputElement | null)?.value ?? "";
     if (!id) {
       store.set({ modal: { kind: "auth", message: "Введите ID" } });
       return;
     }
     if (!pw) {
-      store.set({ modal: { kind: "auth", message: "Введите пароль" } });
+      store.set({ modal: { kind: "auth", message: "Введите код доступа" } });
       return;
     }
     send({ type: "auth", id, password: pw });
@@ -96,15 +96,15 @@ export function createAuthFeature(deps: AuthFeatureDeps): AuthFeature {
       store.set({ status: "Нет соединения с сервером" });
       return;
     }
-    const pw1 = (document.getElementById("auth-pw1") as HTMLInputElement | null)?.value ?? "";
-    const pw2 = (document.getElementById("auth-pw2") as HTMLInputElement | null)?.value ?? "";
+    const pw1 = (document.getElementById("auth-code-a") as HTMLInputElement | null)?.value ?? "";
+    const pw2 = (document.getElementById("auth-code-b") as HTMLInputElement | null)?.value ?? "";
     const pw = pw1;
     if (!pw) {
-      store.set({ modal: { kind: "auth", message: "Введите пароль для регистрации" } });
+      store.set({ modal: { kind: "auth", message: "Введите код доступа для регистрации" } });
       return;
     }
     if (pw1 !== pw2) {
-      store.set({ modal: { kind: "auth", message: "Пароли не совпадают" } });
+      store.set({ modal: { kind: "auth", message: "Коды доступа не совпадают" } });
       return;
     }
     send({ type: "register", password: pw });

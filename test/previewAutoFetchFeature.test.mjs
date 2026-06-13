@@ -83,3 +83,10 @@ test("previewAutoFetchFeature: history audio nodes stay in visible hydration sca
   assert.match(src, /for\s*\(const node of Array\.from\(audioNodes\)\)\s*\{[\s\S]*?kind:\s*"audio"/);
   assert.match(src, /for\s*\(const node of Array\.from\(audioNodes\)\)\s*\{[\s\S]*?node\.getAttribute\("data-msg-idx"\)/);
 });
+
+test("previewAutoFetchFeature: loaded media clears stale placeholder strip", async () => {
+  const src = await readFile(path.resolve("src/app/features/files/previewAutoFetchFeature.ts"), "utf8");
+  assert.match(src, /function\s+clearPreviewPlaceholder/);
+  assert.match(src, /node\.querySelector\("img\.chat-file-img,\s*video\.chat-file-video"\)/);
+  assert.match(src, /if\s*\(!mediaFailed\s*&&\s*\(img instanceof HTMLImageElement \|\| video instanceof HTMLVideoElement\)\)\s*\{[\s\S]*?clearPreviewPlaceholder\(node\)/);
+});
