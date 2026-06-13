@@ -899,6 +899,14 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   background: #000;
 }
 
+/* W-1006: stale lazy placeholders must never draw a strip over loaded media. */
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-file-placeholder,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-file-placeholder,
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-media-state,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty):not(.chat-file-preview-missing) > .chat-media-state {
+  display: none !important;
+}
+
 .chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="image"] .msg-attach-footer-media,
 .chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="video"] .msg-attach-footer-media {
   width: 100%;

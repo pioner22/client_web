@@ -138,6 +138,32 @@
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M6 5h4v14H6zm8 0h4v14h-4z'/%3E%3C/svg%3E") no-repeat center / contain;
 }
 
+@keyframes chat-voice-wave {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 14px 0;
+  }
+}
+
+@keyframes chat-voice-progress-pulse {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.chat-voice[data-voice-state="playing"] .chat-voice-play {
+  background: color-mix(in srgb, var(--msg-accent, var(--accent)), transparent 84%);
+  color: color-mix(in srgb, var(--msg-accent, var(--accent)), var(--text) 10%);
+}
+
 .chat-voice-track {
   flex: 1 1 auto;
   min-width: 132px;
@@ -167,6 +193,11 @@
   mask-image: linear-gradient(to bottom, transparent 0%, #000 26%, #000 74%, transparent 100%);
 }
 
+.chat-voice[data-voice-state="playing"] .chat-voice-track::before {
+  opacity: 0.72;
+  animation: chat-voice-wave 680ms linear infinite;
+}
+
 .chat-voice-progress {
   display: block;
   width: var(--voice-progress, 0%);
@@ -179,6 +210,10 @@
   );
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 82%, transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 82%, transparent 100%);
+}
+
+.chat-voice[data-voice-state="playing"] .chat-voice-progress {
+  animation: chat-voice-progress-pulse 920ms ease-in-out infinite;
 }
 
 .chat-voice-time {
@@ -223,6 +258,13 @@
 
 .chat-voice.chat-voice-placeholder {
   opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-voice[data-voice-state="playing"] .chat-voice-track::before,
+  .chat-voice[data-voice-state="playing"] .chat-voice-progress {
+    animation: none;
+  }
 }
 
 .file-row-chat.file-row-image.file-row-video-note {

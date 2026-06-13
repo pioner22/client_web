@@ -1730,11 +1730,11 @@ html[data-theme="dark"] .chat:not(.chat-board) {
 .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-stage {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: calc(100dvh - 96px);
+  max-height: min(82dvh, calc(100dvh - 128px));
 }
 
 .overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-stage {
-  max-height: calc(100dvh - 170px);
+  max-height: min(74dvh, calc(100dvh - 228px));
 }
 
 .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media,
@@ -1743,6 +1743,15 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   height: 100%;
   max-height: 100%;
   overflow: hidden;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual:not(.viewer-zoomed) .viewer-img-scroll {
+  box-sizing: border-box;
+  padding: clamp(4px, 1.2vh, 14px) clamp(12px, 4vw, 88px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail:not(.viewer-zoomed) .viewer-img-scroll {
+  padding-bottom: clamp(8px, 1.6vh, 18px);
 }
 
 .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media .viewer-img,
@@ -1771,11 +1780,11 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   }
 
   .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-stage {
-    max-height: calc(100dvh - 116px);
+    max-height: min(78dvh, calc(100dvh - 116px));
   }
 
   .overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-stage {
-    max-height: calc(100dvh - 182px);
+    max-height: min(68dvh, calc(100dvh - 182px));
   }
 
   .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell {

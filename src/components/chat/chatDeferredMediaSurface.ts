@@ -164,7 +164,10 @@ function renderVoicePlayer(opts: RenderDeferredVoicePlayerCtx["opts"]): HTMLElem
       takeMediaFocus(audio);
       if (voiceLike) applyVoicePlaybackRate(audio);
       setState("playing");
-      void audio.play().catch(() => setState("paused"));
+      void audio.play().catch(() => {
+        releaseMediaFocus(audio);
+        setState("paused");
+      });
     } else {
       audio.pause();
       setState("paused");
@@ -232,6 +235,10 @@ function renderVoicePlayer(opts: RenderDeferredVoicePlayerCtx["opts"]): HTMLElem
     releaseMediaFocus(audio);
     setState("paused");
   });
+  audio.addEventListener("error", () => {
+    releaseMediaFocus(audio);
+    setState("paused");
+  });
   audio.addEventListener("play", () => {
     takeMediaFocus(audio);
     if (voiceLike) {
@@ -250,7 +257,10 @@ function renderVoicePlayer(opts: RenderDeferredVoicePlayerCtx["opts"]): HTMLElem
     takeMediaFocus(audio);
     if (voiceLike) applyVoicePlaybackRate(audio);
     setState("playing");
-    void audio.play().catch(() => setState("paused"));
+    void audio.play().catch(() => {
+      releaseMediaFocus(audio);
+      setState("paused");
+    });
   }
 
   return wrap;

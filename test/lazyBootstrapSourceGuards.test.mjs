@@ -148,6 +148,8 @@ test("lazy bootstrap: mountApp and late wiring keep debug/PWA runtime behind laz
   const chatSurfaceMediaRuntimeSrc = await readSrc("src/app/features/navigation/chatSurfaceMediaRuntime.ts");
   assert.match(chatSurfaceMediaRuntimeSrc, /import\("\.\/chatSurfaceMediaActions"\)/);
   assert.match(chatSurfaceMediaRuntimeSrc, /handleVoicePlaceholderClick/);
+  assert.match(chatSurfaceMediaRuntimeSrc, /toggleResolvedVoicePlayback/);
+  assert.match(chatSurfaceMediaRuntimeSrc, /ensureVoiceFallbackBound/);
   assert.match(chatSurfaceMediaRuntimeSrc, /handleMediaToggleClick/);
   assert.match(chatSurfaceMediaRuntimeSrc, /handleOpenFileViewerClick/);
 
