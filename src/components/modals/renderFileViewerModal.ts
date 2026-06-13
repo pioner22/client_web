@@ -32,6 +32,7 @@ export interface FileViewerModalActions {
 export interface FileViewerModalOptions {
   autoplay?: boolean;
   posterUrl?: string | null;
+  fallbackUrl?: string | null;
 }
 
 function formatBytes(size: number): string {
@@ -97,6 +98,8 @@ export function renderFileViewerModal(
   const shouldAutoplay = Boolean(isVideo && opts?.autoplay);
   const posterRaw = isVideo ? String(opts?.posterUrl || "").trim() : "";
   const posterUrl = posterRaw ? safeUrl(posterRaw, { base: window.location.href, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
+  const fallbackRaw = isImage ? String(opts?.fallbackUrl || "").trim() : "";
+  const fallbackUrl = fallbackRaw ? safeUrl(fallbackRaw, { base: window.location.href, allowedProtocols: ["http:", "https:", "blob:"] }) : null;
 
   const authorId = String(meta?.authorId || "").trim();
   const authorKind = meta?.authorKind || "dm";
@@ -646,11 +649,39 @@ export function renderFileViewerModal(
       });
     };
     let preloaderSettled = false;
+    let fallbackTried = false;
     let preloaderStallTimer: ReturnType<typeof setTimeout> | null = null;
     const clearPreloaderStallTimer = () => {
       if (preloaderStallTimer === null) return;
       clearTimeout(preloaderStallTimer);
       preloaderStallTimer = null;
+    };
+    const armPreloaderStallTimer = () => {
+      clearPreloaderStallTimer();
+      preloaderStallTimer = setTimeout(() => {
+        if (preloaderSettled) return;
+        onFailed();
+      }, 8_000);
+      (preloaderStallTimer as any)?.unref?.();
+    };
+    const tryFallbackImage = (): boolean => {
+      if (!fallbackUrl || fallbackTried) return false;
+      const current = String(img.currentSrc || img.src || "").trim();
+      if (current && current === fallbackUrl) return false;
+      fallbackTried = true;
+      setViewerLoadState("loading");
+      preloader.classList.remove("viewer-preloader-failed");
+      preloaderText.textContent = "Показываем превью…";
+      armPreloaderStallTimer();
+      img.src = fallbackUrl;
+      if (actions.onRecover) {
+        try {
+          actions.onRecover();
+        } catch {
+          // ignore
+        }
+      }
+      return true;
     };
     const onLoaded = () => {
       if (preloaderSettled) return;
@@ -667,6 +698,7 @@ export function renderFileViewerModal(
     };
     const onFailed = () => {
       if (preloaderSettled) return;
+      if (tryFallbackImage()) return;
       preloaderSettled = true;
       clearPreloaderStallTimer();
       setViewerLoadState("error");
@@ -681,14 +713,10 @@ export function renderFileViewerModal(
         }
       }
     };
-    img.addEventListener("load", onLoaded, { once: true });
-    img.addEventListener("error", onFailed, { once: true });
+    img.addEventListener("load", onLoaded);
+    img.addEventListener("error", onFailed);
     setViewerLoadState("loading");
-    preloaderStallTimer = setTimeout(() => {
-      if (preloaderSettled) return;
-      onFailed();
-    }, 8_000);
-    (preloaderStallTimer as any)?.unref?.();
+    armPreloaderStallTimer();
     img.src = safeHref;
     if (img.complete) {
       if (img.naturalWidth > 0) onLoaded();

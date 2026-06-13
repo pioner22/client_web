@@ -306,6 +306,9 @@ test("renderFileViewerModal: footer shell helper and CSS hooks are present", asy
   assert.match(source, /data-viewer-fit/);
   assert.match(source, /data-viewer-load/);
   assert.match(source, /preloaderStallTimer/);
+  assert.match(source, /fallbackUrl/);
+  assert.match(source, /tryFallbackImage/);
+  assert.match(source, /Показываем превью/);
   assert.match(source, /"Вписано"/);
   assert.match(helperSource, /viewer-footer-shell/);
   assert.match(helperSource, /viewer-footer-counter/);
@@ -401,6 +404,10 @@ test("renderFileViewerModal: W-1014 viewer polish is imported after legacy polis
   assert.match(css, /W-1014:\s*hard viewer\/media geometry/);
   assert.match(css, /grid-template-rows:\s*minmax\(0,\s*1fr\)\s*!important;/);
   assert.match(css, /\.viewer-header\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?pointer-events:\s*none;/);
+  assert.match(css, /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.viewer-header-info\s*\{[\s\S]*?display:\s*none;/);
+  assert.match(css, /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?\.viewer-header-actions\s*\{[\s\S]*?max-width:\s*calc\(100dvw - max\(20px,\s*env\(safe-area-inset-left\)\) - max\(20px,\s*env\(safe-area-inset-right\)\)\);/);
+  assert.match(css, /\.modal\.modal-viewer:not\(\.viewer-visual\)\s*\{[\s\S]*?width:\s*100dvw;[\s\S]*?overflow:\s*hidden;/);
+  assert.match(css, /\.modal\.modal-viewer:not\(\.viewer-visual\)\s+\.viewer-action-btn\s*\{[\s\S]*?flex:\s*0 0 38px;[\s\S]*?width:\s*38px;/);
   assert.match(css, /\.viewer-stage,[\s\S]*?\.viewer-has-rail \.viewer-stage\s*\{[\s\S]*?padding:\s*var\(--viewer-w1014-top\)\s+0\s+var\(--viewer-w1014-bottom\);/);
   assert.match(css, /\.viewer-footer-shell\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*0;/);
   assert.match(css, /\.viewer-img[\s\S]*?max-height:\s*calc\(var\(--app-vh,\s*100dvh\)\s*-\s*var\(--viewer-w1014-top\)\s*-\s*var\(--viewer-w1014-bottom\)\s*-\s*10px\)\s*!important;/);

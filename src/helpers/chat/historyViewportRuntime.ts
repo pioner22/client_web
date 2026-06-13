@@ -6,6 +6,7 @@ export interface ChatHistoryViewportRuntimeState {
   pendingBottomStickKey: string | null;
   pendingBottomStickUntil: number;
   shiftAnchor: ChatShiftAnchor | null;
+  viewerReturnAnchor: ChatShiftAnchor | null;
   compensatedAt: number;
   virtualAvgHeights: Map<string, number>;
   unreadAnchors: Map<string, UnreadDividerAnchor>;
@@ -25,6 +26,7 @@ function createRuntimeState(): ChatHistoryViewportRuntimeState {
     pendingBottomStickKey: null,
     pendingBottomStickUntil: 0,
     shiftAnchor: null,
+    viewerReturnAnchor: null,
     compensatedAt: 0,
     virtualAvgHeights: new Map(),
     unreadAnchors: new Map(),
@@ -88,6 +90,12 @@ export function captureAndStoreChatShiftAnchor(host: HTMLElement, key: string): 
   return anchor;
 }
 
+export function captureAndStoreViewerReturnAnchor(host: HTMLElement, key: string): ChatShiftAnchor | null {
+  const anchor = captureChatShiftAnchor(host, key);
+  getChatHistoryViewportRuntime(host).viewerReturnAnchor = anchor;
+  return anchor;
+}
+
 export function disconnectChatHistoryViewportObserver(host: HTMLElement): void {
   const runtime = getChatHistoryViewportRuntime(host);
   const observer = runtime.linesObserver;
@@ -108,6 +116,7 @@ export function resetChatHistoryViewportRuntime(host: HTMLElement): void {
   runtime.pendingBottomStickKey = null;
   runtime.pendingBottomStickUntil = 0;
   runtime.shiftAnchor = null;
+  runtime.viewerReturnAnchor = null;
   runtime.compensatedAt = 0;
   runtime.virtualAvgHeights.clear();
   runtime.unreadAnchors.clear();

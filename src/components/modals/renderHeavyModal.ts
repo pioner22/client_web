@@ -261,6 +261,6 @@ export function renderFileViewerHeavyModal(
       ...(canDelete ? { onDelete: () => actions.onFileViewerDelete(), canDelete } : {}),
       ...(viewerMessage ? { onOpenAt: (msgIdx: number) => actions.onFileViewerOpenAt(msgIdx) } : {}),
     },
-    { autoplay: Boolean(modal.autoplay), posterUrl }
+    { autoplay: Boolean(modal.autoplay), posterUrl, fallbackUrl: modal.fallbackUrl ?? null }
   );
 }

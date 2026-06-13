@@ -257,6 +257,7 @@ export type ModalState =
       size: number;
       mime?: string | null;
       caption?: string | null;
+      fallbackUrl?: string | null;
       autoplay?: boolean;
       chatKey?: string | null;
       msgIdx?: number | null;

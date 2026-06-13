@@ -195,6 +195,8 @@ export function renderChat(layout: Layout, state: AppState) {
   const prevScrollTop = scrollHost.scrollTop;
   const atBottomBefore = scrollHost.scrollTop >= maxScrollTop() - 24;
   const viewportRuntime = getChatHistoryViewportRuntime(scrollHost);
+  const viewerReturnAnchor =
+    key && !keyChanged && viewportRuntime.viewerReturnAnchor?.key === key ? viewportRuntime.viewerReturnAnchor : null;
   const sticky = viewportRuntime.stickyBottom;
   const stickyActive = isChatStickyBottomActive(scrollHost, sticky, key);
   const pendingBottomStickActive = isChatPendingBottomStickActive(scrollHost, key);
@@ -219,10 +221,13 @@ export function renderChat(layout: Layout, state: AppState) {
   );
   if (tailMessageAppended) markChatPendingBottomStick(scrollHost, key, Date.now(), 2500);
   // Keep pinned-bottom stable during re-renders/content growth, including the first render after a sent-message autoscroll mark.
-  const shouldStick = Boolean(key && !keyChanged && allowSticky && (stickyActive || atBottomBefore || pendingBottomStickActive || tailMessageAppended));
-  const preShiftAnchor = key && !keyChanged && !shouldStick ? captureChatShiftAnchor(scrollHost, key) : null;
+  const shouldStick = Boolean(
+    key && !keyChanged && !viewerReturnAnchor && allowSticky && (stickyActive || atBottomBefore || pendingBottomStickActive || tailMessageAppended)
+  );
+  const preShiftAnchor = viewerReturnAnchor ?? (key && !keyChanged && !shouldStick ? captureChatShiftAnchor(scrollHost, key) : null);
   if (keyChanged && viewportRuntime.stickyBottom) viewportRuntime.stickyBottom = null;
   if (keyChanged && viewportRuntime.shiftAnchor) viewportRuntime.shiftAnchor = null;
+  if (keyChanged && viewportRuntime.viewerReturnAnchor) viewportRuntime.viewerReturnAnchor = null;
   else if (key) {
     if (shouldStick) viewportRuntime.stickyBottom = createChatStickyBottomState(scrollHost, key, true);
     else if (viewportRuntime.stickyBottom && viewportRuntime.stickyBottom.key === key) {
@@ -418,6 +423,7 @@ export function renderChat(layout: Layout, state: AppState) {
     prevRender.searchDate === renderState.searchDate &&
     prevRender.contextMenuMessageIdx === renderState.contextMenuMessageIdx;
   if (
+    !viewerReturnAnchor &&
     canSkipRenderExceptTransfers &&
     prevRender.fileTransfersRef !== renderState.fileTransfersRef &&
     transferProgressTickOnly(prevRender.fileTransfersRef, renderState.fileTransfersRef)
@@ -426,7 +432,7 @@ export function renderChat(layout: Layout, state: AppState) {
     patchChatTransferProgress(scrollHost, renderState.fileTransfersRef);
     return;
   }
-  if (canSkipRender) return;
+  if (canSkipRender && !viewerReturnAnchor) return;
   hostState.__chatRenderState = renderState;
   const mobileLikeUi = isMobileLikeUi();
   const memoryGb = (() => {
@@ -718,6 +724,9 @@ export function renderChat(layout: Layout, state: AppState) {
     } catch {
       // ignore
     }
+  }
+  if (viewerReturnAnchor && viewportRuntime.viewerReturnAnchor === viewerReturnAnchor) {
+    viewportRuntime.viewerReturnAnchor = null;
   }
   const atBottomNow = scrollHost.scrollTop >= maxScrollTop() - 24;
   layout.chatJump.classList.toggle("hidden", !key || shouldStick || atBottomNow);

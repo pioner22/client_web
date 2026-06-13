@@ -24,6 +24,7 @@ async function loadHelper() {
     const mod = await import(pathToFileURL(outfile).href);
     if (typeof mod.getChatHistoryViewportRuntime !== "function") throw new Error("getChatHistoryViewportRuntime export missing");
     if (typeof mod.captureAndStoreChatShiftAnchor !== "function") throw new Error("captureAndStoreChatShiftAnchor export missing");
+    if (typeof mod.captureAndStoreViewerReturnAnchor !== "function") throw new Error("captureAndStoreViewerReturnAnchor export missing");
     if (typeof mod.markChatPendingBottomStick !== "function") throw new Error("markChatPendingBottomStick export missing");
     if (typeof mod.isChatPendingBottomStickActive !== "function") throw new Error("isChatPendingBottomStickActive export missing");
     if (typeof mod.clearChatPendingBottomStick !== "function") throw new Error("clearChatPendingBottomStick export missing");
@@ -31,6 +32,7 @@ async function loadHelper() {
     return {
       getChatHistoryViewportRuntime: mod.getChatHistoryViewportRuntime,
       captureAndStoreChatShiftAnchor: mod.captureAndStoreChatShiftAnchor,
+      captureAndStoreViewerReturnAnchor: mod.captureAndStoreViewerReturnAnchor,
       markChatPendingBottomStick: mod.markChatPendingBottomStick,
       isChatPendingBottomStickActive: mod.isChatPendingBottomStickActive,
       clearChatPendingBottomStick: mod.clearChatPendingBottomStick,
@@ -89,6 +91,33 @@ test("historyViewportRuntime: keeps one shared runtime per host and stores captu
   }
 });
 
+test("historyViewportRuntime: stores a separate viewer return anchor", async () => {
+  const { getChatHistoryViewportRuntime, captureAndStoreViewerReturnAnchor, cleanup } = await loadHelper();
+  try {
+    const first = createMsgNode(201, 34, 94);
+    const host = {
+      scrollTop: 640,
+      firstElementChild: { children: [first] },
+      getBoundingClientRect: () => ({ top: 0, bottom: 220 }),
+    };
+
+    const anchor = captureAndStoreViewerReturnAnchor(host, "dm:viewer");
+    const runtime = getChatHistoryViewportRuntime(host);
+
+    assert.deepEqual(anchor, {
+      key: "dm:viewer",
+      msgKey: "msg:201",
+      msgId: 201,
+      rectTop: 34,
+      scrollTop: 640,
+    });
+    assert.equal(runtime.viewerReturnAnchor, anchor);
+    assert.equal(runtime.shiftAnchor, null);
+  } finally {
+    await cleanup();
+  }
+});
+
 test("historyViewportRuntime: pending bottom stick is scoped, expires, and can be cleared", async () => {
   const {
     getChatHistoryViewportRuntime,
@@ -128,6 +157,7 @@ test("historyViewportRuntime: reset clears sticky/anchor state and disconnects o
     runtime.pendingBottomStickKey = "dm:123";
     runtime.pendingBottomStickUntil = 2000;
     runtime.shiftAnchor = { key: "dm:123", msgKey: "msg:101", msgId: 101, rectTop: 40, scrollTop: 480 };
+    runtime.viewerReturnAnchor = { key: "dm:123", msgKey: "msg:102", msgId: 102, rectTop: 80, scrollTop: 560 };
     runtime.compensatedAt = 123456;
     runtime.virtualAvgHeights.set("dm:123", 92);
     runtime.unreadAnchors.set("dm:123", { msgKey: "msg:101", msgId: 101 });
@@ -146,6 +176,7 @@ test("historyViewportRuntime: reset clears sticky/anchor state and disconnects o
     assert.equal(runtime.pendingBottomStickKey, null);
     assert.equal(runtime.pendingBottomStickUntil, 0);
     assert.equal(runtime.shiftAnchor, null);
+    assert.equal(runtime.viewerReturnAnchor, null);
     assert.equal(runtime.compensatedAt, 0);
     assert.equal(runtime.virtualAvgHeights.size, 0);
     assert.equal(runtime.unreadAnchors.size, 0);
@@ -172,6 +203,8 @@ test("history autoscroll: sent-message pending bottom stick is wired into render
   assert.match(renderChatSrc, /markChatPendingBottomStick\(scrollHost,\s*key,\s*Date\.now\(\),\s*2500\)/);
   assert.match(renderChatSrc, /window\.setTimeout\(stickNow,\s*260\)/);
   assert.match(renderChatSrc, /clearChatPendingBottomStick\(scrollHost,\s*key\)/);
+  assert.match(renderChatSrc, /viewerReturnAnchor/);
+  assert.match(renderChatSrc, /!viewerReturnAnchor\s*&&\s*allowSticky/);
   assert.match(renderChatSrc, /isChatPendingBottomStickActive\(scrollHost,\s*curKey\)\s*\|\|\s*isChatStickyBottomActive/);
   assert.match(historyFeatureSrc, /markChatPendingBottomStick\(chatHost,\s*k\)/);
   assert.match(mountAppSrc, /markChatPendingBottomStick\(host,\s*k\)/);
@@ -179,6 +212,8 @@ test("history autoscroll: sent-message pending bottom stick is wired into render
   assert.match(mountAppSrc, /window\.setTimeout\(stickNow,\s*260\)/);
   assert.match(mountAppSrc, /chatHost:\s*layout\.chatHost/);
   assert.match(modalCloseSrc, /closeFileViewerState/);
+  assert.match(modalCloseSrc, /captureAndStoreViewerReturnAnchor/);
+  assert.match(modalCloseSrc, /isChatHostNearBottom\(chatHost,\s*32\)/);
   assert.match(modalCloseSrc, /delete historyVirtualStart\[key\]/);
   assert.match(modalCloseSrc, /markChatPendingBottomStick\(chatHost,\s*key,\s*Date\.now\(\),\s*2500\)/);
 });

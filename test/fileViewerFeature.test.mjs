@@ -403,3 +403,206 @@ test("fileViewerFeature: terminal visual not_found is not re-enqueued from chat 
     await helper.cleanup();
   }
 });
+
+test("fileViewerFeature: pdf message is not treated as visual gallery media", async () => {
+  const helper = await loadFeature();
+  try {
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "doc-1",
+              name: "contract.pdf",
+              size: 123,
+              mime: "application/pdf",
+            },
+          },
+        ],
+      },
+      fileOffersIn: [],
+      fileTransfers: [],
+      fileThumbs: {},
+      modal: null,
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") Object.assign(storeState, patch);
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        return false;
+      },
+      enqueueFileGet() {
+        throw new Error("pdf visual open must not enqueue");
+      },
+      setPendingFileViewer() {},
+    });
+
+    const opened = await feature.openFromMessageIndex("dm:222", 0, { kindHint: undefined });
+    assert.equal(opened, false);
+    assert.equal(storeState.modal, null);
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("fileViewerFeature: thumb-only unknown attachment opens as image preview and queues full upgrade", async () => {
+  const helper = await loadFeature();
+  try {
+    const enqueued = [];
+    const pending = [];
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "thumb-only",
+              name: "файл",
+              size: 0,
+              mime: null,
+            },
+          },
+        ],
+      },
+      fileOffersIn: [],
+      fileTransfers: [],
+      fileThumbs: {
+        "thumb-only": { url: "blob:thumb-only", mime: "image/jpeg", ts: 1000 },
+      },
+      modal: null,
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") Object.assign(storeState, patch);
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        return false;
+      },
+      enqueueFileGet(fileId) {
+        enqueued.push(String(fileId));
+      },
+      setPendingFileViewer(state) {
+        pending.push(state);
+      },
+    });
+
+    const opened = await feature.openFromMessageIndex("dm:222", 0);
+    assert.equal(opened, true);
+    assert.equal(storeState.modal?.kind, "file_viewer");
+    assert.equal(storeState.modal?.url, "blob:thumb-only");
+    assert.equal(storeState.modal?.mime, "image/jpeg");
+    assert.deepEqual(enqueued, ["thumb-only"]);
+    assert.equal(pending[0]?.fileId, "thumb-only");
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("fileViewerFeature: image full url keeps thumb fallback for mobile recovery", async () => {
+  const helper = await loadFeature();
+  try {
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "img-1",
+              name: "IMG_3375.jpeg",
+              size: 123,
+              mime: "image/jpeg",
+            },
+          },
+        ],
+      },
+      fileOffersIn: [],
+      fileTransfers: [
+        {
+          localId: "ft-img",
+          id: "img-1",
+          name: "IMG_3375.jpeg",
+          size: 123,
+          mime: "image/jpeg",
+          direction: "in",
+          peer: "222",
+          status: "complete",
+          progress: 100,
+          url: "blob:full-img",
+        },
+      ],
+      fileThumbs: {
+        "img-1": { url: "blob:thumb-img", mime: "image/jpeg", ts: 1000 },
+      },
+      modal: null,
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") Object.assign(storeState, patch);
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        return false;
+      },
+      enqueueFileGet() {
+        throw new Error("complete image should open direct url");
+      },
+      setPendingFileViewer() {},
+    });
+
+    const opened = await feature.openFromMessageIndex("dm:222", 0);
+    assert.equal(opened, true);
+    assert.equal(storeState.modal?.url, "blob:full-img");
+    assert.equal(storeState.modal?.fallbackUrl, "blob:thumb-img");
+  } finally {
+    await helper.cleanup();
+  }
+});
