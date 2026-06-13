@@ -424,6 +424,248 @@ test("pwaUpdateFeature: standalone PWA keeps updates manual and does not auto-re
   }
 });
 
+test("pwaUpdateFeature: pending build from startup gate opens manual update prompt", async () => {
+  const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const prevSessionStorageDesc = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const prevLocalStorageDesc = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const prevFetch = globalThis.fetch;
+  const helper = await loadFeature();
+  try {
+    const windowTarget = makeEventTarget();
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    sessionStorage.setItem("yagodka_pending_pwa_build_v1", JSON.stringify({ buildId: "0.1.792-abcdef123456", ts: Date.now() }));
+    const windowStub = {
+      ...windowTarget,
+      localStorage,
+      sessionStorage,
+      location: { href: "https://yagodka.org/web/", protocol: "https:" },
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    };
+    Object.defineProperty(globalThis, "window", { value: windowStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: { visibilityState: "visible", activeElement: null },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: { serviceWorker: { getRegistration: async () => null, ready: Promise.resolve(null) } },
+      configurable: true,
+      writable: true,
+    });
+    globalThis.fetch = async () => {
+      throw new Error("offline");
+    };
+
+    const store = {
+      state: {
+        authed: true,
+        conn: "connected",
+        selfId: "111",
+        clientVersion: "0.1.791-27ef803b5f72",
+        updateLatest: null,
+        pwaUpdateAvailable: false,
+        status: "",
+        fileTransfers: [],
+        historyLoading: {},
+        modal: null,
+        editing: null,
+        replyDraft: null,
+        forwardDraft: null,
+        chatSelection: null,
+      },
+      get() {
+        return this.state;
+      },
+      set(patch) {
+        this.state =
+          typeof patch === "function"
+            ? patch(this.state)
+            : {
+                ...this.state,
+                ...patch,
+              };
+      },
+    };
+
+    const feature = helper.createPwaUpdateFeature({
+      store,
+      send: () => {},
+      flushBeforeReload: () => {},
+      getLastUserInputAt: () => 0,
+      hasPendingHistoryActivityForUpdate: () => false,
+      hasPendingPreviewActivityForUpdate: () => false,
+      hasPendingFileActivityForUpdate: () => false,
+    });
+    feature.installEventListeners();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(store.state.updateLatest, "0.1.792-abcdef123456");
+    assert.equal(store.state.pwaUpdateAvailable, true);
+    assert.deepEqual(store.state.modal, { kind: "pwa_update" });
+    assert.match(store.state.status, /Можно обновить сейчас или позже/);
+  } finally {
+    if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
+    else delete globalThis.window;
+    if (prevDocumentDesc) Object.defineProperty(globalThis, "document", prevDocumentDesc);
+    else delete globalThis.document;
+    if (prevNavigatorDesc) Object.defineProperty(globalThis, "navigator", prevNavigatorDesc);
+    else delete globalThis.navigator;
+    if (prevSessionStorageDesc) Object.defineProperty(globalThis, "sessionStorage", prevSessionStorageDesc);
+    else delete globalThis.sessionStorage;
+    if (prevLocalStorageDesc) Object.defineProperty(globalThis, "localStorage", prevLocalStorageDesc);
+    else delete globalThis.localStorage;
+    globalThis.fetch = prevFetch;
+    await helper.cleanup();
+  }
+});
+
+test("pwaUpdateFeature: manual update does not blind-reload when new build is not confirmed", async () => {
+  const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const prevLocationDesc = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const prevEventDesc = Object.getOwnPropertyDescriptor(globalThis, "Event");
+  const prevCustomEventDesc = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
+  const prevFetch = globalThis.fetch;
+  const helper = await loadFeature();
+  try {
+    const windowTarget = makeEventTarget();
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    const replaceCalls = [];
+    const windowStub = {
+      ...windowTarget,
+      localStorage,
+      sessionStorage,
+      location: {
+        href: "https://yagodka.org/web/",
+        protocol: "https:",
+        replace(url) {
+          replaceCalls.push(String(url));
+        },
+        reload() {
+          replaceCalls.push("reload");
+        },
+      },
+      setTimeout(fn) {
+        fn();
+        return 1;
+      },
+      clearTimeout() {},
+    };
+    class EventStub {
+      constructor(type) {
+        this.type = String(type);
+      }
+    }
+    class CustomEventStub extends EventStub {
+      constructor(type, init = {}) {
+        super(type);
+        this.detail = init.detail;
+      }
+    }
+    const reg = {
+      waiting: null,
+      active: { postMessage() {} },
+      installing: null,
+      update: async () => new Promise(() => {}),
+    };
+    Object.defineProperty(globalThis, "window", { value: windowStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: { visibilityState: "visible", activeElement: null },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          controller: { postMessage() {} },
+          getRegistration: async () => reg,
+          ready: Promise.resolve(reg),
+          addEventListener() {},
+          removeEventListener() {},
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "location", { value: windowStub.location, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "Event", { value: EventStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "CustomEvent", { value: CustomEventStub, configurable: true, writable: true });
+    globalThis.fetch = async () => {
+      throw new Error("offline");
+    };
+
+    const store = {
+      state: {
+        authed: true,
+        conn: "connected",
+        selfId: "111",
+        clientVersion: "0.1.791-27ef803b5f72",
+        updateLatest: "0.1.792-abcdef123456",
+        pwaUpdateAvailable: true,
+        status: "",
+        fileTransfers: [],
+        historyLoading: {},
+        modal: { kind: "pwa_update" },
+        editing: null,
+        replyDraft: null,
+        forwardDraft: null,
+        chatSelection: null,
+      },
+      get() {
+        return this.state;
+      },
+      set(patch) {
+        this.state =
+          typeof patch === "function"
+            ? patch(this.state)
+            : {
+                ...this.state,
+                ...patch,
+              };
+      },
+    };
+
+    const feature = helper.createPwaUpdateFeature({
+      store,
+      send: () => {},
+      flushBeforeReload: () => {},
+      getLastUserInputAt: () => 0,
+      hasPendingHistoryActivityForUpdate: () => false,
+      hasPendingPreviewActivityForUpdate: () => false,
+      hasPendingFileActivityForUpdate: () => false,
+    });
+    await feature.applyPwaUpdateNow({ mode: "manual" });
+
+    assert.deepEqual(replaceCalls, []);
+    assert.equal(store.state.pwaUpdateAvailable, true);
+    assert.deepEqual(store.state.modal, { kind: "pwa_update" });
+    assert.match(store.state.status, /Не удалось проверить загрузку обновления/);
+  } finally {
+    if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
+    else delete globalThis.window;
+    if (prevDocumentDesc) Object.defineProperty(globalThis, "document", prevDocumentDesc);
+    else delete globalThis.document;
+    if (prevNavigatorDesc) Object.defineProperty(globalThis, "navigator", prevNavigatorDesc);
+    else delete globalThis.navigator;
+    if (prevLocationDesc) Object.defineProperty(globalThis, "location", prevLocationDesc);
+    else delete globalThis.location;
+    if (prevEventDesc) Object.defineProperty(globalThis, "Event", prevEventDesc);
+    else delete globalThis.Event;
+    if (prevCustomEventDesc) Object.defineProperty(globalThis, "CustomEvent", prevCustomEventDesc);
+    else delete globalThis.CustomEvent;
+    globalThis.fetch = prevFetch;
+    await helper.cleanup();
+  }
+});
+
 test("pwaUpdateFeature: auto-apply waits while recent media failures keep PWA stability hold active", async () => {
   const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
   const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");

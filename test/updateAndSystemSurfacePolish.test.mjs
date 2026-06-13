@@ -10,7 +10,8 @@ test("pwa update modal has a dedicated mobile-safe update overlay", async () => 
   const css = await readCssWithImports("src/scss/modal.css");
 
   assert.match(modalSrc, /modal-pwa-update/);
-  assert.match(modalSrc, /Обновление готово/);
+  assert.match(modalSrc, /Доступно обновление/);
+  assert.match(modalSrc, /подготовит обновлённые файлы/);
   assert.match(surfaceSrc, /overlay-update/);
   assert.match(css, /\.overlay\.overlay-update/);
   assert.match(css, /\.modal\.modal-pwa-update/);

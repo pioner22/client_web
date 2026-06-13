@@ -7,6 +7,8 @@ let lastBuildId = "";
 let shareReadySent = false;
 let registerStarted = false;
 const SW_READY_TIMEOUT_MS = 1500;
+const SW_UPDATE_TIMEOUT_MS = 3500;
+let updateCheckInFlight = false;
 
 function emitSwError(err: unknown) {
   try {
@@ -36,6 +38,28 @@ export function __setUpdateRegistrationForTest(reg: ServiceWorkerRegistration | 
 export function hasPwaUpdate(): boolean {
   if (!isServiceWorkerRuntimeAvailable()) return false;
   return Boolean(updateRegistration?.waiting);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  return await new Promise((resolve) => {
+    let done = false;
+    let timer: number | null = null;
+    const finish = (value: T) => {
+      if (done) return;
+      done = true;
+      if (timer !== null) {
+        try {
+          window.clearTimeout(timer);
+        } catch {
+          // ignore
+        }
+        timer = null;
+      }
+      resolve(value);
+    };
+    timer = window.setTimeout(() => finish(fallback), Math.max(0, timeoutMs));
+    promise.then(finish).catch(() => finish(fallback));
+  });
 }
 
 async function waitForServiceWorkerReady(timeoutMs = SW_READY_TIMEOUT_MS): Promise<ServiceWorkerRegistration | null> {
@@ -83,6 +107,39 @@ async function resolveUpdateRegistration(timeoutMs = SW_READY_TIMEOUT_MS): Promi
   }
   if (reg) updateRegistration = reg;
   return reg;
+}
+
+async function updateRegistrationWithTimeout(reg: ServiceWorkerRegistration, timeoutMs = SW_UPDATE_TIMEOUT_MS): Promise<boolean> {
+  try {
+    await withTimeout(reg.update(), timeoutMs, undefined);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function checkForPwaUpdate(opts?: { timeoutMs?: number }): Promise<boolean> {
+  if (!isServiceWorkerRuntimeAvailable()) return false;
+  if (updateCheckInFlight) return shouldNotifyUpdate(updateRegistration);
+  updateCheckInFlight = true;
+  try {
+    const reg = await resolveUpdateRegistration(opts?.timeoutMs ?? SW_READY_TIMEOUT_MS);
+    if (!reg) return false;
+    updateRegistration = reg;
+    if (shouldNotifyUpdate(reg)) {
+      notifyUpdate(reg);
+      return true;
+    }
+    await updateRegistrationWithTimeout(reg, opts?.timeoutMs ?? SW_UPDATE_TIMEOUT_MS);
+    if (shouldNotifyUpdate(reg)) {
+      notifyUpdate(reg);
+      return true;
+    }
+    requestBuildId(reg);
+    return false;
+  } finally {
+    updateCheckInFlight = false;
+  }
 }
 
 export async function activatePwaUpdate(): Promise<boolean> {
@@ -217,13 +274,7 @@ function startUpdatePolling(reg: ServiceWorkerRegistration) {
     // Some tabs may miss "updatefound" if another tab already downloaded the new SW.
     // Polling must also surface an already-waiting worker.
     if (shouldNotifyUpdate(reg)) notifyUpdate(reg);
-    reg
-      .update()
-      .catch(() => {})
-      .finally(() => {
-        if (shouldNotifyUpdate(reg)) notifyUpdate(reg);
-        requestBuildId(reg);
-      });
+    void checkForPwaUpdate({ timeoutMs: SW_UPDATE_TIMEOUT_MS });
   };
 
   const onVisible = () => {

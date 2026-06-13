@@ -1,5 +1,6 @@
 import { APP_VERSION } from "../../config/app";
 import { loadActiveBuildId, storeActiveBuildId } from "../../helpers/pwa/buildIdStore";
+import { writePendingPwaBuild } from "../../helpers/pwa/pendingUpdate";
 import { splitBuildId } from "../../helpers/version/buildId";
 
 export interface RequiredUpdateGateResult {
@@ -358,7 +359,7 @@ function setGateFallback(root: HTMLElement, liveBuildId: string): void {
 function setGateReloadFallback(root: HTMLElement): void {
   setGateStatus(root, {
     title: "Не удалось обновить приложение",
-    detail: "Проверьте подключение и повторите обновление перед входом.",
+    detail: "Обновление не завершилось. Откройте текущую версию или повторите обновление из окна приложения.",
     activeStep: "reload",
     errorStep: "reload",
     progress: 88,
@@ -651,19 +652,10 @@ export async function runRequiredUpdateGate(root: HTMLElement): Promise<Required
     return { blocked: false, liveBuildId, reason: "reload_failed" };
   }
 
-  const guard = markAttempt(liveBuildId);
-  await showGateStep(root, setGatePreparing);
-  let updatePromise: Promise<void>;
-  if (guard.tries > UPDATE_GATE_MAX_TOTAL_RELOADS || guard.tries > UPDATE_GATE_MAX_DIRECT_RELOADS) {
-    updatePromise = resetServiceWorkerCaches().catch(() => {});
-    await showGateStep(root, setGateClearing);
-  } else {
-    updatePromise = applyServiceWorkerUpdate().catch(() => {});
-  }
-  await withTimeout(updatePromise, UPDATE_GATE_SW_TIMEOUT_MS + UPDATE_GATE_MIN_STEP_MS, undefined);
-
-  writeBypass(liveBuildId);
-  await showGateStep(root, setGateReloading);
+  // Do not apply or reload from the pre-mount gate. Mobile PWA/WebKit can hang when
+  // a service-worker install/reload cycle happens before the app and its update UI are mounted.
+  // Persist the live build and let the main runtime show a user-controlled update prompt.
+  writePendingPwaBuild(liveBuildId);
   setGateLaunchingCurrent(root, liveBuildId, currentBuildId);
   await delay(UPDATE_GATE_CONTINUE_DELAY_MS);
   clearGuard();

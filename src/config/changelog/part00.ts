@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.896",
+    date: "2026-06-13",
+    improved: [
+      "PWA/Web update flow теперь сначала монтирует приложение и показывает пользователю окно обновления, а не пытается применить service worker/cache update до запуска интерфейса.",
+      "Проверки service worker обновления получили timeout и защиту от параллельных запусков, а navigation/static fetch в service worker больше не ждёт сеть бесконечно.",
+    ],
+    fixed: [
+      "Исправлен сценарий RESULT_CODE_HUNG и тупикового сообщения про интернет при незавершённом update pipeline: клиент сохраняет pending build, предлагает обновить сейчас или позже и запускает recovery stale cache без blind reload.",
+      "Текст окна обновления стал точнее: новая версия помечается как доступная, а не как уже гарантированно загруженная до подтверждения service worker/network.",
+    ],
+  },
+  {
     version: "0.1.895",
     date: "2026-06-13",
     improved: [

@@ -22,14 +22,16 @@ export function renderPwaUpdateModal(clientVersion: string, latest: string, acti
 
   box.append(
     el("div", { class: "pwa-update-mark", "aria-hidden": "true" }, [""]),
-    el("div", { class: "modal-title pwa-update-title", id: "pwa-update-title" }, ["Обновление готово"]),
+    el("div", { class: "modal-title pwa-update-title", id: "pwa-update-title" }, ["Доступно обновление"]),
     el("div", { class: "modal-line pwa-update-version", title: webBuild.build ? `build ${webBuild.build}` : undefined }, [
       el("span", { class: "pwa-update-version-label" }, ["web"]),
       el("span", { class: "pwa-update-version-now" }, [webBuild.version || "—"]),
       el("span", { class: "pwa-update-version-arrow", "aria-hidden": "true" }, ["→"]),
       el("span", { class: "pwa-update-version-next" }, [latestLabel]),
     ]),
-    el("div", { class: "modal-line pwa-update-copy" }, ["Новая версия уже загружена. Обновление займёт несколько секунд."]),
+    el("div", { class: "modal-line pwa-update-copy" }, [
+      "Клиент подготовит обновлённые файлы, применит новую версию и проверит запуск. Можно обновить позже.",
+    ]),
     ...(mobileUi
       ? []
       : [

@@ -240,7 +240,8 @@ test("requiredUpdateGate: opens current app and updates stale PWA in background"
     assert.equal(sessionStorage.getItem("yagodka_force_recover"), null);
     assert.equal(root.children.length, 0);
     assert.equal(replaced.length, 0);
-    assert.match(sessionStorage.getItem("yagodka_required_update_gate_bypass_v1"), /0\.1\.810-abcdef123456/);
+    assert.equal(sessionStorage.getItem("yagodka_required_update_gate_bypass_v1"), null);
+    assert.match(sessionStorage.getItem("yagodka_pending_pwa_build_v1"), /0\.1\.810-abcdef123456/);
   });
   await gate.cleanup();
 });
@@ -290,7 +291,8 @@ test("requiredUpdateGate: repeated stale build still opens without automatic rel
     assert.equal(result.reason, "update_required");
     assert.equal(replaced.length, 0);
     assert.equal(root.children.length, 0);
-    assert.match(sessionStorage.getItem("yagodka_required_update_gate_bypass_v1"), /0\.1\.810-abcdef123456/);
+    assert.equal(sessionStorage.getItem("yagodka_required_update_gate_bypass_v1"), null);
+    assert.match(sessionStorage.getItem("yagodka_pending_pwa_build_v1"), /0\.1\.810-abcdef123456/);
   });
   await gate.cleanup();
 });
@@ -449,7 +451,8 @@ test("requiredUpdateGate: update surface has animated taskbar and finite fallbac
   assert.match(css, /\.required-update-gate--failed\s+\.required-update-gate__spinner/);
   assert.match(gate, /UPDATE_GATE_MIN_STEP_MS/);
   assert.match(gate, /showGateStep/);
-  assert.match(gate, /showGateStep\(root,\s*setGateReloading\)/);
+  assert.match(gate, /writePendingPwaBuild\(liveBuildId\)/);
+  assert.doesNotMatch(gate, /writeBypass\(liveBuildId\);\s*await showGateStep\(root,\s*setGateReloading\)/);
   assert.match(gate, /setGateLaunchReady/);
 });
 
@@ -477,6 +480,8 @@ test("requiredUpdateGate: boot and service worker recovery are early and bounded
   const swBuilder = await readFile(path.resolve("scripts/build_pwa.mjs"), "utf8");
   assert.match(swBuilder, /patchIndexHtmlBuildVersion/);
   assert.match(swBuilder, /prefer network so old installed clients can escape a stale cached index/);
-  assert.match(swBuilder, /const fresh = await fetch\(req\)/);
+  assert.match(swBuilder, /fetchWithTimeout\(req,\s*NAVIGATION_NETWORK_TIMEOUT_MS\)/);
+  assert.match(swBuilder, /PRECACHE_FETCH_TIMEOUT_MS/);
+  assert.match(swBuilder, /Best-effort cache with per-request timeout/);
   assert.match(swBuilder, /cachedIndex/);
 });

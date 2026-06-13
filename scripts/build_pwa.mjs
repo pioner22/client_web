@@ -281,6 +281,9 @@ const PRECACHE_URLS = ${JSON.stringify(precacheUrls, null, 2)};
 const RUNTIME_CACHE = CACHE_PREFIX + "runtime";
 const RUNTIME_LIMIT = 220;
 const RUNTIME_MAX_BYTES = 8 * 1024 * 1024;
+const NETWORK_TIMEOUT_MS = 8000;
+const NAVIGATION_NETWORK_TIMEOUT_MS = 3500;
+const PRECACHE_FETCH_TIMEOUT_MS = 9000;
 const RUNTIME_EXT_RE = /\\.(js|css|jpe?g|png|gif|webp|avif|svg|ico|woff2?|ttf|otf|wasm|webmanifest)(?:\\?.*)?$/i;
 const RUNTIME_PATH_RE = /^\\/(assets|icons|skins)\\//i;
 const RUNTIME_SPECIAL = new Set(["/manifest.webmanifest", "/sw.js"]);
@@ -300,6 +303,34 @@ const OUTBOX_SEND_LIMIT = 8;
 const OUTBOX_RETRY_MIN_MS = 900;
 const OUTBOX_SCHEDULE_GRACE_MS = 1200;
 let outboxDbPromise = null;
+
+async function fetchWithTimeout(input, timeoutMs) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  let timer = null;
+  if (controller) {
+    timer = setTimeout(() => {
+      try {
+        controller.abort();
+      } catch {}
+    }, Math.max(0, timeoutMs || NETWORK_TIMEOUT_MS));
+  }
+  try {
+    return await fetch(input, controller ? { signal: controller.signal } : undefined);
+  } finally {
+    if (timer !== null) {
+      try {
+        clearTimeout(timer);
+      } catch {}
+    }
+  }
+}
+
+async function cacheUrl(cache, url) {
+  try {
+    const res = await fetchWithTimeout(url, PRECACHE_FETCH_TIMEOUT_MS);
+    if (res && res.ok) await cache.put(url, res.clone());
+  } catch {}
+}
 
 function openOutboxDb() {
   if (outboxDbPromise) return outboxDbPromise;
@@ -711,23 +742,10 @@ self.addEventListener("install", (event) => {
       if (cache) {
         // Keep app shell version-consistent: ensure index.html is cached first.
         // Never fail the whole SW install on cache errors: some clients may have broken/quota-limited CacheStorage.
-        try {
-          await cache.add("./index.html");
-        } catch {}
+        await cacheUrl(cache, "./index.html");
         const urls = PRECACHE_URLS.filter((u) => u !== "./index.html");
-        try {
-          await cache.addAll(urls);
-        } catch {
-          // Best-effort fallback: cache files individually to avoid a full install failure
-          // due to a single transient request (race during deploy / flaky network).
-          await Promise.all(
-            urls.map(async (u) => {
-              try {
-                await cache.add(u);
-              } catch {}
-            })
-          );
-        }
+        // Best-effort cache with per-request timeout: never let SW install hang the PWA.
+        await Promise.all(urls.map((u) => cacheUrl(cache, u)));
       }
       // Telegram-like: activate the new SW immediately, but *do not* force reload here.
       // The app decides when it's safe to restart (idle / no transfers / no focused input).
@@ -913,7 +931,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         try {
-          const fresh = await fetch(req);
+          const fresh = await fetchWithTimeout(req, NAVIGATION_NETWORK_TIMEOUT_MS);
           if (fresh && fresh.ok) return fresh;
         } catch {}
         try {
@@ -921,7 +939,10 @@ self.addEventListener("fetch", (event) => {
           const cachedIndex = await cache.match("./index.html");
           if (cachedIndex) return cachedIndex;
         } catch {}
-        return fetch(req);
+        try {
+          return await fetchWithTimeout(req, NAVIGATION_NETWORK_TIMEOUT_MS);
+        } catch {}
+        return new Response("offline", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
       })()
     );
     return;
@@ -944,7 +965,7 @@ self.addEventListener("fetch", (event) => {
       } catch {
         cache = null;
       }
-      const res = await fetch(req);
+      const res = await fetchWithTimeout(req, NETWORK_TIMEOUT_MS);
       if (cache && isCacheableResponse(res)) {
         try {
           cache.put(req, res.clone());

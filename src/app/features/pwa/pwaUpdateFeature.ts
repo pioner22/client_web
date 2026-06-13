@@ -4,9 +4,10 @@ import { buildClientInfoTags } from "../../../helpers/device/clientTags";
 import { storeActiveBuildId } from "../../../helpers/pwa/buildIdStore";
 import { getPwaStabilityHoldRemainingMs, readPwaStabilityHold } from "../../../helpers/pwa/stabilityHold";
 import { hasPwaReloadBlockers } from "../../../helpers/pwa/reloadSafety";
-import { activatePwaUpdate, hasPwaUpdate } from "../../../helpers/pwa/registerServiceWorker";
+import { activatePwaUpdate, checkForPwaUpdate, hasPwaUpdate } from "../../../helpers/pwa/registerServiceWorker";
 import { isServiceWorkerRuntimeAvailable } from "../../../helpers/pwa/serviceWorkerRuntime";
 import { shouldReloadForBuild } from "../../../helpers/pwa/shouldReloadForBuild";
+import { clearPendingPwaBuild, readPendingPwaBuild } from "../../../helpers/pwa/pendingUpdate";
 import { hasActiveFileTransferEntries } from "../../../helpers/runtime/deliveryCoordinator";
 import { isIOS, isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
 import type { Store } from "../../../stores/store";
@@ -56,6 +57,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const PWA_AUTO_APPLY_RETRY_MS = 20 * 1000;
   const PWA_AUTO_APPLY_LOG_LIMIT = 24;
   const PWA_AUTO_APPLY_STATUS = "Получено обновление веб-клиента. Откройте обновление вручную, когда приложение не используется.";
+  const PWA_MANUAL_CHECK_TIMEOUT_MS = 3500;
   let pwaPendingBuildId = "";
   let pwaAutoApplySuppressed = false;
   let pwaBootReconcileStarted = false;
@@ -128,7 +130,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       ...prev,
       updateLatest: id,
       pwaUpdateAvailable: true,
-      status: status || "Доступно обновление веб-клиента. Нажмите «Обновить», когда будет удобно.",
+      status: status || "Доступно обновление веб-клиента. Можно обновить сейчас или позже.",
       ...(shouldOpenPwaUpdatePrompt(prev) ? { modal: { kind: "pwa_update" } } : {}),
     }));
   };
@@ -136,6 +138,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const adoptActiveBuild = (buildId: string) => {
     const id = String(buildId || "").trim();
     if (!id) return;
+    clearPendingPwaBuild(id);
     storeActiveBuildId(id);
     if (store.get().clientVersion !== id) {
       store.set({ clientVersion: id });
@@ -381,6 +384,14 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       buildIdSource = "latest";
       hasNewBuild = true;
     }
+    if (mode === "manual") {
+      store.set({ status: "Проверяем и подготавливаем обновление веб-клиента…", pwaUpdateAvailable: true });
+      try {
+        await checkForPwaUpdate({ timeoutMs: PWA_MANUAL_CHECK_TIMEOUT_MS });
+      } catch {
+        // keep the manual prompt open; network/service-worker checks have their own fallback below
+      }
+    }
     try {
       flushBeforeReload();
     } catch {
@@ -397,6 +408,19 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     if (!activated) {
       const hasController = typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
       const hasWaiting = hasPwaUpdate();
+      let reg: ServiceWorkerRegistration | null = null;
+      if (mode === "manual" && typeof navigator !== "undefined" && navigator.serviceWorker) {
+        try {
+          reg = (await navigator.serviceWorker.getRegistration()) ?? null;
+        } catch {
+          reg = null;
+        }
+      }
+      const swBuildId = mode === "manual" ? await requestPwaBuildId(reg, 1200) : "";
+      const netBuildId = mode === "manual" ? await fetchSwBuildId(PWA_MANUAL_CHECK_TIMEOUT_MS) : "";
+      const confirmedBuildId = String(netBuildId || swBuildId || buildId || "").trim();
+      const confirmedNeedsReload = confirmedBuildId ? shouldReloadForBuild(currentBuildId, confirmedBuildId) : false;
+      const swConfirmsBuild = Boolean(swBuildId && confirmedBuildId && swBuildId === confirmedBuildId);
       const canReloadWithoutWaiting = hasNewBuild && !hasWaiting;
       const shouldForceLatestReload =
         mode === "manual" && !hasWaiting && !canReloadWithoutWaiting && hasController && buildIdSource === "latest" && updateLatest;
@@ -406,16 +430,44 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
         forceUpdateReload("manual_latest_force");
         return;
       }
+      if (mode === "manual" && !hasWaiting && confirmedNeedsReload && netBuildId && !swConfirmsBuild) {
+        logPwaUpdate("manual_reset_stale_sw", `${swBuildId || "none"}->${netBuildId}`);
+        store.set({ status: "Новая версия найдена, но старый PWA кэш не отдаёт её. Сбрасываем кэш и перезапускаем…" });
+        await resetPwaCachesAndServiceWorkers(`manual_stale_sw:${swBuildId || "none"}->${netBuildId}`);
+        return;
+      }
+      if (mode === "manual" && !hasWaiting && confirmedNeedsReload && swConfirmsBuild) {
+        const targetBuildId = confirmedBuildId || buildId;
+        logPwaUpdate("manual_reload_confirmed_sw", targetBuildId);
+        storeActiveBuildId(targetBuildId);
+        navigateForUpdateReload("manual_confirmed_sw");
+        return;
+      }
+      if (mode === "manual" && !hasWaiting && hasNewBuild && !netBuildId && !swConfirmsBuild) {
+        store.set({
+          status: "Не удалось проверить загрузку обновления. Оставьте приложение открытым и повторите попытку через несколько секунд.",
+          pwaUpdateAvailable: true,
+          modal: { kind: "pwa_update" },
+        });
+        logPwaUpdate("manual_unconfirmed_update", buildId || "unknown");
+        return;
+      }
       if (mode === "manual" && !hasWaiting && !canReloadWithoutWaiting) {
         const msg = hasController
-          ? "Новых обновлений нет."
-          : "PWA обновление недоступно: нет активного Service Worker. Перезапустите приложение.";
-        store.set({ status: msg, pwaUpdateAvailable: false });
+          ? "Обновление ещё не загружено. Оставьте приложение открытым и повторите попытку через несколько секунд."
+          : "PWA обновление ещё не готово: Service Worker запускается. Повторите обновление через несколько секунд.";
+        store.set({ status: msg, pwaUpdateAvailable: Boolean(updateLatest || pwaPendingBuildId), modal: { kind: "pwa_update" } });
         logPwaUpdate("manual_no_update", buildId || "unknown");
         return;
       }
       if (canReloadWithoutWaiting) {
         logPwaUpdate(mode === "manual" ? "manual_reload_active" : "auto_reload_active", buildId || "unknown");
+        if (mode === "manual" && netBuildId && !swConfirmsBuild) {
+          logPwaUpdate("manual_reload_active_reset", `${swBuildId || "none"}->${netBuildId}`);
+          store.set({ status: "Обновление требует очистки старого PWA кэша. Перезапускаем безопасно…" });
+          await resetPwaCachesAndServiceWorkers(`manual_reload_active_reset:${swBuildId || "none"}->${netBuildId}`);
+          return;
+        }
         storeActiveBuildId(buildId);
         if (mode === "manual" && (buildIdSource === "latest" || buildIdSource === "opts")) {
           forceUpdateReload(buildIdSource === "latest" ? "manual_latest" : "manual_opts");
@@ -475,7 +527,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
         }
       }
       try {
-        await reg.update();
+        await checkForPwaUpdate({ timeoutMs: PWA_MANUAL_CHECK_TIMEOUT_MS });
       } catch {
         // ignore
       }
@@ -520,20 +572,28 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     if (!reg) {
       reg = await waitForServiceWorkerReady(1200);
     }
+    const currentBuildId = currentClientBuildId();
+    const pendingBuildId = readPendingPwaBuild(currentBuildId);
     const swBuildId = await requestPwaBuildId(reg, 1200);
     const netBuildId = await fetchSwBuildId();
-    const liveBuildId = String(netBuildId || swBuildId || "").trim();
+    const liveBuildId = String(netBuildId || swBuildId || pendingBuildId || "").trim();
     if (!liveBuildId) return;
-    const liveNeedsReload = shouldReloadForBuild(currentClientBuildId(), liveBuildId);
+    const startupPendingOnly = Boolean(pendingBuildId && pendingBuildId === liveBuildId && !netBuildId && !swBuildId);
+    const liveNeedsReload = shouldReloadForBuild(currentBuildId, liveBuildId);
     if (!liveNeedsReload) {
       adoptActiveBuild(liveBuildId);
       store.set((prev) => (prev.pwaUpdateAvailable ? { ...prev, pwaUpdateAvailable: false } : prev));
       clearPwaAutoApplyGuard();
+      clearPendingPwaBuild(liveBuildId);
       return;
     }
-    setPendingPwaBuild(liveBuildId, "Получено обновление веб-клиента (применится автоматически)");
+    setPendingPwaBuild(liveBuildId, "Получено обновление веб-клиента. Можно обновить сейчас или позже.");
     if (!swBuildId || swBuildId !== liveBuildId) {
       logPwaUpdate("bootstrap_reconcile_stale", `${swBuildId || "none"}->${liveBuildId}`);
+      if (startupPendingOnly) {
+        logPwaUpdate("bootstrap_pending_prompt", liveBuildId);
+        return;
+      }
       if (shouldDisableAutoApplyUpdate()) {
         scheduleAutoApplyPwaUpdate(PWA_AUTO_APPLY_RETRY_MS);
         return;

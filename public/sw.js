@@ -3,6 +3,9 @@ const CACHE_PREFIX = "yagodka-web-cache-fallback-";
 const CACHE = `${CACHE_PREFIX}v1`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-v1`;
 const RUNTIME_LIMIT = 140;
+const NETWORK_TIMEOUT_MS = 8000;
+const NAVIGATION_NETWORK_TIMEOUT_MS = 3500;
+const PRECACHE_FETCH_TIMEOUT_MS = 9000;
 const RUNTIME_EXT_RE = /\.(js|css|jpe?g|png|gif|webp|avif|svg|ico|woff2?|ttf|otf|wasm|webmanifest)(?:\?.*)?$/i;
 const RUNTIME_PATH_RE = /^\/(assets|icons|skins)\//i;
 const RUNTIME_SPECIAL = new Set(["/manifest.webmanifest", "/sw.js"]);
@@ -22,6 +25,34 @@ const OUTBOX_SEND_LIMIT = 8;
 const OUTBOX_RETRY_MIN_MS = 900;
 const OUTBOX_SCHEDULE_GRACE_MS = 1200;
 let outboxDbPromise = null;
+
+async function fetchWithTimeout(input, timeoutMs) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  let timer = null;
+  if (controller) {
+    timer = setTimeout(() => {
+      try {
+        controller.abort();
+      } catch {}
+    }, Math.max(0, timeoutMs || NETWORK_TIMEOUT_MS));
+  }
+  try {
+    return await fetch(input, controller ? { signal: controller.signal } : undefined);
+  } finally {
+    if (timer !== null) {
+      try {
+        clearTimeout(timer);
+      } catch {}
+    }
+  }
+}
+
+async function cacheUrl(cache, url) {
+  try {
+    const res = await fetchWithTimeout(url, PRECACHE_FETCH_TIMEOUT_MS);
+    if (res && res.ok) await cache.put(url, res.clone());
+  } catch {}
+}
 
 function openOutboxDb() {
   if (outboxDbPromise) return outboxDbPromise;
@@ -409,12 +440,18 @@ async function handleStreamFetch(event) {
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((c) =>
-        c.addAll([
+    (async () => {
+      let cache = null;
+      try {
+        cache = await caches.open(CACHE);
+      } catch {
+        cache = null;
+      }
+      if (!cache) return;
+      await cacheUrl(cache, "./index.html");
+      await Promise.all(
+        [
           "./",
-          "./index.html",
           "./manifest.webmanifest",
           "./icons/icon.svg",
           "./icons/icon-app-192.png",
@@ -423,9 +460,9 @@ self.addEventListener("install", (event) => {
           "./icons/icon-512.png",
           "./skins/skins.json",
           "./skins/telegram-exact.css",
-        ])
-      )
-      .catch(() => {})
+        ].map((url) => cacheUrl(cache, url))
+      );
+    })()
   );
   // Do NOT skipWaiting() automatically: apply updates only on user confirmation.
 });
@@ -575,14 +612,18 @@ self.addEventListener("fetch", (event) => {
       try {
         // App shell: for navigations, prefer cached index.html to avoid mixing versions.
         if (req.mode === "navigate" || req.destination === "document") {
+          try {
+            const fresh = await fetchWithTimeout(req, NAVIGATION_NETWORK_TIMEOUT_MS);
+            if (fresh && fresh.ok) return fresh;
+          } catch {}
           const cachedIndex = await caches.match("./index.html");
           if (cachedIndex) return cachedIndex;
         }
-        if (!isStaticAssetUrl(url)) return fetch(req);
+        if (!isStaticAssetUrl(url)) return fetchWithTimeout(req, NETWORK_TIMEOUT_MS);
         const runtime = await caches.open(RUNTIME_CACHE);
         const cachedRuntime = await runtime.match(req);
         if (cachedRuntime) return cachedRuntime;
-        const res = await fetch(req);
+        const res = await fetchWithTimeout(req, NETWORK_TIMEOUT_MS);
         if (res && res.ok) {
           runtime.put(req, res.clone()).catch(() => {});
           trimRuntimeCache(runtime);
