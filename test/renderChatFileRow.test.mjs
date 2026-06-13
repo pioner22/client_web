@@ -1356,10 +1356,18 @@ test("renderChat: audio file-attachment рендерит custom audio player (ch
 
       const player = findFirst(fileRow, (n) => hasClass(n, "chat-voice"));
       assert.ok(player, "должен быть chat-voice player");
+      assert.equal(player.getAttribute("data-file-kind"), "audio");
+      assert.equal(player.getAttribute("data-file-id"), "77");
+      assert.equal(player.getAttribute("data-name"), "note.ogg");
+      assert.equal(player.getAttribute("data-size"), "321");
+      assert.equal(player.getAttribute("data-mime"), "audio/ogg");
+      assert.equal(player.getAttribute("data-msg-idx"), "0");
 
       const audio = findFirst(player, (n) => n && n.tagName === "AUDIO");
       assert.ok(audio, "должен быть <audio> внутри плеера");
       assert.ok(hasClass(audio, "chat-voice-audio"));
+      assert.equal(audio.getAttribute("preload"), "metadata");
+      assert.equal(audio.getAttribute("src"), "blob:audio");
     });
   } finally {
     await helper.cleanup();

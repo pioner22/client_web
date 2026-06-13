@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.894",
+    date: "2026-06-13",
+    improved: [
+      "Окно авторизации стало компактнее на телефонах: меньше вертикальные отступы, ниже логотип и отдельный плотный режим при открытой клавиатуре, чтобы поле пароля не уходило вниз.",
+      "Поле ввода сообщения на мобильном экране поднято на 2px и использует тот же offset для истории, jump-кнопки и iOS standalone-safe-area.",
+    ],
+    fixed: [
+      "Перепроверена цепочка аудио в истории: voice/audio player сохраняет `preload=metadata`, `data-file-id`, `data-msg-idx` и участвует в visible audio hydration scan.",
+      "Регрессионные тесты теперь закрепляют audio history metadata/hydration, compact auth keyboard layout и новый mobile composer bottom offset.",
+    ],
+  },
+  {
     version: "0.1.893",
     date: "2026-06-13",
     improved: [

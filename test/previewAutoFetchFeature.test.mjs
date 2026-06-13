@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -74,4 +74,12 @@ test("previewAutoFetchFeature: visible visual previews request silent thumb hydr
   } finally {
     await helper.cleanup();
   }
+});
+
+test("previewAutoFetchFeature: history audio nodes stay in visible hydration scan", async () => {
+  const src = await readFile(path.resolve("src/app/features/files/previewAutoFetchFeature.ts"), "utf8");
+  assert.match(src, /querySelectorAll\("\[data-file-kind='audio'\]\[data-file-id\]"\)/);
+  assert.match(src, /for\s*\(const node of Array\.from\(audioNodes\)\)\s*\{[\s\S]*?fileKind:\s*"audio"/);
+  assert.match(src, /for\s*\(const node of Array\.from\(audioNodes\)\)\s*\{[\s\S]*?kind:\s*"audio"/);
+  assert.match(src, /for\s*\(const node of Array\.from\(audioNodes\)\)\s*\{[\s\S]*?node\.getAttribute\("data-msg-idx"\)/);
 });

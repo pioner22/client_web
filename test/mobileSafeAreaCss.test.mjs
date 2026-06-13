@@ -84,7 +84,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.match(css, /--mobile-bottom-nav-bottom-offset:\s*0px;/);
   assert.match(css, /--mobile-bottom-nav-glass-bg:\s*rgba\(24,\s*24,\s*32,\s*0\.58\);/);
   assert.match(css, /--mobile-bottom-nav-glass-border:\s*rgba\(255,\s*255,\s*255,\s*0\.14\);/);
-  assert.match(css, /--mobile-composer-bottom-offset:\s*0px;/);
+  assert.match(css, /--mobile-composer-bottom-offset:\s*2px;/);
   assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
   assert.match(
     css,
@@ -108,7 +108,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*0px;[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\),\s*var\(--app-logged-bottom-fill\)\);[\s\S]*?bottom:\s*0;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*2px;[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\),\s*var\(--app-logged-bottom-fill\)\);[\s\S]*?bottom:\s*var\(--mobile-composer-bottom-offset\);/
   );
   assert.match(
     css,
@@ -150,7 +150,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.doesNotMatch(appFrameBlock, /height:\s*var\(--app-logged-frame-vh\);/);
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.chat-col\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*0px;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.chat-col\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*2px;/
   );
   assert.doesNotMatch(
     css,
