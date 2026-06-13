@@ -23,6 +23,8 @@ type ProfileActions = Pick<
   | "onSearchServerForward"
   | "onProfileSave"
   | "onProfileRefresh"
+  | "onProfileCopyId"
+  | "onProfileShareId"
   | "onSessionsRefresh"
   | "onSessionsLogoutOthers"
   | "onProfileAvatarSelect"

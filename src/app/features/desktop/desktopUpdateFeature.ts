@@ -1,17 +1,6 @@
 import type { Store } from "../../../stores/store";
-import type { AppState, ToastKind } from "../../../stores/types";
+import type { AppState, DesktopUpdateRuntimeState, DesktopUpdateState, ToastKind } from "../../../stores/types";
 import type { ShowToastOptions } from "../ui/toastFeature";
-
-type DesktopUpdateState =
-  | "idle"
-  | "disabled"
-  | "checking"
-  | "available"
-  | "not_available"
-  | "downloading"
-  | "ready"
-  | "installing"
-  | "failed";
 
 interface DesktopUpdateInfo {
   version?: string;
@@ -24,16 +13,11 @@ interface DesktopUpdateProgress {
   total?: number;
 }
 
-interface DesktopUpdateStatus {
-  state: DesktopUpdateState;
-  supported: boolean;
+export interface DesktopUpdateConnectionReadiness {
+  connect: boolean;
   reason: string;
-  appVersion: string;
-  feedUrl: string;
-  autoCheck: boolean;
-  updateInfo: DesktopUpdateInfo | null;
-  progress: DesktopUpdateProgress | null;
-  error: string;
+  buildId: string | null;
+  stage?: DesktopUpdateState;
 }
 
 interface DesktopUpdateBridge {
@@ -68,7 +52,7 @@ function readNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function normalizeStatus(raw: unknown): DesktopUpdateStatus {
+function normalizeStatus(raw: unknown): DesktopUpdateRuntimeState {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const rawState = readString(obj.state) as DesktopUpdateState;
   const state: DesktopUpdateState =
@@ -106,10 +90,11 @@ function normalizeStatus(raw: unknown): DesktopUpdateStatus {
         }
       : null,
     error: readString(obj.error),
+    updatedAt: Date.now(),
   };
 }
 
-function updateVersion(status: DesktopUpdateStatus): string {
+function updateVersion(status: DesktopUpdateRuntimeState): string {
   return status.updateInfo?.version || "";
 }
 
@@ -122,7 +107,7 @@ function reasonLabel(reason: string): string {
   return reason || "недоступно";
 }
 
-function statusMessage(status: DesktopUpdateStatus): string {
+function statusMessage(status: DesktopUpdateRuntimeState): string {
   const version = updateVersion(status);
   if (status.state === "disabled") return `Desktop обновления: ${reasonLabel(status.reason)}`;
   if (status.state === "checking") return "Проверяем desktop обновления…";
@@ -138,7 +123,7 @@ function statusMessage(status: DesktopUpdateStatus): string {
   return "Desktop обновления готовы";
 }
 
-function statusKind(status: DesktopUpdateStatus): ToastKind {
+function statusKind(status: DesktopUpdateRuntimeState): ToastKind {
   if (status.state === "failed" || status.state === "disabled") return "warn";
   if (status.state === "available" || status.state === "ready" || status.state === "not_available") return "success";
   return "info";
@@ -148,8 +133,36 @@ export function createDesktopUpdateFeature(deps: DesktopUpdateFeatureDeps) {
   const { store, showToast, flushBeforeInstall } = deps;
   let unlistenStatus: (() => void) | null = null;
   let bound = false;
+  let lastCheckPromise: Promise<DesktopUpdateRuntimeState> | null = null;
 
-  const showStatus = (status: DesktopUpdateStatus, forceToast = false) => {
+  const shouldBlockConnection = (status: DesktopUpdateRuntimeState): boolean =>
+    status.supported &&
+    (["checking", "available", "downloading", "ready", "installing"].includes(status.state) ||
+      (status.state === "failed" && status.reason === "desktop_update_check_timeout"));
+
+  const shouldOpenModal = (status: DesktopUpdateRuntimeState): boolean =>
+    status.supported &&
+    (["available", "downloading", "ready", "installing"].includes(status.state) ||
+      (status.state === "failed" && status.reason === "desktop_update_check_timeout"));
+
+  const applyStatusToStore = (status: DesktopUpdateRuntimeState, opts?: { openModal?: boolean; closeModal?: boolean }) => {
+    const message = statusMessage(status);
+    store.set((prev) => {
+      const patch: Partial<AppState> = { desktopUpdate: status };
+      if (message && (status.state === "checking" || status.state === "downloading" || status.state === "installing" || status.state === "available" || status.state === "ready")) {
+        patch.status = message;
+      }
+      if (opts?.openModal || shouldOpenModal(status)) {
+        patch.modal = { kind: "desktop_update" };
+      } else if ((opts?.closeModal || status.state === "not_available" || status.state === "disabled") && prev.modal?.kind === "desktop_update") {
+        patch.modal = null;
+      }
+      return { ...prev, ...patch };
+    });
+  };
+
+  const showStatus = (status: DesktopUpdateRuntimeState, forceToast = false) => {
+    applyStatusToStore(status);
     const message = statusMessage(status);
     if (!message) return;
     if (status.state === "downloading") {
@@ -164,7 +177,7 @@ export function createDesktopUpdateFeature(deps: DesktopUpdateFeatureDeps) {
     } else if (status.state === "failed" || status.state === "not_available" || status.state === "disabled") {
       actions.push({ id: "desktop-update-check", label: "Проверить", onClick: () => void check() });
     }
-    if (!forceToast && (status.state === "idle" || status.state === "disabled")) return;
+    if (!forceToast) return;
     showToast(message, {
       kind: statusKind(status),
       timeoutMs: actions.length ? 12000 : 5200,
@@ -172,28 +185,32 @@ export function createDesktopUpdateFeature(deps: DesktopUpdateFeatureDeps) {
     });
   };
 
-  const request = async (action: "getStatus" | "check" | "download" | "install", forceToast = true) => {
+  const request = async (action: "getStatus" | "check" | "download" | "install", forceToast = true): Promise<DesktopUpdateRuntimeState> => {
     const updates = desktopUpdatesBridge();
     const fn = updates?.[action];
     if (typeof fn !== "function") {
-      showStatus(
-        normalizeStatus({ state: "disabled", supported: false, reason: "electron_updater_missing" }),
-        forceToast
-      );
-      return;
+      const status = normalizeStatus({ state: "disabled", supported: false, reason: "electron_updater_missing" });
+      showStatus(status, forceToast);
+      return status;
     }
     try {
       const raw = await fn.call(updates);
-      showStatus(normalizeStatus(raw), forceToast);
+      const status = normalizeStatus(raw);
+      showStatus(status, forceToast);
+      return status;
     } catch (error) {
-      showStatus(
-        normalizeStatus({ state: "failed", supported: false, error: error instanceof Error ? error.message : String(error) }),
-        true
-      );
+      const status = normalizeStatus({ state: "failed", supported: false, error: error instanceof Error ? error.message : String(error) });
+      showStatus(status, true);
+      return status;
     }
   };
 
-  const check = () => request("check", true);
+  const check = () => {
+    lastCheckPromise = request("check", true).finally(() => {
+      lastCheckPromise = null;
+    });
+    return lastCheckPromise;
+  };
   const download = () => request("download", true);
   const install = async () => {
     try {
@@ -232,8 +249,76 @@ export function createDesktopUpdateFeature(deps: DesktopUpdateFeatureDeps) {
       const off = updates.onStatus((status) => showStatus(normalizeStatus(status), true));
       if (typeof off === "function") unlistenStatus = off;
     }
-    void request("getStatus", false);
+    void request("getStatus", false).then((status) => {
+      if (status.supported && status.autoCheck && (status.state === "idle" || status.state === "not_available")) {
+        void check();
+      }
+    });
   };
+
+  async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+    const limit = Math.max(0, Math.trunc(Number(timeoutMs) || 0));
+    if (limit <= 0 || typeof window === "undefined" || typeof window.setTimeout !== "function") {
+      try {
+        return await promise;
+      } catch {
+        return fallback;
+      }
+    }
+    return await new Promise<T>((resolve) => {
+      let done = false;
+      let timer: number | null = null;
+      const finish = (value: T) => {
+        if (done) return;
+        done = true;
+        if (timer !== null) {
+          try {
+            window.clearTimeout(timer);
+          } catch {
+            // ignore
+          }
+        }
+        resolve(value);
+      };
+      timer = window.setTimeout(() => finish(fallback), limit);
+      promise.then((value) => finish(value)).catch(() => finish(fallback));
+    });
+  }
+
+  async function whenClientReadyForConnection(opts?: { timeoutMs?: number }): Promise<DesktopUpdateConnectionReadiness> {
+    if (!desktopUpdatesBridge()) return { connect: true, reason: "desktop_update_unavailable", buildId: null };
+    const timeoutMs = Math.max(1200, Math.min(9000, Math.trunc(Number(opts?.timeoutMs ?? 6500) || 6500)));
+    const current = store.get().desktopUpdate;
+    const fallback =
+      current && (current.supported || current.state !== "idle")
+        ? current
+        : normalizeStatus({
+            state: "failed",
+            supported: true,
+            reason: "desktop_update_check_timeout",
+            appVersion: current?.appVersion,
+            error: "Проверка обновления заняла слишком много времени.",
+          });
+    const status =
+      lastCheckPromise && current.state === "checking"
+        ? await withTimeout(lastCheckPromise, timeoutMs, fallback)
+        : await withTimeout(request(current.autoCheck || current.state === "idle" ? "check" : "getStatus", false), timeoutMs, fallback);
+    if (shouldBlockConnection(status)) {
+      applyStatusToStore(status, { openModal: shouldOpenModal(status) });
+      return {
+        connect: false,
+        reason: `desktop_update_${status.state}`,
+        buildId: updateVersion(status) || null,
+        stage: status.state,
+      };
+    }
+    return {
+      connect: true,
+      reason: status.state === "failed" ? "desktop_update_check_failed" : "desktop_update_ready",
+      buildId: updateVersion(status) || null,
+      stage: status.state,
+    };
+  }
 
   const stop = () => {
     try {
@@ -244,5 +329,5 @@ export function createDesktopUpdateFeature(deps: DesktopUpdateFeatureDeps) {
     unlistenStatus = null;
   };
 
-  return { bind, start, stop, check, download, install };
+  return { bind, start, stop, check, download, install, whenClientReadyForConnection };
 }

@@ -1,5 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { dmKey } from "../../helpers/chat/conversationKey";
+import { copyText } from "../../helpers/dom/copyText";
 import { focusElement } from "../../helpers/ui/focus";
 import type { AppState, FriendEntry, MobileSidebarTab, TargetRef } from "../../stores/types";
 import {
@@ -47,6 +48,7 @@ export interface SidebarRenderTools {
   buildSidebarArchiveToggle: (count: number, active: boolean) => HTMLElement;
   buildSidebarArchiveHint: () => HTMLElement;
   buildSidebarArchiveEmpty: (label: string) => HTMLElement;
+  buildSelfIdContactCard: () => HTMLElement | null;
   buildChatlist: (
     fixedRows: HTMLElement[],
     rows: HTMLElement[],
@@ -432,6 +434,56 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
 
   const buildSidebarArchiveEmpty = (label: string): HTMLElement => el("div", { class: "sidebar-archive-empty" }, [label]);
 
+  const buildSelfIdContactCard = (): HTMLElement | null => {
+    const id = String(state.selfId || state.authRememberedId || "").trim();
+    if (!id) return null;
+    const shareText = `Мой ID в Ягодке: ${id}`;
+    const copyBtn = el("button", { class: "btn btn-primary sidebar-self-id-copy", type: "button" }, ["Скопировать ID"]) as HTMLButtonElement;
+    const shareBtn = el("button", { class: "btn sidebar-self-id-share", type: "button" }, ["Поделиться"]) as HTMLButtonElement;
+    const flash = (button: HTMLButtonElement, label: string) => {
+      const prev = button.textContent || label;
+      button.textContent = label;
+      try {
+        window.setTimeout(() => {
+          button.textContent = prev;
+        }, 1200);
+      } catch {
+        button.textContent = prev;
+      }
+    };
+    copyBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      void copyText(id).then((ok) => flash(copyBtn, ok ? "Скопировано" : "Не скопировано"));
+    });
+    shareBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      void (async () => {
+        try {
+          if (typeof navigator.share === "function") {
+            await navigator.share({ title: "Мой ID в Ягодке", text: shareText });
+            flash(shareBtn, "Отправлено");
+            return;
+          }
+        } catch {
+          // fallback to clipboard below
+        }
+        const ok = await copyText(id);
+        flash(shareBtn, ok ? "ID скопирован" : "Не скопировано");
+      })();
+    });
+    const idButton = el("button", { class: "sidebar-self-id-value", type: "button", title: "Скопировать ID" }, [id]) as HTMLButtonElement;
+    idButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      void copyText(id).then((ok) => flash(idButton, ok ? "Скопировано" : id));
+    });
+    return el("div", { class: "sidebar-self-id-card", role: "region", "aria-label": "Ваш ID" }, [
+      el("div", { class: "sidebar-self-id-kicker" }, ["Ваш ID"]),
+      idButton,
+      el("div", { class: "sidebar-self-id-copyline" }, ["Отправьте этот ID человеку, чтобы он смог добавить вас в контакты."]),
+      el("div", { class: "sidebar-self-id-actions" }, [copyBtn, shareBtn]),
+    ]);
+  };
+
   const wrapChatlist = (children: HTMLElement[]): HTMLElement => el("div", { class: "chatlist virtual-chatlist" }, children);
 
   const clearVirtualChatlist = () => {
@@ -601,6 +653,7 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
     buildSidebarArchiveToggle,
     buildSidebarArchiveHint,
     buildSidebarArchiveEmpty,
+    buildSelfIdContactCard,
     buildChatlist,
     clearVirtualChatlist,
   };

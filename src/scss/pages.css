@@ -115,6 +115,71 @@
   opacity: 0.9;
 }
 
+.profile-id-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 38%);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--focus), transparent 88%), transparent 66%),
+    color-mix(in srgb, var(--panel2), transparent 22%);
+}
+
+.profile-id-card-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.profile-id-value {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--focus), transparent 66%);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel), transparent 10%);
+  color: var(--text);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.profile-id-value:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.profile-id-value:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
+.profile-id-card-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.profile-id-card-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.profile-id-card-actions .btn {
+  flex: 1 1 132px;
+  justify-content: center;
+}
+
 .profile-field {
   display: grid;
   gap: 6px;

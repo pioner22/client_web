@@ -337,19 +337,137 @@ input.modal-input[type="file"]::file-selector-button:active {
   border-radius: 16px;
 }
 
+.modal.modal-desktop-update {
+  width: min(420px, 100%);
+  max-height: min(560px, calc(100dvh - 36px - var(--safe-bottom-pad)));
+  display: grid;
+  justify-items: stretch;
+  gap: 12px;
+  padding: 22px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.052)),
+    rgba(12, 15, 21, 0.92);
+  color: #fff;
+  box-shadow:
+    0 26px 84px rgba(0, 0, 0, 0.42),
+    0 1px 0 rgba(255, 255, 255, 0.1) inset;
+}
+
+.modal-desktop-update .desktop-update-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0)),
+    color-mix(in srgb, var(--good), #ffffff 8%);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--good), transparent 74%);
+}
+
+.modal-desktop-update[data-update-stage="failed"] .desktop-update-mark {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0)),
+    color-mix(in srgb, var(--warn), #ffffff 8%);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--warn), transparent 76%);
+}
+
+.modal-desktop-update .desktop-update-mark::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 3a1 1 0 0 1 .8.4l3 4a1 1 0 0 1-1.6 1.2L13 7v6a1 1 0 1 1-2 0V7L9.8 8.6a1 1 0 1 1-1.6-1.2l3-4A1 1 0 0 1 12 3Zm-7 10a1 1 0 0 1 1 1v3a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3a1 1 0 1 1 2 0v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-3a1 1 0 0 1 1-1Z'/%3E%3C/svg%3E")
+    no-repeat center / 24px 24px;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 3a1 1 0 0 1 .8.4l3 4a1 1 0 0 1-1.6 1.2L13 7v6a1 1 0 1 1-2 0V7L9.8 8.6a1 1 0 1 1-1.6-1.2l3-4A1 1 0 0 1 12 3Zm-7 10a1 1 0 0 1 1 1v3a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3a1 1 0 1 1 2 0v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-3a1 1 0 0 1 1-1Z'/%3E%3C/svg%3E")
+    no-repeat center / 24px 24px;
+}
+
+.modal-desktop-update .desktop-update-title {
+  margin: 2px 0 0;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 860;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.modal-desktop-update .desktop-update-version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  font-weight: 760;
+  overflow: hidden;
+}
+
+.modal-desktop-update .desktop-update-version-label {
+  color: rgba(255, 255, 255, 0.52);
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.modal-desktop-update .desktop-update-version-next {
+  color: #fff;
+}
+
+.modal-desktop-update .desktop-update-copy {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.modal-desktop-update .desktop-update-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.modal-desktop-update .desktop-update-progress-bar {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--good), #ffffff 10%), rgba(255, 255, 255, 0.88));
+  transition: width 220ms ease;
+}
+
+.modal-desktop-update .desktop-update-actions {
+  justify-content: stretch;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.modal-desktop-update .desktop-update-actions .btn {
+  flex: 1 1 132px;
+  min-height: 44px;
+  border-radius: 16px;
+}
+
 @media (max-width: 600px) {
   .overlay.overlay-update {
     padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + var(--safe-bottom-pad));
   }
 
-  .modal.modal-pwa-update {
+  .modal.modal-pwa-update,
+  .modal.modal-desktop-update {
     width: min(100%, 390px);
     max-height: calc(100dvh - 28px - var(--safe-bottom-pad));
     padding: 20px;
     border-radius: 24px;
   }
 
-  .modal-pwa-update .pwa-update-title {
+  .modal-pwa-update .pwa-update-title,
+  .modal-desktop-update .desktop-update-title {
     font-size: 22px;
   }
 }

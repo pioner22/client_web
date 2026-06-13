@@ -416,3 +416,14 @@ test("renderFileViewerModal: W-1014 viewer polish is imported after legacy polis
   assert.match(css, /\.msg-attach\[data-msg-file="image"\][\s\S]*?\.msg-body\s*\{[\s\S]*?max-width:\s*calc\(100dvw - var\(--history-mobile-media-gutter\)\)\s*!important;/);
   assert.match(css, /\.chat-file-preview > \.chat-file-img,[\s\S]*?\.chat-file-preview > \.chat-file-video\s*\{[\s\S]*?object-fit:\s*cover;/);
 });
+
+test("renderFileViewerModal: W-1019 final viewer layer separates single-photo and rail bottom reserve", async () => {
+  const css = await readFile(path.resolve("src/scss/w1014-media-viewer.css"), "utf8");
+
+  assert.match(css, /W-1019:\s*final mobile viewer allocation/);
+  assert.match(css, /--viewer-w1019-bottom-pad:\s*0px;/);
+  assert.match(css, /\.viewer-has-caption\s*\{[\s\S]*?--viewer-w1019-bottom-pad:\s*clamp\(74px,\s*14dvh,\s*112px\);/);
+  assert.match(css, /\.viewer-has-rail\s*\{[\s\S]*?--viewer-w1019-bottom-pad:\s*clamp\(118px,\s*20dvh,\s*156px\);/);
+  assert.match(css, /padding:\s*var\(--viewer-w1019-top-pad\)\s+0\s+var\(--viewer-w1019-bottom-pad\)\s*!important;/);
+  assert.match(css, /max-height:\s*calc\(var\(--app-vh,\s*100dvh\)\s*-\s*var\(--viewer-w1019-top-pad\)\s*-\s*var\(--viewer-w1019-bottom-pad\)\s*-\s*8px\)\s*!important;/);
+});

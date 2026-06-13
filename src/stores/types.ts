@@ -176,6 +176,37 @@ export interface PwaUpdateRuntimeState {
   updatedAt: number | null;
 }
 
+export type DesktopUpdateState =
+  | "idle"
+  | "disabled"
+  | "checking"
+  | "available"
+  | "not_available"
+  | "downloading"
+  | "ready"
+  | "installing"
+  | "failed";
+
+export interface DesktopUpdateRuntimeState {
+  state: DesktopUpdateState;
+  supported: boolean;
+  reason: string;
+  appVersion: string;
+  feedUrl: string;
+  autoCheck: boolean;
+  updateInfo: {
+    version: string;
+    releaseDate: string;
+  } | null;
+  progress: {
+    percent: number;
+    transferred: number;
+    total: number;
+  } | null;
+  error: string;
+  updatedAt: number | null;
+}
+
 export interface FileThumbEntry {
   url: string;
   mime: string | null;
@@ -192,6 +223,7 @@ export type ModalState =
   | { kind: "logout" }
   | { kind: "update" }
   | { kind: "pwa_update" }
+  | { kind: "desktop_update" }
   | { kind: "reactions"; chatKey: string; msgId: number }
   | {
       kind: "call";
@@ -667,6 +699,7 @@ export interface AppState {
   updateDismissedLatest: string | null;
   pwaUpdateAvailable: boolean;
   pwaUpdate: PwaUpdateRuntimeState;
+  desktopUpdate: DesktopUpdateRuntimeState;
   pwaPushSupported: boolean;
   pwaPushPermission: "default" | "granted" | "denied";
   pwaPushSubscribed: boolean;

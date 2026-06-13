@@ -279,3 +279,55 @@ html.viewer-surface-open .overlay.overlay-viewer {
     box-sizing: border-box;
   }
 }
+
+/* W-1019: final mobile viewer allocation after iPhone screenshot regressions. */
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+  --viewer-w1019-top-pad: max(18px, env(safe-area-inset-top));
+  --viewer-w1019-bottom-pad: 0px;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-caption {
+  --viewer-w1019-bottom-pad: clamp(74px, 14dvh, 112px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+  --viewer-w1019-bottom-pad: clamp(118px, 20dvh, 156px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-stage,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-stage {
+  padding: var(--viewer-w1019-top-pad) 0 var(--viewer-w1019-bottom-pad) !important;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+  display: grid;
+  place-items: center;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"]:not(.viewer-zoomed) .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"]:not(.viewer-zoomed) .viewer-video {
+  max-height: calc(var(--app-vh, 100dvh) - var(--viewer-w1019-top-pad) - var(--viewer-w1019-bottom-pad) - 8px) !important;
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1019-top-pad: max(12px, env(safe-area-inset-top));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-caption {
+    --viewer-w1019-bottom-pad: clamp(68px, 12dvh, 96px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+    --viewer-w1019-bottom-pad: clamp(108px, 18dvh, 140px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+    max-height: var(--viewer-w1019-bottom-pad);
+    background: linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.88) 72%, rgba(0, 0, 0, 0));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-rail {
+    max-height: calc(var(--viewer-w1019-bottom-pad) - 38px);
+  }
+}

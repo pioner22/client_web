@@ -121,3 +121,56 @@ test("clientConnectionWorker: starts gateway once after client update readiness"
     await helper.cleanup();
   }
 });
+
+test("clientConnectionWorker: checks desktop updater before PWA readiness and blocks on desktop update", async () => {
+  const helper = await loadWorker();
+  try {
+    const store = makeStore();
+    let connectCalls = 0;
+    let desktopChecks = 0;
+    let pwaChecks = 0;
+    const worker = helper.createClientConnectionWorker({
+      store,
+      gateway: {
+        connect: () => {
+          connectCalls += 1;
+        },
+        send: () => false,
+        close: () => {},
+      },
+      desktopUpdateWorker: {
+        whenClientReadyForConnection: async () => {
+          desktopChecks += 1;
+          return {
+            connect: false,
+            reason: "desktop_update_available",
+            buildId: "0.1.913",
+            stage: "available",
+          };
+        },
+      },
+      updateWorker: {
+        whenClientReadyForConnection: async () => {
+          pwaChecks += 1;
+          return {
+            connect: true,
+            reason: "client_update_ready",
+            buildId: "0.1.913",
+            stage: "idle",
+          };
+        },
+      },
+    });
+
+    worker.startAfterClientUpdateReady();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(connectCalls, 0);
+    assert.equal(desktopChecks, 1);
+    assert.equal(pwaChecks, 0);
+    assert.deepEqual(store.state.modal, { kind: "desktop_update" });
+    assert.match(store.state.status, /Доступно desktop обновление/);
+  } finally {
+    await helper.cleanup();
+  }
+});

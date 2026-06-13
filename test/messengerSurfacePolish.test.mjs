@@ -171,6 +171,7 @@ test("messenger surface polish: W-0988 tightens history, profile and menu chrome
   const css = await readCssWithImports("src/scss/style.css");
   const profileSrc = await readFile(new URL("../src/pages/profile/createProfilePage.ts", import.meta.url), "utf8");
   const menuSrc = await readFile(new URL("../src/components/sidebar/renderSidebarMenuSurface.ts", import.meta.url), "utf8");
+  const sidebarToolsSrc = await readFile(new URL("../src/components/sidebar/renderSidebarUiTools.ts", import.meta.url), "utf8");
 
   assert.match(css, /W-0988:\s*screenshot-guided refinement for history,\s*profile and menu/);
   assert.match(css, /--history-layer-rail-max:\s*min\(100%,\s*900px\)/);
@@ -179,17 +180,26 @@ test("messenger surface polish: W-0988 tightens history, profile and menu chrome
   assert.match(css, /\.hdr-action,[\s\S]*?\.composer-actions\s+\.btn,[\s\S]*?transform:\s*none\s*!important/);
   assert.match(css, /\.sidebar\[data-sidebar-tab="menu"\]\s+\.sidebar-menu-row\s+\.row-prefix\s*\{[\s\S]*?width:\s*32px;[\s\S]*?animation:\s*none\s*!important/);
   assert.match(css, /\.sidebar-menu-row\[data-menu-icon="profile"\]\s+\.row-prefix\s*\{[\s\S]*?--menu-icon-mask:\s*var\(--menu-icon-profile\)/);
+  assert.match(css, /\.sidebar-self-id-card\s*\{/);
 
-  assert.match(profileSrc, /profileId\.textContent\s*=\s*h\s*\?\s*"Публичный профиль"\s*:\s*"Логин поможет друзьям найти вас"/);
-  assert.doesNotMatch(profileSrc, /ID:\s*\$\{me\?\.id\}/);
+  assert.match(profileSrc, /profileIdCard/);
+  assert.match(profileSrc, /Ваш ID для контактов/);
+  assert.match(profileSrc, /profileId\.textContent\s*=\s*myId\s*\?\s*`ID:\s*\$\{myId\}`\s*:\s*"ID появится после входа"/);
+  assert.match(profileSrc, /onCopyId/);
+  assert.match(profileSrc, /onShareId/);
   assert.match(profileSrc, /profileCompletenessValue\.textContent\s*=\s*completion\s*>=\s*100\s*\?\s*"Готов"/);
   assert.match(profileSrc, /profileNotifyValue\.textContent\s*=\s*subscribed\s*\?\s*"Включены"/);
   assert.match(profileSrc, /profileSessionsPill\.textContent\s*=\s*sessionEntries\.length\s*\?\s*`Устройств:/);
 
   assert.match(menuSrc, /function markMenuRow/);
   assert.match(menuSrc, /dataset\.menuIcon/);
-  assert.match(menuSrc, /"Справка"/);
+  assert.match(menuSrc, /"Профиль и настройки"/);
+  assert.match(menuSrc, /"Справка и версия"/);
   assert.doesNotMatch(menuSrc, /"Info"/);
+
+  assert.match(sidebarToolsSrc, /buildSelfIdContactCard/);
+  assert.match(sidebarToolsSrc, /Скопировать ID/);
+  assert.match(sidebarToolsSrc, /navigator\.share/);
 });
 
 test("messenger surface polish: W-0989 keeps lazy media and audio geometry stable", async () => {

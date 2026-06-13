@@ -3,6 +3,7 @@ import { el } from "../../helpers/dom/el";
 import { renderAuthModal } from "./renderAuthModal";
 import { renderUpdateModal } from "./renderUpdateModal";
 import { renderPwaUpdateModal } from "./renderPwaUpdateModal";
+import { renderDesktopUpdateModal } from "./renderDesktopUpdateModal";
 import { renderWelcomeModal } from "./renderWelcomeModal";
 import { renderLogoutModal } from "./renderLogoutModal";
 import { renderConfirmModal } from "./renderConfirmModal";
@@ -203,6 +204,9 @@ export interface ModalActions {
   onDismissUpdate: () => void;
   onReloadUpdate: () => void;
   onApplyPwaUpdate: () => void;
+  onDesktopUpdateCheck: () => void;
+  onDesktopUpdateDownload: () => void;
+  onDesktopUpdateInstall: () => void;
   onSkinChange: (skinId: string) => void;
   onMembersAdd: () => void;
   onMembersRemove: () => void;
@@ -272,6 +276,14 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
     return renderPwaUpdateModal(state.clientVersion, state.updateLatest ?? "", state.pwaUpdate, {
       onDismiss: actions.onClose,
       onApply: actions.onApplyPwaUpdate,
+    });
+  }
+  if (kind === "desktop_update") {
+    return renderDesktopUpdateModal(state.desktopUpdate, {
+      onClose: actions.onClose,
+      onCheck: actions.onDesktopUpdateCheck,
+      onDownload: actions.onDesktopUpdateDownload,
+      onInstall: actions.onDesktopUpdateInstall,
     });
   }
   if (kind === "forward_select") {

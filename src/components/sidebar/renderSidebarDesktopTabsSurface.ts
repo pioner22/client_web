@@ -27,6 +27,7 @@ export interface RenderSidebarDesktopTabsCtx {
   lastTsForKey: (key: string) => number;
   isMuted: (id: string) => boolean;
   buildSidebarArchiveHint: () => HTMLElement;
+  buildSelfIdContactCard: () => HTMLElement | null;
   buildChatlist: (
     fixedRows: HTMLElement[],
     rows: HTMLElement[],
@@ -115,6 +116,7 @@ function renderContactsSurface(ctx: RenderSidebarDesktopTabsCtx) {
     pinnedContactEntries,
     unknownAttnRows,
     activeContacts,
+    buildSelfIdContactCard,
     buildChatlist,
     markCompactAvatarRows,
     buildContactRows,
@@ -143,6 +145,10 @@ function renderContactsSurface(ctx: RenderSidebarDesktopTabsCtx) {
   if (pinnedContactRowsCompact.length) fixedRows.push(...pinnedContactRowsCompact);
   if (compactUnknownAttnRows.length) fixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...compactUnknownAttnRows);
   if (topPeerRows.length) fixedRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
+  if (!pinnedContactRowsCompact.length && !compactUnknownAttnRows.length && !topPeerRows.length && !activeContactRows.length) {
+    const selfCard = buildSelfIdContactCard();
+    if (selfCard) fixedRows.push(selfCard);
+  }
   if (activeContactRows.length && !archiveBlock.length) fixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
   const contactRows = (() => {
     if (!archiveBlock.length) return activeContactRows;

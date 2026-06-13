@@ -199,6 +199,7 @@ export function renderSidebar(
     buildSidebarArchiveToggle,
     buildSidebarArchiveHint,
     buildSidebarArchiveEmpty,
+    buildSelfIdContactCard,
     buildChatlist,
     clearVirtualChatlist,
   } = createSidebarRenderTools({
@@ -302,6 +303,7 @@ export function renderSidebar(
       matchesQuery, matchesFriend, matchesRoom, isMuted, lastTsForKey, attnSet, mentionForKey, computeRoomUnread,
       buildSidebarTabButton, buildSidebarSearchBar, buildChatlist,
       setBodyChatlistClass, bindHeaderScroll, toggleClass, markCompactAvatarRows, dialogPriority,
+      buildSelfIdContactCard,
       unknownAttnPeers, contactCandidates, activeContacts, archivedContacts, buildContactRows, buildTopPeerContactRows,
       onSelect, onOpenUser, onSetPage, onCreateGroup, onCreateBoard, onAuthOpen, onAuthLogout,
     });
@@ -353,6 +355,7 @@ export function renderSidebar(
       buildSidebarHeaderToolbar,
       buildSidebarTabButton,
       buildSidebarSearchBar,
+      buildSelfIdContactCard,
       buildChatlist,
       setBodyChatlistClass,
       bindHeaderScroll,
@@ -617,6 +620,7 @@ export function renderSidebar(
     buildSidebarArchiveHint,
     buildChatlist,
     markCompactAvatarRows,
+    buildSelfIdContactCard,
     buildContactRows,
     buildTopPeerContactRows,
     onSelect,

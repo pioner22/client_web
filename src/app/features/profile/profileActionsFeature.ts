@@ -12,7 +12,7 @@ export interface ProfileActionsFeatureDeps {
   markUserInput: () => void;
   buildSearchServerShareText: (state: AppState, items: SearchResultEntry[]) => string;
   tryAppendShareTextToSelected: (text: string) => boolean;
-  copyText: (text: string) => void;
+  copyText: (text: string) => boolean | Promise<boolean>;
   getAvatarFeature: () => AvatarFeatureLike | null;
 }
 
@@ -21,6 +21,8 @@ export interface ProfileActionsFeature {
   onSearchServerForward: (items: SearchResultEntry[]) => void;
   onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onProfileRefresh: () => void;
+  onProfileCopyId: () => void;
+  onProfileShareId: () => void;
   onSessionsRefresh: () => void;
   onSessionsLogoutOthers: () => void;
   onProfileAvatarSelect: (file: File | null) => void;
@@ -68,6 +70,41 @@ export function createProfileActionsFeature(deps: ProfileActionsFeatureDeps): Pr
     send({ type: "profile_get" });
   };
 
+  const currentSelfId = (): string => String(store.get().selfId || store.get().authRememberedId || "").trim();
+
+  const onProfileCopyId = () => {
+    const id = currentSelfId();
+    if (!id) {
+      store.set({ status: "ID станет доступен после входа" });
+      return;
+    }
+    void Promise.resolve(copyText(id)).then((ok) => {
+      store.set({ status: ok ? "ID скопирован" : "Не удалось скопировать ID" });
+    });
+  };
+
+  const onProfileShareId = () => {
+    const id = currentSelfId();
+    if (!id) {
+      store.set({ status: "ID станет доступен после входа" });
+      return;
+    }
+    const text = `Мой ID в Ягодке: ${id}`;
+    void (async () => {
+      try {
+        if (typeof navigator.share === "function") {
+          await navigator.share({ title: "Мой ID в Ягодке", text });
+          store.set({ status: "ID отправлен" });
+          return;
+        }
+      } catch {
+        // fallback to clipboard below
+      }
+      const ok = await Promise.resolve(copyText(id));
+      store.set({ status: ok ? "ID скопирован для отправки" : "Не удалось подготовить ID" });
+    })();
+  };
+
   const onSessionsRefresh = () => {
     const st = store.get();
     if (st.conn !== "connected" || !st.authed) return;
@@ -101,6 +138,8 @@ export function createProfileActionsFeature(deps: ProfileActionsFeatureDeps): Pr
     onSearchServerForward,
     onProfileSave,
     onProfileRefresh,
+    onProfileCopyId,
+    onProfileShareId,
     onSessionsRefresh,
     onSessionsLogoutOthers,
     onProfileAvatarSelect,

@@ -317,6 +317,9 @@ export interface RenderActions {
   onDismissUpdate: () => void;
   onReloadUpdate: () => void;
   onApplyPwaUpdate: () => void;
+  onDesktopUpdateCheck: () => void;
+  onDesktopUpdateDownload: () => void;
+  onDesktopUpdateInstall: () => void;
   onSkinChange: (skinId: string) => void;
   onThemeChange: (theme: ThemeMode) => void;
   onSessionsRefresh: () => void;
@@ -359,6 +362,8 @@ export interface RenderActions {
   onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onProfileRefresh: () => void;
+  onProfileCopyId: () => void;
+  onProfileShareId: () => void;
   onProfileAvatarSelect: (file: File | null) => void;
   onProfileAvatarClear: () => void;
   onPushEnable: () => void;
@@ -705,6 +710,9 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     onDismissUpdate: actions.onDismissUpdate,
     onReloadUpdate: actions.onReloadUpdate,
     onApplyPwaUpdate: actions.onApplyPwaUpdate,
+    onDesktopUpdateCheck: actions.onDesktopUpdateCheck,
+    onDesktopUpdateDownload: actions.onDesktopUpdateDownload,
+    onDesktopUpdateInstall: actions.onDesktopUpdateInstall,
     onSkinChange: actions.onSkinChange,
     onMembersAdd: actions.onMembersAdd,
     onMembersRemove: actions.onMembersRemove,
@@ -959,6 +967,8 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
             onDraftChange: actions.onProfileDraftChange,
             onSave: actions.onProfileSave,
             onRefresh: actions.onProfileRefresh,
+            onCopyId: actions.onProfileCopyId,
+            onShareId: actions.onProfileShareId,
             onOpenSessionsPage: () => actions.onSetPage("sessions"),
             onSkinChange: actions.onSkinChange,
             onThemeChange: actions.onThemeChange,

@@ -8,6 +8,8 @@ export interface ProfilePageActions {
   onDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
   onRefresh: () => void;
+  onCopyId: () => void;
+  onShareId: () => void;
   onOpenSessionsPage: () => void;
   onSkinChange: (skinId: string) => void;
   onThemeChange: (theme: ThemeMode) => void;
@@ -35,6 +37,15 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const profileName = el("div", { class: "profile-name" }, ["—"]);
   const profileHandle = el("div", { class: "profile-handle" }, ["—"]);
   const profileId = el("div", { class: "profile-id" }, [""]);
+  const profileIdValue = el("button", { class: "profile-id-value", type: "button", title: "Скопировать ID" }, ["—"]) as HTMLButtonElement;
+  const btnCopyId = el("button", { class: "btn btn-primary profile-id-copy", type: "button" }, ["Скопировать"]) as HTMLButtonElement;
+  const btnShareId = el("button", { class: "btn profile-id-share", type: "button" }, ["Поделиться"]) as HTMLButtonElement;
+  const profileIdCard = el("div", { class: "profile-id-card", role: "region", "aria-label": "Ваш ID" }, [
+    el("div", { class: "profile-id-card-label" }, ["Ваш ID для контактов"]),
+    profileIdValue,
+    el("div", { class: "profile-id-card-hint" }, ["ID можно отправить другому пользователю, чтобы он быстро нашёл и добавил вас."]),
+    el("div", { class: "profile-id-card-actions" }, [btnCopyId, btnShareId]),
+  ]);
   const profileStatusPill = el("span", { class: "profile-pill profile-pill-status" }, ["—"]);
   const profileThemePill = el("span", { class: "profile-pill" }, ["—"]);
   const profileSessionsPill = el("span", { class: "profile-pill" }, ["—"]);
@@ -76,7 +87,7 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     avatarPreview,
     el("div", { class: "profile-head-main" }, [profileName, profileHandle, profileId, profileSummary]),
   ]);
-  const head = el("div", { class: "profile-card profile-head" }, [headTop, avatarActions]);
+  const head = el("div", { class: "profile-card profile-head" }, [headTop, profileIdCard, avatarActions]);
 
   const displayNameLabel = el("label", { class: "modal-label", for: "profile-display-name" }, ["Имя"]);
   const displayNameInput = el("input", {
@@ -251,6 +262,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
 
   btnSave.addEventListener("click", () => save());
   btnRefresh.addEventListener("click", () => actions.onRefresh());
+  profileIdValue.addEventListener("click", () => actions.onCopyId());
+  btnCopyId.addEventListener("click", () => actions.onCopyId());
+  btnShareId.addEventListener("click", () => actions.onShareId());
   skinSelect.addEventListener("change", () => actions.onSkinChange(skinSelect.value));
   btnLight.addEventListener("click", () => actions.onThemeChange("light"));
   btnDark.addEventListener("click", () => actions.onThemeChange("dark"));
@@ -298,10 +312,15 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
 
   function update(state: AppState) {
     const me = state.selfId ? state.profiles[state.selfId] : null;
+    const myId = state.selfId || state.authRememberedId || "";
     profileName.textContent = me?.display_name ? me.display_name : "Без имени";
     const h = me?.handle ? String(me.handle).trim() : "";
     profileHandle.textContent = h ? (h.startsWith("@") ? h : `@${h}`) : "Логин не задан";
-    profileId.textContent = h ? "Публичный профиль" : "Логин поможет друзьям найти вас";
+    profileId.textContent = myId ? `ID: ${myId}` : "ID появится после входа";
+    profileIdValue.textContent = myId || "—";
+    profileIdValue.disabled = !myId;
+    btnCopyId.disabled = !myId;
+    btnShareId.disabled = !myId;
     const statusRaw = String(me?.status || state.profileDraftStatus || "").trim();
     profileStatusPill.textContent = statusRaw ? `Статус: ${statusRaw}` : "Статус не задан";
     profileStatusPill.classList.toggle("is-muted", !statusRaw);
@@ -317,7 +336,6 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     profileCompletenessDetail.textContent =
       completion >= 100 ? "Профиль заполнен" : completion >= 75 ? "Осталось чуть-чуть" : completion >= 50 ? "Добавьте пару деталей" : "Добавьте имя, логин и статус";
 
-    const myId = state.selfId || "";
     const url = myId ? getStoredAvatar("dm", myId) : null;
     const hue = avatarHue(`dm:${myId || "anon"}`);
     avatarPreview.style.setProperty("--avatar-h", String(hue));

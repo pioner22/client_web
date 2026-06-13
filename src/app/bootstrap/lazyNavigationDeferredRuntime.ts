@@ -18,6 +18,8 @@ type DeferredNavigationRuntime = Pick<
   | "onSearchServerForward"
   | "onProfileSave"
   | "onProfileRefresh"
+  | "onProfileCopyId"
+  | "onProfileShareId"
   | "onSessionsRefresh"
   | "onSessionsLogoutOthers"
   | "onProfileAvatarSelect"
@@ -168,6 +170,12 @@ export function createLazyNavigationDeferredRuntime(
     },
     onProfileRefresh() {
       callRuntime("onProfileRefresh", []);
+    },
+    onProfileCopyId() {
+      callRuntime("onProfileCopyId", []);
+    },
+    onProfileShareId() {
+      callRuntime("onProfileShareId", []);
     },
     onSessionsRefresh() {
       callRuntime("onSessionsRefresh", []);

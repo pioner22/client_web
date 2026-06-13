@@ -437,8 +437,11 @@ test("mobile sidebar: Меню содержит навигацию/создан�
         );
         await flushLazySidebarRender();
         assert.equal(hasText(target, "Навигация"), true);
-        assert.equal(hasText(target, "Поиск"), true);
-        assert.equal(hasText(target, "Создать группу"), true);
+        assert.equal(hasText(target, "Профиль и настройки"), true);
+        assert.equal(hasText(target, "Поиск по истории"), true);
+        assert.equal(hasText(target, "Медиа и файлы"), true);
+        assert.equal(hasText(target, "Новая группа"), true);
+        assert.equal(hasText(target, "Справка и версия"), true);
         assert.equal(hasText(target, "Подсказки"), true);
         assert.equal(hasText(target, "Онлайн"), false);
       },

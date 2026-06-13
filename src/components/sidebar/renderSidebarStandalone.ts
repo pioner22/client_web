@@ -48,6 +48,7 @@ export type RenderSidebarStandaloneCtx = {
   buildSidebarHeaderToolbar: (activeTab: "contacts" | "groups" | "boards" | "menu") => HTMLElement;
   buildSidebarTabButton: (tab: MobileSidebarTab, activeTab: MobileSidebarTab, label: string) => HTMLButtonElement;
   buildSidebarSearchBar: (placeholder: string, opts?: { action?: HTMLElement }) => HTMLElement;
+  buildSelfIdContactCard: () => HTMLElement | null;
   buildChatlist: (
     fixedRows: HTMLElement[],
     rows: HTMLElement[],
@@ -109,6 +110,7 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     computeRoomUnread,
     buildSidebarArchiveHint,
     buildSidebarArchiveEmpty,
+    buildSelfIdContactCard,
     buildSidebarHeaderToolbar,
     buildSidebarTabButton,
     buildSidebarSearchBar,
@@ -430,6 +432,10 @@ export function renderSidebarStandalone(ctx: RenderSidebarStandaloneCtx) {
     if (pinnedContactRowsCompact.length) contactFixedRows.push(...pinnedContactRowsCompact);
     if (unknownAttnRows.length) contactFixedRows.push(el("div", { class: "pane-section" }, ["Внимание"]), ...unknownAttnRows);
     if (topPeerRows.length) contactFixedRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
+    if (!pinnedContactRowsCompact.length && !unknownAttnRows.length && !topPeerRows.length && !activeContactRows.length) {
+      const selfCard = buildSelfIdContactCard();
+      if (selfCard) contactFixedRows.push(selfCard);
+    }
     if (activeContactRows.length && !archiveBlock.length) contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
     const contactRows = (() => {
       if (!archiveBlock.length) return activeContactRows;

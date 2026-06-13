@@ -40,6 +40,7 @@ export type RenderSidebarMobileCtx = {
   computeRoomUnread: (key: string) => number;
   buildSidebarArchiveHint: () => HTMLElement;
   buildSidebarArchiveEmpty: (label: string) => HTMLElement;
+  buildSelfIdContactCard: () => HTMLElement | null;
   buildSidebarTabButton: (tab: MobileSidebarTab, activeTab: MobileSidebarTab, label: string) => HTMLButtonElement;
   buildSidebarSearchBar: (placeholder: string, opts?: { action?: HTMLElement }) => HTMLElement;
   buildChatlist: (
@@ -104,6 +105,7 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
     computeRoomUnread,
     buildSidebarArchiveHint,
     buildSidebarArchiveEmpty,
+    buildSelfIdContactCard,
     buildSidebarTabButton,
     buildSidebarSearchBar,
     buildChatlist,
@@ -429,6 +431,10 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
     if (topPeerRows.length) {
       contactFixedRows.push(el("div", { class: "pane-section" }, ["Топ"]), ...topPeerRows);
     }
+    if (!pinnedContactRowsCompact.length && !compactUnknownAttnRows.length && !topPeerRows.length && !activeContactRows.length) {
+      const selfCard = buildSelfIdContactCard();
+      if (selfCard) contactFixedRows.push(selfCard);
+    }
     if (activeContactRows.length && !archiveBlock.length) {
       contactFixedRows.push(el("div", { class: "pane-section" }, ["Контакты"]));
     }
@@ -444,42 +450,42 @@ export function renderSidebarMobile(ctx: RenderSidebarMobileCtx) {
   }
 
   // Menu tab: действия и навигация.
-  const profileRow = roomRow("☺", "Профиль", shell.profileAreaOpen, () => onSetPage("profile"), undefined, {
-    sub: "Имя, @handle, аватар",
+  const profileRow = roomRow("☺", "Профиль и настройки", shell.profileAreaOpen, () => onSetPage("profile"), undefined, {
+    sub: "Ваш ID, имя, фото, оформление",
     time: null,
     hasDraft: false,
   });
   toggleClass(profileRow, "row-settings", true);
   profileRow.setAttribute("title", "Настройки профиля и интерфейса");
-  const searchRow = roomRow("🔍", "Поиск", shell.isSearchPage, () => onSetPage("search"), undefined, {
-    sub: "Глобальный поиск",
+  const searchRow = roomRow("🔍", "Поиск по истории", shell.isSearchPage, () => onSetPage("search"), undefined, {
+    sub: "Сообщения, люди, медиа",
     time: null,
     hasDraft: false,
   });
   searchRow.setAttribute("title", "Глобальный поиск");
-  const filesRow = roomRow("▦", "Файлы", shell.isFilesPage, () => onSetPage("files"), undefined, {
-    sub: "История и загрузки",
+  const filesRow = roomRow("▦", "Медиа и файлы", shell.isFilesPage, () => onSetPage("files"), undefined, {
+    sub: "Передачи, загрузки, вложения",
     time: null,
     hasDraft: false,
   });
   filesRow.setAttribute("title", "Передача файлов и история");
   const navRows: HTMLElement[] = [profileRow, searchRow, filesRow];
 
-  const createGroupRow = roomRow("+", "Создать группу", shell.isGroupCreatePage, () => onCreateGroup(), undefined, {
+  const createGroupRow = roomRow("+", "Новая группа", shell.isGroupCreatePage, () => onCreateGroup(), undefined, {
     sub: "Группа с приглашёнными участниками",
     time: null,
     hasDraft: false,
   });
   createGroupRow.setAttribute("title", "Создать новую группу");
-  const createBoardRow = roomRow("+", "Создать канал", shell.isBoardCreatePage, () => onCreateBoard(), undefined, {
-    sub: "Канал новостей и информации",
+  const createBoardRow = roomRow("+", "Новый канал", shell.isBoardCreatePage, () => onCreateBoard(), undefined, {
+    sub: "Новости и информация",
     time: null,
     hasDraft: false,
   });
   createBoardRow.setAttribute("title", "Создать новый канал");
   const createRows: HTMLElement[] = [createGroupRow, createBoardRow];
-  const infoRow = roomRow("?", "Info", shell.isHelpPage, () => onSetPage("help"), undefined, {
-    sub: mobileUi ? "Версии и изменения" : "Хоткеи, версии и изменения",
+  const infoRow = roomRow("?", "Справка и версия", shell.isHelpPage, () => onSetPage("help"), undefined, {
+    sub: mobileUi ? "Версии и изменения" : "Помощь, версии и изменения",
     time: null,
     hasDraft: false,
   });

@@ -29,7 +29,7 @@ export function resolveModalPresentation(state: ModalStateLike): ModalPresentati
 
   let overlaySurface: OverlaySurface | null = null;
   if (fullScreenKind) overlaySurface = "overlay-auth";
-  else if (modalKind === "pwa_update") overlaySurface = "overlay-update";
+  else if (modalKind === "pwa_update" || modalKind === "desktop_update") overlaySurface = "overlay-update";
   else if (modalKind === "context_menu") overlaySurface = "overlay-context";
   else if (modalKind === "file_viewer" || modalKind === "call") overlaySurface = "overlay-viewer";
 

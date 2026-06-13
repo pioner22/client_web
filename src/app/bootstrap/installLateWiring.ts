@@ -192,6 +192,7 @@ export function installLateWiring(deps: any) {
   const connectionWorker = createClientConnectionWorker({
     store,
     gateway,
+    desktopUpdateWorker: desktopUpdateFeature,
     updateWorker: pwaUpdateRuntime,
   });
 
@@ -372,6 +373,9 @@ export function installLateWiring(deps: any) {
     onSetSidebarQuery: sidebarPreferencesActionsFeature.onSetSidebarQuery,
     onToggleSidebarArchive: sidebarPreferencesActionsFeature.onToggleSidebarArchive,
     ...actionsAccountFeature,
+    onDesktopUpdateCheck: desktopUpdateFeature.check,
+    onDesktopUpdateDownload: desktopUpdateFeature.download,
+    onDesktopUpdateInstall: desktopUpdateFeature.install,
     onCallRequestMediaAccess: callRequestMediaAccess,
     onCallOpenMediaSettings: callOpenMediaSettings,
     onCallAccept: callAccept,

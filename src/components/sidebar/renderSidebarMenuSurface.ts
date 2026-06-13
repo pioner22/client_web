@@ -40,23 +40,23 @@ export function renderSidebarMenuSurface(ctx: RenderSidebarMenuCtx) {
   const { state, mobileUi, onSetPage, onCreateGroup, onCreateBoard, onAuthOpen, onAuthLogout, mountDesktop } = ctx;
   const shell = buildAppShellProjection(state);
 
-  const profileRow = markMenuRow(roomRow(" ", "Профиль", shell.profileAreaOpen, () => onSetPage("profile"), undefined, {
-    sub: "Имя, фото и оформление",
+  const profileRow = markMenuRow(roomRow(" ", "Профиль и настройки", shell.profileAreaOpen, () => onSetPage("profile"), undefined, {
+    sub: "Ваш ID, имя, фото, оформление",
     time: null,
     hasDraft: false,
   }), "profile");
   toggleClass(profileRow, "row-settings", true);
   profileRow.setAttribute("title", "Настройки профиля и интерфейса");
 
-  const searchRow = markMenuRow(roomRow(" ", "Поиск", shell.isSearchPage, () => onSetPage("search"), undefined, {
-    sub: "Сообщения, люди и медиа",
+  const searchRow = markMenuRow(roomRow(" ", "Поиск по истории", shell.isSearchPage, () => onSetPage("search"), undefined, {
+    sub: "Сообщения, люди, медиа",
     time: null,
     hasDraft: false,
   }), "search");
   searchRow.setAttribute("title", "Глобальный поиск");
 
-  const filesRow = markMenuRow(roomRow(" ", "Файлы", shell.isFilesPage, () => onSetPage("files"), undefined, {
-    sub: "Медиа и загрузки",
+  const filesRow = markMenuRow(roomRow(" ", "Медиа и файлы", shell.isFilesPage, () => onSetPage("files"), undefined, {
+    sub: "Передачи, загрузки, вложения",
     time: null,
     hasDraft: false,
   }), "files");
@@ -78,7 +78,7 @@ export function renderSidebarMenuSurface(ctx: RenderSidebarMenuCtx) {
   createBoardRow.setAttribute("title", "Создать новый канал");
   const createRows: HTMLElement[] = [createGroupRow, createBoardRow];
 
-  const infoRow = markMenuRow(roomRow(" ", "Справка", shell.isHelpPage, () => onSetPage("help"), undefined, {
+  const infoRow = markMenuRow(roomRow(" ", "Справка и версия", shell.isHelpPage, () => onSetPage("help"), undefined, {
     sub: mobileUi ? "Версии и изменения" : "Помощь, версии и изменения",
     time: null,
     hasDraft: false,
