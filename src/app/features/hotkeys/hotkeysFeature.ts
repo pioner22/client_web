@@ -68,7 +68,7 @@ export function createHotkeysFeature(deps: HotkeysFeatureDeps): HotkeysFeature {
         onManualPwaUpdate();
         return;
       }
-      if (!["Shift", "Control", "Alt", "Meta"].includes(e.key)) {
+      if (e.key === "Escape") {
         e.preventDefault();
         onCloseModal();
       }

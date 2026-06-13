@@ -394,6 +394,9 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     const swSupported = typeof navigator !== "undefined" && "serviceWorker" in navigator;
     let updateText = "Проверяет свежую версию и применяет её после подтверждения.";
     if (!swSupported) updateText = "PWA обновления не поддерживаются в этом браузере";
+    else if (state.pwaUpdate?.stage === "error") updateText = state.pwaUpdate.detail || "Обновление требует повторной проверки.";
+    else if (state.pwaUpdate?.stage === "checking") updateText = "Проверяем свежую сборку и Service Worker.";
+    else if (state.pwaUpdate?.stage === "applying" || state.pwaUpdate?.stage === "verifying") updateText = "Обновление устанавливается и проверяется.";
     else if (state.pwaUpdateAvailable) updateText = "Доступно обновление — нажмите, чтобы применить.";
     pwaUpdateHint.textContent = updateText;
     btnPwaUpdate.disabled = !swSupported;

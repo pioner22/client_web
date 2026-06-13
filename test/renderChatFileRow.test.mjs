@@ -1451,6 +1451,8 @@ test("renderChat: audio bubble uses frameless centered controls", async () => {
   assert.match(css, /@keyframes\s+chat-voice-wave/);
   assert.match(css, /\.chat-voice\[data-voice-state="playing"\]\s+\.chat-voice-track::before\s*\{[\s\S]*?animation:\s*chat-voice-wave/);
   assert.match(css, /\.chat-voice\[data-voice-state="playing"\]\s+\.chat-voice-progress\s*\{[\s\S]*?animation:\s*chat-voice-progress-pulse/);
+  assert.match(css, /@keyframes\s+chat-voice-loading-spin/);
+  assert.match(css, /\.chat-voice\[data-voice-state="loading"\]\s+\.chat-voice-play::before\s*\{[\s\S]*?animation:\s*chat-voice-loading-spin/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?chat-voice\[data-voice-state="playing"\][\s\S]*?animation:\s*none/);
 });
 

@@ -162,6 +162,20 @@ export interface FileTransferEntry {
   receivedBy?: string[];
 }
 
+export type PwaUpdateStage = "idle" | "available" | "checking" | "downloading" | "applying" | "verifying" | "done" | "error";
+export type PwaUpdateDecision = "pending" | "later" | "accepted" | null;
+
+export interface PwaUpdateRuntimeState {
+  stage: PwaUpdateStage;
+  buildId: string | null;
+  message: string;
+  detail: string;
+  progress: number;
+  error: string | null;
+  userDecision: PwaUpdateDecision;
+  updatedAt: number | null;
+}
+
 export interface FileThumbEntry {
   url: string;
   mime: string | null;
@@ -651,6 +665,7 @@ export interface AppState {
   updateLatest: string | null;
   updateDismissedLatest: string | null;
   pwaUpdateAvailable: boolean;
+  pwaUpdate: PwaUpdateRuntimeState;
   pwaPushSupported: boolean;
   pwaPushPermission: "default" | "granted" | "denied";
   pwaPushSubscribed: boolean;

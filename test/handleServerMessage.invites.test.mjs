@@ -365,6 +365,8 @@ test("handleServerMessage: update_required с build id открывает явн
     const st = getState();
     assert.equal(st.updateLatest, "0.1.515-c539a3244834");
     assert.equal(st.pwaUpdateAvailable, true);
+    assert.equal(st.pwaUpdate?.stage, "available");
+    assert.equal(st.pwaUpdate?.buildId, "0.1.515-c539a3244834");
     assert.deepEqual(st.modal, { kind: "pwa_update" });
     assert.ok(String(st.status || "").includes("Нажмите"));
   } finally {

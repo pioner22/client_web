@@ -159,6 +159,12 @@
   }
 }
 
+@keyframes chat-voice-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .chat-voice[data-voice-state="playing"] .chat-voice-play {
   background: color-mix(in srgb, var(--msg-accent, var(--accent)), transparent 84%);
   color: color-mix(in srgb, var(--msg-accent, var(--accent)), var(--text) 10%);
@@ -252,8 +258,21 @@
   cursor: progress;
 }
 
+.chat-voice[data-voice-state="loading"] .chat-voice-play::before {
+  -webkit-mask: none;
+  mask: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 999px;
+  background: transparent;
+  animation: chat-voice-loading-spin 780ms linear infinite;
+}
+
 .chat-voice[data-voice-state="loading"] .chat-voice-track::before {
-  opacity: 0.25;
+  opacity: 0.38;
+  animation: chat-voice-wave 920ms linear infinite;
 }
 
 .chat-voice.chat-voice-placeholder {
@@ -262,7 +281,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .chat-voice[data-voice-state="playing"] .chat-voice-track::before,
-  .chat-voice[data-voice-state="playing"] .chat-voice-progress {
+  .chat-voice[data-voice-state="playing"] .chat-voice-progress,
+  .chat-voice[data-voice-state="loading"] .chat-voice-play::before,
+  .chat-voice[data-voice-state="loading"] .chat-voice-track::before {
     animation: none;
   }
 }

@@ -8,6 +8,7 @@ import { loadActiveBuildId } from "../helpers/pwa/buildIdStore";
 import { getNotifyInAppEnabled, getNotifySoundEnabled } from "../helpers/notify/notifyPrefs";
 import { getStoredMessageView } from "../helpers/ui/messageView";
 import { createRuntimeDeliverySyncState } from "../helpers/runtime/deliverySync";
+import { createPwaUpdateState } from "../helpers/pwa/updateState";
 
 export function createInitialState(): AppState {
   const skin = getStoredSkinId();
@@ -140,6 +141,7 @@ export function createInitialState(): AppState {
     updateLatest: null,
     updateDismissedLatest: null,
     pwaUpdateAvailable: false,
+    pwaUpdate: createPwaUpdateState(),
     pwaPushSupported: pushSupported,
     pwaPushPermission: pushPermission,
     pwaPushSubscribed: false,

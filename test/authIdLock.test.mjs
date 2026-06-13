@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -589,6 +589,15 @@ test("renderAuthModal: manual access-code input avoids browser credential form s
   } finally {
     await helper.cleanup();
   }
+});
+
+test("renderAuthModal: manual code visibility never switches input to browser password type", async () => {
+  const src = await readFile(path.resolve("src/components/modals/renderAuthModal.ts"), "utf8");
+
+  assert.match(src, /wrapWithCodeVisibilityToggle/);
+  assert.doesNotMatch(src, /wrapWithPasswordToggle/);
+  assert.doesNotMatch(src, /type\s*=\s*[^;\n]*["']password["']/);
+  assert.doesNotMatch(src, /toLowerCase\(\)\s*===\s*["']password["']/);
 });
 
 test("renderAuthModal: primary CTA sends register via direct click fallback", async () => {

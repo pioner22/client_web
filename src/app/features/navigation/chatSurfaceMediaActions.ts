@@ -34,9 +34,14 @@ export function createChatSurfaceMediaActions(deps: ChatSurfaceDeferredDeps) {
     if (!requireConnectedAndAuthed(st)) return;
 
     requestVoiceAutoplay(fileId);
+    const requestToken = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
     try {
       wrap.setAttribute("data-voice-state", "loading");
+      wrap.setAttribute("data-voice-request", requestToken);
       voicePlayBtn.setAttribute("disabled", "true");
+      voicePlayBtn.setAttribute("aria-label", "Готовим голосовое");
+      const time = wrap.querySelector(".chat-voice-time") as HTMLElement | null;
+      if (time) time.textContent = "…";
     } catch {
       // ignore
     }
@@ -55,12 +60,17 @@ export function createChatSurfaceMediaActions(deps: ChatSurfaceDeferredDeps) {
       try {
         if (!wrap.isConnected) return;
         if (!wrap.classList.contains("chat-voice-placeholder")) return;
+        if (wrap.getAttribute("data-voice-request") !== requestToken) return;
         wrap.setAttribute("data-voice-state", "paused");
+        wrap.removeAttribute("data-voice-request");
         voicePlayBtn.removeAttribute("disabled");
+        voicePlayBtn.setAttribute("aria-label", "Повторить загрузку голосового");
+        const time = wrap.querySelector(".chat-voice-time") as HTMLElement | null;
+        if (time) time.textContent = "повтор";
       } catch {
         // ignore
       }
-    }, 10_000);
+    }, 12_000);
   };
 
   const handleMediaToggleClick = (preview: HTMLButtonElement, video: HTMLVideoElement): void => {

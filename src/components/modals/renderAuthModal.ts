@@ -166,7 +166,7 @@ export function renderAuthModal(
     return el("div", { class: "field-with-action auth-id-edit" }, [input, toggle]);
   }
 
-  function wrapWithPasswordToggle(input: HTMLInputElement): HTMLElement {
+  function wrapWithCodeVisibilityToggle(input: HTMLInputElement): HTMLElement {
     const toggle = el(
       "button",
       {
@@ -180,15 +180,13 @@ export function renderAuthModal(
     ) as HTMLButtonElement;
 
     const apply = (visible: boolean) => {
-      if (input.getAttribute("data-manual-mask") === "1") {
-        input.setAttribute("data-mask-visible", visible ? "1" : "0");
-      } else {
-        try {
-          input.type = visible ? "text" : "password";
-        } catch {
-          // ignore
-        }
+      try {
+        input.type = "text";
+      } catch {
+        // ignore
       }
+      input.setAttribute("data-manual-mask", "1");
+      input.setAttribute("data-mask-visible", visible ? "1" : "0");
       toggle.classList.toggle("on", visible);
       toggle.setAttribute("aria-pressed", visible ? "true" : "false");
       toggle.setAttribute("aria-label", visible ? "Скрыть ввод" : "Показать ввод");
@@ -196,10 +194,7 @@ export function renderAuthModal(
     };
 
     toggle.addEventListener("click", () => {
-      const visible =
-        input.getAttribute("data-manual-mask") === "1"
-          ? input.getAttribute("data-mask-visible") !== "1"
-          : String(input.type || "").toLowerCase() === "password";
+      const visible = input.getAttribute("data-mask-visible") !== "1";
       apply(visible);
       focusElement(input);
     });
@@ -337,11 +332,11 @@ export function renderAuthModal(
     body.append(
       el("div", { class: "auth-field-stack" }, [
         el("label", { class: "modal-label", for: "auth-code-a" }, ["Код доступа"]),
-        wrapWithPasswordToggle(pw1Input),
+        wrapWithCodeVisibilityToggle(pw1Input),
       ]),
       el("div", { class: "auth-field-stack" }, [
         el("label", { class: "modal-label", for: "auth-code-b" }, ["Подтверждение"]),
-        wrapWithPasswordToggle(pw2Input),
+        wrapWithCodeVisibilityToggle(pw2Input),
       ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
       el("div", { class: "modal-actions" }, primaryButton ? [primaryButton] : [])
@@ -403,7 +398,7 @@ export function renderAuthModal(
       manualIdBlock,
       el("div", { class: "auth-field-stack" }, [
         el("label", { class: "modal-label", for: "auth-code" }, ["Код доступа"]),
-        wrapWithPasswordToggle(pwInput),
+        wrapWithCodeVisibilityToggle(pwInput),
       ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
       el("div", { class: `modal-actions${touchIdBtn ? " auth-inline-actions" : ""}` }, [

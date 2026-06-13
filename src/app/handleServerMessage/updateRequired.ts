@@ -1,5 +1,6 @@
 import type { AppState } from "../../stores/types";
 import { isServiceWorkerRuntimeAvailable } from "../../helpers/pwa/serviceWorkerRuntime";
+import { createPwaUpdateState } from "../../helpers/pwa/updateState";
 import { getCapacitorPlatform, isCapacitorNativeRuntime } from "../../helpers/runtime/nativeRuntime";
 import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import { splitBuildId } from "../../helpers/version/buildId";
@@ -28,6 +29,12 @@ export function handleUpdateRequiredMessage(t: string, msg: any, state: AppState
       patch({
         updateLatest: latest,
         pwaUpdateAvailable: true,
+        pwaUpdate: createPwaUpdateState("available", {
+          buildId: latest,
+          message: "Доступно обновление веб-клиента",
+          detail: "Сервер сообщил о новой сборке. Нажмите «Обновить», когда будет удобно.",
+          userDecision: "pending",
+        }),
         status: "Доступно обновление веб-клиента. Нажмите «Обновить», когда будет удобно.",
         modal: state.modal && state.modal.kind !== "pwa_update" ? state.modal : { kind: "pwa_update" },
       });
