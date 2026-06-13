@@ -381,3 +381,46 @@ test("handleServerMessage: update_required с build id открывает явн
     await cleanup();
   }
 });
+
+test("handleServerMessage: update_required preempts auth modal for explicit PWA update prompt", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  const nav = globalThis.navigator ?? {};
+  const hadNavigator = Boolean(globalThis.navigator);
+  const prevSw = nav.serviceWorker;
+  if (!hadNavigator) {
+    Object.defineProperty(globalThis, "navigator", { value: nav, configurable: true });
+  }
+  Object.defineProperty(nav, "serviceWorker", {
+    value: { getRegistration: async () => ({ update: () => {} }) },
+    configurable: true,
+  });
+  try {
+    const { getState, patch } = createPatchHarness({
+      updateLatest: "0.1.514-old",
+      updateDismissedLatest: null,
+      pwaUpdateAvailable: false,
+      pwaUpdate: { stage: "idle", buildId: null },
+      modal: { kind: "auth", message: "Нет связи. Проверьте интернет." },
+      status: "Нет связи. Проверьте интернет.",
+    });
+
+    handleServerMessage({ type: "update_required", latest: "0.1.908-deadbeef0000" }, getState(), { send() {} }, patch);
+
+    const st = getState();
+    assert.equal(st.updateLatest, "0.1.908-deadbeef0000");
+    assert.equal(st.pwaUpdateAvailable, true);
+    assert.equal(st.pwaUpdate?.buildId, "0.1.908-deadbeef0000");
+    assert.deepEqual(st.modal, { kind: "pwa_update" });
+    assert.ok(String(st.status || "").includes("Доступно обновление веб-клиента"));
+  } finally {
+    if (prevSw === undefined) {
+      delete nav.serviceWorker;
+    } else {
+      Object.defineProperty(nav, "serviceWorker", { value: prevSw, configurable: true });
+    }
+    if (!hadNavigator) {
+      delete globalThis.navigator;
+    }
+    await cleanup();
+  }
+});

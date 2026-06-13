@@ -99,6 +99,14 @@ test("messenger surface polish: W-1006 hides stale media placeholders over loade
   assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-file-preview:has\(>\s*video\.chat-file-video\)\s*>\s*\.chat-media-state-idle\s*\{[\s\S]*?display:\s*none\s*!important/);
 });
 
+test("messenger surface polish: W-1012 keeps visible media free of stale progress chrome", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+
+  assert.match(css, /W-1012:\s*screenshot repair for PWA viewer\/history geometry/);
+  assert.match(css, /\.chat:not\(\.chat-board\)\s+\.chat-file-preview:has\(>\s*img\.chat-file-img\)\s*>\s*\.chat-media-progress,[\s\S]*?\.chat-file-preview:has\(>\s*video\.chat-file-video\)\s*>\s*\.chat-media-progress\s*\{[\s\S]*?opacity:\s*0\s*;/);
+  assert.match(css, /\.chat-jump\[data-jump-unread="0"\]\s+\.chat-jump-badge,[\s\S]*?\.chat-jump\[data-jump-unread="0"\]\s+\.chat-jump-label\s*\{[\s\S]*?display:\s*none\s*!important/);
+});
+
 test("messenger surface polish: W-0978 keeps Android bubbles and context menu bounded", async () => {
   const css = await readCssWithImports("src/scss/style.css");
 

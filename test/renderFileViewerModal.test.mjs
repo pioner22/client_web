@@ -304,6 +304,8 @@ test("renderFileViewerModal: footer shell helper and CSS hooks are present", asy
   assert.match(source, /isAudioLikeFile/);
   assert.match(source, /resetImageViewport/);
   assert.match(source, /data-viewer-fit/);
+  assert.match(source, /data-viewer-load/);
+  assert.match(source, /preloaderStallTimer/);
   assert.match(source, /"Вписано"/);
   assert.match(helperSource, /viewer-footer-shell/);
   assert.match(helperSource, /viewer-footer-counter/);
@@ -372,4 +374,38 @@ test("renderFileViewerModal: mobile visual viewer uses compact non-overlapping c
   const baseRailIndex = css.indexOf(".viewer-rail {");
   const mobileRailIndex = css.indexOf(".overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-rail {");
   assert.ok(baseRailIndex >= 0 && mobileRailIndex > baseRailIndex, "mobile rail override must come after the base rail rule");
+});
+
+test("renderFileViewerModal: W-1013 stage fit keeps media paintable after mobile polish", async () => {
+  const css = await readFile(path.resolve("src/scss/polish.css"), "utf8");
+
+  assert.match(css, /W-1012:\s*screenshot repair for PWA viewer\/history geometry/);
+  assert.match(css, /W-1013:\s*crash screenshot repair for blank visual viewer and mobile host paint/);
+  assert.match(css, /\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\]\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;/);
+  assert.match(css, /\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\]\s+\.viewer-stage,[\s\S]*?\.viewer-has-rail \.viewer-stage\s*\{[\s\S]*?contain:\s*layout paint;/);
+  assert.match(css, /\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\]\s+\.viewer-footer-shell\s*\{[\s\S]*?max-height:\s*min\(30dvh,\s*220px\);[\s\S]*?background:\s*#000;/);
+  assert.match(css, /data-viewer-load="ready"[\s\S]*?\.viewer-preloader[\s\S]*?display:\s*none\s*!important;/);
+  assert.match(css, /data-viewer-load="error"[\s\S]*?\.viewer-preloader[\s\S]*?display:\s*grid;/);
+  assert.doesNotMatch(css, /contain:\s*size layout paint;/);
+});
+
+test("renderFileViewerModal: W-1014 viewer polish is imported after legacy polish and clamps mobile media", async () => {
+  const [styleCss, css] = await Promise.all([
+    readFile(path.resolve("src/scss/style.css"), "utf8"),
+    readFile(path.resolve("src/scss/w1014-media-viewer.css"), "utf8"),
+  ]);
+
+  const polishIndex = styleCss.indexOf('@import "./polish.css";');
+  const w1014Index = styleCss.indexOf('@import "./w1014-media-viewer.css";');
+  assert.ok(polishIndex >= 0 && w1014Index > polishIndex, "W-1014 viewer layer must load after polish.css");
+  assert.match(css, /W-1014:\s*hard viewer\/media geometry/);
+  assert.match(css, /grid-template-rows:\s*minmax\(0,\s*1fr\)\s*!important;/);
+  assert.match(css, /\.viewer-header\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?pointer-events:\s*none;/);
+  assert.match(css, /\.viewer-stage,[\s\S]*?\.viewer-has-rail \.viewer-stage\s*\{[\s\S]*?padding:\s*var\(--viewer-w1014-top\)\s+0\s+var\(--viewer-w1014-bottom\);/);
+  assert.match(css, /\.viewer-footer-shell\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*0;/);
+  assert.match(css, /\.viewer-img[\s\S]*?max-height:\s*calc\(var\(--app-vh,\s*100dvh\)\s*-\s*var\(--viewer-w1014-top\)\s*-\s*var\(--viewer-w1014-bottom\)\s*-\s*10px\)\s*!important;/);
+  assert.match(css, /data-viewer-load="loading"[\s\S]*?\.viewer-preloader\s*\{[\s\S]*?display:\s*grid;/);
+  assert.match(css, /--history-mobile-media-gutter:\s*42px;/);
+  assert.match(css, /\.msg-attach\[data-msg-file="image"\][\s\S]*?\.msg-body\s*\{[\s\S]*?max-width:\s*calc\(100dvw - var\(--history-mobile-media-gutter\)\)\s*!important;/);
+  assert.match(css, /\.chat-file-preview > \.chat-file-img,[\s\S]*?\.chat-file-preview > \.chat-file-video\s*\{[\s\S]*?object-fit:\s*cover;/);
 });

@@ -42,15 +42,33 @@ const AUTH_ENTRY_PANEL_TITLE = "Вход в Ягодку";
 const AUTH_ENTRY_PANEL_SUBTITLE = "Введите данные аккаунта или создайте новый профиль.";
 const AUTH_ENTRY_HERO_TITLE = "Рабочий мессенджер для команды";
 const AUTH_ENTRY_HERO_COPY = "Общайтесь, отправляйте файлы и возвращайтесь к рабочим чатам без лишних шагов.";
-const AUTH_ENTRY_HELPER = "Для входа нужен ID и код доступа. Если создаёте аккаунт, сохраните выданный ID после регистрации.";
-const AUTH_MANUAL_FIELD_ATTRS = {
-  autocomplete: "off",
+const AUTH_ENTRY_HELPER = "Для входа нужен ID и ручной ключ. Если создаёте аккаунт, сохраните выданный ID после регистрации.";
+const AUTH_ID_INPUT_ID = "auth-id";
+const AUTH_LOGIN_MANUAL_INPUT_ID = "auth-manual-entry";
+const AUTH_REGISTER_MANUAL_INPUT_ID = "auth-manual-entry-a";
+const AUTH_REGISTER_CONFIRM_INPUT_ID = "auth-manual-entry-b";
+const AUTH_MANUAL_INPUT_LABEL = "Ручной ввод";
+const AUTH_MANUAL_INPUT_PLACEHOLDER = "Введите вручную";
+const AUTH_CREDENTIAL_IGNORE_ATTRS = {
   "aria-autocomplete": "none",
   "data-lpignore": "true",
   "data-1p-ignore": "true",
   "data-bwignore": "true",
   "data-form-type": "other",
   "data-protonpass-ignore": "true",
+  "data-credentialless": "true",
+  "data-credential-field": "false",
+  "data-autofill-suppressed": "1",
+  autofill: "off",
+};
+const AUTH_ID_FIELD_ATTRS = {
+  ...AUTH_CREDENTIAL_IGNORE_ATTRS,
+  autocomplete: "off",
+};
+const AUTH_MANUAL_FIELD_ATTRS = {
+  ...AUTH_CREDENTIAL_IGNORE_ATTRS,
+  autocomplete: "one-time-code",
+  inputmode: "text",
 };
 
 function isQuietStatus(status: string, connected: boolean, mode: AuthMode): boolean {
@@ -81,7 +99,7 @@ function resolveCopy(mode: AuthMode): EntryCopy {
       panelSubtitle: AUTH_ENTRY_PANEL_SUBTITLE,
       heroTitle: AUTH_ENTRY_HERO_TITLE,
       heroCopy: AUTH_ENTRY_HERO_COPY,
-      primaryLabel: "Ввести код",
+      primaryLabel: "Ввести ключ",
       helper: AUTH_ENTRY_HELPER,
     };
   }
@@ -203,6 +221,19 @@ export function renderAuthModal(
     return el("div", { class: "field-with-action" }, [input, toggle]);
   }
 
+  function hardenManualEntryInput(input: HTMLInputElement): void {
+    input.setAttribute("readonly", "true");
+    input.setAttribute("data-manual-entry-ready", "0");
+    const unlock = () => {
+      input.removeAttribute("readonly");
+      input.setAttribute("data-manual-entry-ready", "1");
+    };
+    input.addEventListener("pointerdown", unlock, { capture: true });
+    input.addEventListener("touchstart", unlock, { capture: true });
+    input.addEventListener("focus", unlock);
+    input.addEventListener("keydown", unlock);
+  }
+
   const root = el("div", { id: "auth-pages", class: `auth-entry-page auth-entry-${mode}` });
   const scrollable = el("div", { class: "scrollable auth-entry-scroll" });
   const layout = el("div", { class: `container modal-auth auth-entry-layout ${mode === "register" ? "page-signUp" : "page-sign"}` });
@@ -299,10 +330,10 @@ export function renderAuthModal(
   } else if (mode === "register") {
     const pw1Input = el("input", {
       class: "modal-input auth-manual-key-input",
-      id: "auth-code-a",
-      name: "manual-entry-a",
+      id: AUTH_REGISTER_MANUAL_INPUT_ID,
+      name: "manual-field-a",
       type: "text",
-      placeholder: "Код доступа",
+      placeholder: AUTH_MANUAL_INPUT_PLACEHOLDER,
       ...AUTH_MANUAL_FIELD_ATTRS,
       "data-manual-mask": "1",
       "data-mask-visible": "0",
@@ -315,10 +346,10 @@ export function renderAuthModal(
     }) as HTMLInputElement;
     const pw2Input = el("input", {
       class: "modal-input auth-manual-key-input",
-      id: "auth-code-b",
-      name: "manual-entry-b",
+      id: AUTH_REGISTER_CONFIRM_INPUT_ID,
+      name: "manual-field-b",
       type: "text",
-      placeholder: "Повторите код",
+      placeholder: "Повторите ввод",
       ...AUTH_MANUAL_FIELD_ATTRS,
       "data-manual-mask": "1",
       "data-mask-visible": "0",
@@ -329,13 +360,15 @@ export function renderAuthModal(
       "data-fancy-caret": "off",
       enterkeyhint: "done",
     }) as HTMLInputElement;
+    hardenManualEntryInput(pw1Input);
+    hardenManualEntryInput(pw2Input);
     body.append(
       el("div", { class: "auth-field-stack" }, [
-        el("label", { class: "modal-label", for: "auth-code-a" }, ["Код доступа"]),
+        el("label", { class: "modal-label", for: AUTH_REGISTER_MANUAL_INPUT_ID }, [AUTH_MANUAL_INPUT_LABEL]),
         wrapWithCodeVisibilityToggle(pw1Input),
       ]),
       el("div", { class: "auth-field-stack" }, [
-        el("label", { class: "modal-label", for: "auth-code-b" }, ["Подтверждение"]),
+        el("label", { class: "modal-label", for: AUTH_REGISTER_CONFIRM_INPUT_ID }, ["Повтор ввода"]),
         wrapWithCodeVisibilityToggle(pw2Input),
       ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),
@@ -344,10 +377,10 @@ export function renderAuthModal(
   } else {
     const idInput = el("input", {
       class: "modal-input",
-      id: "auth-id",
+      id: AUTH_ID_INPUT_ID,
       name: "manual-identity",
       placeholder: "517-048-184 или @login",
-      ...AUTH_MANUAL_FIELD_ATTRS,
+      ...AUTH_ID_FIELD_ATTRS,
       "data-ios-assistant": "off",
       "data-fancy-caret": "off",
       inputmode: "text",
@@ -374,10 +407,10 @@ export function renderAuthModal(
     });
     const pwInput = el("input", {
       class: "modal-input auth-manual-key-input",
-      id: "auth-code",
-      name: "manual-entry",
+      id: AUTH_LOGIN_MANUAL_INPUT_ID,
+      name: "manual-field",
       type: "text",
-      placeholder: "Код доступа",
+      placeholder: AUTH_MANUAL_INPUT_PLACEHOLDER,
       ...AUTH_MANUAL_FIELD_ATTRS,
       "data-manual-mask": "1",
       "data-mask-visible": "0",
@@ -388,16 +421,17 @@ export function renderAuthModal(
       spellcheck: "false",
       enterkeyhint: "done",
     }) as HTMLInputElement;
+    hardenManualEntryInput(pwInput);
     const touchIdBtn = showTouchId ? createTouchIdButton(actions) : null;
     const manualIdBlock = el("div", { class: "auth-field-stack auth-manual-id" }, [
-      el("label", { class: "modal-label", for: "auth-id" }, ["ID или @логин"]),
+      el("label", { class: "modal-label", for: AUTH_ID_INPUT_ID }, ["ID или @логин"]),
       wrapWithIdEditAction(idInput, hasRememberedId),
     ]);
 
     body.append(
       manualIdBlock,
       el("div", { class: "auth-field-stack" }, [
-        el("label", { class: "modal-label", for: "auth-code" }, ["Код доступа"]),
+        el("label", { class: "modal-label", for: AUTH_LOGIN_MANUAL_INPUT_ID }, [AUTH_MANUAL_INPUT_LABEL]),
         wrapWithCodeVisibilityToggle(pwInput),
       ]),
       el("div", { class: "modal-help auth-section-lead" }, [copy.helper]),

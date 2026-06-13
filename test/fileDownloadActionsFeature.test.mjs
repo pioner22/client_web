@@ -116,6 +116,7 @@ test("fileDownloadActionsFeature: beginViewerStream prepares inline PWA stream a
   const helper = await loadFeature();
   try {
     const enqueued = [];
+    const statuses = [];
     class CustomEventStub extends Event {
       constructor(type, init = {}) {
         super(type);
@@ -177,7 +178,9 @@ test("fileDownloadActionsFeature: beginViewerStream prepares inline PWA stream a
             selfId: "111",
           };
         },
-        set() {},
+        set(patch) {
+          if (patch && typeof patch === "object" && typeof patch.status === "string") statuses.push(patch.status);
+        },
       },
       downloadByFileId,
       enqueueFileGet(fileId) {
@@ -198,6 +201,7 @@ test("fileDownloadActionsFeature: beginViewerStream prepares inline PWA stream a
     assert.deepEqual(enqueued, ["f-1"]);
     assert.equal(downloadByFileId.get("f-1")?.streaming, true);
     assert.equal(downloadByFileId.get("f-1")?.streamId, sid);
+    assert.deepEqual(statuses, [], "inline viewer stream must not overwrite the mobile header status");
   } finally {
     if (prevWindow === undefined) delete globalThis.window;
     else Object.defineProperty(globalThis, "window", { value: prevWindow, configurable: true, writable: true });

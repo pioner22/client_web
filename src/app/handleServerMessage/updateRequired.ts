@@ -7,6 +7,11 @@ import { splitBuildId } from "../../helpers/version/buildId";
 
 type PatchFn = (p: Partial<AppState> | ((prev: AppState) => AppState)) => void;
 
+function canPreemptModalForPwaUpdate(state: AppState): boolean {
+  const kind = state.modal?.kind;
+  return !kind || kind === "pwa_update" || kind === "auth" || kind === "welcome" || kind === "update";
+}
+
 export function handleUpdateRequiredMessage(t: string, msg: any, state: AppState, patch: PatchFn): boolean {
   if (t !== "update_required") return false;
 
@@ -25,7 +30,10 @@ export function handleUpdateRequiredMessage(t: string, msg: any, state: AppState
   const latestAndroidVersion = latestAndroidVersionName || latestVersion || latest;
 
   if (hasSw && !isAndroidAppUpdate) {
-    if (state.updateLatest !== latest) {
+    const shouldOpenPrompt = canPreemptModalForPwaUpdate(state);
+    const promptMissing = shouldOpenPrompt && state.modal?.kind !== "pwa_update";
+    const runtimeBuild = String((state as any).pwaUpdate?.buildId ?? "").trim();
+    if (state.updateLatest !== latest || state.pwaUpdateAvailable !== true || runtimeBuild !== latest || promptMissing) {
       patch({
         updateLatest: latest,
         pwaUpdateAvailable: true,
@@ -36,7 +44,7 @@ export function handleUpdateRequiredMessage(t: string, msg: any, state: AppState
           userDecision: "pending",
         }),
         status: "Доступно обновление веб-клиента. Нажмите «Обновить», когда будет удобно.",
-        modal: state.modal && state.modal.kind !== "pwa_update" ? state.modal : { kind: "pwa_update" },
+        ...(shouldOpenPrompt ? { modal: { kind: "pwa_update" as const } } : {}),
       });
     }
     try {

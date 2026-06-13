@@ -347,7 +347,9 @@ export function createFileDownloadActionsFeature(deps: FileDownloadActionsFeatur
       streaming: true,
     });
     enqueueFileGet(req.fileId, { priority: "high" });
-    store.set({ status: `${req.target === "viewer" ? "Загрузка" : "Скачивание"}: ${req.name || "файл"}` });
+    if (req.target !== "viewer") {
+      store.set({ status: `Скачивание: ${req.name || "файл"}` });
+    }
   }
 
   function reset() {

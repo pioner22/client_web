@@ -1,6 +1,7 @@
 import { GatewayClient, type GatewayRole, type GatewayTransport, type MsgHandler, type StatusHandler } from "../../../lib/net/gatewayClient";
 import { MultiplexGatewayClient } from "../../../lib/net/multiplexGatewayClient";
 import { isCapacitorNativeRuntime } from "../../../helpers/runtime/nativeRuntime";
+import { isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
 import type { Store } from "../../../stores/store";
 import type { AppState, ConnStatus } from "../../../stores/types";
 
@@ -74,6 +75,26 @@ function requeueSendingOutboxOnDisconnect(prev: AppState): AppState {
   const next = prev.authed ? { ...prev, authed: false } : prev;
   if (!outboxChanged && !convChanged) return next;
   return { ...next, outbox, conversations };
+}
+
+function isDesktopBridgeRuntime(): boolean {
+  try {
+    return typeof window !== "undefined" && Boolean((window as any).yagodkaDesktop);
+  } catch {
+    return false;
+  }
+}
+
+function shouldUseMultiplexGateway(): boolean {
+  if (isCapacitorNativeRuntime()) return false;
+  if (isDesktopBridgeRuntime()) return false;
+  if (isStandaloneDisplayMode()) return false;
+  return (
+    typeof window !== "undefined" &&
+    typeof BroadcastChannel === "function" &&
+    typeof navigator !== "undefined" &&
+    Boolean((navigator as any)?.locks?.request)
+  );
 }
 
 export function createGatewayClientFeature(deps: Deps): GatewayClientFeature {
@@ -162,12 +183,7 @@ export function createGatewayClientFeature(deps: Deps): GatewayClientFeature {
   };
 
   const url = deps.getGatewayUrl();
-  const canMultiplex =
-    !isCapacitorNativeRuntime() &&
-    typeof window !== "undefined" &&
-    typeof BroadcastChannel === "function" &&
-    typeof navigator !== "undefined" &&
-    Boolean((navigator as any)?.locks?.request);
+  const canMultiplex = shouldUseMultiplexGateway();
 
   gateway = canMultiplex ? new MultiplexGatewayClient(url, onMessage, onStatus, { onRole }) : new GatewayClient(url, onMessage, onStatus);
 

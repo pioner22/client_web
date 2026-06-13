@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -37,7 +37,7 @@ function makeStore(initial) {
   };
 }
 
-function stubRuntime({ native = false, webSocketClass = undefined } = {}) {
+function stubRuntime({ native = false, standalone = false, desktop = false, webSocketClass = undefined } = {}) {
   const prev = {
     window: Object.getOwnPropertyDescriptor(globalThis, "window"),
     document: Object.getOwnPropertyDescriptor(globalThis, "document"),
@@ -74,8 +74,11 @@ function stubRuntime({ native = false, webSocketClass = undefined } = {}) {
     clearInterval,
     setTimeout,
     clearTimeout,
+    matchMedia: (query) => ({ matches: standalone && /display-mode:\s*(standalone|fullscreen)/.test(String(query || "")) }),
+    ...(desktop ? { yagodkaDesktop: { platform: "darwin" } } : {}),
   };
   const navigator = {
+    standalone,
     locks: {
       request: async (_name, arg1, arg2) => {
         const cb = typeof arg1 === "function" ? arg1 : arg2;
@@ -219,6 +222,56 @@ test("gatewayClientFeature: native runtime bypasses multiplex gateway even when 
   }
 });
 
+test("gatewayClientFeature: standalone PWA bypasses multiplex to avoid stale browser-tab leadership", async () => {
+  const helper = await loadFeature();
+  const runtime = stubRuntime({ standalone: true });
+  try {
+    const store = makeStore({
+      netLeader: false,
+      authed: false,
+      selfId: null,
+      outbox: {},
+      conversations: {},
+      conn: "connecting",
+      status: "",
+      modal: null,
+    });
+    const { gateway } = helper.createGatewayClientFeature(makeDeps(store));
+    assert.equal(runtime.getChannelConstructed(), 0, "standalone PWA should keep its own gateway socket");
+    assert.equal(gateway.getRole?.(), "solo");
+    assert.equal(store.get().netLeader, true);
+    gateway.close();
+  } finally {
+    runtime.cleanup();
+    await helper.cleanup();
+  }
+});
+
+test("gatewayClientFeature: Electron desktop bridge bypasses multiplex even with browser locks", async () => {
+  const helper = await loadFeature();
+  const runtime = stubRuntime({ desktop: true });
+  try {
+    const store = makeStore({
+      netLeader: false,
+      authed: false,
+      selfId: null,
+      outbox: {},
+      conversations: {},
+      conn: "connecting",
+      status: "",
+      modal: null,
+    });
+    const { gateway } = helper.createGatewayClientFeature(makeDeps(store));
+    assert.equal(runtime.getChannelConstructed(), 0, "desktop runtime should not share gateway leadership with browser tabs");
+    assert.equal(gateway.getRole?.(), "solo");
+    assert.equal(store.get().netLeader, true);
+    gateway.close();
+  } finally {
+    runtime.cleanup();
+    await helper.cleanup();
+  }
+});
+
 test("gatewayClientFeature: browser runtime still keeps multiplex path when locks are available", async () => {
   const helper = await loadFeature();
   const runtime = stubRuntime({ native: false });
@@ -241,6 +294,16 @@ test("gatewayClientFeature: browser runtime still keeps multiplex path when lock
     runtime.cleanup();
     await helper.cleanup();
   }
+});
+
+test("MultiplexGatewayClient: follower has stale-leader watchdog for visible connected tabs", async () => {
+  const src = await readFile(path.resolve("src/lib/net/multiplexGatewayClient.ts"), "utf8");
+  assert.match(src, /leaderStaleMs\s*=\s*Math\.max\(this\.heartbeatMs\s*\*\s*3,\s*6500\)/);
+  assert.match(src, /followerWatchdogTimer/);
+  assert.match(src, /checkLeaderHealth/);
+  assert.match(src, /leader_recovery/);
+  assert.match(src, /this\.post\(\{\s*t:\s*"connect"/);
+  assert.match(src, /leaderAcquireInFlight/);
 });
 
 test("gatewayClientFeature: duplicate disconnected status does not rewrite store", async () => {

@@ -61,6 +61,8 @@ export class MultiplexGatewayClient implements GatewayTransport {
   private readonly channelName: string;
   private readonly lockName: string;
   private readonly heartbeatMs: number;
+  private readonly leaderStaleMs: number;
+  private readonly followerWatchdogMs: number;
 
   private role: GatewayRole = "follower";
   private inner: GatewayClient | null = null;
@@ -71,6 +73,8 @@ export class MultiplexGatewayClient implements GatewayTransport {
 
   private releaseLeader: (() => void) | null = null;
   private leaderHeartbeatTimer: number | null = null;
+  private followerWatchdogTimer: number | null = null;
+  private leaderAcquireInFlight = false;
 
   private lastLeaderSeenAt = 0;
   private lastLeaderId = "";
@@ -95,6 +99,8 @@ export class MultiplexGatewayClient implements GatewayTransport {
     this.channelName = opts.channelName || "yagodka_gateway_bus_v1";
     this.lockName = opts.lockName || "yagodka_gateway_leader_v1";
     this.heartbeatMs = Math.max(500, Math.min(10_000, Math.trunc(Number(opts.heartbeatMs ?? 2000) || 2000)));
+    this.leaderStaleMs = Math.max(this.heartbeatMs * 3, 6500);
+    this.followerWatchdogMs = Math.max(1000, Math.min(3000, Math.trunc(this.heartbeatMs * 1.5)));
     this.onRole = typeof opts.onRole === "function" ? opts.onRole : null;
 
     if (!supportsBroadcastChannel() || !supportsWebLocks() || typeof window === "undefined") {
@@ -145,6 +151,7 @@ export class MultiplexGatewayClient implements GatewayTransport {
     this.post({ t: "connect", from: this.instanceId, ts: nowMs() });
     // Optimistically show "connecting" until we hear from leader.
     this.onStatus("connecting");
+    this.startFollowerWatchdog();
     this.onVisibilityChanged();
   }
 
@@ -168,6 +175,7 @@ export class MultiplexGatewayClient implements GatewayTransport {
     this.wantConnected = false;
     this.disposed = true;
     this.stopLeaderHeartbeat();
+    this.stopFollowerWatchdog();
     this.releaseLeader?.();
     this.releaseLeader = null;
     this.inner?.close();
@@ -205,16 +213,20 @@ export class MultiplexGatewayClient implements GatewayTransport {
     // Yield leadership when hidden to keep the lock in a visible tab.
     if (docHidden()) {
       if (this.role === "leader") this.releaseLeader?.();
+      this.stopFollowerWatchdog();
       return;
     }
 
     // Visible tab: always queue a leader lock request (it will run when available).
+    if (this.role === "follower" && this.wantConnected) this.startFollowerWatchdog();
     void this.tryAcquireLeader();
   }
 
   private become(role: GatewayRole): void {
     if (this.role === role) return;
     this.role = role;
+    if (role === "follower" && this.wantConnected && !docHidden()) this.startFollowerWatchdog();
+    else this.stopFollowerWatchdog();
     this.onRole?.(role);
     try {
       // Expose leader/follower state to the app via a global hook for debugging.
@@ -228,10 +240,12 @@ export class MultiplexGatewayClient implements GatewayTransport {
     if (this.disposed) return;
     if (this.role === "solo" || this.role === "leader") return;
     if (docHidden()) return;
+    if (this.leaderAcquireInFlight) return;
     if (!supportsWebLocks()) return;
     const locks: any = (navigator as any).locks;
     if (!locks || typeof locks.request !== "function") return;
 
+    this.leaderAcquireInFlight = true;
     try {
       await locks.request(this.lockName, async () => {
         if (this.disposed) return;
@@ -259,6 +273,11 @@ export class MultiplexGatewayClient implements GatewayTransport {
       });
     } catch {
       // ignore
+    } finally {
+      this.leaderAcquireInFlight = false;
+      if (!this.disposed && this.role === "follower" && this.wantConnected && !docHidden()) {
+        this.startFollowerWatchdog();
+      }
     }
   }
 
@@ -299,6 +318,38 @@ export class MultiplexGatewayClient implements GatewayTransport {
       // ignore
     }
     this.leaderHeartbeatTimer = null;
+  }
+
+  private startFollowerWatchdog(): void {
+    if (this.disposed) return;
+    if (this.role !== "follower") return;
+    if (!this.wantConnected) return;
+    if (docHidden()) return;
+    if (this.followerWatchdogTimer !== null) return;
+    this.followerWatchdogTimer = window.setInterval(() => this.checkLeaderHealth(), this.followerWatchdogMs);
+  }
+
+  private stopFollowerWatchdog(): void {
+    if (this.followerWatchdogTimer === null) return;
+    try {
+      window.clearInterval(this.followerWatchdogTimer);
+    } catch {
+      // ignore
+    }
+    this.followerWatchdogTimer = null;
+  }
+
+  private checkLeaderHealth(): void {
+    if (this.disposed) return;
+    if (this.role !== "follower") return;
+    if (!this.wantConnected) return;
+    if (docHidden()) return;
+    const age = this.lastLeaderSeenAt > 0 ? nowMs() - this.lastLeaderSeenAt : Number.POSITIVE_INFINITY;
+    if (age < this.leaderStaleMs) return;
+    this.lastLeaderId = "";
+    this.onStatus("connecting", this.lastLeaderSeenAt > 0 ? "leader_recovery" : "leader_discovery");
+    this.post({ t: "connect", from: this.instanceId, ts: nowMs() });
+    void this.tryAcquireLeader();
   }
 
   private handleWire(msg: WireMessage | null): void {

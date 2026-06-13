@@ -1913,3 +1913,257 @@ html.viewer-surface-open body::after {
     padding-bottom: max(10px, var(--app-frame-bottom-inset, 0px), env(safe-area-inset-bottom));
   }
 }
+
+/* W-1012: screenshot repair for PWA viewer/history geometry.
+ * Keep the physical bottom black, make the media stage a hard grid row, and
+ * prevent stale progress chrome from drawing over already visible media.
+ */
+html.viewer-surface-open::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: max(var(--app-frame-bottom-inset, 0px), var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px), env(safe-area-inset-bottom));
+  background: #000;
+  pointer-events: none;
+  z-index: 79;
+}
+
+html.viewer-surface-open #app.app-frame::after,
+html.viewer-surface-open body::after {
+  background: #000;
+  background-color: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+  justify-content: stretch;
+  min-width: 0;
+  min-height: 0;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+  min-width: 0;
+  min-height: 0;
+  flex: none;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-stage,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-stage {
+  align-self: stretch;
+  justify-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-media,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"]:not(.viewer-zoomed) .viewer-media .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail:not(.viewer-zoomed) .viewer-media .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-media .viewer-video {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+  max-height: min(30dvh, 220px);
+  overflow: hidden;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-rail {
+  background: #000;
+}
+
+.chat:not(.chat-board) .chat-file-preview:has(> img.chat-file-img) > .chat-media-progress,
+.chat:not(.chat-board) .chat-file-preview:has(> video.chat-file-video) > .chat-media-progress {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .chat-file-preview:has(> img.chat-file-img) > .chat-media-state,
+.chat:not(.chat-board) .chat-file-preview:has(> video.chat-file-video) > .chat-media-state {
+  display: none !important;
+}
+
+.chat-jump[data-jump-unread="0"] .chat-jump-badge,
+.chat-jump[data-jump-unread="0"] .chat-jump-label {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  html.viewer-surface-open::after {
+    height: max(var(--app-frame-bottom-inset, 0px), var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px), env(safe-area-inset-bottom), 28px);
+  }
+
+  .overlay.overlay-viewer {
+    min-height: 100svh;
+    background: #000;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    height: 100dvh;
+    min-height: 100svh;
+    max-height: 100dvh;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+    padding: 0 4px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+    max-height: min(24dvh, 128px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-rail {
+    padding-bottom: max(12px, var(--app-bottom-live-pad, 0px), env(safe-area-inset-bottom));
+  }
+
+  .chat-jump {
+    right: calc(10px + env(safe-area-inset-right));
+    bottom: calc(var(--chat-bottom-inset, 0px) + var(--mobile-composer-bottom-offset, 0px) + var(--chat-history-bottom-gap, 0px) + 18px);
+    z-index: 9;
+  }
+
+  .page.page-profile {
+    scroll-padding-top: calc(var(--mobile-header-overlay-h, 0px) + 10px);
+  }
+
+  .page.page-profile .profile-card {
+    scroll-margin-top: calc(var(--mobile-header-overlay-h, 0px) + 10px);
+  }
+}
+
+/* W-1013: crash screenshot repair for blank visual viewer and mobile host paint.
+ * `contain: size` on the media row can hide the main image/video in Chromium
+ * while the sibling footer still paints. Keep only layout/paint containment and
+ * give the media, preloader and footer deterministic layers.
+ */
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app,
+html.viewer-surface-open #app.app-frame,
+html.viewer-surface-open #app.app-frame::after,
+html.viewer-surface-open body::after {
+  --safe-area-bg: #000;
+  --app-frame-bg: #000;
+  --app-frame-safe-bg: #000;
+  --app-host-canvas-bg: #000;
+  background: #000 !important;
+  background-color: #000 !important;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+  grid-template-rows: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: minmax(0, 1fr);
+  isolation: isolate;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-stage,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-areas: "viewer-media";
+  place-items: stretch;
+  overflow: hidden;
+  background: #000;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-media,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+  position: relative;
+  z-index: 1;
+  grid-area: viewer-media;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-video {
+  position: relative;
+  z-index: 1;
+  display: block;
+  visibility: visible;
+  opacity: 1;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-preloader {
+  z-index: 3;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-load="ready"] .viewer-preloader.hidden,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-load="ready"] .viewer-preloader {
+  display: none !important;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-load="error"] .viewer-preloader {
+  display: grid;
+  background: rgba(0, 0, 0, 0.72);
+  pointer-events: auto;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+  align-self: end;
+  justify-self: stretch;
+  z-index: 4;
+  opacity: 0.82;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-context {
+  min-height: 0;
+}
+
+@media (max-width: 600px) {
+  html.viewer-surface-open:not(.kbd-open) #app,
+  html.viewer-surface-open:not(.kbd-open) .overlay.overlay-viewer,
+  html.viewer-surface-open:not(.kbd-open) .overlay.overlay-viewer .modal.modal-viewer.viewer-visual {
+    min-height: var(--app-vh, 100dvh);
+    background: #000 !important;
+    background-color: #000 !important;
+  }
+
+  html.viewer-surface-open:not(.kbd-open) body::after,
+  html.viewer-surface-open:not(.kbd-open) #app.app-frame::after,
+  html.viewer-surface-open:not(.kbd-open)::after {
+    height: max(var(--app-frame-bottom-inset, 0px), var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px), env(safe-area-inset-bottom), 28px);
+    background: #000 !important;
+    background-color: #000 !important;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header {
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: #000;
+  }
+
+  .hdr-right[data-status-empty="0"] .hdr-status {
+    max-height: 1.35em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

@@ -59,10 +59,41 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const PWA_AUTO_APPLY_LOG_LIMIT = 24;
   const PWA_AUTO_APPLY_STATUS = "Получено обновление веб-клиента. Откройте обновление вручную, когда приложение не используется.";
   const PWA_MANUAL_CHECK_TIMEOUT_MS = 3500;
+  const PWA_FORCE_WATCHDOG_MS = 12_000;
+  const PWA_RESET_STEP_TIMEOUT_MS = 4_500;
   let pwaPendingBuildId = "";
   let pwaAutoApplySuppressed = false;
   let pwaBootReconcileStarted = false;
   let pwaUpdateEventVerifyInFlight = false;
+
+  const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> => {
+    const limit = Math.max(0, Math.trunc(Number(timeoutMs) || 0));
+    if (limit <= 0 || typeof window === "undefined" || typeof window.setTimeout !== "function") {
+      try {
+        return await promise;
+      } catch {
+        return fallback;
+      }
+    }
+    return await new Promise<T>((resolve) => {
+      let done = false;
+      let timer: number | null = null;
+      const finish = (value: T) => {
+        if (done) return;
+        done = true;
+        if (timer !== null) {
+          try {
+            window.clearTimeout(timer);
+          } catch {
+            // ignore
+          }
+        }
+        resolve(value);
+      };
+      timer = window.setTimeout(() => finish(fallback), limit);
+      promise.then((value) => finish(value)).catch(() => finish(fallback));
+    });
+  };
 
   const getStorage = (kind: "session" | "local"): Storage | null => {
     try {
@@ -119,7 +150,10 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     pwaAutoApplySuppressed = false;
   };
 
-  const shouldOpenPwaUpdatePrompt = (st: AppState): boolean => !st.modal || st.modal.kind === "pwa_update";
+  const shouldOpenPwaUpdatePrompt = (st: AppState): boolean => {
+    const kind = st.modal?.kind;
+    return !kind || kind === "pwa_update" || kind === "auth" || kind === "welcome" || kind === "update";
+  };
 
   const setPwaUpdateRuntime = (
     stage: PwaUpdateStage,
@@ -382,32 +416,32 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     logPwaUpdate("manual_pwa_reset", reason || "unknown");
     stashSessionTokenForReload(`pwa_reset:${reason || "unknown"}`);
     try {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(
+      const regs = await withTimeout(navigator.serviceWorker.getRegistrations(), PWA_RESET_STEP_TIMEOUT_MS, [] as ServiceWorkerRegistration[]);
+      await withTimeout(Promise.all(
         regs.map(async (r) => {
           try {
-            await r.unregister();
+            await withTimeout(r.unregister(), 1500, false);
           } catch {
             // ignore
           }
         })
-      );
+      ), PWA_RESET_STEP_TIMEOUT_MS, []);
     } catch {
       // ignore
     }
     try {
-      const keys = await caches.keys();
-      await Promise.all(
+      const keys = typeof caches !== "undefined" ? await withTimeout(caches.keys(), PWA_RESET_STEP_TIMEOUT_MS, [] as string[]) : [];
+      await withTimeout(Promise.all(
         keys
           .filter((k) => k.startsWith("yagodka-web-cache-") || k.startsWith("yagodka-web-cache-fallback-"))
           .map(async (k) => {
             try {
-              await caches.delete(k);
+              await withTimeout(caches.delete(k), 1500, false);
             } catch {
               // ignore
             }
           })
-      );
+      ), PWA_RESET_STEP_TIMEOUT_MS, []);
     } catch {
       // ignore
     }
@@ -647,7 +681,17 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   }
 
   async function forcePwaUpdate() {
-    if (pwaForceInFlight) return;
+    if (pwaForceInFlight) {
+      setPwaUpdateRuntime("checking", {
+        buildId: String(store.get().updateLatest ?? "").trim() || null,
+        message: "Проверка обновления уже выполняется",
+        detail: "Если статус не изменится в течение нескольких секунд, повторите проверку. Зависшая операция будет автоматически разблокирована.",
+        userDecision: "accepted",
+        available: true,
+        modal: "open",
+      });
+      return;
+    }
     if (!isServiceWorkerRuntimeAvailable()) {
       setPwaUpdateRuntime("error", {
         message: "PWA обновление недоступно",
@@ -658,6 +702,24 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       return;
     }
     pwaForceInFlight = true;
+    let watchdogTimedOut = false;
+    let watchdogTimer: number | null = null;
+    if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+      watchdogTimer = window.setTimeout(() => {
+        if (!pwaForceInFlight) return;
+        watchdogTimedOut = true;
+        pwaForceInFlight = false;
+        logPwaUpdate("manual_force_watchdog_timeout", String(store.get().updateLatest || "unknown"));
+        setPwaUpdateRuntime("error", {
+          buildId: String(store.get().updateLatest ?? "").trim() || null,
+          message: "Проверка обновления зависла",
+          detail: "Service Worker или кэш браузера не ответил вовремя. Повторите проверку: клиент разблокировал процесс и выполнит безопасную проверку заново.",
+          error: "manual_force_watchdog_timeout",
+          available: true,
+          modal: "open",
+        });
+      }, PWA_FORCE_WATCHDOG_MS);
+    }
     setPwaUpdateRuntime("checking", {
       buildId: String(store.get().updateLatest ?? "").trim() || null,
       message: "Проверяем обновление PWA",
@@ -669,7 +731,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     try {
       let reg: ServiceWorkerRegistration | null = null;
       try {
-        reg = (await navigator.serviceWorker.getRegistration()) ?? null;
+        reg = (await withTimeout(navigator.serviceWorker.getRegistration(), 1500, null)) ?? null;
       } catch {
         reg = null;
       }
@@ -678,8 +740,11 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
       }
       if (!reg) {
         try {
-          reg = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+          reg = await withTimeout(navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }), PWA_MANUAL_CHECK_TIMEOUT_MS, null);
         } catch {
+          reg = null;
+        }
+        if (!reg) {
           setPwaUpdateRuntime("error", {
             message: "Service Worker не зарегистрирован",
             detail: "Перезапустите приложение и повторите обновление.",
@@ -730,7 +795,14 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
         forceUpdateReload("manual_force");
       }
     } finally {
-      pwaForceInFlight = false;
+      if (watchdogTimer !== null) {
+        try {
+          window.clearTimeout(watchdogTimer);
+        } catch {
+          // ignore
+        }
+      }
+      if (!watchdogTimedOut) pwaForceInFlight = false;
     }
   }
 

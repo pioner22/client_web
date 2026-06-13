@@ -106,6 +106,10 @@ const MEDIA_PERMISSION_TRACKS = new Map([
   ["video", "camera"],
   ["audio", "microphone"],
 ]);
+const DESKTOP_RENDERER_RECOVERY_MAX_ATTEMPTS = 3;
+const DESKTOP_RENDERER_RECOVERY_DELAY_MS = 650;
+const DESKTOP_RENDERER_STABLE_MS = 15_000;
+const desktopRendererRecovery = new WeakMap();
 let desktopUpdaterConfigured = false;
 let desktopUpdateStatus = {
   state: "idle",
@@ -519,6 +523,92 @@ function clearSecureSessionPayload() {
   }
 }
 
+function getDesktopRendererRecoveryState(win) {
+  let state = desktopRendererRecovery.get(win);
+  if (!state) {
+    state = { attempts: 0, timer: null, stableTimer: null };
+    desktopRendererRecovery.set(win, state);
+  }
+  return state;
+}
+
+function clearDesktopRendererRecoveryTimer(state, key) {
+  if (!state?.[key]) return;
+  clearTimeout(state[key]);
+  state[key] = null;
+}
+
+function markDesktopRendererStableSoon(win) {
+  const state = getDesktopRendererRecoveryState(win);
+  clearDesktopRendererRecoveryTimer(state, "stableTimer");
+  state.stableTimer = setTimeout(() => {
+    state.stableTimer = null;
+    state.attempts = 0;
+  }, DESKTOP_RENDERER_STABLE_MS);
+}
+
+function desktopEntryQuery(opts = {}) {
+  if (!opts.recovery) return undefined;
+  return {
+    desktop_recovery: "1",
+    desktop_recovery_reason: String(opts.reason || "renderer"),
+    desktop_recovery_attempt: String(opts.attempt || 0),
+  };
+}
+
+function loadDesktopEntry(win, opts = {}) {
+  const query = desktopEntryQuery(opts);
+  if (app.isPackaged) {
+    return win.loadFile(path.join(__dirname, "..", "dist", "index.html"), query ? { query } : undefined);
+  }
+  if (!query) return win.loadURL(DEV_URL);
+  try {
+    const url = new URL(DEV_URL);
+    for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+    return win.loadURL(url.href);
+  } catch {
+    return win.loadURL(DEV_URL);
+  }
+}
+
+function shouldRecoverDesktopRenderer(reason) {
+  const value = String(reason || "").trim().toLowerCase();
+  if (!value || value === "clean-exit") return false;
+  return true;
+}
+
+function recoverDesktopRenderer(win, details = {}) {
+  if (!win || win.isDestroyed()) return;
+  const reason = String(details.reason || details.type || "renderer").trim() || "renderer";
+  if (!shouldRecoverDesktopRenderer(reason)) return;
+  const state = getDesktopRendererRecoveryState(win);
+  clearDesktopRendererRecoveryTimer(state, "timer");
+  clearDesktopRendererRecoveryTimer(state, "stableTimer");
+  state.attempts += 1;
+  const attempt = state.attempts;
+  console.warn("[desktop] renderer recovery scheduled", { attempt, reason, details });
+  state.timer = setTimeout(() => {
+    state.timer = null;
+    if (win.isDestroyed()) return;
+    void (async () => {
+      try {
+        await clearDesktopServiceWorkerState();
+      } catch (error) {
+        console.warn("[desktop] renderer recovery storage cleanup failed", sanitizeError(error));
+      }
+      if (win.isDestroyed()) return;
+      if (attempt > DESKTOP_RENDERER_RECOVERY_MAX_ATTEMPTS) {
+        console.error("[desktop] renderer recovery exhausted", { attempt, reason });
+      }
+      try {
+        await loadDesktopEntry(win, { recovery: true, reason, attempt });
+      } catch (error) {
+        console.error("[desktop] renderer recovery reload failed", sanitizeError(error));
+      }
+    })();
+  }, DESKTOP_RENDERER_RECOVERY_DELAY_MS);
+}
+
 function createWindow() {
   const appIcon = nativeImage.createFromPath(ICON_PATH);
   const geometry = resolveWindowGeometry();
@@ -549,11 +639,23 @@ function createWindow() {
 
   win.webContents.on("render-process-gone", (_event, details) => {
     console.error("[desktop] render-process-gone", details);
+    recoverDesktopRenderer(win, details);
+  });
+
+  win.on("unresponsive", () => {
+    recoverDesktopRenderer(win, { reason: "unresponsive" });
+  });
+
+  win.webContents.on("did-finish-load", () => {
+    markDesktopRendererStableSoon(win);
   });
 
   win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame) return;
     console.error("[desktop] did-fail-load", { errorCode, errorDescription, validatedURL });
+    if (errorCode !== -3) {
+      recoverDesktopRenderer(win, { reason: `load_failed_${errorCode}`, errorDescription, validatedURL });
+    }
   });
 
   win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
@@ -572,11 +674,7 @@ function createWindow() {
     openExternalUrl(url);
   });
 
-  if (app.isPackaged) {
-    void win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
-  } else {
-    void win.loadURL(DEV_URL);
-  }
+  void loadDesktopEntry(win);
 
   return win;
 }

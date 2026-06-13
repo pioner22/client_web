@@ -80,6 +80,25 @@ test("pwaUpdateFeature: update reload clears browser session carry before naviga
   assert.match(src, /stashSessionTokenForReload\(`pwa_reset:\$\{reason \|\| "unknown"\}`\)/);
 });
 
+test("pwaUpdateFeature: manual update has watchdog and bounded reset operations", async () => {
+  const src = await readFile(path.resolve("src/app/features/pwa/pwaUpdateFeature.ts"), "utf8");
+  assert.match(src, /PWA_FORCE_WATCHDOG_MS\s*=\s*12_000/);
+  assert.match(src, /PWA_RESET_STEP_TIMEOUT_MS\s*=\s*4_500/);
+  assert.match(src, /manual_force_watchdog_timeout/);
+  assert.match(src, /Проверка обновления уже выполняется/);
+  assert.match(src, /withTimeout\(navigator\.serviceWorker\.getRegistrations\(\),\s*PWA_RESET_STEP_TIMEOUT_MS/);
+  assert.match(src, /withTimeout\(caches\.keys\(\),\s*PWA_RESET_STEP_TIMEOUT_MS/);
+});
+
+test("pwaUpdateFeature: PWA prompt is allowed to preempt auth, welcome and update modals", async () => {
+  const src = await readFile(path.resolve("src/app/features/pwa/pwaUpdateFeature.ts"), "utf8");
+  assert.match(src, /const\s+shouldOpenPwaUpdatePrompt\s*=\s*\(st:\s*AppState\):\s*boolean\s*=>\s*\{/);
+  assert.match(src, /kind\s*===\s*"auth"/);
+  assert.match(src, /kind\s*===\s*"welcome"/);
+  assert.match(src, /kind\s*===\s*"update"/);
+  assert.match(src, /kind\s*===\s*"pwa_update"/);
+});
+
 test("pwaUpdateFeature: новый BUILD_ID не подменяет clientVersion до реального reload", async () => {
   const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
   const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");

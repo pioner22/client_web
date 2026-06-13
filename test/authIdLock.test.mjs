@@ -333,9 +333,9 @@ test("renderAuthModal: login/register keep a stable corporate heading and reserv
       assert.ok(hasClass(loginNotice, "auth-entry-notice-empty"));
       assert.ok(hasClass(registerNotice, "auth-entry-notice-empty"));
 
-      const failed = helper.renderAuthModal("login", null, "Введите код доступа", skins, "telegram-exact", actions);
+      const failed = helper.renderAuthModal("login", null, "Введите ручной ключ", skins, "telegram-exact", actions);
       const failedNotice = findFirst(failed, (n) => hasClass(n, "auth-entry-notice"));
-      assert.equal(collectText(failedNotice), "Введите код доступа");
+      assert.equal(collectText(failedNotice), "Введите ручной ключ");
       assert.equal(hasClass(failedNotice, "auth-entry-notice-empty"), false);
 
       const loginForm = findFirst(login, (n) => hasClass(n, "auth-entry-form-fixed"));
@@ -381,7 +381,7 @@ test("renderAuthModal: auto-resume screen keeps manual and different-account act
       assert.doesNotMatch(collectText(modal), /Автовход|Подключение|Сессия|Готовим защищённый канал/i);
       const manualBtn = findFirst(
         modal,
-        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Ввести код/.test(collectText(n))
+        (n) => typeof n?.tagName === "string" && n.tagName === "BUTTON" && /Ввести ключ/.test(collectText(n))
       );
       const switchBtn = findFirst(
         modal,
@@ -576,14 +576,23 @@ test("renderAuthModal: manual access-code input avoids browser credential form s
         }
       );
 
-      const keyInput = findFirst(modal, (n) => typeof n?.getAttribute === "function" && n.getAttribute("id") === "auth-code");
+      const keyInput = findFirst(modal, (n) => typeof n?.getAttribute === "function" && n.getAttribute("id") === "auth-manual-entry");
       assert.ok(keyInput, "manual key input not found");
       assert.equal(keyInput.getAttribute("type"), "text");
-      assert.equal(keyInput.getAttribute("autocomplete"), "off");
+      assert.equal(keyInput.getAttribute("autocomplete"), "one-time-code");
       assert.equal(keyInput.getAttribute("data-manual-mask"), "1");
-      assert.equal(keyInput.getAttribute("name"), "manual-entry");
-      assert.equal(findFirst(modal, (n) => typeof n?.getAttribute === "function" && /pw|pass|secret|password/i.test(String(n.getAttribute("id") || ""))), null);
-      assert.equal(findFirst(modal, (n) => typeof n?.getAttribute === "function" && /pw|pass|secret|password/i.test(String(n.getAttribute("name") || ""))), null);
+      assert.equal(keyInput.getAttribute("data-lpignore"), "true");
+      assert.equal(keyInput.getAttribute("data-1p-ignore"), "true");
+      assert.equal(keyInput.getAttribute("data-credentialless"), "true");
+      assert.equal(keyInput.getAttribute("data-credential-field"), "false");
+      assert.equal(keyInput.getAttribute("data-autofill-suppressed"), "1");
+      assert.equal(keyInput.getAttribute("autofill"), "off");
+      assert.equal(keyInput.getAttribute("name"), "manual-field");
+      assert.equal(keyInput.getAttribute("readonly"), "true");
+      assert.equal(keyInput.getAttribute("data-manual-entry-ready"), "0");
+      assert.equal(findFirst(modal, (n) => typeof n?.getAttribute === "function" && /pw|pass|secret|password|code/i.test(String(n.getAttribute("id") || ""))), null);
+      assert.equal(findFirst(modal, (n) => typeof n?.getAttribute === "function" && /pw|pass|secret|password|code/i.test(String(n.getAttribute("name") || ""))), null);
+      assert.equal(findFirst(modal, (n) => /Код доступа|Повторите код/.test(collectText(n))), null);
       assert.equal(findFirst(modal, (n) => typeof n?.tagName === "string" && n.tagName === "FORM"), null);
     });
   } finally {

@@ -114,6 +114,10 @@ export function renderFileViewerModal(
   if (captionText) modalClasses.push("viewer-has-caption");
   const box = el("div", { class: modalClasses.join(" "), role: "dialog", "aria-modal": "true" });
   if (isVisual) box.setAttribute("data-viewer-fit", "stage");
+  if (isVisual) box.setAttribute("data-viewer-load", "idle");
+  const setViewerLoadState = (state: "idle" | "loading" | "ready" | "error") => {
+    if (isVisual) box.setAttribute("data-viewer-load", state);
+  };
 
   const IMAGE_ZOOM_DEFAULT_SCALE = 2;
   const IMAGE_ZOOM_MAX_SCALE = 4;
@@ -642,9 +646,21 @@ export function renderFileViewerModal(
       });
     };
     let preloaderSettled = false;
+    let preloaderStallTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearPreloaderStallTimer = () => {
+      if (preloaderStallTimer === null) return;
+      clearTimeout(preloaderStallTimer);
+      preloaderStallTimer = null;
+    };
     const onLoaded = () => {
       if (preloaderSettled) return;
+      if (!img.naturalWidth) {
+        onFailed();
+        return;
+      }
       preloaderSettled = true;
+      clearPreloaderStallTimer();
+      setViewerLoadState("ready");
       resetImageViewport();
       img.classList.add("viewer-img-loaded");
       preloader.classList.add("hidden");
@@ -652,6 +668,8 @@ export function renderFileViewerModal(
     const onFailed = () => {
       if (preloaderSettled) return;
       preloaderSettled = true;
+      clearPreloaderStallTimer();
+      setViewerLoadState("error");
       preloader.classList.add("viewer-preloader-failed");
       const canRecover = Boolean(actions.onRecover);
       preloaderText.textContent = canRecover ? "Не удалось загрузить. Пробуем восстановить…" : "Не удалось загрузить";
@@ -665,6 +683,12 @@ export function renderFileViewerModal(
     };
     img.addEventListener("load", onLoaded, { once: true });
     img.addEventListener("error", onFailed, { once: true });
+    setViewerLoadState("loading");
+    preloaderStallTimer = setTimeout(() => {
+      if (preloaderSettled) return;
+      onFailed();
+    }, 8_000);
+    (preloaderStallTimer as any)?.unref?.();
     img.src = safeHref;
     if (img.complete) {
       if (img.naturalWidth > 0) onLoaded();
@@ -682,6 +706,10 @@ export function renderFileViewerModal(
       ...(shouldAutoplay ? { autoplay: "true" } : {}),
       "data-allow-audio": "1",
     }) as HTMLVideoElement;
+    setViewerLoadState("loading");
+    const markVideoReady = () => setViewerLoadState("ready");
+    video.addEventListener("loadedmetadata", markVideoReady, { once: true });
+    video.addEventListener("canplay", markVideoReady, { once: true });
     if (shouldAutoplay) {
       const attemptPlay = (muted: boolean) => {
         try {
@@ -708,6 +736,7 @@ export function renderFileViewerModal(
     video.addEventListener(
       "error",
       () => {
+        setViewerLoadState("error");
         if (!actions.onRecover) return;
         try {
           actions.onRecover();
