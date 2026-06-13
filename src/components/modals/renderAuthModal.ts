@@ -92,6 +92,13 @@ function resolveNotice(message: string, status: string, connected: boolean, mode
   return status;
 }
 
+function resolvePrimaryLabel(copy: EntryCopy, status: string, connected: boolean): string {
+  if (connected) return copy.primaryLabel;
+  if (/обновлени[ея]|обновление клиента|клиента перед подключением/i.test(status)) return "Обновление клиента";
+  if (/подключени|подключаем/i.test(status)) return "Подключение…";
+  return "Проверьте интернет";
+}
+
 function resolveCopy(mode: AuthMode): EntryCopy {
   if (mode === "auto") {
     return {
@@ -301,7 +308,7 @@ export function renderAuthModal(
       : (el(
           "button",
           { class: "btn btn-primary auth-primary-cta", type: "button", ...(connected ? {} : { disabled: "true" }) },
-          [connected ? copy.primaryLabel : "Проверьте интернет"]
+          [resolvePrimaryLabel(copy, rawStatus, connected)]
         ) as HTMLButtonElement);
 
   const body =

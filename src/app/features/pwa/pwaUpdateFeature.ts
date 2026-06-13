@@ -8,7 +8,7 @@ import { activatePwaUpdate, checkForPwaUpdate, hasPwaUpdate } from "../../../hel
 import { isServiceWorkerRuntimeAvailable } from "../../../helpers/pwa/serviceWorkerRuntime";
 import { shouldReloadForBuild } from "../../../helpers/pwa/shouldReloadForBuild";
 import { clearPendingPwaBuild, readPendingPwaBuild } from "../../../helpers/pwa/pendingUpdate";
-import { createPwaUpdateState, mergePwaUpdateState } from "../../../helpers/pwa/updateState";
+import { createPwaUpdateState, isPwaUpdateBusy, mergePwaUpdateState } from "../../../helpers/pwa/updateState";
 import { hasActiveFileTransferEntries } from "../../../helpers/runtime/deliveryCoordinator";
 import { isIOS, isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
 import type { Store } from "../../../stores/store";
@@ -33,9 +33,17 @@ export interface PwaUpdateFeature {
   forceUpdateReload: (reason?: string) => void;
   forcePwaUpdate: () => Promise<void>;
   scheduleAutoApplyPwaUpdate: (delayMs?: number) => void;
+  whenClientReadyForConnection: () => Promise<ClientUpdateConnectionReadiness>;
 }
 
 type PwaAutoApplyGuard = { buildId: string; tries: number; ts: number };
+
+export interface ClientUpdateConnectionReadiness {
+  connect: boolean;
+  reason: string;
+  buildId: string | null;
+  stage?: PwaUpdateStage;
+}
 
 export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFeature {
   const {
@@ -64,6 +72,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   let pwaPendingBuildId = "";
   let pwaAutoApplySuppressed = false;
   let pwaBootReconcileStarted = false;
+  let pwaBootReconcilePromise: Promise<void> | null = null;
   let pwaUpdateEventVerifyInFlight = false;
 
   const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> => {
@@ -245,6 +254,26 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   };
 
   const currentClientBuildId = (): string => String(store.get().clientVersion || APP_VERSION || "").trim();
+
+  const getClientUpdateConnectionReadiness = (reason = "current"): ClientUpdateConnectionReadiness => {
+    if (!isServiceWorkerRuntimeAvailable()) return { connect: true, reason: "sw_unavailable", buildId: null };
+    const st = store.get();
+    const currentBuildId = currentClientBuildId();
+    const updateLatest = String(st.updateLatest ?? "").trim();
+    const runtimeBuildId = String((st as any).pwaUpdate?.buildId ?? "").trim();
+    const pendingBuildId = String(pwaPendingBuildId || readPendingPwaBuild(currentBuildId) || "").trim();
+    const buildId = updateLatest || runtimeBuildId || pendingBuildId || null;
+    const runtimeStage = ((st as any).pwaUpdate?.stage || "idle") as PwaUpdateStage;
+    const busy = isPwaUpdateBusy(runtimeStage);
+    const needsLatest = Boolean(updateLatest && shouldReloadForBuild(currentBuildId, updateLatest));
+    const needsRuntime = Boolean(runtimeBuildId && shouldReloadForBuild(currentBuildId, runtimeBuildId));
+    const needsPending = Boolean(pendingBuildId && shouldReloadForBuild(currentBuildId, pendingBuildId));
+    if (busy) return { connect: false, reason: `update_${runtimeStage}`, buildId, stage: runtimeStage };
+    if (needsLatest || needsRuntime || needsPending || Boolean(st.pwaUpdateAvailable && buildId)) {
+      return { connect: false, reason: "update_pending", buildId, stage: runtimeStage };
+    }
+    return { connect: true, reason, buildId: buildId && !shouldReloadForBuild(currentBuildId, buildId) ? buildId : null, stage: runtimeStage };
+  };
 
   const logPwaUpdate = (event: string, detail?: string) => {
     const storage = getStorage("local");
@@ -852,6 +881,20 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     scheduleAutoApplyPwaUpdate(1200);
   }
 
+  function startPwaBootReconcile(): Promise<void> {
+    if (!pwaBootReconcilePromise) {
+      pwaBootReconcilePromise = reconcilePwaBootState().catch((err) => {
+        logPwaUpdate("bootstrap_reconcile_error", String(err || "unknown"));
+      });
+    }
+    return pwaBootReconcilePromise;
+  }
+
+  async function whenClientReadyForConnection(): Promise<ClientUpdateConnectionReadiness> {
+    await startPwaBootReconcile();
+    return getClientUpdateConnectionReadiness("boot_reconciled");
+  }
+
   function isSafeToAutoApplyUpdate(st: AppState): boolean {
     if (typeof document === "undefined") return false;
     if (getPwaStabilityHoldRemainingMs() > 0) return false;
@@ -1034,7 +1077,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     window.addEventListener("yagodka:pwa-sw-error", onPwaSwError);
     window.addEventListener("yagodka:pwa-update", onPwaUpdate);
     window.addEventListener("yagodka:pwa-stability-hold", onPwaStabilityHold);
-    void reconcilePwaBootState().catch(() => {});
+    void startPwaBootReconcile();
   }
 
   function dispose() {
@@ -1065,5 +1108,6 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     forceUpdateReload,
     forcePwaUpdate,
     scheduleAutoApplyPwaUpdate,
+    whenClientReadyForConnection,
   };
 }

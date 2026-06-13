@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.912",
+    date: "2026-06-13",
+    improved: [
+      "Web/PWA startup разделён на независимые lifecycle workers: client update worker сначала подтверждает актуальность сборки, а connection worker запускает gateway только после `client update ready`.",
+      "Если при старте есть pending/live PWA build или update stage busy, WebSocket/auth auto-connect больше не открывается; пользователю показывается update prompt вместо ложного состояния `Проверьте интернет`.",
+      "Android debug APK пересобирается как отдельный клиент `1.0.52 (code 53)` для новой публикации на странице загрузок.",
+    ],
+    fixed: [
+      "Исправлен race, при котором late wiring запускал `gateway.connect()` до загрузки PWA update runtime и boot reconcile, из-за чего auth-экран мог зависать на сетевой ошибке при незавершённом обновлении.",
+      "Auth-кнопка в период проверки/ожидания обновления теперь не пишет `Проверьте интернет`, потому что это состояние относится к обновлению клиента, а не к отсутствию сети.",
+    ],
+  },
+  {
     version: "0.1.911",
     date: "2026-06-13",
     improved: [

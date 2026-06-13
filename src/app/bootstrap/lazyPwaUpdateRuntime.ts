@@ -1,5 +1,7 @@
 import type { Store } from "../../stores/store";
-import type { AppState } from "../../stores/types";
+import type { AppState, PwaUpdateStage } from "../../stores/types";
+import { shouldReloadForBuild } from "../../helpers/pwa/shouldReloadForBuild";
+import { isPwaUpdateBusy } from "../../helpers/pwa/updateState";
 import { scheduleDeferredTask } from "./scheduleDeferredTask";
 import { recoverFromLazyImportError } from "./lazyImportRecovery";
 
@@ -18,12 +20,20 @@ type LazyPwaUpdateRuntimeDeps = {
   hasPendingFileActivityForUpdate: () => boolean;
 };
 
+export interface ClientUpdateConnectionReadiness {
+  connect: boolean;
+  reason: string;
+  buildId: string | null;
+  stage?: PwaUpdateStage;
+}
+
 export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
   startDeferredBoot: () => void;
   applyPwaUpdateNow: (opts?: { mode?: "auto" | "manual"; buildId?: string }) => Promise<void>;
   forceUpdateReload: (reason?: string) => void;
   forcePwaUpdate: () => Promise<void>;
   scheduleAutoApplyPwaUpdate: (delayMs?: number) => void;
+  whenClientReadyForConnection: (opts?: { timeoutMs?: number }) => Promise<ClientUpdateConnectionReadiness>;
 } {
   const bufferedEvents: BufferedUpdateEvent[] = [];
   let buffersInstalled = false;
@@ -41,6 +51,52 @@ export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
   const onBuild = bufferEvent("yagodka:pwa-build");
   const onSwError = bufferEvent("yagodka:pwa-sw-error");
   const onUpdate = bufferEvent("yagodka:pwa-update");
+
+  function deriveStoreReadiness(reason = "store_fallback"): ClientUpdateConnectionReadiness {
+    const st = deps.store.get();
+    const currentBuildId = String(st.clientVersion || "").trim();
+    const updateLatest = String(st.updateLatest || "").trim();
+    const runtimeBuildId = String((st as any).pwaUpdate?.buildId || "").trim();
+    const runtimeStage = (String((st as any).pwaUpdate?.stage || "idle") as PwaUpdateStage) || "idle";
+    const buildId = updateLatest || runtimeBuildId || null;
+    const busy = isPwaUpdateBusy(runtimeStage);
+    const needsLatest = Boolean(updateLatest && shouldReloadForBuild(currentBuildId, updateLatest));
+    const needsRuntime = Boolean(runtimeBuildId && shouldReloadForBuild(currentBuildId, runtimeBuildId));
+    if (busy) return { connect: false, reason: `update_${runtimeStage}`, buildId, stage: runtimeStage };
+    if (needsLatest || needsRuntime || Boolean(st.pwaUpdateAvailable && buildId)) {
+      return { connect: false, reason: "update_pending", buildId, stage: runtimeStage };
+    }
+    return { connect: true, reason, buildId: buildId && !shouldReloadForBuild(currentBuildId, buildId) ? buildId : null, stage: runtimeStage };
+  }
+
+  async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+    const limit = Math.max(0, Math.trunc(Number(timeoutMs) || 0));
+    if (limit <= 0 || typeof window === "undefined" || typeof window.setTimeout !== "function") {
+      try {
+        return await promise;
+      } catch {
+        return fallback;
+      }
+    }
+    return await new Promise<T>((resolve) => {
+      let done = false;
+      let timer: number | null = null;
+      const finish = (value: T) => {
+        if (done) return;
+        done = true;
+        if (timer !== null) {
+          try {
+            window.clearTimeout(timer);
+          } catch {
+            // ignore
+          }
+        }
+        resolve(value);
+      };
+      timer = window.setTimeout(() => finish(fallback), limit);
+      promise.then((value) => finish(value)).catch(() => finish(fallback));
+    });
+  }
 
   function installBuffers(): void {
     if (buffersInstalled) return;
@@ -130,6 +186,19 @@ export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
       .catch(() => {});
   }
 
+  async function whenClientReadyForConnection(opts?: { timeoutMs?: number }): Promise<ClientUpdateConnectionReadiness> {
+    const timeoutMs = Math.max(800, Math.min(8000, Math.trunc(Number(opts?.timeoutMs ?? 4500) || 4500)));
+    const feature = await withTimeout(ensureRuntimeLoaded(), timeoutMs, null);
+    if (!feature || typeof feature.whenClientReadyForConnection !== "function") {
+      return deriveStoreReadiness("update_runtime_timeout");
+    }
+    return await withTimeout(
+      Promise.resolve(feature.whenClientReadyForConnection()),
+      timeoutMs,
+      deriveStoreReadiness("update_reconcile_timeout")
+    );
+  }
+
   installBuffers();
 
   return {
@@ -138,5 +207,6 @@ export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
     forceUpdateReload,
     forcePwaUpdate,
     scheduleAutoApplyPwaUpdate,
+    whenClientReadyForConnection,
   };
 }

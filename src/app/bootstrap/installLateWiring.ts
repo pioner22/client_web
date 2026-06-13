@@ -6,6 +6,7 @@ import { copyText } from "../../helpers/dom/copyText";
 import { loadAutoDownloadPrefs, saveAutoDownloadPrefs } from "../../helpers/files/autoDownloadPrefs";
 import { setNotifyInAppEnabled, setNotifySoundEnabled } from "../../helpers/notify/notifyPrefs";
 import { autosizeInput } from "../../helpers/ui/autosizeInput";
+import { createClientConnectionWorker } from "./clientConnectionWorker";
 import { createLazyNavigationDeferredRuntime } from "./lazyNavigationDeferredRuntime";
 import { createLazyRoomModerationActionsRuntime } from "./lazyRoomModerationActionsRuntime";
 import { createLazyPwaUpdateRuntime } from "./lazyPwaUpdateRuntime";
@@ -187,6 +188,12 @@ export function installLateWiring(deps: any) {
   function scheduleAutoApplyPwaUpdate(delayMs = 800) {
     pwaUpdateRuntime.scheduleAutoApplyPwaUpdate(delayMs);
   }
+
+  const connectionWorker = createClientConnectionWorker({
+    store,
+    gateway,
+    updateWorker: pwaUpdateRuntime,
+  });
 
   const navigationDeferredRuntime = createLazyNavigationDeferredRuntime({
     hotkeyActions: {
@@ -490,7 +497,7 @@ export function installLateWiring(deps: any) {
   navigationDeferredRuntime.startDeferredBoot();
 
   void initSkins();
-  gateway.connect();
+  connectionWorker.startAfterClientUpdateReady();
 
   // Remove the boot screen only after the app is ready enough to render UI.
   try {

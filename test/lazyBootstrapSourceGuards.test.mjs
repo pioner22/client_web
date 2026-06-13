@@ -105,13 +105,16 @@ test("lazy bootstrap: mountApp and late wiring keep debug/PWA runtime behind laz
   assert.doesNotMatch(handleServerCommonSrc, /helpers\/notify\/tabNotifier"(?!Lazy)/);
 
   const lateWiringSrc = await readSrc("src/app/bootstrap/installLateWiring.ts");
+  assert.match(lateWiringSrc, /createClientConnectionWorker/);
   assert.match(lateWiringSrc, /createLazyNavigationDeferredRuntime/);
   assert.match(lateWiringSrc, /createLazyRoomModerationActionsRuntime/);
   assert.match(lateWiringSrc, /createLazyPwaUpdateRuntime/);
   assert.match(lateWiringSrc, /membersChipsFeature\?\.startDeferredBoot\?\.\(\)/);
   assert.match(lateWiringSrc, /bindDebugMonitor\?\.\(\{ store, gateway \}\)/);
   assert.match(lateWiringSrc, /pwaUpdateRuntime\.startDeferredBoot\(\)/);
+  assert.match(lateWiringSrc, /connectionWorker\.startAfterClientUpdateReady\(\)/);
   assert.match(lateWiringSrc, /navigationDeferredRuntime\.startDeferredBoot\(\)/);
+  assert.doesNotMatch(lateWiringSrc, /gateway\.connect\(\)/);
   assert.doesNotMatch(lateWiringSrc, /createHotkeyActionsFeature/);
   assert.doesNotMatch(lateWiringSrc, /createHotkeyAdapterActionsFeature/);
   assert.doesNotMatch(lateWiringSrc, /createHotkeysFeature/);
