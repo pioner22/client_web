@@ -113,6 +113,7 @@ export function renderFileViewerModal(
   if (isPdf) modalClasses.push("viewer-kind-pdf");
   if (captionText) modalClasses.push("viewer-has-caption");
   const box = el("div", { class: modalClasses.join(" "), role: "dialog", "aria-modal": "true" });
+  if (isVisual) box.setAttribute("data-viewer-fit", "stage");
 
   const IMAGE_ZOOM_DEFAULT_SCALE = 2;
   const IMAGE_ZOOM_MAX_SCALE = 4;
@@ -612,6 +613,13 @@ export function renderFileViewerModal(
     scroll.addEventListener("pointercancel", (e) => stopPan(e));
     const resetImageViewport = () => {
       if (zoomScale > 1) return;
+      img.style.removeProperty("width");
+      img.style.removeProperty("height");
+      img.style.removeProperty("max-width");
+      img.style.removeProperty("max-height");
+      img.style.removeProperty("object-fit");
+      zoomBaseW = 0;
+      zoomBaseH = 0;
       try {
         scroll.scrollLeft = 0;
         scroll.scrollTop = 0;
@@ -621,6 +629,11 @@ export function renderFileViewerModal(
       window.requestAnimationFrame(() => {
         try {
           if (zoomScale > 1) return;
+          img.style.removeProperty("width");
+          img.style.removeProperty("height");
+          img.style.removeProperty("max-width");
+          img.style.removeProperty("max-height");
+          img.style.removeProperty("object-fit");
           scroll.scrollLeft = 0;
           scroll.scrollTop = 0;
         } catch {
@@ -766,7 +779,7 @@ export function renderFileViewerModal(
   const nodes: HTMLElement[] = [header, stage];
   if (footerShell) nodes.push(footerShell);
   if (captionNode) nodes.push(captionNode);
-  nodes.push(actionsRow);
+  if (!isVisual) nodes.push(actionsRow);
   box.append(...nodes);
 
   return box;

@@ -78,9 +78,10 @@ test("messenger surface polish: W-0999 bounds tall media and viewer chrome", asy
     /\.chat:not\(\.chat-board\)\s+\.msg-attach\[data-msg-file="image"\]:not\(\[data-msg-album="1"\]\)\s+\.chat-file-preview\[data-history-geometry="reserved"\],[\s\S]*?max-height:\s*var\(--chat-media-frame-max-h\)/
   );
   assert.match(css, /\.overlay\.overlay-viewer\s*\{[\s\S]*?z-index:\s*80/);
-  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\s+\.viewer-stage\s*\{[\s\S]*?max-height:\s*min\(82dvh,\s*calc\(100dvh - 128px\)\)/);
-  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\.viewer-has-rail\s+\.viewer-stage\s*\{[\s\S]*?max-height:\s*min\(74dvh,\s*calc\(100dvh - 228px\)\)/);
-  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual:not\(\.viewer-zoomed\)\s+\.viewer-img-scroll\s*\{[\s\S]*?padding:\s*clamp\(4px,\s*1\.2vh,\s*14px\)\s+clamp\(12px,\s*4vw,\s*88px\)/);
+  assert.match(css, /W-1010:\s*final visual viewer fit/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\]\s+\.viewer-header-actions\s*\{[\s\S]*?overflow-x:\s*auto/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\]\s+\.viewer-stage,[\s\S]*?max-height:\s*none/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\]:not\(\.viewer-zoomed\)[\s\S]*?\.viewer-media \.viewer-img,[\s\S]*?max-height:\s*100%\s*!important/);
   assert.match(css, /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?--chat-media-frame-max-h:\s*min\(46dvh,\s*360px\)/);
   assert.match(previewShared, /CHAT_HISTORY_IMAGE_SLOT_RATIO_MIN\s*=\s*0\.72/);
   assert.match(previewShared, /CHAT_HISTORY_MEDIA_SLOT_RATIO_MIN\s*=\s*0\.4/);

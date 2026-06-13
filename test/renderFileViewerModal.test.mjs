@@ -266,6 +266,7 @@ test("renderFileViewerModal: visual viewer uses explicit footer shell with count
         },
         { onClose() {}, onOpenAt() {} }
       );
+      assert.equal(node.getAttribute("data-viewer-fit"), "stage");
       const stage = findFirst(node, (n) => n && String(n.className || "").includes("viewer-stage"));
       assert.ok(stage, "viewer stage missing");
       const footer = findFirst(node, (n) => n && String(n.className || "").includes("viewer-footer-shell"));
@@ -280,6 +281,11 @@ test("renderFileViewerModal: visual viewer uses explicit footer shell with count
       const caption = findFirst(node, (n) => n && String(n.className || "").includes("viewer-caption-body"));
       assert.ok(caption, "viewer caption body missing");
       assert.match(collectText(caption), /Подпись к фото/);
+      const bottomActions = findFirst(
+        node,
+        (n) => n && String(n.className || "").includes("modal-actions") && String(n.className || "").includes("viewer-actions")
+      );
+      assert.equal(bottomActions, null, "visual viewer must not render hidden bottom actions");
     });
   } finally {
     await helper.cleanup();
@@ -297,6 +303,7 @@ test("renderFileViewerModal: footer shell helper and CSS hooks are present", asy
   assert.match(source, /isVideoLikeFile/);
   assert.match(source, /isAudioLikeFile/);
   assert.match(source, /resetImageViewport/);
+  assert.match(source, /data-viewer-fit/);
   assert.match(source, /"Вписано"/);
   assert.match(helperSource, /viewer-footer-shell/);
   assert.match(helperSource, /viewer-footer-counter/);
@@ -309,8 +316,13 @@ test("renderFileViewerModal: footer shell helper and CSS hooks are present", asy
   assert.match(css, /\.viewer-img-scroll\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?max-height:\s*100%;/);
   assert.match(css, /\.viewer-footer-shell:not\(\.viewer-footer-shell-has-rail\)\s+\.viewer-footer-main\s*\{[\s\S]*?var\(--viewer-frame-bottom-pad\)/);
   assert.match(css, /\.viewer-rail\s*\{[\s\S]*?var\(--viewer-frame-bottom-pad,\s*var\(--safe-bottom-pad\)\)/);
-  assert.match(css, /\.overlay\.overlay-viewer\s+\.viewer-media\s+\.viewer-img,\s*[\s\S]*?\.overlay\.overlay-viewer\s+\.viewer-media\s+\.viewer-video\s*\{[\s\S]*?max-width:\s*min\(100vw,\s*100%\);[\s\S]*?max-height:\s*100%;/);
-  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual:not\(\.viewer-zoomed\)\s+\.viewer-media\s+\.viewer-img\s*\{[\s\S]*?max-height:\s*calc\(100dvh - 132px\);/);
+  assert.match(css, /W-1010:\s*final visual viewer fit/);
+  assert.match(css, /\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\][\s\S]*?height:\s*100dvh;[\s\S]*?overflow:\s*hidden;/);
+  assert.match(css, /\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\][\s\S]*?\.viewer-stage,[\s\S]*?max-height:\s*none;/);
+  assert.match(css, /\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\]:not\(\.viewer-zoomed\)[\s\S]*?\.viewer-media \.viewer-img,[\s\S]*?max-height:\s*100%\s*!important;/);
+  const oldCalcIndex = css.indexOf("max-height: calc(100dvh - 132px)");
+  const finalFitIndex = css.indexOf("W-1010: final visual viewer fit");
+  assert.ok(oldCalcIndex >= 0 && finalFitIndex > oldCalcIndex, "final stage-fit rules must come after old viewport calc rules");
   assert.doesNotMatch(css, /max-height:\s*min\(calc\(var\(--app-vh,\s*100vh\)\s*\*\s*0\.8\),\s*100%\)/);
   assert.match(css, /video\.viewer-video\s*\{/);
   assert.match(css, /audio\.viewer-audio\s*\{/);

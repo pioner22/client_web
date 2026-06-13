@@ -1679,6 +1679,7 @@ export function mountApp(root: HTMLElement) {
 
   const modalCloseFeature = createModalCloseFeature({
     store,
+    chatHost: layout.chatHost,
     clearSendMenuDraft: () => composerSendMenuFeature.clearSendMenuDraft(),
     closeCallModal: () => {
       callsFeature?.closeCallModal();

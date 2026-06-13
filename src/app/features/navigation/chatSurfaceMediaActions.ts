@@ -33,21 +33,22 @@ export function createChatSurfaceMediaActions(deps: ChatSurfaceDeferredDeps) {
     const st = store.get();
     if (!requireConnectedAndAuthed(st)) return;
 
+    const audioKind = String(wrap.getAttribute("data-audio-kind") || "").trim();
+    const audioLabel = audioKind === "music" ? "аудио" : "голосовое";
     requestVoiceAutoplay(fileId);
     const requestToken = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
     try {
       wrap.setAttribute("data-voice-state", "loading");
       wrap.setAttribute("data-voice-request", requestToken);
       voicePlayBtn.setAttribute("disabled", "true");
-      voicePlayBtn.setAttribute("aria-label", "Готовим голосовое");
+      voicePlayBtn.setAttribute("aria-label", `Готовим ${audioLabel}`);
       const time = wrap.querySelector(".chat-voice-time") as HTMLElement | null;
       if (time) time.textContent = "…";
     } catch {
       // ignore
     }
 
-    const name = String(wrap.getAttribute("data-name") || "").trim();
-    showToast("Загружаю голосовое…", { kind: "info", timeoutMs: 3200 });
+    showToast(`Загружаю ${audioLabel}…`, { kind: "info", timeoutMs: 3200 });
 
     const isOffer = st.fileOffersIn.some((offer) => String(offer.id || "").trim() === fileId);
     if (isOffer) {

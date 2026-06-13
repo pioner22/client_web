@@ -425,3 +425,133 @@ test("fileDownloadFeature: silent voice file_url stays progressive instead of ap
     await helper.cleanup();
   }
 });
+
+test("fileDownloadFeature: audio file_url waits for PWA controller instead of full blob fallback", async () => {
+  const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const prevLocationDesc = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const helper = await loadFeature();
+  try {
+    let controller = null;
+    let readyResolve = null;
+    const listeners = new Map();
+    const ready = new Promise((resolve) => {
+      readyResolve = resolve;
+    });
+    Object.defineProperty(globalThis, "location", {
+      value: { href: "https://yagodka.org/web/" },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          get controller() {
+            return controller;
+          },
+          addEventListener(type, cb) {
+            listeners.set(type, cb);
+          },
+          removeEventListener(type, cb) {
+            if (listeners.get(type) === cb) listeners.delete(type);
+          },
+          ready,
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const state = { authed: true, conn: "connected", netLeader: true, selfId: "u1", status: "idle", fileTransfers: [], fileThumbs: {} };
+    const downloadByFileId = new Map();
+    const sent = [];
+    const calls = { finish: 0, clearSilent: 0, browserDownload: 0 };
+    const store = {
+      get: () => state,
+      set: (patch) => Object.assign(state, typeof patch === "function" ? patch(state) : { ...state, ...patch }),
+      subscribe: () => {},
+    };
+    const noop = () => {};
+    const feature = helper.createFileDownloadFeature({
+      store,
+      send: (payload) => sent.push(payload),
+      deviceCaps: { constrained: false, slowNetwork: false, prefetchAllowed: true },
+      downloadByFileId,
+      disableFileHttp: noop,
+      nextTransferId: () => "ft-audio-wait",
+      updateTransferByFileId: noop,
+      scheduleSaveFileTransfers: noop,
+      resolveFileMeta: () => ({ name: "song.mp3", size: 12_000_000, mime: "audio/mpeg" }),
+      shouldCacheFile: () => false,
+      shouldCachePreview: () => false,
+      enforceFileCachePolicy: async () => {},
+      thumbCacheId: (fileId) => `thumb:${fileId}`,
+      canAutoDownloadFullFile: () => true,
+      resolveAutoDownloadKind: () => "audio",
+      isSilentFileGet: () => true,
+      clearSilentFileGet: () => {
+        calls.clearSilent += 1;
+      },
+      clearFileAcceptRetry: noop,
+      clearFileGetNotFoundRetry: noop,
+      scheduleFileGetNotFoundRetry: () => false,
+      finishFileGet: () => {
+        calls.finish += 1;
+      },
+      touchFileGetTimeout: noop,
+      dropFileGetQueue: noop,
+      tryResolveHttpFileUrlWaiter: () => false,
+      requestFreshHttpDownloadUrl: async () => ({ url: "https://example.invalid/file" }),
+      rejectHttpFileUrlWaiter: noop,
+      scheduleThumbPollRetry: noop,
+      clearThumbPollRetry: noop,
+      setFileThumb: noop,
+      maybeSetVideoPosterFromBlob: noop,
+      probeImageDimensions: async () => ({ w: null, h: null }),
+      pendingFileDownloads: new Map(),
+      triggerBrowserDownload: () => {
+        calls.browserDownload += 1;
+      },
+      takePendingFileViewer: () => null,
+      clearPendingFileViewer: noop,
+      buildFileViewerModalState: () => ({ kind: "file_viewer" }),
+      postStreamChunk: () => true,
+      postStreamEnd: noop,
+      postStreamError: noop,
+      clearCachedPreviewAttempt: noop,
+      clearPreviewPrefetchAttempt: noop,
+      isUploadActive: () => false,
+      abortUploadByFileId: noop,
+    });
+
+    assert.equal(
+      feature.handleMessage({
+        type: "file_url",
+        file_id: "aud-wait",
+        url: "https://yagodka.org/files/aud-wait",
+        auth_token: "secret-token-wait",
+        name: "song.mp3",
+        size: 12_000_000,
+        mime: "audio/mpeg",
+      }),
+      true
+    );
+    assert.equal(downloadByFileId.size, 0);
+    assert.equal(calls.browserDownload, 0);
+    assert.equal(sent.length, 0);
+
+    controller = { postMessage() {} };
+    readyResolve();
+    listeners.get("controllerchange")?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(sent, [{ type: "file_get", file_id: "aud-wait" }]);
+    assert.equal(calls.finish, 0);
+    assert.equal(calls.clearSilent, 0);
+  } finally {
+    if (prevNavigatorDesc) Object.defineProperty(globalThis, "navigator", prevNavigatorDesc);
+    else delete globalThis.navigator;
+    if (prevLocationDesc) Object.defineProperty(globalThis, "location", prevLocationDesc);
+    else delete globalThis.location;
+    await helper.cleanup();
+  }
+});

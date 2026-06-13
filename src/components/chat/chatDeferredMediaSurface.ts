@@ -15,6 +15,7 @@ import { renderMediaOverlayControls } from "./mediaOverlayControls";
 import { renderMessageSelectionControl } from "./messageSelectionControl";
 import { renderImagePreviewButton, renderVideoPreviewButton } from "./chatVisualPreviewSurface";
 import { resolveHistoryMediaSlotSize } from "./chatVisualPreviewShared";
+import { classifyAudioAttachment } from "../../helpers/files/audioAttachmentKind";
 import {
   AlbumItem,
   avatar,
@@ -91,7 +92,8 @@ function renderVoicePlayer(opts: RenderDeferredVoicePlayerCtx["opts"]): HTMLElem
   const track = el("button", { class: "btn chat-voice-track", type: "button", "aria-label": "Перемотка" }, [bar]);
   const time = el("div", { class: "chat-voice-time" }, ["0:00"]);
   const name = String(opts.name || "");
-  const voiceLike = name.toLowerCase().startsWith("voice_") || name.toLowerCase().startsWith("voice-note") || name.toLowerCase().startsWith("voice_note");
+  const audioKind = classifyAudioAttachment(name, opts.mime);
+  const voiceLike = audioKind === "voice";
   const speedBtn = voiceLike
     ? (el("button", { class: "btn chat-voice-speed", type: "button", "aria-label": "Скорость воспроизведения" }, [
         formatVoiceRate(getVoicePlaybackRate()),
@@ -109,6 +111,7 @@ function renderVoicePlayer(opts: RenderDeferredVoicePlayerCtx["opts"]): HTMLElem
   const fileId = String(opts.fileId || "").trim();
   if (fileId) {
     wrap.setAttribute("data-file-kind", "audio");
+    wrap.setAttribute("data-audio-kind", audioKind);
     wrap.setAttribute("data-file-id", fileId);
     wrap.setAttribute("data-name", String(opts.name || ""));
     wrap.setAttribute("data-size", String(Number(opts.size || 0) || 0));

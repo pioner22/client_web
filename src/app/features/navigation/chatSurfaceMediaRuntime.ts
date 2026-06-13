@@ -39,6 +39,9 @@ function formatVoiceRate(value: number): string {
 }
 
 function isVoiceLikeName(wrap: HTMLElement): boolean {
+  const audioKind = String(wrap.getAttribute("data-audio-kind") || "").trim().toLowerCase();
+  if (audioKind === "voice") return true;
+  if (audioKind === "music") return false;
   const name = String(wrap.getAttribute("data-name") || "").trim().toLowerCase();
   return name.startsWith("voice_") || name.startsWith("voice-note") || name.startsWith("voice_note");
 }

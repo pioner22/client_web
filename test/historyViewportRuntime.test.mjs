@@ -159,10 +159,11 @@ test("historyViewportRuntime: reset clears sticky/anchor state and disconnects o
 });
 
 test("history autoscroll: sent-message pending bottom stick is wired into render path", async () => {
-  const [renderChatSrc, historyFeatureSrc, mountAppSrc] = await Promise.all([
+  const [renderChatSrc, historyFeatureSrc, mountAppSrc, modalCloseSrc] = await Promise.all([
     readFile(path.resolve("src/components/chat/renderChat.ts"), "utf8"),
     readFile(path.resolve("src/app/features/history/historyFeature.ts"), "utf8"),
     readFile(path.resolve("src/app/mountApp.ts"), "utf8"),
+    readFile(path.resolve("src/app/features/navigation/modalCloseFeature.ts"), "utf8"),
   ]);
 
   assert.match(renderChatSrc, /isChatPendingBottomStickActive\(scrollHost,\s*key\)/);
@@ -176,6 +177,10 @@ test("history autoscroll: sent-message pending bottom stick is wired into render
   assert.match(mountAppSrc, /markChatPendingBottomStick\(host,\s*k\)/);
   assert.match(mountAppSrc, /isChatPendingBottomStickActive\(host,\s*k\)/);
   assert.match(mountAppSrc, /window\.setTimeout\(stickNow,\s*260\)/);
+  assert.match(mountAppSrc, /chatHost:\s*layout\.chatHost/);
+  assert.match(modalCloseSrc, /closeFileViewerState/);
+  assert.match(modalCloseSrc, /delete historyVirtualStart\[key\]/);
+  assert.match(modalCloseSrc, /markChatPendingBottomStick\(chatHost,\s*key,\s*Date\.now\(\),\s*2500\)/);
 });
 
 test("history autoscroll: sendChat hard-scrolls after local message insert", async () => {

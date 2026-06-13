@@ -8,7 +8,7 @@ import { MISSING_FILE_STATUS, isTerminalMissingVisualTransfer } from "../../../h
 import { guessMimeTypeByName } from "../../../helpers/files/mimeGuess";
 import { getDeliveryRetryPolicy } from "../../../helpers/runtime/deliveryCoordinator";
 import { applyFileTransferMutation } from "../../../helpers/runtime/deliverySync";
-import { markProgressiveAudioTransferReady } from "./fileProgressiveAudio";
+import { handleProgressiveAudioFileUrl } from "./fileProgressiveAudio";
 import {
   createFileHttpDownloadRuntime,
   type FileHttpDownloadPriority,
@@ -572,10 +572,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
     const userRequested = pendingFileDownloads.has(fileId);
     const kindForUrl = resolveAutoDownloadKind(name, mime, msg?.kind ? String(msg.kind) : null);
     const pendingStream = Boolean(downloadByFileId.get(fileId)?.streaming);
-    const progressiveAudioReady = url && kindForUrl === "audio" && !pendingStream && (!userRequested || silent)
-      ? markProgressiveAudioTransferReady({ store, fileId, url, name, size, mime, silent, nextTransferId, scheduleSaveFileTransfers, clearSilentFileGet, finishFileGet, debugHook })
-      : false;
-    if (progressiveAudioReady) return true;
+    if (url && kindForUrl === "audio" && !pendingStream && (!userRequested || silent) && handleProgressiveAudioFileUrl({ store, fileId, url, name, size, mime, silent, nextTransferId, scheduleSaveFileTransfers, clearSilentFileGet, finishFileGet, updateTransferByFileId, send, touchFileGetTimeout, debugHook })) return true;
 
     if (silent) {
       try {
