@@ -20,28 +20,42 @@ export class GatewayClient {
   private connectTimeoutTimer: number | null = null;
   private readonly pingIntervalMs = 10_000;
   private readonly connectTimeoutMs = 12_000;
+  private readonly heartbeatStaleMs = 45_000;
+  private readonly heartbeatMaxMisses = 3;
   private readonly reconnectBaseMs = 400;
   private readonly reconnectMaxMs = 30_000;
   private attempts = 0;
   private manualClose = false;
+  private lastConnectStartedAt = 0;
   private lastOpenAt = 0;
   private lastCloseAt = 0;
+  private lastMessageAt = 0;
+  private missedHeartbeats = 0;
   private waitingOnline = false;
   private waitingVisible = false;
   private onlineHandler: (() => void) | null = null;
   private visibilityHandler: (() => void) | null = null;
+  private lifecycleInstalled = false;
+  private lifecycleOnlineHandler: (() => void) | null = null;
+  private lifecycleOfflineHandler: (() => void) | null = null;
+  private lifecycleFocusHandler: (() => void) | null = null;
+  private lifecyclePageShowHandler: (() => void) | null = null;
+  private lifecycleVisibilityHandler: (() => void) | null = null;
 
   constructor(
     private url: string,
     private onMessage: MsgHandler,
     private onStatus: StatusHandler
-  ) {}
+  ) {
+    this.installLifecycleHandlers();
+  }
 
   getRole(): GatewayRole {
     return "solo";
   }
 
   connect() {
+    this.installLifecycleHandlers();
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
     this.clearReconnect();
     this.clearStable();
@@ -55,23 +69,17 @@ export class GatewayClient {
     try {
       const ws = new WebSocket(this.url);
       this.ws = ws;
+      this.lastConnectStartedAt = Date.now();
       this.connectTimeoutTimer = window.setTimeout(() => {
         if (this.ws !== ws || ws.readyState !== WebSocket.CONNECTING) return;
-        this.ws = null;
-        this.clearConnectTimeout();
-        this.lastCloseAt = Date.now();
-        try {
-          ws.close();
-        } catch {
-          // ignore
-        }
-        this.onStatus("disconnected", "connect_timeout");
-        if (!this.manualClose) this.scheduleReconnect();
+        this.forceReconnect("connect_timeout", ws);
       }, this.connectTimeoutMs);
       ws.onopen = () => {
         if (this.ws !== ws) return;
         this.clearConnectTimeout();
         this.lastOpenAt = Date.now();
+        this.lastMessageAt = this.lastOpenAt;
+        this.missedHeartbeats = 0;
         this.onStatus("connected");
         this.startPing();
         // Reset exponential backoff only after the connection stays up for a bit.
@@ -86,6 +94,7 @@ export class GatewayClient {
         this.clearConnectTimeout();
         this.clearStable();
         this.clearPing();
+        this.missedHeartbeats = 0;
         this.lastCloseAt = Date.now();
         const code = typeof ev?.code === "number" ? ev.code : 0;
         const reason = typeof ev?.reason === "string" ? ev.reason : "";
@@ -104,6 +113,8 @@ export class GatewayClient {
         try {
           const data = typeof ev.data === "string" ? ev.data : "";
           const msg = JSON.parse(data);
+          this.lastMessageAt = Date.now();
+          this.missedHeartbeats = 0;
           try {
             const hook = (globalThis as any).__yagodka_debug_on_gateway_in;
             if (typeof hook === "function") hook(msg);
@@ -140,6 +151,7 @@ export class GatewayClient {
     this.clearPing();
     this.clearConnectTimeout();
     this.clearWaiters();
+    this.clearLifecycleHandlers();
     try {
       this.ws?.close();
     } catch {
@@ -177,9 +189,9 @@ export class GatewayClient {
 
   private startPing() {
     if (this.pingTimer !== null) return;
-    this.send({ type: "ping" });
+    this.sendHeartbeatPing();
     this.pingTimer = window.setInterval(() => {
-      this.send({ type: "ping" });
+      this.sendHeartbeatPing();
     }, this.pingIntervalMs);
   }
 
@@ -195,6 +207,113 @@ export class GatewayClient {
       window.clearTimeout(this.connectTimeoutTimer);
       this.connectTimeoutTimer = null;
     }
+  }
+
+  private sendHeartbeatPing() {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const now = Date.now();
+    const staleByTime = this.lastMessageAt > 0 && now - this.lastMessageAt > this.heartbeatStaleMs;
+    if (staleByTime || this.missedHeartbeats >= this.heartbeatMaxMisses) {
+      this.forceReconnect("heartbeat_timeout", ws);
+      return;
+    }
+    this.missedHeartbeats += 1;
+    if (!this.send({ type: "ping" })) {
+      this.forceReconnect("heartbeat_send_failed", ws);
+    }
+  }
+
+  private forceReconnect(detail: string, expected?: WebSocket) {
+    if (expected && this.ws !== expected) return;
+    const ws = this.ws;
+    this.ws = null;
+    this.clearConnectTimeout();
+    this.clearStable();
+    this.clearPing();
+    this.missedHeartbeats = 0;
+    this.lastCloseAt = Date.now();
+    try {
+      ws?.close();
+    } catch {
+      // ignore
+    }
+    this.onStatus("disconnected", detail);
+    if (!this.manualClose) this.scheduleReconnect();
+  }
+
+  private installLifecycleHandlers() {
+    if (this.lifecycleInstalled) return;
+    if (typeof window === "undefined") return;
+    this.lifecycleInstalled = true;
+    this.lifecycleOnlineHandler = () => this.resumeConnection("online");
+    this.lifecycleOfflineHandler = () => this.handleOffline();
+    this.lifecycleFocusHandler = () => this.resumeConnection("focus");
+    this.lifecyclePageShowHandler = () => this.resumeConnection("pageshow");
+    this.lifecycleVisibilityHandler = () => {
+      if (!this.isHidden()) this.resumeConnection("visible");
+    };
+    try {
+      window.addEventListener("online", this.lifecycleOnlineHandler);
+      window.addEventListener("offline", this.lifecycleOfflineHandler);
+      window.addEventListener("focus", this.lifecycleFocusHandler);
+      window.addEventListener("pageshow", this.lifecyclePageShowHandler);
+      document.addEventListener("visibilitychange", this.lifecycleVisibilityHandler);
+    } catch {
+      // ignore
+    }
+  }
+
+  private clearLifecycleHandlers() {
+    if (!this.lifecycleInstalled) return;
+    this.lifecycleInstalled = false;
+    try {
+      if (this.lifecycleOnlineHandler) window.removeEventListener("online", this.lifecycleOnlineHandler);
+      if (this.lifecycleOfflineHandler) window.removeEventListener("offline", this.lifecycleOfflineHandler);
+      if (this.lifecycleFocusHandler) window.removeEventListener("focus", this.lifecycleFocusHandler);
+      if (this.lifecyclePageShowHandler) window.removeEventListener("pageshow", this.lifecyclePageShowHandler);
+      if (this.lifecycleVisibilityHandler) document.removeEventListener("visibilitychange", this.lifecycleVisibilityHandler);
+    } catch {
+      // ignore
+    }
+    this.lifecycleOnlineHandler = null;
+    this.lifecycleOfflineHandler = null;
+    this.lifecycleFocusHandler = null;
+    this.lifecyclePageShowHandler = null;
+    this.lifecycleVisibilityHandler = null;
+  }
+
+  private resumeConnection(_reason: string) {
+    if (this.manualClose) return;
+    if (this.deferIfOffline(false) || this.deferIfHidden(false)) return;
+    const ws = this.ws;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const staleByTime = this.lastMessageAt > 0 && Date.now() - this.lastMessageAt > this.heartbeatStaleMs;
+      if (staleByTime || this.missedHeartbeats >= this.heartbeatMaxMisses) {
+        this.forceReconnect("heartbeat_timeout", ws);
+        return;
+      }
+      this.sendHeartbeatPing();
+      return;
+    }
+    if (ws && ws.readyState === WebSocket.CONNECTING) {
+      const startedAt = this.lastConnectStartedAt || Date.now();
+      if (Date.now() - startedAt > this.connectTimeoutMs) this.forceReconnect("connect_timeout", ws);
+      return;
+    }
+    this.clearReconnect();
+    this.connect();
+  }
+
+  private handleOffline() {
+    if (this.manualClose) return;
+    const ws = this.ws;
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      this.forceReconnect("offline", ws);
+      return;
+    }
+    this.onStatus("disconnected", "offline");
+    this.waitForOnline();
   }
 
   private isOffline(): boolean {

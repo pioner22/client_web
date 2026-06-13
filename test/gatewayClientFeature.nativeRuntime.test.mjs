@@ -304,6 +304,10 @@ test("MultiplexGatewayClient: follower has stale-leader watchdog for visible con
   assert.match(src, /leader_recovery/);
   assert.match(src, /this\.post\(\{\s*t:\s*"connect"/);
   assert.match(src, /leaderAcquireInFlight/);
+  assert.match(src, /window\.addEventListener\("focus",\s*this\.focusHandler\)/);
+  assert.match(src, /window\.addEventListener\("pageshow",\s*this\.pageShowHandler\)/);
+  assert.match(src, /window\.addEventListener\("online",\s*this\.onlineHandler\)/);
+  assert.match(src, /onRuntimeWake\(\)/);
 });
 
 test("gatewayClientFeature: duplicate disconnected status does not rewrite store", async () => {

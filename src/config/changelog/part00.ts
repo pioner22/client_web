@@ -2,6 +2,19 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.911",
+    date: "2026-06-13",
+    improved: [
+      "Web/PWA/desktop/Android gateway получил общий recovery lifecycle: heartbeat watchdog для `OPEN`, но мёртвого WebSocket, быстрый resume на `online/focus/pageshow/visibilitychange` и принудительный выход из подвисшего `CONNECTING` после возврата приложения.",
+      "Обычные browser-вкладки с multiplex gateway теперь просыпают stale-leader recovery сразу при `online/focus/pageshow`, не дожидаясь следующего фонового interval после обновления или восстановления вкладки.",
+      "Android debug APK пересобирается как отдельный клиент `1.0.51 (code 52)` для новой публикации на странице загрузок.",
+    ],
+    fixed: [
+      "После обновления, перезапуска сервера, потери сети или возврата из background клиент больше не должен оставаться в состоянии вечного подключения до полного закрытия приложения.",
+      "Поздние события от закрытого WebSocket, heartbeat timeout и offline recovery больше не ставят дублирующие reconnect-циклы и не ломают видимое состояние подключения.",
+    ],
+  },
+  {
     version: "0.1.910",
     date: "2026-06-13",
     improved: [

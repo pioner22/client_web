@@ -87,6 +87,9 @@ export class MultiplexGatewayClient implements GatewayTransport {
 
   private visibilityHandler: (() => void) | null = null;
   private pageHideHandler: (() => void) | null = null;
+  private focusHandler: (() => void) | null = null;
+  private pageShowHandler: (() => void) | null = null;
+  private onlineHandler: (() => void) | null = null;
   private readonly onRole: ((role: GatewayRole) => void) | null;
 
   constructor(
@@ -123,9 +126,15 @@ export class MultiplexGatewayClient implements GatewayTransport {
 
     this.visibilityHandler = () => this.onVisibilityChanged();
     this.pageHideHandler = () => this.onVisibilityChanged();
+    this.focusHandler = () => this.onRuntimeWake();
+    this.pageShowHandler = () => this.onRuntimeWake();
+    this.onlineHandler = () => this.onRuntimeWake();
     try {
       document.addEventListener("visibilitychange", this.visibilityHandler);
       window.addEventListener("pagehide", this.pageHideHandler);
+      window.addEventListener("focus", this.focusHandler);
+      window.addEventListener("pageshow", this.pageShowHandler);
+      window.addEventListener("online", this.onlineHandler);
     } catch {
       // ignore
     }
@@ -204,6 +213,30 @@ export class MultiplexGatewayClient implements GatewayTransport {
       }
       this.pageHideHandler = null;
     }
+    if (this.focusHandler) {
+      try {
+        window.removeEventListener("focus", this.focusHandler);
+      } catch {
+        // ignore
+      }
+      this.focusHandler = null;
+    }
+    if (this.pageShowHandler) {
+      try {
+        window.removeEventListener("pageshow", this.pageShowHandler);
+      } catch {
+        // ignore
+      }
+      this.pageShowHandler = null;
+    }
+    if (this.onlineHandler) {
+      try {
+        window.removeEventListener("online", this.onlineHandler);
+      } catch {
+        // ignore
+      }
+      this.onlineHandler = null;
+    }
   }
 
   private onVisibilityChanged(): void {
@@ -220,6 +253,20 @@ export class MultiplexGatewayClient implements GatewayTransport {
     // Visible tab: always queue a leader lock request (it will run when available).
     if (this.role === "follower" && this.wantConnected) this.startFollowerWatchdog();
     void this.tryAcquireLeader();
+  }
+
+  private onRuntimeWake(): void {
+    if (this.disposed) return;
+    if (this.role === "solo") return;
+    this.onVisibilityChanged();
+    if (docHidden()) return;
+    if (this.role === "leader") {
+      if (this.wantConnected) this.inner?.connect();
+      return;
+    }
+    if (this.role === "follower" && this.wantConnected) {
+      this.checkLeaderHealth();
+    }
   }
 
   private become(role: GatewayRole): void {
