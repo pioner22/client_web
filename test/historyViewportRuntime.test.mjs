@@ -167,7 +167,24 @@ test("history autoscroll: sent-message pending bottom stick is wired into render
 
   assert.match(renderChatSrc, /isChatPendingBottomStickActive\(scrollHost,\s*key\)/);
   assert.match(renderChatSrc, /stickyActive\s*\|\|\s*atBottomBefore\s*\|\|\s*pendingBottomStickActive/);
+  assert.match(renderChatSrc, /tailMessageAppended/);
+  assert.match(renderChatSrc, /markChatPendingBottomStick\(scrollHost,\s*key,\s*Date\.now\(\),\s*2500\)/);
+  assert.match(renderChatSrc, /window\.setTimeout\(stickNow,\s*260\)/);
   assert.match(renderChatSrc, /clearChatPendingBottomStick\(scrollHost,\s*key\)/);
+  assert.match(renderChatSrc, /isChatPendingBottomStickActive\(scrollHost,\s*curKey\)\s*\|\|\s*isChatStickyBottomActive/);
   assert.match(historyFeatureSrc, /markChatPendingBottomStick\(chatHost,\s*k\)/);
   assert.match(mountAppSrc, /markChatPendingBottomStick\(host,\s*k\)/);
+  assert.match(mountAppSrc, /isChatPendingBottomStickActive\(host,\s*k\)/);
+  assert.match(mountAppSrc, /window\.setTimeout\(stickNow,\s*260\)/);
+});
+
+test("history autoscroll: sendChat hard-scrolls after local message insert", async () => {
+  const [sendChatSrc, mountAppSrc] = await Promise.all([
+    readFile(path.resolve("src/app/features/navigation/sendChatFeature.ts"), "utf8"),
+    readFile(path.resolve("src/app/mountApp.ts"), "utf8"),
+  ]);
+
+  assert.match(sendChatSrc, /scrollChatToBottom\?:\s*\(key:\s*string\)\s*=>\s*void/);
+  assert.match(sendChatSrc, /scheduleSaveOutbox\(\);\s*markChatAutoScroll\(convKey,\s*false\);\s*scrollChatToBottom\?\.\(convKey\);/s);
+  assert.match(mountAppSrc, /createSendChatFeature\(\{[\s\S]*markChatAutoScroll,\s*scrollChatToBottom,/);
 });

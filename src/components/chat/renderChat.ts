@@ -9,6 +9,7 @@ import {
   disconnectChatHistoryViewportObserver,
   getChatHistoryViewportRuntime,
   isChatPendingBottomStickActive,
+  markChatPendingBottomStick,
 } from "../../helpers/chat/historyViewportRuntime";
 import { messageSelectionKey } from "../../helpers/chat/chatSelection";
 import { isPinnedMessage } from "../../helpers/chat/pinnedMessages";
@@ -140,6 +141,20 @@ function patchChatTransferProgress(scrollHost: HTMLElement, transfers: AppState[
   }
 }
 
+function chatTailIdentity(msg: ChatMessage | null | undefined): string {
+  if (!msg) return "";
+  const id = Number(msg.id ?? 0);
+  const serverId = Number.isFinite(id) && id > 0 ? `id:${Math.trunc(id)}` : "";
+  const localId = typeof msg.localId === "string" && msg.localId.trim() ? `local:${msg.localId.trim()}` : "";
+  const stableId = serverId || localId;
+  if (stableId) return `${msg.kind}:${stableId}`;
+  const from = String(msg.from || "");
+  const target = String(msg.room || msg.to || "");
+  const textSize = String(msg.text || "").length;
+  const ts = Number(msg.ts ?? 0);
+  return `${msg.kind}:${from}:${target}:${Number.isFinite(ts) ? ts : 0}:${textSize}`;
+}
+
 export function renderChat(layout: Layout, state: AppState) {
   const activeConversation = getConversationViewportTarget(state);
   const mobileUi = isMobileLikeUi();
@@ -186,8 +201,25 @@ export function renderChat(layout: Layout, state: AppState) {
   const cachedMessages = key ? (state.conversations?.[key] ?? EMPTY_CHAT) : EMPTY_CHAT;
   const historySync = key ? getConversationHistorySyncState(state, key) : null;
   const allowSticky = Boolean(key && ((historySync && historySync.loaded) || cachedMessages.length));
+  const prevTailKey = String(hostState.__chatTailKey || "");
+  const prevTailSig = String(hostState.__chatTailSig || "");
+  const prevTailCount = Math.max(0, Math.trunc(Number(hostState.__chatTailCount || 0) || 0));
+  const tailSig = chatTailIdentity(cachedMessages.length ? cachedMessages[cachedMessages.length - 1] : null);
+  const tailMessageAppended = Boolean(
+    key &&
+      !keyChanged &&
+      allowSticky &&
+      prevTailKey === key &&
+      prevTailSig &&
+      tailSig &&
+      tailSig !== prevTailSig &&
+      cachedMessages.length >= prevTailCount &&
+      !state.chatSearchOpen &&
+      (!state.modal || state.modal.kind === "context_menu")
+  );
+  if (tailMessageAppended) markChatPendingBottomStick(scrollHost, key, Date.now(), 2500);
   // Keep pinned-bottom stable during re-renders/content growth, including the first render after a sent-message autoscroll mark.
-  const shouldStick = Boolean(key && !keyChanged && allowSticky && (stickyActive || atBottomBefore || pendingBottomStickActive));
+  const shouldStick = Boolean(key && !keyChanged && allowSticky && (stickyActive || atBottomBefore || pendingBottomStickActive || tailMessageAppended));
   const preShiftAnchor = key && !keyChanged && !shouldStick ? captureChatShiftAnchor(scrollHost, key) : null;
   if (keyChanged && viewportRuntime.stickyBottom) viewportRuntime.stickyBottom = null;
   if (keyChanged && viewportRuntime.shiftAnchor) viewportRuntime.shiftAnchor = null;
@@ -434,17 +466,24 @@ export function renderChat(layout: Layout, state: AppState) {
     viewportRuntime.unreadClearArmed.delete(key);
   }
 
-  const unreadResolved = resolveUnreadDivider({
-    key,
-    msgs,
-    searchActive,
-    selected: activeConversation,
-    friends: state.friends,
-    lastRead: state.lastRead,
-    savedAnchor: key ? unreadMap.get(key) ?? null : null,
-    virtualEnabled,
-    virtualStart,
-  });
+  const suppressActiveUnread = Boolean(activeConversation && key === conversationKey(activeConversation));
+  if (suppressActiveUnread && key) {
+    unreadMap.delete(key);
+    viewportRuntime.unreadClearArmed.delete(key);
+  }
+  const unreadResolved = suppressActiveUnread
+    ? { unreadIdx: -1, unreadCount: 0, unreadInsertIdx: -1, anchor: null }
+    : resolveUnreadDivider({
+        key,
+        msgs,
+        searchActive,
+        selected: activeConversation,
+        friends: state.friends,
+        lastRead: state.lastRead,
+        savedAnchor: key ? unreadMap.get(key) ?? null : null,
+        virtualEnabled,
+        virtualStart,
+      });
   if (key && unreadResolved.anchor && (unreadResolved.anchor.msgKey || unreadResolved.anchor.msgId !== undefined)) {
     unreadMap.set(key, unreadResolved.anchor);
   }
@@ -614,7 +653,7 @@ export function renderChat(layout: Layout, state: AppState) {
             const curKey = String(scrollHost.getAttribute("data-chat-key") || "");
             if (!curKey) return;
             const st = viewportRuntime.stickyBottom;
-            if (isChatStickyBottomActive(scrollHost, st, curKey)) {
+            if (isChatPendingBottomStickActive(scrollHost, curKey) || isChatStickyBottomActive(scrollHost, st, curKey)) {
               scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
               viewportRuntime.stickyBottom = createChatStickyBottomState(scrollHost, curKey, true);
               return;
@@ -687,13 +726,24 @@ export function renderChat(layout: Layout, state: AppState) {
       const curKey = String(scrollHost.getAttribute("data-chat-key") || "");
       const st = viewportRuntime.stickyBottom;
       if (!curKey || curKey !== key) return;
-      if (!isChatStickyBottomActive(scrollHost, st, key)) return;
+      const forcePending = isChatPendingBottomStickActive(scrollHost, key);
+      if (!forcePending && !isChatStickyBottomActive(scrollHost, st, key)) return;
       scrollHost.scrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
       viewportRuntime.stickyBottom = createChatStickyBottomState(scrollHost, key, true);
-      clearChatPendingBottomStick(scrollHost, key);
+      if (!forcePending) clearChatPendingBottomStick(scrollHost, key);
     };
     queueMicrotask(stickNow);
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(stickNow);
+    }
+    if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+      window.setTimeout(stickNow, 80);
+      window.setTimeout(stickNow, 260);
+    }
   }
+  hostState.__chatTailKey = key;
+  hostState.__chatTailSig = tailSig;
+  hostState.__chatTailCount = msgs.length;
   if (key && !shouldStick) {
     captureAndStoreChatShiftAnchor(scrollHost, key);
   } else if (viewportRuntime.shiftAnchor) {

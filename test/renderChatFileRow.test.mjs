@@ -242,6 +242,69 @@ function textOf(node) {
   return kids.map((child) => textOf(child)).join("");
 }
 
+test("renderChat: active conversation suppresses unread divider", async () => {
+  const helper = await loadRenderChat();
+  try {
+    await withDomStubs(async () => {
+      const chat = document.createElement("div");
+      const chatTop = document.createElement("div");
+      const chatSearchResults = document.createElement("div");
+      const chatSearchFooter = document.createElement("div");
+      const chatHost = document.createElement("div");
+      const chatJump = document.createElement("button");
+      const chatSelectionBar = document.createElement("div");
+      chat.className = "chat";
+      chatTop.className = "chat-top";
+      chatSearchResults.className = "chat-search-results";
+      chatSearchFooter.className = "chat-search-footer";
+      chatHost.className = "chat-host";
+      chatJump.className = "btn chat-jump hidden";
+      chatSelectionBar.className = "chat-selection-bar hidden";
+
+      const peer = "222-222-222";
+      const key = `dm:${peer}`;
+      const layout = { chat, chatTop, chatSearchResults, chatSearchFooter, chatHost, chatJump, chatSelectionBar };
+      const state = {
+        page: "main",
+        modal: null,
+        selected: { kind: "dm", id: peer },
+        selfId: "111-111-111",
+        conversations: {
+          [key]: [
+            { kind: "out", from: "111-111-111", to: peer, text: "old", ts: 100, id: 1 },
+            { kind: "in", from: peer, to: "111-111-111", text: "new", ts: 110, id: 2 },
+          ],
+        },
+        historySync: { [key]: { loaded: true, loading: false, hasMore: false, cursor: 0 } },
+        historyLoaded: { [key]: true },
+        historyCursor: {},
+        historyHasMore: {},
+        friends: [{ id: peer, unread: 1 }],
+        lastRead: { [key]: { id: 1 } },
+        fileTransfers: [],
+        fileOffersIn: [],
+        fileThumbs: {},
+        groups: [],
+        boards: [],
+        profiles: {},
+        chatSearchOpen: false,
+        chatSearchQuery: "",
+        chatSearchHits: [],
+        chatSearchPos: 0,
+        pinnedMessages: {},
+        pinnedMessageActive: {},
+      };
+
+      helper.renderChat(layout, state);
+
+      const unread = findFirst(chatHost, (node) => hasClass(node, "msg-unread"));
+      assert.equal(unread, null);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
 test("renderChat: file-attachment рендерит preview первым, иконку и action-кнопку", async () => {
   const helper = await loadRenderChat();
   try {

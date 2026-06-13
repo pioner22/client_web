@@ -49,6 +49,18 @@ test("entry boot screen: strict corporate surface without animated layout shifts
   assert.doesNotMatch(html, /transform:\s*scale/);
 });
 
+test("entry boot recovery loads before app bundle", async () => {
+  const html = await readFile(path.resolve("index.html"), "utf8");
+  const bootIndex = html.indexOf('src="/boot.js"');
+  const appIndex = html.indexOf('src="/src/index.ts"');
+
+  assert.ok(bootIndex > -1, "boot.js script is missing");
+  assert.ok(appIndex > -1, "app entry script is missing");
+  assert.ok(bootIndex < appIndex, "boot.js must load before the app entry");
+  assert.match(html, /<script\s+defer\s+src="\/boot\.js"><\/script>/);
+  assert.doesNotMatch(html, /<script\s+type="module"\s+src="\/boot\.js"><\/script>/);
+});
+
 test("PWA manifest uses light auth-safe-area launch background", async () => {
   const manifest = JSON.parse(await readFile(path.resolve("public/manifest.webmanifest"), "utf8"));
 

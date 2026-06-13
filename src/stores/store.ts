@@ -13,11 +13,14 @@ export class Store<TState> {
   }
 
   set(patch: Partial<TState> | ((prev: TState) => TState)) {
-    if (typeof patch === "function") {
-      this.state = patch(this.state);
-    } else {
-      this.state = { ...this.state, ...patch };
-    }
+    const prev = this.state;
+    const next = typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
+    if (Object.is(next, prev)) return;
+    this.state = next;
+    this.notify();
+  }
+
+  notify() {
     for (const fn of this.listeners) fn();
   }
 
@@ -26,4 +29,3 @@ export class Store<TState> {
     return () => this.listeners.delete(fn);
   }
 }
-

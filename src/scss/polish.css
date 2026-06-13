@@ -1695,3 +1695,94 @@ html[data-theme="dark"] .chat:not(.chat-board) {
     max-width: min(100%, calc(100dvw - var(--history-mobile-album-gutter)));
   }
 }
+
+/* W-0999: hard history tail and media containment.
+ * Very tall photos must not push the latest messages/composer out of the viewport,
+ * and the full-screen viewer must reserve a real flex row for footer/rail chrome.
+ */
+.chat:not(.chat-board) {
+  --chat-media-frame-max-h: min(52dvh, 440px);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"],
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] {
+  max-height: var(--chat-media-frame-max-h);
+}
+
+.overlay.overlay-viewer {
+  z-index: 80;
+}
+
+.overlay.overlay-viewer:not(.hidden) {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  isolation: isolate;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100dvh - 96px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-stage {
+  max-height: calc(100dvh - 170px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-img-scroll {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media .viewer-video {
+  width: auto;
+  height: auto;
+  max-width: min(100dvw, 100%);
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell {
+  flex: 0 0 auto;
+  max-height: min(34dvh, 220px);
+  overflow: hidden;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-rail {
+  flex: 0 0 auto;
+  max-height: 76px;
+}
+
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --chat-media-frame-max-h: min(46dvh, 360px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-stage {
+    max-height: calc(100dvh - 116px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-stage {
+    max-height: calc(100dvh - 182px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell {
+    max-height: min(38dvh, 176px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption-body {
+    max-height: 4.5rem;
+  }
+}

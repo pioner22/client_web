@@ -23,6 +23,7 @@ import { convoSig } from "../helpers/chat/convoSig";
 import {
   clearChatPendingBottomStick,
   getChatHistoryViewportRuntime,
+  isChatPendingBottomStickActive,
   markChatPendingBottomStick,
 } from "../helpers/chat/historyViewportRuntime";
 import { messageSelectionKey } from "../helpers/chat/chatSelection";
@@ -718,9 +719,13 @@ export function mountApp(root: HTMLElement) {
     const badge = layout.chatJumpBadge;
     const label = layout.chatJumpLabel;
     const activeConversation = getActiveConversationTarget(st);
+    const activeConversationKey = activeConversation ? conversationKey(activeConversation) : "";
+    const showingActiveConversation = Boolean(key && activeConversationKey && key === activeConversationKey);
     let unread = 0;
     if (badge) {
-      if (activeConversation?.kind === "dm") {
+      if (showingActiveConversation) {
+        unread = 0;
+      } else if (activeConversation?.kind === "dm") {
         unread = st.friends.find((f) => f.id === activeConversation.id)?.unread ?? 0;
       } else {
         unread = computeRoomUnread(key, st);
@@ -757,7 +762,6 @@ export function mountApp(root: HTMLElement) {
     if (chatJumpRaf !== null) return;
     chatJumpRaf = window.requestAnimationFrame(updateChatJumpVisibility);
   };
-
   function markChatAutoScroll(key: string, waitForHistory = false) {
     historyFeature?.markChatAutoScroll(key, waitForHistory);
   }
@@ -772,10 +776,11 @@ export function mountApp(root: HTMLElement) {
     const stickNow = () => {
       if (String(host.getAttribute("data-chat-key") || "") !== k) return;
       const st = runtime.stickyBottom;
-      if (!isChatStickyBottomActive(host, st, k)) return;
+      const forcePending = isChatPendingBottomStickActive(host, k);
+      if (!forcePending && !isChatStickyBottomActive(host, st, k)) return;
       host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
       runtime.stickyBottom = createChatStickyBottomState(host, k, true);
-      clearChatPendingBottomStick(host, k);
+      if (!forcePending) clearChatPendingBottomStick(host, k);
       maybeRecordLastRead(k);
     };
     queueMicrotask(stickNow);
@@ -783,6 +788,10 @@ export function mountApp(root: HTMLElement) {
       window.requestAnimationFrame(stickNow);
     } else {
       stickNow();
+    }
+    if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+      window.setTimeout(stickNow, 80);
+      window.setTimeout(stickNow, 260);
     }
     scheduleChatJumpVisibility();
   }
@@ -1487,9 +1496,7 @@ export function mountApp(root: HTMLElement) {
     }
   }
 
-  function sendChat(opts?: SendChatOpts) {
-    sendChatFeature?.sendChat(opts);
-  }
+  function sendChat(opts?: SendChatOpts) { sendChatFeature?.sendChat(opts); }
 
   sendChatFeature = createSendChatFeature({
     store,
@@ -1499,6 +1506,7 @@ export function mountApp(root: HTMLElement) {
     autosizeInput,
     scheduleBoardEditorPreview,
     markChatAutoScroll,
+    scrollChatToBottom,
     helperDraftToRef,
     scheduleSaveOutbox: () => scheduleSaveOutbox(store),
     scheduleSaveDrafts: () => scheduleSaveDrafts(store),
@@ -1592,8 +1600,8 @@ export function mountApp(root: HTMLElement) {
     iosComposerNavLockFeature.restoreLock();
   });
 
-  layout.boardScheduleInput.addEventListener("input", () => store.set((prev) => prev));
-  layout.boardScheduleInput.addEventListener("change", () => store.set((prev) => prev));
+  layout.boardScheduleInput.addEventListener("input", () => store.notify());
+  layout.boardScheduleInput.addEventListener("change", () => store.notify());
 
   composerViewportResizeAutosizeFeature.bind();
   composerInputKeydownFeature.bind();

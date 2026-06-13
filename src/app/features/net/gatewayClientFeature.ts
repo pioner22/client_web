@@ -80,8 +80,16 @@ export function createGatewayClientFeature(deps: Deps): GatewayClientFeature {
   let lastConn: ConnStatus = "connecting";
   let gateway: GatewayTransport;
 
+  const setStoreIfChanged = (reducer: (prev: AppState) => AppState): boolean => {
+    const prev = deps.store.get();
+    const next = reducer(prev);
+    if (Object.is(next, prev)) return false;
+    deps.store.set(() => next);
+    return true;
+  };
+
   const onRole = (role: GatewayRole) => {
-    deps.store.set((prev) => {
+    setStoreIfChanged((prev) => {
       const netLeader = role === "solo" || role === "leader";
       return prev.netLeader === netLeader ? prev : { ...prev, netLeader };
     });
@@ -121,7 +129,8 @@ export function createGatewayClientFeature(deps: Deps): GatewayClientFeature {
     const base =
       conn === "connected" ? "Связь с сервером установлена" : conn === "connecting" ? "Подключение…" : "Нет соединения";
     const nextStatus = detail ? `${base}: ${detail}` : base;
-    deps.store.set((prev) => {
+    setStoreIfChanged((prev) => {
+      if (conn === "connecting" && prev.conn === "disconnected" && prev.modal?.kind === "auth") return prev;
       const clearWelcome = conn === "connected" && prev.modal?.kind === "welcome";
       const preserveLogoutStatus = prev.modal?.kind === "logout" || (prev.modal?.kind === "auth" && prev.status.startsWith("Вы вышли"));
       const status = preserveLogoutStatus ? prev.status : nextStatus;
@@ -138,15 +147,15 @@ export function createGatewayClientFeature(deps: Deps): GatewayClientFeature {
     lastConn = conn;
 
     if (conn !== "connected") {
-      deps.onDisconnected?.();
-      deps.store.set(requeueSendingOutboxOnDisconnect);
-      deps.scheduleSaveOutbox();
+      if (prevConn === "connected") deps.onDisconnected?.();
+      const outboxChanged = setStoreIfChanged(requeueSendingOutboxOnDisconnect);
+      if (outboxChanged) deps.scheduleSaveOutbox();
       return;
     }
 
     // New socket: even if UI thought we were authed, we must re-auth on reconnect.
     if (prevConn !== "connected") {
-      deps.store.set((prev) => (prev.authed ? { ...prev, authed: false } : prev));
+      setStoreIfChanged((prev) => (prev.authed ? { ...prev, authed: false } : prev));
     }
 
     deps.maybeAutoAuthOnConnected?.();

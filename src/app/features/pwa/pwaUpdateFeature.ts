@@ -61,6 +61,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   let pwaPendingBuildId = "";
   let pwaAutoApplySuppressed = false;
   let pwaBootReconcileStarted = false;
+  let pwaUpdateEventVerifyInFlight = false;
 
   const getStorage = (kind: "session" | "local"): Storage | null => {
     try {
@@ -147,6 +148,23 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     if (st.conn === "connected" && st.authed) {
       send({ type: "client_info", client: "web", version: id, ...buildClientInfoTags() });
     }
+  };
+
+  const clearCurrentPwaUpdatePrompt = (buildId?: string) => {
+    const id = String(buildId || "").trim();
+    if (id) clearPendingPwaBuild(id);
+    if (id && pwaPendingBuildId === id) pwaPendingBuildId = "";
+    clearPwaAutoApplyGuard();
+    store.set((prev) => {
+      const updateLatest = String(prev.updateLatest ?? "").trim();
+      const keepUpdateLatest = updateLatest && shouldReloadForBuild(currentClientBuildId(), updateLatest);
+      const patch: Partial<AppState> = {
+        pwaUpdateAvailable: false,
+        ...(keepUpdateLatest ? {} : { updateLatest: null }),
+      };
+      if (prev.modal?.kind === "pwa_update") patch.modal = null;
+      return { ...prev, ...patch };
+    });
   };
 
   const currentClientBuildId = (): string => String(store.get().clientVersion || APP_VERSION || "").trim();
@@ -720,14 +738,37 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
 
   const onPwaUpdate = () => {
     logPwaUpdate("sw_update");
-    store.set((prev) => ({
-      ...prev,
-      pwaUpdateAvailable: true,
-      status: "Получено обновление веб-клиента. Нажмите «Обновить», когда будет удобно.",
-      ...(shouldOpenPwaUpdatePrompt(prev) ? { modal: { kind: "pwa_update" } } : {}),
-    }));
-    scheduleAutoApplyPwaUpdate();
+    void verifyPwaUpdateEvent();
   };
+
+  async function verifyPwaUpdateEvent(): Promise<void> {
+    if (pwaUpdateEventVerifyInFlight) return;
+    pwaUpdateEventVerifyInFlight = true;
+    try {
+      const currentBuildId = currentClientBuildId();
+      const knownBuildId = String(pwaPendingBuildId || readPendingPwaBuild(currentBuildId) || store.get().updateLatest || "").trim();
+      if (knownBuildId && shouldReloadForBuild(currentBuildId, knownBuildId)) {
+        setPendingPwaBuild(knownBuildId, "Получено обновление веб-клиента. Нажмите «Обновить», когда будет удобно.");
+        scheduleAutoApplyPwaUpdate();
+        return;
+      }
+      const liveBuildId = await fetchSwBuildId(PWA_MANUAL_CHECK_TIMEOUT_MS);
+      if (!liveBuildId) {
+        logPwaUpdate("sw_update_unverified", currentBuildId || "unknown");
+        return;
+      }
+      if (shouldReloadForBuild(currentBuildId, liveBuildId)) {
+        setPendingPwaBuild(liveBuildId, "Получено обновление веб-клиента. Нажмите «Обновить», когда будет удобно.");
+        scheduleAutoApplyPwaUpdate();
+        return;
+      }
+      logPwaUpdate("sw_update_current", liveBuildId);
+      adoptActiveBuild(liveBuildId);
+      clearCurrentPwaUpdatePrompt(liveBuildId);
+    } finally {
+      pwaUpdateEventVerifyInFlight = false;
+    }
+  }
 
   const onPwaStabilityHold = () => {
     const remaining = getPwaStabilityHoldRemainingMs();

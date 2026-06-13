@@ -25,16 +25,19 @@ function mkStorage() {
 
 function makeStore(initial) {
   let state = { ...initial };
+  let setCalls = 0;
   return {
     get: () => state,
     set: (patch) => {
+      setCalls += 1;
       state = typeof patch === "function" ? patch(state) : { ...state, ...patch };
       return state;
     },
+    getSetCalls: () => setCalls,
   };
 }
 
-function stubRuntime({ native = false } = {}) {
+function stubRuntime({ native = false, webSocketClass = undefined } = {}) {
   const prev = {
     window: Object.getOwnPropertyDescriptor(globalThis, "window"),
     document: Object.getOwnPropertyDescriptor(globalThis, "document"),
@@ -42,6 +45,7 @@ function stubRuntime({ native = false } = {}) {
     localStorage: Object.getOwnPropertyDescriptor(globalThis, "localStorage"),
     sessionStorage: Object.getOwnPropertyDescriptor(globalThis, "sessionStorage"),
     BroadcastChannel: Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel"),
+    WebSocket: Object.getOwnPropertyDescriptor(globalThis, "WebSocket"),
     Capacitor: Object.getOwnPropertyDescriptor(globalThis, "Capacitor"),
   };
 
@@ -93,6 +97,7 @@ function stubRuntime({ native = false } = {}) {
   Object.defineProperty(globalThis, "window", { value: window, configurable: true });
   Object.defineProperty(globalThis, "navigator", { value: navigator, configurable: true });
   Object.defineProperty(globalThis, "BroadcastChannel", { value: FakeBroadcastChannel, configurable: true });
+  if (webSocketClass) Object.defineProperty(globalThis, "WebSocket", { value: webSocketClass, configurable: true });
   if (Capacitor) Object.defineProperty(globalThis, "Capacitor", { value: Capacitor, configurable: true });
   else delete globalThis.Capacitor;
 
@@ -111,6 +116,8 @@ function stubRuntime({ native = false } = {}) {
       else delete globalThis.sessionStorage;
       if (prev.BroadcastChannel) Object.defineProperty(globalThis, "BroadcastChannel", prev.BroadcastChannel);
       else delete globalThis.BroadcastChannel;
+      if (prev.WebSocket) Object.defineProperty(globalThis, "WebSocket", prev.WebSocket);
+      else delete globalThis.WebSocket;
       if (prev.Capacitor) Object.defineProperty(globalThis, "Capacitor", prev.Capacitor);
       else delete globalThis.Capacitor;
     },
@@ -158,6 +165,35 @@ function makeDeps(store) {
   };
 }
 
+function makeFakeWebSocket() {
+  const instances = [];
+  class FakeWebSocket {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSED = 3;
+
+    readyState = FakeWebSocket.CONNECTING;
+    onopen = null;
+    onclose = null;
+    onerror = null;
+    onmessage = null;
+
+    constructor(url) {
+      this.url = url;
+      instances.push(this);
+    }
+
+    send() {
+      return undefined;
+    }
+
+    close() {
+      this.readyState = FakeWebSocket.CLOSED;
+    }
+  }
+  return { FakeWebSocket, instances };
+}
+
 test("gatewayClientFeature: native runtime bypasses multiplex gateway even when browser locks are available", async () => {
   const helper = await loadFeature();
   const runtime = stubRuntime({ native: true });
@@ -200,6 +236,53 @@ test("gatewayClientFeature: browser runtime still keeps multiplex path when lock
     const { gateway } = helper.createGatewayClientFeature(makeDeps(store));
     assert.equal(runtime.getChannelConstructed(), 1, "browser runtime should still initialize BroadcastChannel multiplexing");
     assert.notEqual(gateway.getRole?.(), "solo");
+    gateway.close();
+  } finally {
+    runtime.cleanup();
+    await helper.cleanup();
+  }
+});
+
+test("gatewayClientFeature: duplicate disconnected status does not rewrite store", async () => {
+  const helper = await loadFeature();
+  const fakeWs = makeFakeWebSocket();
+  const runtime = stubRuntime({ native: true, webSocketClass: fakeWs.FakeWebSocket });
+  let saveOutboxCalls = 0;
+  try {
+    const store = makeStore({
+      netLeader: true,
+      authed: false,
+      selfId: null,
+      outbox: {},
+      conversations: {},
+      conn: "connecting",
+      status: "Подключение…",
+      modal: { kind: "auth" },
+    });
+    const { gateway } = helper.createGatewayClientFeature({
+      ...makeDeps(store),
+      scheduleSaveOutbox: () => {
+        saveOutboxCalls += 1;
+      },
+    });
+
+    gateway.connect();
+    assert.equal(store.getSetCalls(), 0, "same connecting state should be ignored");
+    assert.equal(fakeWs.instances.length, 1);
+
+    fakeWs.instances[0].onclose?.({ code: 1006, reason: "" });
+    assert.equal(store.getSetCalls(), 1, "first disconnect should update visible network state once");
+    assert.equal(store.get().conn, "disconnected");
+
+    gateway.connect();
+    assert.equal(fakeWs.instances.length, 2);
+    assert.equal(store.getSetCalls(), 1, "auth retry connecting state should stay visually stable");
+
+    fakeWs.instances[0].onclose?.({ code: 1006, reason: "" });
+    assert.equal(store.getSetCalls(), 1, "duplicate disconnect should not trigger another store write");
+    fakeWs.instances[1].onclose?.({ code: 1006, reason: "" });
+    assert.equal(store.getSetCalls(), 1, "retry disconnect with same visible status should not trigger another store write");
+    assert.equal(saveOutboxCalls, 0, "unchanged outbox should not schedule persistence on duplicate disconnect");
     gateway.close();
   } finally {
     runtime.cleanup();

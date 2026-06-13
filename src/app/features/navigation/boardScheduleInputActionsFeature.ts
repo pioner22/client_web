@@ -38,6 +38,10 @@ export function createBoardScheduleInputActionsFeature(deps: BoardScheduleInputA
     showToast,
   } = deps;
 
+  const notifyStore = () => {
+    if (typeof (store as any).notify === "function") (store as any).notify();
+  };
+
   const handleBoardScheduleInputWrapClick = (target: HTMLElement | null, event: Event): boolean => {
     const scheduleAddBtn = target?.closest("button[data-action='board-schedule-add']") as HTMLButtonElement | null;
     if (scheduleAddBtn) {
@@ -100,7 +104,7 @@ export function createBoardScheduleInputActionsFeature(deps: BoardScheduleInputA
       armBoardScheduleTimer();
 
       boardScheduleInput.value = "";
-      store.set((prev) => prev);
+      notifyStore();
 
       const convKey = conversationKey(sel);
       store.set((prev) => {
@@ -124,7 +128,7 @@ export function createBoardScheduleInputActionsFeature(deps: BoardScheduleInputA
     if (scheduleClearBtn) {
       event.preventDefault();
       boardScheduleInput.value = "";
-      store.set((prev) => prev);
+      notifyStore();
       return true;
     }
 

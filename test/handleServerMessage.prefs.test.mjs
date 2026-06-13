@@ -167,3 +167,84 @@ test("handleServerMessage: chat_cleared вычищает диалог и history
     await cleanup();
   }
 });
+
+test("handleServerMessage: active DM message clears local unread immediately", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const selfId = "111-111-111";
+    const peer = "222-222-222";
+    const key = `dm:${peer}`;
+    const sentPayloads = [];
+    const { getState, patch } = createPatchHarness({
+      selfId,
+      page: "main",
+      modal: null,
+      selected: { kind: "dm", id: peer },
+      conn: "connected",
+      authed: true,
+      conversations: { [key]: [] },
+      friends: [{ id: peer, unread: 1 }],
+      profiles: {},
+      groups: [],
+      boards: [],
+      lastRead: {},
+      status: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "message",
+        from: peer,
+        to: selfId,
+        text: "new",
+        ts: 100,
+        id: 11,
+      },
+      getState(),
+      { send(payload) { sentPayloads.push(payload); } },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.friends[0].unread, 0);
+    assert.equal(st.conversations[key].length, 1);
+    assert.equal(st.lastRead[key].id, 11);
+    assert.deepEqual(sentPayloads.find((x) => x.type === "message_read"), { type: "message_read", peer, up_to_id: 11 });
+  } finally {
+    await cleanup();
+  }
+});
+
+test("handleServerMessage: unread_counts does not resurrect active DM unread", async () => {
+  const { handleServerMessage, cleanup } = await loadHandleServerMessage();
+  try {
+    const peer = "222-222-222";
+    const other = "333-333-333";
+    const { getState, patch } = createPatchHarness({
+      page: "main",
+      modal: null,
+      selected: { kind: "dm", id: peer },
+      friends: [
+        { id: peer, unread: 0 },
+        { id: other, unread: 0 },
+      ],
+      status: "",
+    });
+
+    handleServerMessage(
+      {
+        type: "unread_counts",
+        counts: { [peer]: 4, [other]: 2 },
+      },
+      getState(),
+      { send() {} },
+      patch
+    );
+
+    const st = getState();
+    assert.equal(st.friends.find((friend) => friend.id === peer).unread, 0);
+    assert.equal(st.friends.find((friend) => friend.id === other).unread, 2);
+  } finally {
+    await cleanup();
+  }
+});

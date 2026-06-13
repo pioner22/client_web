@@ -8,6 +8,7 @@
   var LOOP_KEY = "yagodka_boot_loop_v1";
   var LOOP_RESET_MS = 2 * 60 * 1000;
   var LOOP_MAX = 3;
+  var LIVE_BUILD_TIMEOUT_MS = 2500;
   var RECOVERY_CLASS = "boot-recovery";
   var LEGACY_UPDATE_TEXT_RE = /Обновляем приложение[\s\S]{0,240}Сбрасываем старый кэш приложения перед запуском новой версии/i;
   var LEGACY_UPDATE_CLASS_RE = /(?:^|\s)required-update-gate(?:\s|$)/;
@@ -79,14 +80,31 @@
 
   async function fetchLiveBuildId() {
     if (typeof fetch !== "function") return "";
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = null;
+    if (controller) {
+      timer = window.setTimeout(function () {
+        try {
+          controller.abort();
+        } catch {}
+      }, LIVE_BUILD_TIMEOUT_MS);
+    }
     try {
-      var res = await fetch("./sw.js?boot_ts=" + Date.now(), { cache: "no-store" });
+      var opts = { cache: "no-store" };
+      if (controller) opts.signal = controller.signal;
+      var res = await fetch("./sw.js?boot_ts=" + Date.now(), opts);
       if (!res || !res.ok) return "";
       var text = await res.text();
       var match = String(text || "").match(/\bBUILD_ID\s*=\s*["']([^"']+)["']/);
       return match ? String(match[1] || "").trim() : "";
     } catch {
       return "";
+    } finally {
+      if (timer !== null) {
+        try {
+          window.clearTimeout(timer);
+        } catch {}
+      }
     }
   }
 

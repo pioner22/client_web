@@ -28,6 +28,7 @@ export interface SendChatFeatureDeps {
   autosizeInput: (el: HTMLTextAreaElement) => void;
   scheduleBoardEditorPreview: () => void;
   markChatAutoScroll: (key: string, waitForHistory?: boolean) => void;
+  scrollChatToBottom?: (key: string) => void;
   helperDraftToRef: (draft: MessageHelperDraft | null) => ChatMessage["reply"];
   scheduleSaveOutbox: () => void;
   scheduleSaveDrafts: () => void;
@@ -47,6 +48,7 @@ export function createSendChatFeature(deps: SendChatFeatureDeps): SendChatFeatur
     autosizeInput,
     scheduleBoardEditorPreview,
     markChatAutoScroll,
+    scrollChatToBottom,
     helperDraftToRef,
     scheduleSaveOutbox,
     scheduleSaveDrafts,
@@ -206,6 +208,8 @@ export function createSendChatFeature(deps: SendChatFeatureDeps): SendChatFeatur
       return applyOutboxMutation(next, outbox);
     });
     scheduleSaveOutbox();
+    markChatAutoScroll(convKey, false);
+    scrollChatToBottom?.(convKey);
 
     if (!preserveComposer) {
       input.value = "";

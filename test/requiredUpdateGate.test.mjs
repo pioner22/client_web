@@ -466,6 +466,8 @@ test("requiredUpdateGate: boot and service worker recovery are early and bounded
   assert.match(boot, /Сбрасываем старый кэш приложения перед запуском новой версии/);
   assert.match(boot, /readCurrentBuildId/);
   assert.match(boot, /fetchLiveBuildId/);
+  assert.match(boot, /LIVE_BUILD_TIMEOUT_MS/);
+  assert.match(boot, /AbortController/);
   assert.match(boot, /recoverStaleBootBuild/);
   assert.match(boot, /\.\/sw\.js\?boot_ts=/);
   assert.match(boot, /cache:\s*"no-store"/);
@@ -479,6 +481,8 @@ test("requiredUpdateGate: boot and service worker recovery are early and bounded
 
   const swBuilder = await readFile(path.resolve("scripts/build_pwa.mjs"), "utf8");
   assert.match(swBuilder, /patchIndexHtmlBuildVersion/);
+  assert.match(swBuilder, /ensureEarlyBootScript/);
+  assert.match(swBuilder, /<script defer src="\.\/boot\.js"><\/script>/);
   assert.match(swBuilder, /prefer network so old installed clients can escape a stale cached index/);
   assert.match(swBuilder, /fetchWithTimeout\(req,\s*NAVIGATION_NETWORK_TIMEOUT_MS\)/);
   assert.match(swBuilder, /PRECACHE_FETCH_TIMEOUT_MS/);

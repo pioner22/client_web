@@ -76,6 +76,19 @@ function patchIndexHtmlBuildVersion(html, buildId) {
     );
 }
 
+function ensureEarlyBootScript(html) {
+  const raw = String(html ?? "");
+  const withoutBoot = raw.replace(
+    /\s*<script\b(?=[^>]*\bsrc=(?:"|')(?:\.\/|\/)?boot\.js(?:"|'))[^>]*>\s*<\/script>/gi,
+    ""
+  );
+  const bootScript = '    <script defer src="./boot.js"></script>';
+  if (/<title>[\s\S]*?<\/title>/i.test(withoutBoot)) {
+    return withoutBoot.replace(/(<title>[\s\S]*?<\/title>)/i, `$1\n${bootScript}`);
+  }
+  return withoutBoot.replace(/(<head\b[^>]*>)/i, `$1\n${bootScript}`);
+}
+
 function patchManifestCacheBust(manifest, patchHref) {
   const out = { ...(manifest && typeof manifest === "object" ? manifest : {}) };
 
@@ -196,7 +209,7 @@ async function main() {
   try {
     const indexPath = path.join(distDir, "index.html");
     const existing = await readText(indexPath);
-    const normalized = patchIndexHtmlBuildVersion(patchIndexHtmlCacheBust(existing, stripCacheBust), "dev");
+    const normalized = ensureEarlyBootScript(patchIndexHtmlBuildVersion(patchIndexHtmlCacheBust(existing, stripCacheBust), "dev"));
     if (normalized !== existing) await fs.writeFile(indexPath, normalized, "utf8");
   } catch {}
   try {
@@ -254,11 +267,13 @@ async function main() {
   try {
     const indexPath = path.join(distDir, "index.html");
     const existing = await readText(indexPath);
-    const next = patchIndexHtmlBuildVersion(
-      patchIndexHtmlCacheBust(existing, (href) =>
-        MANIFEST_URL_RE.test(href) ? withCacheBust(href, buildId) : ICON_URL_RE.test(href) ? withCacheBust(href, buildId) : href
-      ),
-      buildId
+    const next = ensureEarlyBootScript(
+      patchIndexHtmlBuildVersion(
+        patchIndexHtmlCacheBust(existing, (href) =>
+          MANIFEST_URL_RE.test(href) ? withCacheBust(href, buildId) : ICON_URL_RE.test(href) ? withCacheBust(href, buildId) : href
+        ),
+        buildId
+      )
     );
     if (next !== existing) await fs.writeFile(indexPath, next, "utf8");
   } catch {}

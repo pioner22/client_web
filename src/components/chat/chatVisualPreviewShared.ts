@@ -34,8 +34,9 @@ export const CHAT_MEDIA_PREVIEW_FALLBACK_BASE_PX = 420;
 export const CHAT_HISTORY_MEDIA_SLOT_BASE_PX = 1000;
 export const CHAT_IMAGE_PREVIEW_FALLBACK_ASPECT_RATIO = 4 / 3;
 export const CHAT_VIDEO_PREVIEW_FALLBACK_ASPECT_RATIO = 16 / 9;
+const CHAT_HISTORY_IMAGE_SLOT_RATIO_MIN = 0.72;
 const CHAT_HISTORY_MEDIA_SLOT_RATIO_MIN = 0.4;
-const CHAT_HISTORY_MEDIA_SLOT_RATIO_MAX = 3.2;
+const CHAT_HISTORY_MEDIA_SLOT_RATIO_MAX = 2.6;
 
 const historyMediaSlotRatios = new Map<string, number>();
 
@@ -58,9 +59,9 @@ export function isVideoNoteName(name: string): boolean {
   return n.startsWith("video_note") || n.startsWith("video-note") || n.includes("_video_note");
 }
 
-function clampHistoryMediaSlotRatio(ratio: number): number {
+function clampHistoryMediaSlotRatio(ratio: number, minRatio = CHAT_HISTORY_MEDIA_SLOT_RATIO_MIN): number {
   if (!Number.isFinite(ratio) || ratio <= 0) return 1;
-  return Math.min(CHAT_HISTORY_MEDIA_SLOT_RATIO_MAX, Math.max(CHAT_HISTORY_MEDIA_SLOT_RATIO_MIN, ratio));
+  return Math.min(CHAT_HISTORY_MEDIA_SLOT_RATIO_MAX, Math.max(minRatio, ratio));
 }
 
 function historyMediaSlotKey(info: FileAttachmentInfo): string {
@@ -77,7 +78,9 @@ function knownHistoryMediaSlotRatio(info: FileAttachmentInfo): number | null {
   const cachedRatio = info.fileId ? getCachedMediaAspectRatio(info.fileId) : null;
   const cachedLocalRatio = !cachedRatio && info.transfer?.localId ? getCachedLocalMediaAspectRatio(info.transfer.localId) : null;
   const ratio = info.isVideo ? previewRatio ?? cachedRatio ?? cachedLocalRatio : cachedRatio ?? cachedLocalRatio ?? previewRatio;
-  if (typeof ratio === "number" && Number.isFinite(ratio) && ratio > 0) return clampHistoryMediaSlotRatio(ratio);
+  if (typeof ratio === "number" && Number.isFinite(ratio) && ratio > 0) {
+    return clampHistoryMediaSlotRatio(ratio, info.isImage ? CHAT_HISTORY_IMAGE_SLOT_RATIO_MIN : CHAT_HISTORY_MEDIA_SLOT_RATIO_MIN);
+  }
   return null;
 }
 
@@ -94,7 +97,7 @@ export function resolveHistoryMediaSlotRatio(info: FileAttachmentInfo): number |
   if (typeof reserved === "number" && Number.isFinite(reserved) && reserved > 0) return reserved;
   const ratio = knownHistoryMediaSlotRatio(info) ?? fallbackHistoryMediaSlotRatio(info);
   if (typeof ratio !== "number" || !Number.isFinite(ratio) || ratio <= 0) return null;
-  const clamped = clampHistoryMediaSlotRatio(ratio);
+  const clamped = clampHistoryMediaSlotRatio(ratio, info.isImage ? CHAT_HISTORY_IMAGE_SLOT_RATIO_MIN : CHAT_HISTORY_MEDIA_SLOT_RATIO_MIN);
   if (key) historyMediaSlotRatios.set(key, clamped);
   return clamped;
 }
@@ -112,7 +115,8 @@ export function resolveHistoryMediaSlotSize(info: FileAttachmentInfo, fallbackRa
   const ratio =
     typeof reserved === "number" && Number.isFinite(reserved) && reserved > 0
       ? reserved
-      : (knownHistoryMediaSlotRatio(info) ?? clampHistoryMediaSlotRatio(fallbackRatio));
+      : (knownHistoryMediaSlotRatio(info) ??
+        clampHistoryMediaSlotRatio(fallbackRatio, info.isImage ? CHAT_HISTORY_IMAGE_SLOT_RATIO_MIN : CHAT_HISTORY_MEDIA_SLOT_RATIO_MIN));
   if (key && !(typeof reserved === "number" && Number.isFinite(reserved) && reserved > 0)) {
     historyMediaSlotRatios.set(key, ratio);
   }

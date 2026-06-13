@@ -67,6 +67,24 @@ test("messenger surface polish: W-0992 reserves rigid history media slots", asyn
   assert.match(previewSurface, /applyReservedHistoryMediaSlot/);
 });
 
+test("messenger surface polish: W-0999 bounds tall media and viewer chrome", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+  const previewShared = await readFile(new URL("../src/components/chat/chatVisualPreviewShared.ts", import.meta.url), "utf8");
+
+  assert.match(css, /W-0999:\s*hard history tail and media containment/);
+  assert.match(css, /--chat-media-frame-max-h:\s*min\(52dvh,\s*440px\)/);
+  assert.match(
+    css,
+    /\.chat:not\(\.chat-board\)\s+\.msg-attach\[data-msg-file="image"\]:not\(\[data-msg-album="1"\]\)\s+\.chat-file-preview\[data-history-geometry="reserved"\],[\s\S]*?max-height:\s*var\(--chat-media-frame-max-h\)/
+  );
+  assert.match(css, /\.overlay\.overlay-viewer\s*\{[\s\S]*?z-index:\s*80/);
+  assert.match(css, /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\.viewer-has-rail\s+\.viewer-stage\s*\{[\s\S]*?max-height:\s*calc\(100dvh - 170px\)/);
+  assert.match(css, /@media\s*\(max-width:\s*600px\)\s*\{[\s\S]*?--chat-media-frame-max-h:\s*min\(46dvh,\s*360px\)/);
+  assert.match(previewShared, /CHAT_HISTORY_IMAGE_SLOT_RATIO_MIN\s*=\s*0\.72/);
+  assert.match(previewShared, /CHAT_HISTORY_MEDIA_SLOT_RATIO_MIN\s*=\s*0\.4/);
+  assert.match(previewShared, /CHAT_HISTORY_MEDIA_SLOT_RATIO_MAX\s*=\s*2\.6/);
+});
+
 test("messenger surface polish: W-0978 keeps Android bubbles and context menu bounded", async () => {
   const css = await readCssWithImports("src/scss/style.css");
 

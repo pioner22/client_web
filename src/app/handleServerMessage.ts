@@ -995,10 +995,21 @@ export function handleServerMessage(
       const key = dmKey(from);
       const now = Date.now();
       const lastSave = lastReadSavedAt.get(key) ?? 0;
-      if (now - lastSave >= 1200) {
+      if (now - lastSave < 1200) {
+        patch((prev) => {
+          const hadUnread = (prev.friends || []).some((friend) => friend.id === from && Number(friend.unread || 0) > 0);
+          if (!hadUnread) return prev;
+          return { ...prev, friends: prev.friends.map((friend) => (friend.id === from ? { ...friend, unread: 0 } : friend)) };
+        });
+      } else {
         lastReadSavedAt.set(key, now);
         patch((prev) => {
-          if (!prev.selfId) return prev;
+          let nextState = prev;
+          const hadUnread = (prev.friends || []).some((friend) => friend.id === from && Number(friend.unread || 0) > 0);
+          if (hadUnread) {
+            nextState = { ...nextState, friends: nextState.friends.map((friend) => (friend.id === from ? { ...friend, unread: 0 } : friend)) };
+          }
+          if (!prev.selfId) return nextState;
           const marker = prev.lastRead?.[key] || {};
           const nextEntry = { ...marker };
           let changed = false;
@@ -1014,10 +1025,10 @@ export function handleServerMessage(
             nextEntry.ts = tsNum;
             changed = true;
           }
-          if (!changed) return prev;
-          const merged = { ...(prev.lastRead || {}), [key]: nextEntry };
+          if (!changed) return nextState;
+          const merged = { ...(nextState.lastRead || {}), [key]: nextEntry };
           saveLastReadMarkers(prev.selfId, merged);
-          return { ...prev, lastRead: merged };
+          return { ...nextState, lastRead: merged };
         });
       }
     }

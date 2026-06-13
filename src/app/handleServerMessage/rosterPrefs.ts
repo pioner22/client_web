@@ -349,7 +349,10 @@ export function handleRosterPrefsMessage(
     patch((prev) => ({
       ...prev,
       // `counts` is an authoritative snapshot; absent keys mean 0 unread.
-      friends: prev.friends.map((f) => ({ ...f, unread: Number((raw as any)[f.id] ?? 0) || 0 })),
+      friends: prev.friends.map((f) => {
+        const activeDm = prev.page === "main" && prev.selected?.kind === "dm" && prev.selected.id === f.id;
+        return { ...f, unread: activeDm ? 0 : Number((raw as any)[f.id] ?? 0) || 0 };
+      }),
     }));
     return true;
   }

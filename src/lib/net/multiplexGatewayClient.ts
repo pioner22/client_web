@@ -311,7 +311,12 @@ export class MultiplexGatewayClient implements GatewayTransport {
       this.lastLeaderSeenAt = nowMs();
       this.lastLeaderId = from;
       if (this.role === "follower") {
-        this.onStatus(msg.conn, msg.detail);
+        const detail = typeof msg.detail === "string" ? msg.detail : undefined;
+        if (this.lastConn !== msg.conn || this.lastDetail !== detail) {
+          this.lastConn = msg.conn;
+          this.lastDetail = detail;
+          this.onStatus(msg.conn, detail);
+        }
         if (this.wantConnected) this.flushFollowerSendQueueToLeader();
       }
       return;
