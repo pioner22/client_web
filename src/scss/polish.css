@@ -1853,3 +1853,63 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   object-fit: contain;
   background: transparent;
 }
+
+/* W-1011: mobile viewer and physical-bottom polish.
+ * The screenshot bottom strip is outside the flex stage, so keep the host canvas,
+ * overlay, modal, footer and rail on the same black surface.
+ */
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app,
+html.viewer-surface-open body::after {
+  --safe-area-bg: #000;
+  --app-frame-bg: #000;
+  --app-frame-safe-bg: #000;
+  --app-host-canvas-bg: #000;
+  background: #000;
+  background-color: #000;
+}
+
+@media (max-width: 600px) {
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) body::after {
+    height: max(var(--app-frame-bottom-inset, 0px), var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px));
+  }
+
+  html.viewer-surface-open .overlay.overlay-viewer,
+  html.viewer-surface-open .overlay.overlay-viewer .modal.modal-viewer.viewer-visual,
+  html.viewer-surface-open .overlay.overlay-viewer .viewer-footer-shell,
+  html.viewer-surface-open .overlay.overlay-viewer .viewer-rail {
+    background: #000;
+    background-color: #000;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-header {
+    padding: max(8px, env(safe-area-inset-top)) 10px 6px;
+    min-height: calc(46px + env(safe-area-inset-top));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-header-actions {
+    gap: 6px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-header-actions .btn {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-switcher {
+    width: 46px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-switcher-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-rail {
+    padding-bottom: max(10px, var(--app-frame-bottom-inset, 0px), env(safe-area-inset-bottom));
+  }
+}

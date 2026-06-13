@@ -162,6 +162,21 @@ body::after {
   z-index: 0;
 }
 
+html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) {
+  --app-frame-bottom-inset: max(var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px));
+}
+
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app {
+  --safe-area-bg: #000;
+  --app-frame-bg: #000;
+  --app-frame-safe-bg: #000;
+  --app-host-canvas-bg: #000;
+  background: #000;
+  background-color: #000;
+}
+
 @media (max-width: 860px) {
   body[data-viewport-diagnostic="1"]::before,
   #app.app-frame[data-viewport-diagnostic="1"]::before {

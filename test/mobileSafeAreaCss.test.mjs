@@ -63,6 +63,20 @@ test("mobile safe-area: diagnostic markers are debug-gated and expose every bott
   assert.match(responsiveCss, /CHAT-COMPOSER-BOTTOM/);
 });
 
+test("mobile safe-area: physical bottom gap and viewer surface paint the host canvas", async () => {
+  const baseCss = await readFile(path.resolve("src/scss/base.css"), "utf8");
+  const polishCss = await readFile(path.resolve("src/scss/polish.css"), "utf8");
+  const viewportSrc = await readFile(path.resolve("src/helpers/ui/appViewport.ts"), "utf8");
+  const modalSurfaceSrc = await readFile(path.resolve("src/app/features/navigation/modalSurface.ts"), "utf8");
+
+  assert.match(viewportSrc, /const physicalBottom = !keyboard && gap >= 1;/);
+  assert.match(baseCss, /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\)\s*\{[\s\S]*?--app-frame-bottom-inset:\s*max\(var\(--app-gap-bottom,\s*0px\),\s*var\(--safe-bottom-pad,\s*0px\)\);/);
+  assert.match(modalSurfaceSrc, /viewer-surface-open/);
+  assert.match(polishCss, /html\.viewer-surface-open,[\s\S]*?html\.viewer-surface-open body::after\s*\{[\s\S]*?--app-host-canvas-bg:\s*#000;/);
+  assert.match(polishCss, /html\.viewer-surface-open \.overlay\.overlay-viewer,[\s\S]*?\.viewer-rail\s*\{[\s\S]*?background:\s*#000;/);
+  assert.match(polishCss, /html\.app-shell-physical-bottom:not\(\.kbd-open\):not\(\.has-auth-pages\) body::after\s*\{[\s\S]*?height:\s*max\(var\(--app-frame-bottom-inset,\s*0px\),\s*var\(--app-gap-bottom,\s*0px\),\s*var\(--safe-bottom-pad,\s*0px\)\);/);
+});
+
 test("mobile safe-area: pages have bottom padding for home indicator", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /\.page\s*\{[\s\S]*?padding-bottom:\s*calc\(\s*var\(--sp-4\)\s*\+\s*var\(--safe-bottom-layout-pad\)\s*\)\s*;/);

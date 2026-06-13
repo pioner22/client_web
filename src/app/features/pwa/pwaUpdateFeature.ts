@@ -603,6 +603,18 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
         forceUpdateReload(mode === "manual" ? "manual_active_fallback" : "auto_active_fallback");
         return;
       }
+      if (mode === "manual" && hasWaiting && confirmedNeedsReload && netBuildId) {
+        logPwaUpdate("manual_reset_waiting_sw", `${swBuildId || "waiting"}->${netBuildId}`);
+        setPwaUpdateRuntime("applying", {
+          buildId: netBuildId,
+          message: "Сбрасываем зависшее PWA обновление",
+          detail: "Новая сборка подтверждена, но браузер не активировал Service Worker. Очищаем старый PWA кэш и перезапускаем.",
+          available: true,
+          modal: "open",
+        });
+        await resetPwaCachesAndServiceWorkers(`manual_waiting_sw:${swBuildId || "waiting"}->${netBuildId}`);
+        return;
+      }
       const msg =
         mode === "manual"
           ? "Не удалось применить обновление. Закройте другие вкладки и попробуйте ещё раз."

@@ -58,6 +58,11 @@ export function resolveOverlayBackdropAction(modal: AppState["modal"] | null | u
 export function applyOverlaySurface(overlay: HTMLElement, surface: OverlaySurface | null, modalNode: HTMLElement | null) {
   const nextNode = surface && modalNode ? modalNode : null;
   const hasOverlay = Boolean(nextNode);
+  try {
+    document.documentElement.classList.toggle("viewer-surface-open", hasOverlay && surface === "overlay-viewer");
+  } catch {
+    // ignore
+  }
   overlay.classList.toggle("hidden", !hasOverlay);
   overlay.classList.toggle("overlay-context", hasOverlay && surface === "overlay-context");
   overlay.classList.toggle("overlay-update", hasOverlay && surface === "overlay-update");

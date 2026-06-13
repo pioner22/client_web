@@ -69,10 +69,15 @@ function resolveVoiceDuration(wrap: HTMLElement, audio: HTMLAudioElement): numbe
 function updateVoiceTime(wrap: HTMLElement, audio: HTMLAudioElement): void {
   const time = wrap.querySelector(".chat-voice-time") as HTMLElement | null;
   const duration = resolveVoiceDuration(wrap, audio);
-  if (!time || !duration) return;
+  if (!time) return;
   const current = Number(audio.currentTime) || 0;
-  setVoiceProgress(wrap, (current / duration) * 100);
-  time.textContent = formatVoiceTime(Math.max(0, duration - current));
+  if (duration > 0) {
+    setVoiceProgress(wrap, (current / duration) * 100);
+    time.textContent = formatVoiceTime(Math.max(0, duration - current));
+    return;
+  }
+  setVoiceProgress(wrap, 0);
+  time.textContent = formatVoiceTime(current);
 }
 
 function ensureVoiceFallbackBound(wrap: HTMLElement, audio: HTMLAudioElement, playBtn: HTMLButtonElement | null): void {
@@ -111,6 +116,7 @@ function ensureVoiceFallbackBound(wrap: HTMLElement, audio: HTMLAudioElement, pl
       }
     }
     setVoiceState(wrap, playBtn, "playing");
+    updateVoiceTime(wrap, audio);
   });
   audio.addEventListener("error", () => {
     releaseMediaFocus(audio);

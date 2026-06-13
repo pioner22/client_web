@@ -223,10 +223,15 @@ function renderVoicePlayer(opts: RenderDeferredVoicePlayerCtx["opts"]): HTMLElem
     }
   });
   audio.addEventListener("timeupdate", () => {
-    if (!Number.isFinite(duration) || duration <= 0) return;
-    const pct = (audio.currentTime / duration) * 100;
-    setProgressPct(pct);
-    time.textContent = formatVoiceTime(Math.max(0, duration - audio.currentTime));
+    const current = Number(audio.currentTime) || 0;
+    if (Number.isFinite(duration) && duration > 0) {
+      const pct = (current / duration) * 100;
+      setProgressPct(pct);
+      time.textContent = formatVoiceTime(Math.max(0, duration - current));
+      return;
+    }
+    setProgressPct(0);
+    time.textContent = formatVoiceTime(current);
   });
   audio.addEventListener("ended", () => {
     setProgressPct(0);
@@ -254,6 +259,9 @@ function renderVoicePlayer(opts: RenderDeferredVoicePlayerCtx["opts"]): HTMLElem
       }
     }
     setState("playing");
+    if (!Number.isFinite(duration) || duration <= 0) {
+      time.textContent = formatVoiceTime(Number(audio.currentTime) || 0);
+    }
   });
 
   if (fileId && consumeVoiceAutoplay(fileId)) {
