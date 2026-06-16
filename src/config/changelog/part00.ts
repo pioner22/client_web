@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.914",
+    date: "2026-06-16",
+    improved: [
+      "Обновлены Web/PWA, desktop и Android runtime-библиотеки до актуальных совместимых версий: Capacitor 8.4, Electron 42.4, Vite 8.0.16, React 19.2.7 и electron-builder 26.15.",
+      "Android debug APK пересобирается как отдельный клиент `1.0.54 (code 55)` для новой публикации на странице загрузок.",
+    ],
+    fixed: [
+      "Закрыт npm audit по production-зависимости `js-yaml` и dev-зависимости `tar` через обновление dependency graph и overrides.",
+      "Публикуемый site/PWA получает исправленные nginx rules: manifest отдаётся с manifest MIME, а отсутствующие hashed assets больше не маскируются HTML fallback.",
+    ],
+  },
+  {
     version: "0.1.913",
     date: "2026-06-13",
     improved: [
