@@ -9,6 +9,7 @@
   var LOOP_RESET_MS = 2 * 60 * 1000;
   var LOOP_MAX = 3;
   var LIVE_BUILD_TIMEOUT_MS = 2500;
+  var BOOT_RECOVERY_STEP_TIMEOUT_MS = 3500;
   var RECOVERY_CLASS = "boot-recovery";
   var LEGACY_UPDATE_TEXT_RE = /Обновляем приложение[\s\S]{0,240}Сбрасываем старый кэш приложения перед запуском новой версии/i;
   var LEGACY_UPDATE_CLASS_RE = /(?:^|\s)required-update-gate(?:\s|$)/;
@@ -106,6 +107,59 @@
         } catch {}
       }
     }
+  }
+
+  async function withTimeout(promise, timeoutMs, fallback) {
+    var timer = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise(function (resolve) {
+          timer = window.setTimeout(function () {
+            resolve(fallback);
+          }, Math.max(0, timeoutMs || 0));
+        }),
+      ]);
+    } catch {
+      return fallback;
+    } finally {
+      if (timer !== null) {
+        try {
+          window.clearTimeout(timer);
+        } catch {}
+      }
+    }
+  }
+
+  async function unregisterServiceWorkersBounded() {
+    try {
+      if (!("serviceWorker" in navigator)) return;
+      var regs = await withTimeout(navigator.serviceWorker.getRegistrations(), BOOT_RECOVERY_STEP_TIMEOUT_MS, []);
+      await withTimeout(
+        Promise.all(
+          (regs || []).map(function (r) {
+            return withTimeout(r.unregister(), 1200, false);
+          })
+        ),
+        BOOT_RECOVERY_STEP_TIMEOUT_MS,
+        []
+      );
+    } catch {}
+  }
+
+  async function clearYagodkaCachesBounded() {
+    try {
+      if (!("caches" in window)) return;
+      var keys = await withTimeout(caches.keys(), BOOT_RECOVERY_STEP_TIMEOUT_MS, []);
+      var dels = (keys || [])
+        .filter(function (k) {
+          return String(k || "").indexOf("yagodka-") === 0;
+        })
+        .map(function (k) {
+          return withTimeout(caches.delete(k), 1200, false);
+        });
+      await withTimeout(Promise.all(dels), BOOT_RECOVERY_STEP_TIMEOUT_MS, []);
+    } catch {}
   }
 
   function cleanUrl(paramName) {
@@ -307,22 +361,8 @@
 
     setStatus("Восстановление обновления…");
 
-    try {
-      if ("serviceWorker" in navigator) {
-        var regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(function (r) { return r.unregister(); }));
-      }
-    } catch {}
-
-    try {
-      if ("caches" in window) {
-        var keys = await caches.keys();
-        var dels = keys
-          .filter(function (k) { return String(k || "").indexOf("yagodka-") === 0; })
-          .map(function (k) { return caches.delete(k); });
-        await Promise.all(dels);
-      }
-    } catch {}
+    await unregisterServiceWorkersBounded();
+    await clearYagodkaCachesBounded();
 
     if (!allowReload()) return;
     navigateClean("__boot_recover");
@@ -341,21 +381,8 @@
     try {
       localStorage.removeItem("yagodka_active_build_id_v1");
     } catch {}
-    try {
-      if ("serviceWorker" in navigator) {
-        var regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(function (r) { return r.unregister(); }));
-      }
-    } catch {}
-    try {
-      if ("caches" in window) {
-        var keys = await caches.keys();
-        var dels = keys
-          .filter(function (k) { return String(k || "").indexOf("yagodka-") === 0; })
-          .map(function (k) { return caches.delete(k); });
-        await Promise.all(dels);
-      }
-    } catch {}
+    await unregisterServiceWorkersBounded();
+    await clearYagodkaCachesBounded();
     if (!allowReload()) return true;
     navigateClean("__boot_recover");
     return true;

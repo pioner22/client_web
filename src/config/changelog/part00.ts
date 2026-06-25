@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.918",
+    date: "2026-06-25",
+    fixed: [
+      "Мобильный Web/PWA больше не должен зависать на экране обновления клиента: раннее восстановление service worker и cache-storage теперь ограничено таймаутами и всегда возвращает управление приложению.",
+    ],
+  },
+  {
     version: "0.1.917",
     date: "2026-06-25",
     fixed: [

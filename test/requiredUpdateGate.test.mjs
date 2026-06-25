@@ -467,7 +467,12 @@ test("requiredUpdateGate: boot and service worker recovery are early and bounded
   assert.match(boot, /readCurrentBuildId/);
   assert.match(boot, /fetchLiveBuildId/);
   assert.match(boot, /LIVE_BUILD_TIMEOUT_MS/);
+  assert.match(boot, /BOOT_RECOVERY_STEP_TIMEOUT_MS/);
   assert.match(boot, /AbortController/);
+  assert.match(boot, /withTimeout\(navigator\.serviceWorker\.getRegistrations\(\),\s*BOOT_RECOVERY_STEP_TIMEOUT_MS/);
+  assert.match(boot, /withTimeout\(caches\.keys\(\),\s*BOOT_RECOVERY_STEP_TIMEOUT_MS/);
+  assert.match(boot, /withTimeout\(r\.unregister\(\),\s*1200/);
+  assert.match(boot, /withTimeout\(caches\.delete\(k\),\s*1200/);
   assert.match(boot, /recoverStaleBootBuild/);
   assert.match(boot, /\.\/sw\.js\?boot_ts=/);
   assert.match(boot, /cache:\s*"no-store"/);
