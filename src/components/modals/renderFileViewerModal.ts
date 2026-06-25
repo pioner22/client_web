@@ -787,10 +787,80 @@ export function renderFileViewerModal(
       ...(shouldAutoplay ? { autoplay: "true" } : {}),
       "data-allow-audio": "1",
     }) as HTMLVideoElement;
-    setViewerLoadState("loading");
-    const markVideoReady = () => setViewerLoadState("ready");
-    video.addEventListener("loadedmetadata", markVideoReady, { once: true });
+    const preloaderText = el("div", { class: "viewer-preloader-text" }, ["Загрузка видео…"]);
+    const preloaderRetryBtn = actions.onRecover
+      ? (el("button", { class: "btn viewer-preloader-retry", type: "button" }, ["Попробовать ещё раз"]) as HTMLButtonElement)
+      : null;
+    if (preloaderRetryBtn) {
+      preloaderRetryBtn.addEventListener("click", () => actions.onRecover && actions.onRecover());
+    }
+    const preloaderActions = preloaderRetryBtn ? el("div", { class: "viewer-preloader-actions" }, [preloaderRetryBtn]) : null;
+    const preloader = el("div", { class: "viewer-preloader viewer-video-preloader", "aria-live": "polite", "aria-busy": "true" }, [
+      el("div", { class: "viewer-preloader-spinner", "aria-hidden": "true" }, [""]),
+      preloaderText,
+      ...(preloaderActions ? [preloaderActions] : []),
+    ]);
+    let videoFailed = false;
+    let preloaderStallTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearPreloaderStallTimer = () => {
+      if (preloaderStallTimer === null) return;
+      clearTimeout(preloaderStallTimer);
+      preloaderStallTimer = null;
+    };
+    const failVideoLoad = () => {
+      if (videoFailed) return;
+      videoFailed = true;
+      clearPreloaderStallTimer();
+      setViewerLoadState("error");
+      preloader.classList.remove("hidden");
+      preloader.classList.add("viewer-preloader-failed");
+      preloader.setAttribute("aria-busy", "false");
+      const canRecover = Boolean(actions.onRecover);
+      preloaderText.textContent = canRecover ? "Не удалось загрузить видео. Пробуем восстановить…" : "Не удалось загрузить видео";
+      if (actions.onRecover) {
+        try {
+          actions.onRecover();
+        } catch {
+          // ignore
+        }
+      }
+    };
+    const armPreloaderStallTimer = () => {
+      clearPreloaderStallTimer();
+      preloaderStallTimer = setTimeout(failVideoLoad, 8_000);
+      (preloaderStallTimer as any)?.unref?.();
+    };
+    const showVideoLoading = (message = "Загрузка видео…") => {
+      if (videoFailed) return;
+      setViewerLoadState("loading");
+      preloader.classList.remove("hidden");
+      preloader.classList.remove("viewer-preloader-failed");
+      preloader.setAttribute("aria-busy", "true");
+      preloaderText.textContent = message;
+      armPreloaderStallTimer();
+    };
+    const markVideoReady = () => {
+      if (videoFailed) return;
+      clearPreloaderStallTimer();
+      setViewerLoadState("ready");
+      preloader.classList.add("hidden");
+      preloader.setAttribute("aria-busy", "false");
+    };
+    showVideoLoading();
+    video.addEventListener("loadedmetadata", () => {
+      if (videoFailed) return;
+      if (shouldAutoplay) {
+        preloaderText.textContent = "Подготовка видео…";
+        return;
+      }
+      markVideoReady();
+    });
+    video.addEventListener("loadeddata", markVideoReady, { once: true });
     video.addEventListener("canplay", markVideoReady, { once: true });
+    video.addEventListener("playing", markVideoReady, { once: true });
+    video.addEventListener("waiting", () => showVideoLoading("Буферизация видео…"));
+    video.addEventListener("stalled", () => showVideoLoading("Видео не отвечает. Пробуем восстановить…"));
+    if (video.readyState >= 2) markVideoReady();
     if (shouldAutoplay) {
       const attemptPlay = (muted: boolean) => {
         try {
@@ -814,20 +884,8 @@ export function renderFileViewerModal(
       };
       attemptPlay(false);
     }
-    video.addEventListener(
-      "error",
-      () => {
-        setViewerLoadState("error");
-        if (!actions.onRecover) return;
-        try {
-          actions.onRecover();
-        } catch {
-          // ignore
-        }
-      },
-      { once: true }
-    );
-    body = el("div", { class: "viewer-media" }, [video]);
+    video.addEventListener("error", failVideoLoad, { once: true });
+    body = el("div", { class: "viewer-media viewer-media-video" }, [video, preloader]);
   } else if (isAudio) {
     const audio = el("audio", { class: "viewer-audio", src: safeHref, controls: "true", preload: "metadata" }) as HTMLAudioElement;
     body = el("div", { class: "viewer-media viewer-media-audio" }, [audio]);

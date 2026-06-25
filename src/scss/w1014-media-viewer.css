@@ -397,3 +397,57 @@ html.viewer-surface-open .overlay.overlay-viewer {
   backdrop-filter: none;
   box-shadow: none;
 }
+
+/* W-1050: video viewer recovery and mobile chrome polish.
+   Keep the PWA viewer canvas black, make retry controls belong to the dark
+   viewer surface, and lift the album rail clear of the iPhone bottom well. */
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app,
+html.viewer-surface-open .overlay.overlay-viewer,
+html.viewer-surface-open #app.app-frame::before {
+  --safe-area-bg: #000;
+  --app-frame-bg: #000;
+  --app-frame-safe-bg: #000;
+  --app-host-canvas-bg: #000;
+  background: #000 !important;
+  background-color: #000 !important;
+  color-scheme: dark;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-preloader-retry {
+  min-height: 38px;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.52);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-preloader-retry:hover,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-preloader-retry:focus-visible {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(24, 24, 28, 0.72);
+  color: #fff;
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1050-footer-lift: clamp(88px, 13dvh, 144px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+    --viewer-w1019-bottom-pad: clamp(232px, 36dvh, 312px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-footer-shell {
+    bottom: var(--viewer-w1050-footer-lift);
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1050-footer-lift));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-rail {
+    padding-bottom: 8px;
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1050-footer-lift) - 34px);
+  }
+}

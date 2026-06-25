@@ -67,6 +67,21 @@ function withDomStubs(run) {
       }
       this._syncTo();
     }
+    remove(...names) {
+      for (const n of names) {
+        for (const part of String(n || "")
+          .split(/\s+/)
+          .map((x) => x.trim())
+          .filter(Boolean)) {
+          this._owner._classSet.delete(part);
+        }
+      }
+      this._syncTo();
+    }
+    contains(name) {
+      const part = String(name || "").trim();
+      return Boolean(part && this._owner._classSet.has(part));
+    }
     toggle(name, force) {
       const part = String(name || "").trim();
       if (!part) return false;
@@ -88,6 +103,8 @@ function withDomStubs(run) {
       this._classSet = new Set();
       this.classList = new ClassListStub(this);
       this.style = { setProperty() {} };
+      this._listeners = new Map();
+      this.readyState = 0;
     }
     get className() {
       return this._className;
@@ -108,13 +125,31 @@ function withDomStubs(run) {
       const v = this._attrs.get(String(name));
       return v === undefined ? null : v;
     }
+    removeAttribute(name) {
+      this._attrs.delete(String(name));
+    }
     append(...nodes) {
       for (const n of nodes) this._children.push(n);
     }
     replaceChildren(...nodes) {
       this._children = [...nodes];
     }
-    addEventListener() {}
+    addEventListener(type, handler) {
+      const key = String(type || "");
+      if (!key || typeof handler !== "function") return;
+      const handlers = this._listeners.get(key) || [];
+      handlers.push(handler);
+      this._listeners.set(key, handlers);
+    }
+    dispatchEvent(event) {
+      const key = String(event?.type || "");
+      const handlers = this._listeners.get(key) || [];
+      for (const handler of handlers) handler.call(this, event);
+      return true;
+    }
+    play() {
+      return Promise.resolve();
+    }
   }
 
   class HTMLInputElementStub extends HTMLElementStub {
@@ -211,6 +246,64 @@ test("renderFileViewerModal: renders <video> for video files", async () => {
       assert.ok(String(video.className || "").includes("viewer-video"));
       assert.ok(String(node.className || "").includes("viewer-kind-video"));
       assert.ok(!String(node.className || "").includes("viewer-video"), "modal root must not reuse the video element class");
+      assert.equal(node.getAttribute("data-viewer-load"), "loading");
+      const media = findFirst(node, (n) => n && String(n.className || "").includes("viewer-media-video"));
+      assert.ok(media, "video media shell missing");
+      const preloader = findFirst(node, (n) => n && String(n.className || "").includes("viewer-video-preloader"));
+      assert.ok(preloader, "video preloader missing");
+      assert.match(collectText(preloader), /Загрузка видео/);
+      video.readyState = 2;
+      video.dispatchEvent({ type: "loadeddata" });
+      assert.equal(node.getAttribute("data-viewer-load"), "ready");
+      assert.ok(String(preloader.className || "").includes("hidden"), "video preloader must hide after playable data");
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderFileViewerModal: video load failures expose recovery state", async () => {
+  const helper = await loadRenderFileViewerModal();
+  try {
+    withDomStubs(() => {
+      let recoverCount = 0;
+      const node = helper.renderFileViewerModal("blob:video", "clip.webm", 123, "video/webm", null, null, {
+        onClose() {},
+        onRecover() {
+          recoverCount += 1;
+        },
+      });
+      const video = findFirst(node, (n) => n && n.tagName === "VIDEO");
+      assert.ok(video, "video element missing");
+      video.dispatchEvent({ type: "error" });
+      assert.equal(node.getAttribute("data-viewer-load"), "error");
+      const preloader = findFirst(node, (n) => n && String(n.className || "").includes("viewer-video-preloader"));
+      assert.ok(preloader, "video preloader missing");
+      assert.ok(String(preloader.className || "").includes("viewer-preloader-failed"), "video preloader must expose failed state");
+      assert.match(collectText(preloader), /Не удалось загрузить видео/);
+      assert.equal(recoverCount, 1);
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("renderFileViewerModal: manual video playback unlocks controls after metadata", async () => {
+  const helper = await loadRenderFileViewerModal();
+  try {
+    withDomStubs(() => {
+      const node = helper.renderFileViewerModal("blob:video", "clip.mp4", 123, "video/mp4", null, null, { onClose() {} });
+      const video = findFirst(node, (n) => n && n.tagName === "VIDEO");
+      assert.ok(video, "video element missing");
+      const preloader = findFirst(node, (n) => n && String(n.className || "").includes("viewer-video-preloader"));
+      assert.ok(preloader, "video preloader missing");
+      assert.equal(node.getAttribute("data-viewer-load"), "loading");
+
+      video.dispatchEvent({ type: "loadedmetadata" });
+
+      assert.equal(node.getAttribute("data-viewer-load"), "ready");
+      assert.ok(String(preloader.className || "").includes("hidden"), "metadata must reveal native video controls for manual play");
+      assert.equal(preloader.getAttribute("aria-busy"), "false");
     });
   } finally {
     await helper.cleanup();
@@ -306,6 +399,7 @@ test("renderFileViewerModal: footer shell helper and CSS hooks are present", asy
   assert.match(source, /data-viewer-fit/);
   assert.match(source, /data-viewer-load/);
   assert.match(source, /preloaderStallTimer/);
+  assert.match(source, /viewer-video-preloader/);
   assert.match(source, /fallbackUrl/);
   assert.match(source, /tryFallbackImage/);
   assert.match(source, /Показываем превью/);
@@ -474,4 +568,29 @@ test("renderFileViewerModal: W-1039 visual header does not draw a blurred top st
   const w1035Index = css.indexOf("W-1035: screenshot remediation lifts the whole mobile album rail shell");
   const w1039Index = css.indexOf("W-1039: keep visual viewer header chrome off the photo top edge");
   assert.ok(w1035Index >= 0 && w1039Index > w1035Index, "W-1039 header cleanup must override earlier viewer header gradients");
+});
+
+test("renderFileViewerModal: W-1050 video recovery keeps mobile viewer chrome black and lifted", async () => {
+  const css = await readFile(path.resolve("src/scss/w1014-media-viewer.css"), "utf8");
+
+  assert.match(css, /W-1050:\s*video viewer recovery and mobile chrome polish/);
+  assert.match(css, /color-scheme:\s*dark;/);
+  assert.match(
+    css,
+    /\.viewer-preloader-retry\s*\{[\s\S]*?border-color:\s*rgba\(255,\s*255,\s*255,\s*0\.28\);[\s\S]*?background:\s*rgba\(0,\s*0,\s*0,\s*0\.52\);[\s\S]*?color:\s*#fff;/
+  );
+  assert.match(css, /--viewer-w1050-footer-lift:\s*clamp\(88px,\s*13dvh,\s*144px\);/);
+  assert.match(css, /\.viewer-has-rail\s*\{[\s\S]*?--viewer-w1019-bottom-pad:\s*clamp\(232px,\s*36dvh,\s*312px\);/);
+  assert.match(
+    css,
+    /\.viewer-has-rail\s+\.viewer-footer-shell\s*\{[\s\S]*?bottom:\s*var\(--viewer-w1050-footer-lift\);[\s\S]*?max-height:\s*calc\(var\(--viewer-w1019-bottom-pad\)\s*-\s*var\(--viewer-w1050-footer-lift\)\);/
+  );
+  assert.match(
+    css,
+    /\.viewer-has-rail\s+\.viewer-rail\s*\{[\s\S]*?padding-bottom:\s*8px;[\s\S]*?max-height:\s*calc\(var\(--viewer-w1019-bottom-pad\)\s*-\s*var\(--viewer-w1050-footer-lift\)\s*-\s*34px\);/
+  );
+
+  const w1039Index = css.indexOf("W-1039: keep visual viewer header chrome off the photo top edge");
+  const w1050Index = css.indexOf("W-1050: video viewer recovery and mobile chrome polish");
+  assert.ok(w1039Index >= 0 && w1050Index > w1039Index, "W-1050 must override earlier viewer chrome repairs");
 });

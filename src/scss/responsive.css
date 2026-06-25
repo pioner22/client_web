@@ -2,7 +2,7 @@
   :root {
     --right-column-width: 100vw;
     --mobile-header-overlay-h: calc(env(safe-area-inset-top) + 96px);
-    --mobile-sidebar-sticky-h: calc(env(safe-area-inset-top) + 60px);
+    --mobile-sidebar-sticky-h: calc(env(safe-area-inset-top) + 72px);
     --mobile-sidebar-menu-sticky-h: calc(env(safe-area-inset-top) + 48px);
     --mobile-bottom-nav-fill: var(--app-bottom-live-pad);
     --mobile-bottom-nav-row-h: 74px;
@@ -12,7 +12,7 @@
     --mobile-bottom-nav-glass-bg: rgba(24, 24, 32, 0.58);
     --mobile-bottom-nav-glass-border: rgba(255, 255, 255, 0.14);
     --mobile-bottom-nav-active-bg: rgba(255, 255, 255, 0.16);
-    --mobile-composer-bottom-offset: 2px;
+    --mobile-composer-bottom-offset: 5px;
   }
 
   /* iOS safe-area strip (home indicator zone): match composer bar by default.
@@ -195,6 +195,9 @@
     z-index: 34;
     min-height: var(--mobile-header-overlay-h);
     box-sizing: border-box;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--header-bg), var(--panel2) 18%), var(--header-bg)),
+      var(--header-bg);
   }
 
   .chat-col {
@@ -280,11 +283,14 @@
     left: 0;
     right: 0;
     z-index: 2;
+    box-sizing: border-box;
+    min-height: var(--mobile-sidebar-sticky-h);
+    display: flex;
+    align-items: flex-end;
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--sidebar-bg), var(--panel2) 22%), var(--sidebar-bg)),
       var(--sidebar-bg);
     padding: calc(env(safe-area-inset-top) + 6px) 10px 8px;
-    padding-bottom: 0;
     margin-bottom: 0;
   }
 
@@ -309,6 +315,7 @@
   }
 
   .sidebar-mobile-sticky .sidebar-searchbar {
+    flex: 0 0 auto;
     width: 46px;
     min-height: 46px;
     padding: 0 5px;
@@ -441,12 +448,25 @@
     overflow: hidden;
     text-overflow: clip;
     white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+      background 160ms ease,
+      color 160ms ease,
+      box-shadow 160ms ease,
+      opacity 160ms ease,
+      filter 120ms ease;
   }
 
   .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab-active {
     color: #fff;
     background: var(--mobile-bottom-nav-active-bg);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  }
+
+  .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab:active {
+    filter: brightness(1.12);
+    background: color-mix(in srgb, var(--mobile-bottom-nav-active-bg), transparent 22%);
   }
 
   .sidebar-tabs.sidebar-tabs-mobile.sidebar-tabs-bottom-nav .sidebar-tab::after {
@@ -928,6 +948,36 @@
     place-items: center;
     background: transparent;
     border-color: transparent;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+      background 160ms ease,
+      color 160ms ease,
+      filter 120ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .hk-btn.hdr-search:active {
+    filter: brightness(1.12);
+    background: color-mix(in srgb, var(--btn-bg-active), transparent 50%);
+  }
+
+  .hdr-action,
+  .nav-toggle {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+      background 160ms ease,
+      color 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      filter 120ms ease;
+  }
+
+  .hdr-action:active:not(:disabled),
+  .nav-toggle:active:not(:disabled) {
+    filter: brightness(1.12);
+    background: color-mix(in srgb, var(--btn-bg-active), transparent 48%);
   }
 
   .hk-btn.hdr-search::before {
@@ -964,9 +1014,9 @@
   .hdr-right:not([data-status-empty="1"]) {
     min-height: 30px;
     padding: 5px 8px;
-    border: 1px solid color-mix(in srgb, var(--line), transparent 48%);
+    border: 1px solid color-mix(in srgb, var(--header-border-color), transparent 35%);
     border-radius: 8px;
-    background: color-mix(in srgb, var(--panel2), transparent 18%);
+    background: color-mix(in srgb, var(--header-bg), var(--panel2) 22%);
   }
 
   .hdr-right[data-status-empty="1"]:not(:has(.hdr-actions, .hdr-status-actions)) {
@@ -1134,14 +1184,14 @@
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .input-wrap {
-    --mobile-composer-bottom-offset: 2px;
+    --mobile-composer-bottom-offset: 5px;
     --composer-bottom-edge-pad: max(var(--composer-pad-y), var(--app-bottom-live-pad), var(--app-logged-bottom-fill));
     bottom: var(--mobile-composer-bottom-offset);
     background: var(--composer-bg);
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .chat-col {
-    --mobile-composer-bottom-offset: 2px;
+    --mobile-composer-bottom-offset: 5px;
   }
 
   html.is-ios:not(.kbd-open):not(.has-auth-pages) .input-wrap::before {
@@ -1244,6 +1294,19 @@
     background: color-mix(in srgb, var(--composer-bg), var(--panel2) 18%);
     border: 1px solid color-mix(in srgb, var(--line), transparent 44%);
     box-shadow: 0 8px 18px color-mix(in srgb, #000, transparent 86%);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+      background 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      filter 120ms ease,
+      color 160ms ease;
+  }
+
+  .composer-field .btn.composer-action:active {
+    filter: brightness(1.1);
+    background: color-mix(in srgb, var(--composer-bg), var(--focus) 14%);
   }
 
   .btn.composer-attach {

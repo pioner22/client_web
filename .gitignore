@@ -3,7 +3,6 @@ node_modules/
 node_modules.broken-*/
 node_modules_bad_*/
 dist/
-desktop-dist/
 .vite/
 
 # Logs

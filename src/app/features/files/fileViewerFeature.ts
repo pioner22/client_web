@@ -115,8 +115,9 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     if (!beginViewerStream) return false;
     if (!fileId) return false;
     if (!isIOS() || !isStandaloneDisplayMode()) return false;
-    if (kindHint === "image" || kindHint === "video") return true;
-    return isImageLikeFile(name, mime) || isVideoLikeFile(name, mime);
+    if (kindHint === "video") return false;
+    if (kindHint === "image") return true;
+    return isImageLikeFile(name, mime);
   };
 
   const openInlineViewerStream = (params: {
@@ -279,7 +280,9 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const size = Number(att.size || entry?.size || fallback?.size || 0) || 0;
     const mime = (att.mime ?? entry?.mime ?? fallback?.mime) || null;
     const hasThumb = Boolean(fileId && st.fileThumbs?.[fileId]?.url);
-    const thumbUrl = fileId && st.fileThumbs?.[fileId]?.url ? String(st.fileThumbs[fileId].url || "").trim() : null;
+    const thumbEntry = fileId && st.fileThumbs?.[fileId] ? st.fileThumbs[fileId] : null;
+    const thumbUrl = thumbEntry?.url ? String(thumbEntry.url || "").trim() : null;
+    const thumbMime = thumbEntry?.mime ? String(thumbEntry.mime || "").trim() : null;
     const kindHint = fallback?.kindHint === "image" || fallback?.kindHint === "video" ? fallback.kindHint : null;
     const looksVideo = isVideoLikeFile(name, mime);
     const looksImage = isImageLikeFile(name, mime);
@@ -324,10 +327,23 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       store.set({ status: MISSING_FILE_STATUS });
       return true;
     }
-    const canOpenThumbNow = Boolean(fileId && thumbUrl && mediaKind === "image");
+    const canOpenThumbNow = Boolean(fileId && thumbUrl && (mediaKind === "image" || mediaKind === "video"));
     if (canOpenThumbNow) {
-      debugHook("file.viewer.open.thumb", { chatKey, msgIdx, fileId, hasThumb: true });
-      store.set({ modal: buildModalState({ fileId, url: thumbUrl as string, name, size, mime: viewerMime, caption, autoplay: false, chatKey, msgIdx }) });
+      const previewMime = mediaKind === "video" ? thumbMime || "image/jpeg" : viewerMime;
+      debugHook("file.viewer.open.thumb", { chatKey, msgIdx, fileId, hasThumb: true, targetKind: mediaKind });
+      store.set({
+        modal: buildModalState({
+          fileId,
+          url: thumbUrl as string,
+          name,
+          size,
+          mime: previewMime,
+          caption,
+          autoplay: false,
+          chatKey,
+          msgIdx,
+        }),
+      });
       maybePrefetchNeighbors(chatKey, msgIdx);
       queueViewerDownload({
         fileId: fileId as string,
@@ -337,7 +353,7 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
         caption,
         chatKey,
         msgIdx,
-        reason: "thumb_prefetch_upgrade",
+        reason: mediaKind === "video" ? "video_thumb_prefetch_upgrade" : "thumb_prefetch_upgrade",
       });
       return true;
     }
@@ -428,12 +444,22 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
     const fileId = modalFileId || derivedFileId;
     if (!fileId) return;
 
-    const name = String(modal.name || "файл");
-    const size = Number(modal.size || 0) || 0;
-    const mime = (modal.mime ?? null) || null;
+    const sourceAtt = (() => {
+      if (!chatKey || msgIdx === null) return null;
+      const msgs = st.conversations[chatKey] || [];
+      const msg = msgs[msgIdx];
+      const att = msg?.attachment;
+      return att && att.kind === "file" ? att : null;
+    })();
+    const name = String(sourceAtt?.name || modal.name || "файл");
+    const size = Number(sourceAtt?.size || modal.size || 0) || 0;
+    const mime = (sourceAtt?.mime ?? modal.mime ?? null) || null;
     const recoveringFromInlineStream = isInlineViewerStreamUrl(modal.url);
     const rawCaption = String(modal.caption || "").trim();
     const caption = rawCaption && !rawCaption.startsWith("[file]") ? rawCaption : null;
+    const thumbEntry = fileId && st.fileThumbs?.[fileId] ? st.fileThumbs[fileId] : null;
+    const thumbUrl = thumbEntry?.url ? String(thumbEntry.url || "").trim() : null;
+    const thumbMime = thumbEntry?.mime ? String(thumbEntry.mime || "").trim() : null;
     const kindHint =
       isVideoLikeFile(name, mime)
         ? "video"
@@ -467,6 +493,21 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       debugHook("file.viewer.recover.blocked", { fileId, reason: "not_found_terminal" });
       store.set({ status: MISSING_FILE_STATUS });
       return;
+    }
+    if (kindHint === "video" && thumbUrl && String(modal.url || "").trim() !== thumbUrl) {
+      store.set({
+        modal: buildModalState({
+          fileId,
+          url: thumbUrl,
+          name,
+          size,
+          mime: thumbMime || "image/jpeg",
+          caption,
+          autoplay: false,
+          chatKey: chatKey || null,
+          msgIdx,
+        }),
+      });
     }
     if (
       !recoveringFromInlineStream &&

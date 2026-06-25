@@ -35,7 +35,7 @@ async function loadFeature() {
   }
 }
 
-test("fileViewerFeature: iOS standalone media opens via inline stream instead of blob download", async () => {
+test("fileViewerFeature: iOS standalone image opens via inline stream instead of blob download", async () => {
   const prevWindow = globalThis.window;
   const prevNavigator = globalThis.navigator;
   const helper = await loadFeature();
@@ -244,6 +244,118 @@ test("fileViewerFeature: iOS standalone image with thumb opens preview immediate
   }
 });
 
+test("fileViewerFeature: iOS standalone video with thumb opens poster preview and queues full upgrade", async () => {
+  const prevWindow = globalThis.window;
+  const prevNavigator = globalThis.navigator;
+  const helper = await loadFeature();
+  try {
+    const enqueued = [];
+    const pending = [];
+    const statuses = [];
+    let streamAttempts = 0;
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        matchMedia(query) {
+          return { matches: query === "(display-mode: standalone)" };
+        },
+        setTimeout() {
+          return 1;
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+        standalone: true,
+        maxTouchPoints: 5,
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "vid-thumb",
+              name: "clip.mp4",
+              size: 9_000_000,
+              mime: "video/mp4",
+            },
+          },
+        ],
+      },
+      fileOffersIn: [],
+      fileTransfers: [],
+      fileThumbs: {
+        "vid-thumb": { url: "blob:video-thumb", mime: "image/jpeg", ts: 1000 },
+      },
+      modal: null,
+      status: "",
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") {
+            if (typeof patch.status === "string") statuses.push(patch.status);
+            Object.assign(storeState, patch);
+          }
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        throw new Error("video thumb path should open before cache lookup");
+      },
+      enqueueFileGet(fileId) {
+        enqueued.push(String(fileId));
+      },
+      beginViewerStream() {
+        streamAttempts += 1;
+        return "/__yagodka_stream__/files/vid-thumb?sid=bad&inline=1";
+      },
+      setPendingFileViewer(state) {
+        pending.push(state);
+      },
+    });
+
+    const opened = await feature.openFromMessageIndex("dm:222", 0);
+
+    assert.equal(opened, true);
+    assert.equal(streamAttempts, 0, "video viewer must not use Range-incompatible inline stream");
+    assert.equal(storeState.modal?.kind, "file_viewer");
+    assert.equal(storeState.modal?.url, "blob:video-thumb");
+    assert.equal(storeState.modal?.mime, "image/jpeg");
+    assert.equal(storeState.modal?.autoplay, undefined);
+    assert.deepEqual(enqueued, ["vid-thumb"]);
+    assert.equal(pending[0]?.fileId, "vid-thumb");
+    assert.equal(pending[0]?.mime, "video/mp4");
+    assert.ok(statuses.includes("Скачивание: clip.mp4"));
+  } finally {
+    if (prevWindow === undefined) delete globalThis.window;
+    else Object.defineProperty(globalThis, "window", { value: prevWindow, configurable: true, writable: true });
+    if (prevNavigator === undefined) delete globalThis.navigator;
+    else Object.defineProperty(globalThis, "navigator", { value: prevNavigator, configurable: true, writable: true });
+    await helper.cleanup();
+  }
+});
+
 test("fileViewerFeature: explicit visual open accepts pending file offer before file_get", async () => {
   const helper = await loadFeature();
   try {
@@ -424,6 +536,92 @@ test("fileViewerFeature: failed iOS inline stream recovery falls back to file_ge
     else Object.defineProperty(globalThis, "window", { value: prevWindow, configurable: true, writable: true });
     if (prevNavigator === undefined) delete globalThis.navigator;
     else Object.defineProperty(globalThis, "navigator", { value: prevNavigator, configurable: true, writable: true });
+    await helper.cleanup();
+  }
+});
+
+test("fileViewerFeature: video recovery restores thumb preview before full file_get", async () => {
+  const helper = await loadFeature();
+  try {
+    const enqueued = [];
+    const pending = [];
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "vid-recover",
+              name: "clip.mp4",
+              size: 9_000_000,
+              mime: "video/mp4",
+            },
+          },
+        ],
+      },
+      fileOffersIn: [],
+      fileTransfers: [],
+      fileThumbs: {
+        "vid-recover": { url: "blob:recover-thumb", mime: "image/jpeg", ts: 1000 },
+      },
+      modal: {
+        kind: "file_viewer",
+        fileId: "vid-recover",
+        url: "/__yagodka_stream__/files/vid-recover?sid=s1&inline=1",
+        name: "clip.mp4",
+        size: 9_000_000,
+        mime: "video/mp4",
+        caption: null,
+        chatKey: "dm:222",
+        msgIdx: 0,
+        prevIdx: null,
+        nextIdx: null,
+        openedAtMs: Date.now(),
+      },
+      status: "",
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") Object.assign(storeState, patch);
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        return false;
+      },
+      enqueueFileGet(fileId) {
+        enqueued.push(String(fileId));
+      },
+      beginViewerStream() {
+        throw new Error("video recovery must not restart inline stream");
+      },
+      setPendingFileViewer(state) {
+        pending.push(state);
+      },
+    });
+
+    await feature.recoverCurrent();
+
+    assert.equal(storeState.modal?.url, "blob:recover-thumb");
+    assert.equal(storeState.modal?.mime, "image/jpeg");
+    assert.deepEqual(enqueued, ["vid-recover"]);
+    assert.equal(pending[0]?.fileId, "vid-recover");
+    assert.equal(pending[0]?.mime, "video/mp4");
+  } finally {
     await helper.cleanup();
   }
 });

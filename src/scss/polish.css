@@ -2228,3 +2228,28 @@ html.viewer-surface-open body::after {
     text-overflow: ellipsis;
   }
 }
+
+/* W-1050: mobile contact list clearance above the bottom nav.
+   The bottom tab bar is fixed glass; the list needs more scroll reserve and a
+   tighter compact search control so contact rows do not disappear underneath. */
+@media (max-width: 600px) and (pointer: coarse) {
+  .sidebar {
+    --mobile-sidebar-sticky-h: calc(env(safe-area-inset-top) + 62px);
+    --mobile-bottom-nav-scroll-pad: calc(var(--mobile-bottom-nav-h) + 56px);
+  }
+
+  .sidebar-mobile-sticky .sidebar-searchbar {
+    width: 42px;
+    min-height: 42px;
+  }
+
+  .sidebar-body {
+    padding-bottom: var(--mobile-bottom-nav-scroll-pad);
+    scroll-padding-bottom: calc(var(--mobile-bottom-nav-h) + 40px);
+  }
+
+  .sidebar-body > .chatlist::after {
+    height: calc(var(--mobile-bottom-nav-h) + 56px);
+    min-height: 132px;
+  }
+}

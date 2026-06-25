@@ -21,6 +21,7 @@ test("calls: CSS contains modal-call layout", async () => {
   assert.match(css, /\.modal\.modal-call/);
   assert.match(css, /html\.call-surface-open\s+\.overlay\.overlay-viewer\s*\{[\s\S]*?height:\s*var\(--app-vh,\s*100dvh\)/);
   assert.match(css, /html\.call-surface-open\s+\.overlay\.overlay-viewer\s+\.modal\.modal-call\s*\{[\s\S]*?width:\s*100dvw;[\s\S]*?max-width:\s*100dvw/);
+  assert.match(css, /\.call-controls\s*\{[\s\S]*?padding-bottom:\s*max\([\s\S]*?--app-frame-bottom-inset[\s\S]*?--app-gap-bottom/);
   assert.match(css, /\.call-control-buttons\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
   assert.match(css, /\.call-frame/);
   assert.match(css, /\.call-permission/);

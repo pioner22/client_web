@@ -90,6 +90,8 @@ test("web-www-build keeps messenger under /web and builds public root from site 
   assert.match(makefile, /PUBLIC_SITE_ROOT \?= cite_yagodka\.org/);
   assert.match(makefile, /build_public_site\.py/);
   assert.match(makefile, /--web-dist "\$\(WEB_CLIENT_DIR\)\/dist"/);
+  assert.match(makefile, /--client-android-dir "\$\(ANDROID_CLIENT_DIR\)"/);
+  assert.match(makefile, /--client-macos-dir "\$\(MACOS_CLIENT_DIR\)"/);
   assert.doesNotMatch(makefile, /dist\/" "\$\(WWW_ROOT\)\/"/);
   assert.match(builder, /android\/yagodka-android-debug\.apk/);
   assert.match(builder, /macos\/yagodka-macos-x64\.zip/);
@@ -106,8 +108,8 @@ test("web-www-build keeps messenger under /web and builds public root from site 
 
 test("downloaded client builds keep production endpoints after web split", () => {
   const env = readProject("client-web/src/config/env.ts");
-  const desktopMain = readProject("client-web/desktop/main.cjs");
-  const desktopPreload = readProject("client-web/desktop/preload.cjs");
+  const desktopMain = readProject("client-macos/desktop/main.cjs");
+  const desktopPreload = readProject("client-macos/desktop/preload.cjs");
   const cliClient = readProject("client-cli/bin/client.py");
   const distClient = readProject("server/dist/client.py");
 

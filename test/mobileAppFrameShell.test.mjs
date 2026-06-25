@@ -74,7 +74,8 @@ test("mobile app frame: contact list owns the full fixed mobile frame without a 
   assert.match(css, /--mobile-bottom-nav-bottom-offset:\s*0px;/);
   assert.match(css, /--mobile-bottom-nav-glass-bg:\s*rgba\(24,\s*24,\s*32,\s*0\.58\);/);
   assert.match(css, /--mobile-bottom-nav-active-bg:\s*rgba\(255,\s*255,\s*255,\s*0\.16\);/);
-  assert.match(css, /\.sidebar-mobile-sticky\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?padding:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*6px\)\s+10px\s+8px;/);
+  assert.match(css, /\.sidebar-mobile-sticky\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?min-height:\s*var\(--mobile-sidebar-sticky-h\);[\s\S]*?align-items:\s*flex-end;/);
+  assert.match(css, /\.sidebar-mobile-sticky\s*\{[\s\S]*?padding:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*6px\)\s+10px\s+8px;/);
   assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*var\(--mobile-bottom-nav-bottom-offset\);[\s\S]*?height:\s*var\(--mobile-bottom-nav-row-h\);/);
   assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?align-items:\s*flex-end;/);
   assert.match(css, /\.sidebar-mobile-bottom\s*\{[\s\S]*?pointer-events:\s*none;/);

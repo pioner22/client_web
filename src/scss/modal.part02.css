@@ -1339,7 +1339,12 @@ html.call-surface-open .overlay.overlay-viewer .modal.modal-call {
   justify-content: center;
   gap: 10px;
   padding: 18px;
-  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  padding-bottom: max(
+    28px,
+    calc(18px + env(safe-area-inset-bottom)),
+    calc(18px + var(--app-frame-bottom-inset, 0px)),
+    calc(18px + var(--app-gap-bottom, 0px))
+  );
   padding-left: calc(18px + env(safe-area-inset-left));
   padding-right: calc(18px + env(safe-area-inset-right));
   background: linear-gradient(0deg, rgba(2, 4, 6, 0.72), rgba(2, 4, 6, 0.28) 52%, rgba(2, 4, 6, 0));
@@ -1536,7 +1541,12 @@ html.call-surface-open .overlay.overlay-viewer .modal.modal-call {
   .call-controls {
     gap: 9px;
     padding: 14px;
-    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    padding-bottom: max(
+      24px,
+      calc(14px + env(safe-area-inset-bottom)),
+      calc(14px + var(--app-frame-bottom-inset, 0px)),
+      calc(14px + var(--app-gap-bottom, 0px))
+    );
     padding-left: calc(14px + env(safe-area-inset-left));
     padding-right: calc(14px + env(safe-area-inset-right));
   }

@@ -13,7 +13,7 @@ test("mobile composer: Telegram-like бар (blur) и более плотный 
   assert.match(css, /\.composer-field\s*\.input\s*\{[\s\S]*?padding:\s*var\(--composer-input-pad-y\)\s+13px\s*;/);
 });
 
-test("mobile composer: iOS override lowers composer closer to the bottom edge", async () => {
+test("mobile composer: iOS override keeps composer compact above the bottom edge", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\)\)\s*;/);
   assert.doesNotMatch(css, /html\.is-ios\s+\.input-wrap\s*\{[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-inset\)\)\s*;/);
@@ -33,7 +33,7 @@ test("mobile composer: iOS fixed frame uses compact live pad in no-keyboard shel
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?bottom:\s*0\s*;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*5px;[\s\S]*?bottom:\s*var\(--mobile-composer-bottom-offset\)\s*;/
   );
   assert.match(
     css,
@@ -61,4 +61,5 @@ test("mobile messenger reference polish: patterned chat, floating composer actio
   assert.match(css, /\.composer-field\s*\{[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
   assert.match(css, /\.composer-field\s+\.input\s*\{[\s\S]*background:\s*var\(--composer-field-bg\);[\s\S]*border-radius:\s*999px;/);
   assert.match(css, /\.composer-field\s+\.btn\.composer-action\s*\{[\s\S]*border-radius:\s*999px;[\s\S]*background:/);
+  assert.match(css, /\.composer-field\s+\.btn\.composer-action:active\s*\{[\s\S]*?filter:\s*brightness\(1\.1\);/);
 });

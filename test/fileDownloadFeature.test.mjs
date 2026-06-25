@@ -688,3 +688,141 @@ test("fileDownloadFeature: fullscreen image upgrade keeps current preview as fal
     await helper.cleanup();
   }
 });
+
+test("fileDownloadFeature: fullscreen video upgrade applies completed blob url", async () => {
+  const helper = await loadFeature();
+  const prevUrl = globalThis.URL;
+  try {
+    globalThis.URL = { ...(prevUrl || {}), createObjectURL: () => "blob:full-video" };
+    const state = {
+      authed: true,
+      conn: "connected",
+      netLeader: true,
+      selfId: "u1",
+      status: "idle",
+      fileThumbs: {},
+      fileTransfers: [
+        {
+          localId: "ft-video",
+          id: "vid-1",
+          name: "clip.webm",
+          size: 4,
+          mime: "video/webm",
+          direction: "in",
+          peer: "u2",
+          status: "downloading",
+          progress: 50,
+        },
+      ],
+      modal: {
+        kind: "file_viewer",
+        fileId: "vid-1",
+        url: "/__yagodka_stream__/files/vid-1?sid=old",
+        name: "clip.webm",
+        size: 4,
+        mime: "video/webm",
+        caption: null,
+        chatKey: "dm:u2",
+        msgIdx: 7,
+      },
+    };
+    const downloadByFileId = new Map([
+      [
+        "vid-1",
+        {
+          fileId: "vid-1",
+          name: "clip.webm",
+          size: 4,
+          from: "u2",
+          room: null,
+          mime: "video/webm",
+          chunks: [new Uint8Array([1, 2, 3, 4]).buffer],
+          received: 4,
+          lastProgress: 100,
+        },
+      ],
+    ]);
+    const pendingViewer = {
+      fileId: "vid-1",
+      name: "clip.webm",
+      size: 4,
+      mime: "video/webm",
+      caption: null,
+      chatKey: "dm:u2",
+      msgIdx: 7,
+    };
+    let pendingTaken = 0;
+    let posterProbeCount = 0;
+    const store = {
+      get: () => state,
+      set: (patch) => Object.assign(state, typeof patch === "function" ? patch(state) : { ...state, ...patch }),
+      subscribe: () => {},
+    };
+    const noop = () => {};
+    const feature = helper.createFileDownloadFeature({
+      store,
+      send: noop,
+      deviceCaps: { constrained: false, slowNetwork: false, prefetchAllowed: true },
+      downloadByFileId,
+      disableFileHttp: noop,
+      nextTransferId: () => "ft-next",
+      updateTransferByFileId: (fileId, apply) => {
+        state.fileTransfers = state.fileTransfers.map((entry) => (entry.id === fileId ? apply(entry) : entry));
+      },
+      scheduleSaveFileTransfers: noop,
+      resolveFileMeta: () => ({ name: "clip.webm", size: 4, mime: "video/webm" }),
+      shouldCacheFile: () => false,
+      shouldCachePreview: () => false,
+      enforceFileCachePolicy: async () => {},
+      thumbCacheId: (fileId) => `thumb:${fileId}`,
+      canAutoDownloadFullFile: () => true,
+      resolveAutoDownloadKind: () => "video",
+      isSilentFileGet: () => false,
+      clearSilentFileGet: noop,
+      clearFileAcceptRetry: noop,
+      clearFileGetNotFoundRetry: noop,
+      scheduleFileGetNotFoundRetry: () => false,
+      finishFileGet: noop,
+      touchFileGetTimeout: noop,
+      dropFileGetQueue: noop,
+      tryResolveHttpFileUrlWaiter: () => false,
+      requestFreshHttpDownloadUrl: async () => ({ url: "https://example.invalid/file" }),
+      rejectHttpFileUrlWaiter: noop,
+      scheduleThumbPollRetry: noop,
+      clearThumbPollRetry: noop,
+      setFileThumb: noop,
+      maybeSetVideoPosterFromBlob: () => {
+        posterProbeCount += 1;
+      },
+      probeImageDimensions: async () => ({ w: null, h: null }),
+      pendingFileDownloads: new Map(),
+      triggerBrowserDownload: noop,
+      takePendingFileViewer: () => {
+        pendingTaken += 1;
+        return pendingViewer;
+      },
+      clearPendingFileViewer: noop,
+      buildFileViewerModalState: (params) => ({ kind: "file_viewer", ...params }),
+      postStreamChunk: () => true,
+      postStreamEnd: noop,
+      postStreamError: noop,
+      clearCachedPreviewAttempt: noop,
+      clearPreviewPrefetchAttempt: noop,
+      isUploadActive: () => false,
+      abortUploadByFileId: noop,
+    });
+
+    assert.equal(feature.handleMessage({ type: "file_download_complete", file_id: "vid-1" }), true);
+    assert.equal(pendingTaken, 1);
+    assert.equal(state.modal?.kind, "file_viewer");
+    assert.equal(state.modal?.url, "blob:full-video");
+    assert.equal(state.modal?.fallbackUrl, null);
+    assert.equal(state.modal?.fileId, "vid-1");
+    assert.equal(state.modal?.mime, "video/webm");
+    assert.equal(posterProbeCount, 1);
+  } finally {
+    if (prevUrl === undefined) delete globalThis.URL;
+    else globalThis.URL = prevUrl;
+    await helper.cleanup();
+  }
+});

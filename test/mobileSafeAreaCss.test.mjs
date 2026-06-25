@@ -130,7 +130,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.match(css, /calc\(var\(--app-frame-vh,\s*var\(--app-vh\)\)\s*-\s*var\(--app-vh,\s*100dvh\)\)/);
   assert.match(css, /--app-frame-bottom-inset:\s*var\(--app-logged-bottom-fill\);/);
   assert.match(css, /--mobile-header-overlay-h:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*96px\);/);
-  assert.match(css, /--mobile-sidebar-sticky-h:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*60px\);/);
+  assert.match(css, /--mobile-sidebar-sticky-h:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*72px\);/);
   assert.match(css, /--mobile-bottom-nav-fill:\s*var\(--app-bottom-live-pad\);/);
   assert.match(css, /--mobile-bottom-nav-row-h:\s*74px;/);
   assert.match(css, /--mobile-bottom-nav-h:\s*calc\(var\(--mobile-bottom-nav-row-h\)\s*\+\s*var\(--mobile-bottom-nav-fill\)\);/);
@@ -139,7 +139,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.match(css, /--mobile-bottom-nav-bottom-offset:\s*0px;/);
   assert.match(css, /--mobile-bottom-nav-glass-bg:\s*rgba\(24,\s*24,\s*32,\s*0\.58\);/);
   assert.match(css, /--mobile-bottom-nav-glass-border:\s*rgba\(255,\s*255,\s*255,\s*0\.14\);/);
-  assert.match(css, /--mobile-composer-bottom-offset:\s*2px;/);
+  assert.match(css, /--mobile-composer-bottom-offset:\s*5px;/);
   assert.match(css, /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?bottom:\s*auto;/);
   assert.match(
     css,
@@ -163,7 +163,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   );
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*2px;[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\),\s*var\(--app-logged-bottom-fill\)\);[\s\S]*?bottom:\s*var\(--mobile-composer-bottom-offset\);/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.input-wrap\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*5px;[\s\S]*?--composer-bottom-edge-pad:\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad\),\s*var\(--app-logged-bottom-fill\)\);[\s\S]*?bottom:\s*var\(--mobile-composer-bottom-offset\);/
   );
   assert.match(
     css,
@@ -205,7 +205,7 @@ test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays
   assert.doesNotMatch(appFrameBlock, /height:\s*var\(--app-logged-frame-vh\);/);
   assert.match(
     css,
-    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.chat-col\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*2px;/
+    /html\.is-ios:not\(\.kbd-open\):not\(\.has-auth-pages\)\s+\.chat-col\s*\{[\s\S]*?--mobile-composer-bottom-offset:\s*5px;/
   );
   assert.doesNotMatch(
     css,
@@ -222,4 +222,24 @@ test("mobile safe-area: default skin preserves the shared iOS composer inset", a
     /html\.is-ios\[data-skin="yagodka-modern"\]\s+\.input-wrap\s*\{[\s\S]*?padding-bottom:\s*var\(--composer-bottom-edge-pad,\s*max\(var\(--composer-pad-y\),\s*var\(--app-bottom-live-pad,\s*var\(--app-bottom-inset\)\)\)\)\s*;/
   );
   assert.doesNotMatch(skinCss, /html\.is-ios\[data-skin="yagodka-modern"\]\s+\.input-wrap\s*\{[\s\S]*env\(safe-area-inset-bottom\)/);
+});
+
+test("mobile safe-area: W-1050 contact list has bottom-nav clearance and tighter sticky search", async () => {
+  const css = await readFile(path.resolve("src/scss/polish.css"), "utf8");
+
+  assert.match(css, /W-1050:\s*mobile contact list clearance above the bottom nav/);
+  assert.match(css, /--mobile-sidebar-sticky-h:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*62px\);/);
+  assert.match(css, /--mobile-bottom-nav-scroll-pad:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*56px\);/);
+  assert.match(
+    css,
+    /\.sidebar-mobile-sticky\s+\.sidebar-searchbar\s*\{[\s\S]*?width:\s*42px;[\s\S]*?min-height:\s*42px;/
+  );
+  assert.match(
+    css,
+    /\.sidebar-body\s*\{[\s\S]*?padding-bottom:\s*var\(--mobile-bottom-nav-scroll-pad\);[\s\S]*?scroll-padding-bottom:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*40px\);/
+  );
+  assert.match(
+    css,
+    /\.sidebar-body\s*>\s*\.chatlist::after\s*\{[\s\S]*?height:\s*calc\(var\(--mobile-bottom-nav-h\)\s*\+\s*56px\);[\s\S]*?min-height:\s*132px;/
+  );
 });
