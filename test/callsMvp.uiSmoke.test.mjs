@@ -19,6 +19,9 @@ test("calls: modal renderer supports kind=call", async () => {
 test("calls: CSS contains modal-call layout", async () => {
   const css = await readCssWithImports("src/scss/modal.css");
   assert.match(css, /\.modal\.modal-call/);
+  assert.match(css, /html\.call-surface-open\s+\.overlay\.overlay-viewer\s*\{[\s\S]*?height:\s*var\(--app-vh,\s*100dvh\)/);
+  assert.match(css, /html\.call-surface-open\s+\.overlay\.overlay-viewer\s+\.modal\.modal-call\s*\{[\s\S]*?width:\s*100dvw;[\s\S]*?max-width:\s*100dvw/);
+  assert.match(css, /\.call-control-buttons\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
   assert.match(css, /\.call-frame/);
   assert.match(css, /\.call-permission/);
   assert.match(css, /\.call-device/);

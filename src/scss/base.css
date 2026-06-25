@@ -168,7 +168,10 @@ html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) {
 
 html.viewer-surface-open,
 html.viewer-surface-open body,
-html.viewer-surface-open #app {
+html.viewer-surface-open #app,
+html.call-surface-open,
+html.call-surface-open body,
+html.call-surface-open #app {
   --safe-area-bg: #000;
   --app-frame-bg: #000;
   --app-frame-safe-bg: #000;

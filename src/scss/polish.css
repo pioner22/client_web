@@ -1916,7 +1916,11 @@ html[data-theme="dark"] .chat:not(.chat-board) {
 html.viewer-surface-open,
 html.viewer-surface-open body,
 html.viewer-surface-open #app,
-html.viewer-surface-open body::after {
+html.viewer-surface-open body::after,
+html.call-surface-open,
+html.call-surface-open body,
+html.call-surface-open #app,
+html.call-surface-open body::after {
   --safe-area-bg: #000;
   --app-frame-bg: #000;
   --app-frame-safe-bg: #000;
@@ -1986,7 +1990,9 @@ html.viewer-surface-open::after {
 }
 
 html.viewer-surface-open #app.app-frame::after,
-html.viewer-surface-open body::after {
+html.viewer-surface-open body::after,
+html.call-surface-open #app.app-frame::after,
+html.call-surface-open body::after {
   background: #000;
   background-color: #000;
 }

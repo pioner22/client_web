@@ -22,12 +22,17 @@ async function loadModalSurface() {
       logLevel: "silent",
     });
     const mod = await import(pathToFileURL(outfile).href);
-    if (typeof mod.resolveModalPresentation !== "function" || typeof mod.resolveOverlayBackdropAction !== "function") {
+    if (
+      typeof mod.resolveModalPresentation !== "function" ||
+      typeof mod.resolveOverlayBackdropAction !== "function" ||
+      typeof mod.applyOverlaySurface !== "function"
+    ) {
       throw new Error("modalSurface exports missing");
     }
     return {
       resolveModalPresentation: mod.resolveModalPresentation,
       resolveOverlayBackdropAction: mod.resolveOverlayBackdropAction,
+      applyOverlaySurface: mod.applyOverlaySurface,
       cleanup: () => rm(tempDir, { recursive: true, force: true }),
     };
   } catch (error) {
@@ -97,6 +102,54 @@ test("modalSurface: context_menu и file_viewer идут через overlay surf
     assert.equal(call.inlineModal, false);
     assert.equal(call.overlaySurface, "overlay-viewer");
   } finally {
+    await cleanup();
+  }
+});
+
+test("modalSurface: call surface does not reuse viewer html state", async () => {
+  const { applyOverlaySurface, cleanup } = await loadModalSurface();
+  const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
+  try {
+    const toggles = [];
+    const overlayClasses = new Set();
+    const htmlClassList = {
+      toggle(name, value) {
+        toggles.push([name, Boolean(value)]);
+      },
+    };
+    const overlay = {
+      firstElementChild: null,
+      replaceChildren(...children) {
+        this.firstElementChild = children[0] || null;
+      },
+      classList: {
+        toggle(name, value) {
+          if (value) overlayClasses.add(name);
+          else overlayClasses.delete(name);
+        },
+      },
+    };
+    const callNode = {
+      classList: {
+        contains(name) {
+          return name === "modal-call";
+        },
+      },
+    };
+    const documentStub = { documentElement: { classList: htmlClassList } };
+    Object.defineProperty(globalThis, "document", { value: documentStub, configurable: true, writable: true });
+
+    applyOverlaySurface(overlay, "overlay-viewer", callNode);
+
+    assert.deepEqual(toggles, [
+      ["viewer-surface-open", false],
+      ["call-surface-open", true],
+    ]);
+    assert.equal(overlayClasses.has("overlay-viewer"), true);
+    assert.equal(overlay.firstElementChild, callNode);
+  } finally {
+    if (prevDocumentDesc) Object.defineProperty(globalThis, "document", prevDocumentDesc);
+    else delete globalThis.document;
     await cleanup();
   }
 });

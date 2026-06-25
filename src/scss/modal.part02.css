@@ -634,9 +634,12 @@ input.modal-input[type="file"]::file-selector-button:active {
 }
 
 .overlay.overlay-viewer .modal.modal-call {
-  width: 100%;
+  width: 100dvw;
+  max-width: 100dvw;
   max-height: none;
-  height: 100%;
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
   border: 0;
   border-radius: 0;
   padding: 0;
@@ -645,6 +648,24 @@ input.modal-input[type="file"]::file-selector-button:active {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+html.call-surface-open .overlay.overlay-viewer {
+  width: 100dvw;
+  max-width: 100dvw;
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
+  background: #000;
+  background-color: #000;
+}
+
+html.call-surface-open .overlay.overlay-viewer .modal.modal-call {
+  width: 100dvw;
+  max-width: 100dvw;
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
 }
 
 .call-stage {
@@ -1362,10 +1383,12 @@ input.modal-input[type="file"]::file-selector-button:active {
 
 .call-control-buttons {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 18px;
   max-width: 100%;
+  min-width: 0;
 }
 
 .call-ctl {

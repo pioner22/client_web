@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.931",
+    date: "2026-06-25",
+    fixed: [
+      "Окно аудио/видео вызова больше не сужается из-за правил fullscreen photo viewer: для вызовов добавлен отдельный fullscreen-surface, а нижние кнопки управления теперь переносятся на узких экранах.",
+    ],
+  },
+  {
     version: "0.1.930",
     date: "2026-06-25",
     improved: [
