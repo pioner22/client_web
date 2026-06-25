@@ -10,7 +10,6 @@ import { createClientConnectionWorker } from "./clientConnectionWorker";
 import { createLazyNavigationDeferredRuntime } from "./lazyNavigationDeferredRuntime";
 import { createLazyRoomModerationActionsRuntime } from "./lazyRoomModerationActionsRuntime";
 import { createLazyPwaUpdateRuntime } from "./lazyPwaUpdateRuntime";
-import { createDesktopUpdateFeature } from "../features/desktop/desktopUpdateFeature";
 import { createFileActionsFeature } from "../features/files/fileActionsFeature";
 import { installEditingEndSyncFeature } from "../features/history/editingEndSyncFeature";
 import { createAuthUiActionsFeature } from "../features/auth/authUiActionsFeature";
@@ -147,17 +146,6 @@ export function installLateWiring(deps: any) {
   }
 
   const restartStateFeature = createRestartStateFeature();
-  const desktopUpdateFeature = createDesktopUpdateFeature({
-    store,
-    showToast,
-    flushBeforeInstall: () => {
-      flushRuntimeDelivery(store);
-      restartStateFeature.save(store.get());
-    },
-  });
-  desktopUpdateFeature.bind();
-  desktopUpdateFeature.start();
-
   const pwaUpdateRuntime = createLazyPwaUpdateRuntime({
     store,
     send: (payload) => gateway.send(payload),
@@ -196,7 +184,6 @@ export function installLateWiring(deps: any) {
   const connectionWorker = createClientConnectionWorker({
     store,
     gateway,
-    desktopUpdateWorker: desktopUpdateFeature,
     updateWorker: pwaUpdateRuntime,
   });
 
@@ -378,9 +365,9 @@ export function installLateWiring(deps: any) {
     onSetSidebarQuery: sidebarPreferencesActionsFeature.onSetSidebarQuery,
     onToggleSidebarArchive: sidebarPreferencesActionsFeature.onToggleSidebarArchive,
     ...actionsAccountFeature,
-    onDesktopUpdateCheck: desktopUpdateFeature.check,
-    onDesktopUpdateDownload: desktopUpdateFeature.download,
-    onDesktopUpdateInstall: desktopUpdateFeature.install,
+    onDesktopUpdateCheck: () => undefined,
+    onDesktopUpdateDownload: () => undefined,
+    onDesktopUpdateInstall: () => undefined,
     onCallRequestMediaAccess: callRequestMediaAccess,
     onCallOpenMediaSettings: callOpenMediaSettings,
     onCallAccept: callAccept,
