@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.928",
+    date: "2026-06-25",
+    fixed: [
+      "Активная Web/PWA-сессия теперь сама обнаруживает свежий build без перезапуска: клиент мягко сверяет live Service Worker, показывает окно обновления после паузы в действиях пользователя и восстанавливает prompt после закрытия другого окна.",
+    ],
+  },
+  {
     version: "0.1.927",
     date: "2026-06-25",
     improved: [

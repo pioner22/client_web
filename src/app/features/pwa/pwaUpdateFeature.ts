@@ -7,7 +7,7 @@ import { hasPwaReloadBlockers } from "../../../helpers/pwa/reloadSafety";
 import { activatePwaUpdate, checkForPwaUpdate, hasPwaUpdate } from "../../../helpers/pwa/registerServiceWorker";
 import { isServiceWorkerRuntimeAvailable } from "../../../helpers/pwa/serviceWorkerRuntime";
 import { shouldReloadForBuild } from "../../../helpers/pwa/shouldReloadForBuild";
-import { clearPendingPwaBuild, readPendingPwaBuild } from "../../../helpers/pwa/pendingUpdate";
+import { clearPendingPwaBuild, readPendingPwaBuild, writePendingPwaBuild } from "../../../helpers/pwa/pendingUpdate";
 import { createPwaUpdateState, isPwaUpdateBusy, mergePwaUpdateState } from "../../../helpers/pwa/updateState";
 import { hasActiveFileTransferEntries } from "../../../helpers/runtime/deliveryCoordinator";
 import { isIOS, isStandaloneDisplayMode } from "../../../helpers/ui/iosInputAssistant";
@@ -72,11 +72,20 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const PWA_MANUAL_CHECK_TIMEOUT_MS = 3500;
   const PWA_FORCE_WATCHDOG_MS = 12_000;
   const PWA_RESET_STEP_TIMEOUT_MS = 4_500;
+  const PWA_FOREGROUND_CHECK_TIMEOUT_MS = 2200;
+  const PWA_FOREGROUND_STARTUP_DELAY_MS = 12_000;
+  const PWA_FOREGROUND_CHECK_INTERVAL_MS = 45_000;
+  const PWA_FOREGROUND_IDLE_GRACE_MS = 2800;
   let pwaPendingBuildId = "";
   let pwaAutoApplySuppressed = false;
   let pwaBootReconcileStarted = false;
   let pwaBootReconcilePromise: Promise<void> | null = null;
   let pwaUpdateEventVerifyInFlight = false;
+  let foregroundBuildCheckTimer: number | null = null;
+  let foregroundBuildCheckDueAt = 0;
+  let foregroundBuildCheckInFlight = false;
+  let lastForegroundBuildCheckAt = 0;
+  let storeUnsubscribe: (() => void) | null = null;
 
   const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> => {
     const limit = Math.max(0, Math.trunc(Number(timeoutMs) || 0));
@@ -204,24 +213,56 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const setPendingPwaBuild = (buildId: string, status?: string) => {
     const id = String(buildId || "").trim();
     if (!id) return;
+    writePendingPwaBuild(id);
     if (pwaPendingBuildId !== id) {
       pwaPendingBuildId = id;
       pwaAutoApplySuppressed = false;
     }
-    store.set((prev) => ({
-      ...prev,
-      updateLatest: id,
-      pwaUpdateAvailable: true,
-      status: status || "Доступно обновление веб-клиента. Можно обновить сейчас или позже.",
-      pwaUpdate: mergePwaUpdateState((prev as any).pwaUpdate, "available", {
-        buildId: id,
-        message: "Доступно обновление веб-клиента",
-        detail: status || "Нажмите «Обновить», когда будет удобно. Клиент скачает и проверит файлы после подтверждения.",
-        userDecision: "pending",
-        error: null,
-      }),
-      ...(shouldOpenPwaUpdatePrompt(prev) ? { modal: { kind: "pwa_update" } } : {}),
-    }));
+    store.set((prev) => {
+      const prevRuntime = (prev as any).pwaUpdate;
+      const prevBuildId = String(prev.updateLatest || prevRuntime?.buildId || "").trim();
+      const deferredSameBuild = prevBuildId === id && prevRuntime?.userDecision === "later";
+      if (deferredSameBuild) {
+        if (prev.status === PWA_DEFERRED_STATUS && prev.pwaUpdateAvailable && prev.modal?.kind !== "pwa_update") return prev;
+        return {
+          ...prev,
+          updateLatest: id,
+          pwaUpdateAvailable: true,
+          status: PWA_DEFERRED_STATUS,
+          pwaUpdate: mergePwaUpdateState(prevRuntime, "available", {
+            buildId: id,
+            message: "Обновление отложено",
+            detail: "Обновление отложено до перезапуска. Можно обновить вручную позже.",
+            userDecision: "later",
+            error: null,
+          }),
+          ...(prev.modal?.kind === "pwa_update" ? { modal: null } : {}),
+        };
+      }
+      const shouldOpenPrompt = shouldOpenPwaUpdatePrompt(prev);
+      const promptAlreadyVisible = prev.modal?.kind === "pwa_update";
+      const samePending =
+        prev.pwaUpdateAvailable &&
+        prevBuildId === id &&
+        prevRuntime?.stage === "available" &&
+        prevRuntime?.userDecision === "pending" &&
+        (promptAlreadyVisible || !shouldOpenPrompt);
+      if (samePending) return prev;
+      return {
+        ...prev,
+        updateLatest: id,
+        pwaUpdateAvailable: true,
+        status: status || "Доступно обновление веб-клиента. Можно обновить сейчас или позже.",
+        pwaUpdate: mergePwaUpdateState(prevRuntime, "available", {
+          buildId: id,
+          message: "Доступно обновление веб-клиента",
+          detail: status || "Нажмите «Обновить», когда будет удобно. Клиент скачает и проверит файлы после подтверждения.",
+          userDecision: "pending",
+          error: null,
+        }),
+        ...(shouldOpenPrompt ? { modal: { kind: "pwa_update" } } : {}),
+      };
+    });
   };
 
   const adoptActiveBuild = (buildId: string) => {
@@ -1055,6 +1096,119 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     }));
   }
 
+  function maybeRestorePendingPwaUpdatePrompt(reason: string) {
+    const st = store.get();
+    if (!st.pwaUpdateAvailable) return;
+    if (st.modal?.kind === "pwa_update") return;
+    if (!shouldOpenPwaUpdatePrompt(st)) return;
+    const runtime = (st as any).pwaUpdate;
+    if (runtime?.userDecision === "later") return;
+    const buildId = String(st.updateLatest || runtime?.buildId || pwaPendingBuildId || "").trim();
+    if (!buildId || !shouldReloadForBuild(currentClientBuildId(), buildId)) return;
+    logPwaUpdate("restore_prompt", `${reason}:${buildId}`);
+    scheduleAutoApplyPwaUpdate(0);
+  }
+
+  function scheduleForegroundBuildCheck(delayMs: number, reason = "timer") {
+    if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
+    const delay = Math.max(0, Math.trunc(Number(delayMs) || 0));
+    const dueAt = Date.now() + delay;
+    if (foregroundBuildCheckTimer !== null && foregroundBuildCheckDueAt <= dueAt) return;
+    if (foregroundBuildCheckTimer !== null) {
+      try {
+        window.clearTimeout(foregroundBuildCheckTimer);
+      } catch {
+        // ignore
+      }
+      foregroundBuildCheckTimer = null;
+    }
+    foregroundBuildCheckDueAt = dueAt;
+    foregroundBuildCheckTimer = window.setTimeout(() => {
+      foregroundBuildCheckTimer = null;
+      foregroundBuildCheckDueAt = 0;
+      void runForegroundBuildCheck(reason);
+    }, delay);
+  }
+
+  async function runForegroundBuildCheck(reason = "timer"): Promise<void> {
+    if (!isServiceWorkerRuntimeAvailable()) return;
+    if (typeof document !== "undefined" && document.visibilityState && document.visibilityState !== "visible") {
+      scheduleForegroundBuildCheck(PWA_FOREGROUND_CHECK_INTERVAL_MS, "hidden");
+      return;
+    }
+    const idleFor = Math.max(0, Date.now() - (getLastUserInputAt() || 0));
+    if (idleFor < PWA_FOREGROUND_IDLE_GRACE_MS) {
+      scheduleForegroundBuildCheck(PWA_FOREGROUND_IDLE_GRACE_MS - idleFor + 250, "user_active");
+      return;
+    }
+    const sinceLast = Date.now() - lastForegroundBuildCheckAt;
+    if (lastForegroundBuildCheckAt > 0 && sinceLast < PWA_FOREGROUND_CHECK_INTERVAL_MS && reason !== "focus" && reason !== "pageshow") {
+      scheduleForegroundBuildCheck(PWA_FOREGROUND_CHECK_INTERVAL_MS - sinceLast, "throttle");
+      return;
+    }
+    if (foregroundBuildCheckInFlight) {
+      scheduleForegroundBuildCheck(5_000, "in_flight");
+      return;
+    }
+    foregroundBuildCheckInFlight = true;
+    lastForegroundBuildCheckAt = Date.now();
+    try {
+      const currentBuildId = currentClientBuildId();
+      const liveBuildId = await fetchSwBuildId(PWA_FOREGROUND_CHECK_TIMEOUT_MS);
+      if (liveBuildId && shouldReloadForBuild(currentBuildId, liveBuildId)) {
+        setPendingPwaBuild(liveBuildId, "Получено обновление веб-клиента. Можно обновить сейчас или отложить.");
+        scheduleAutoApplyPwaUpdate(0);
+        try {
+          await checkForPwaUpdate({ timeoutMs: PWA_FOREGROUND_CHECK_TIMEOUT_MS });
+        } catch {
+          // Prompt already uses live sw.js; Service Worker update can retry later.
+        }
+        return;
+      }
+      if (liveBuildId) {
+        const st = store.get();
+        const knownBuildId = String(st.updateLatest || (st as any).pwaUpdate?.buildId || pwaPendingBuildId || "").trim();
+        if (!knownBuildId || !shouldReloadForBuild(currentBuildId, knownBuildId)) {
+          adoptActiveBuild(liveBuildId);
+          clearCurrentPwaUpdatePrompt(liveBuildId);
+        }
+      }
+    } finally {
+      foregroundBuildCheckInFlight = false;
+      scheduleForegroundBuildCheck(PWA_FOREGROUND_CHECK_INTERVAL_MS, "loop");
+    }
+  }
+
+  function startForegroundBuildMonitor() {
+    if (
+      typeof document === "undefined" ||
+      typeof document.addEventListener !== "function" ||
+      typeof document.removeEventListener !== "function" ||
+      typeof window === "undefined" ||
+      typeof window.addEventListener !== "function" ||
+      typeof window.removeEventListener !== "function"
+    ) {
+      return () => {};
+    }
+    scheduleForegroundBuildCheck(PWA_FOREGROUND_STARTUP_DELAY_MS, "startup");
+    const onVisible = () => {
+      if (document.visibilityState === "visible") scheduleForegroundBuildCheck(700, "visible");
+    };
+    const onFocus = () => scheduleForegroundBuildCheck(700, "focus");
+    const onPageShow = () => scheduleForegroundBuildCheck(900, "pageshow");
+    const onOnline = () => scheduleForegroundBuildCheck(1200, "online");
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("online", onOnline);
+    };
+  }
+
   const onPwaBuild = (ev: Event) => {
     const detail = (ev as CustomEvent<any>).detail;
     const buildId = String(detail?.buildId ?? "").trim();
@@ -1146,6 +1300,17 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     window.addEventListener("yagodka:pwa-sw-error", onPwaSwError);
     window.addEventListener("yagodka:pwa-update", onPwaUpdate);
     window.addEventListener("yagodka:pwa-stability-hold", onPwaStabilityHold);
+    const disposeForegroundBuildMonitor = startForegroundBuildMonitor();
+    const subscribe = (store as any).subscribe;
+    storeUnsubscribe =
+      typeof subscribe === "function"
+        ? subscribe.call(store, () => maybeRestorePendingPwaUpdatePrompt("store"))
+        : null;
+    const prevDispose = storeUnsubscribe;
+    storeUnsubscribe = () => {
+      disposeForegroundBuildMonitor();
+      if (prevDispose) prevDispose();
+    };
     void startPwaBootReconcile();
   }
 
@@ -1160,6 +1325,14 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     } catch {
       // ignore
     }
+    if (storeUnsubscribe) {
+      try {
+        storeUnsubscribe();
+      } catch {
+        // ignore
+      }
+      storeUnsubscribe = null;
+    }
     if (pwaAutoApplyTimer !== null) {
       try {
         window.clearTimeout(pwaAutoApplyTimer);
@@ -1167,6 +1340,15 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
         // ignore
       }
       pwaAutoApplyTimer = null;
+    }
+    if (foregroundBuildCheckTimer !== null) {
+      try {
+        window.clearTimeout(foregroundBuildCheckTimer);
+      } catch {
+        // ignore
+      }
+      foregroundBuildCheckTimer = null;
+      foregroundBuildCheckDueAt = 0;
     }
   }
 
