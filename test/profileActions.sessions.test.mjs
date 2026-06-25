@@ -65,6 +65,137 @@ test("profileActionsFeature: refresh профиля запрашивает то�
   }
 });
 
+test("profileActionsFeature: W-1036 draft change autosaves profile without manual save click", async () => {
+  const { createProfileActionsFeature, cleanup } = await loadFeature();
+  try {
+    const sent = [];
+    const patches = [];
+    let state = {
+      conn: "connected",
+      authed: true,
+      selfId: "111-111-111",
+      profiles: {
+        "111-111-111": {
+          id: "111-111-111",
+          display_name: "Old",
+          handle: "old",
+          bio: "",
+          status: "",
+        },
+      },
+    };
+    let userInputMarks = 0;
+    const feature = createProfileActionsFeature({
+      store: {
+        get() {
+          return state;
+        },
+        set(patch) {
+          patches.push(patch);
+          if (typeof patch === "object" && patch) state = { ...state, ...patch };
+        },
+      },
+      send: (payload) => sent.push(payload),
+      markUserInput() {
+        userInputMarks += 1;
+      },
+      buildSearchServerShareText() {
+        return "";
+      },
+      tryAppendShareTextToSelected() {
+        return false;
+      },
+      copyText() {},
+      getAvatarFeature() {
+        return null;
+      },
+      profileAutosaveDelayMs: 0,
+    });
+
+    feature.onProfileDraftChange({
+      displayName: " New name ",
+      handle: " new_handle ",
+      bio: " Bio ",
+      status: " Online ",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    assert.equal(userInputMarks, 1);
+    assert.deepEqual(sent, [
+      {
+        type: "profile_set",
+        display_name: "New name",
+        handle: "new_handle",
+        bio: "Bio",
+        status: "Online",
+      },
+    ]);
+    assert.equal(state.profileDraftDisplayName, " New name ");
+    assert.equal(state.profileDraftHandle, " new_handle ");
+    assert.equal(state.profileDraftBio, " Bio ");
+    assert.equal(state.profileDraftStatus, " Online ");
+    assert.match(String(patches.at(-1)?.status || ""), /профил/i);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("profileActionsFeature: W-1036 autosave skips duplicate profile drafts", async () => {
+  const { createProfileActionsFeature, cleanup } = await loadFeature();
+  try {
+    const sent = [];
+    let state = {
+      conn: "connected",
+      authed: true,
+      selfId: "111-111-111",
+      profiles: {
+        "111-111-111": {
+          id: "111-111-111",
+          display_name: "Same",
+          handle: "same",
+          bio: "Bio",
+          status: "Online",
+        },
+      },
+    };
+    const feature = createProfileActionsFeature({
+      store: {
+        get() {
+          return state;
+        },
+        set(patch) {
+          if (typeof patch === "object" && patch) state = { ...state, ...patch };
+        },
+      },
+      send: (payload) => sent.push(payload),
+      markUserInput() {},
+      buildSearchServerShareText() {
+        return "";
+      },
+      tryAppendShareTextToSelected() {
+        return false;
+      },
+      copyText() {},
+      getAvatarFeature() {
+        return null;
+      },
+      profileAutosaveDelayMs: 0,
+    });
+
+    feature.onProfileDraftChange({
+      displayName: "Same",
+      handle: "same",
+      bio: "Bio",
+      status: "Online",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    assert.deepEqual(sent, []);
+  } finally {
+    await cleanup();
+  }
+});
+
 test("profileActionsFeature: logout other devices отправляет команду и выставляет status", async () => {
   const { createProfileActionsFeature, cleanup } = await loadFeature();
   try {

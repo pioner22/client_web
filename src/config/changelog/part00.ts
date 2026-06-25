@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.921",
+    date: "2026-06-25",
+    improved: [
+      "Профиль теперь сохраняет изменения имени, логина, статуса и описания автоматически: нижние кнопки `Сохранить` и `Обновить` убраны из основного вида профиля.",
+    ],
+  },
+  {
     version: "0.1.920",
     date: "2026-06-25",
     fixed: [

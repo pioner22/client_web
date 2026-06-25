@@ -150,6 +150,14 @@ function getText(node) {
   return [String(node.textContent || ""), ...children.map(getText)].join("");
 }
 
+function collectNodes(node, predicate, out = []) {
+  if (!node || node.nodeType === 3) return out;
+  if (predicate(node)) out.push(node);
+  const children = Array.isArray(node._children) ? node._children : [];
+  for (const child of children) collectNodes(child, predicate, out);
+  return out;
+}
+
 test("profile page: session management moved out of main profile body", async () => {
   const helper = await loadPage("src/pages/profile/createProfilePage.ts", "createProfilePage");
   try {
@@ -175,6 +183,39 @@ test("profile page: session management moved out of main profile body", async ()
       assert.ok(text.includes("Открыть устройства"));
       assert.ok(!text.includes("Другие устройства"));
       assert.ok(!text.includes("Активные сессии"));
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test("profile page: W-1036 removes manual save and refresh footer actions", async () => {
+  const helper = await loadPage("src/pages/profile/createProfilePage.ts", "createProfilePage");
+  try {
+    withDomStubs(() => {
+      const page = helper.factory({
+        onDraftChange() {},
+        onSave() {},
+        onRefresh() {},
+        onOpenSessionsPage() {},
+        onSkinChange() {},
+        onThemeChange() {},
+        onAvatarSelect() {},
+        onAvatarClear() {},
+        onPushEnable() {},
+        onPushDisable() {},
+        onNotifyInAppEnable() {},
+        onNotifyInAppDisable() {},
+        onNotifySoundEnable() {},
+        onNotifySoundDisable() {},
+        onForcePwaUpdate() {},
+      });
+      const text = getText(page.root);
+      const footerActions = collectNodes(page.root, (node) => String(node.className || "").split(/\s+/).includes("page-actions"));
+
+      assert.equal(footerActions.length, 0, "profile must not render a bottom page-actions footer");
+      assert.equal(text.includes("Сохранить"), false, "profile must not show a manual save button or hint");
+      assert.equal(text.includes("Обновить"), false, "profile must not show a manual refresh button");
     });
   } finally {
     await helper.cleanup();

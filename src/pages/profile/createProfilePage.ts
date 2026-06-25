@@ -1,7 +1,6 @@
 import { el } from "../../helpers/dom/el";
 import { avatarHue, avatarMonogram, getStoredAvatar } from "../../helpers/avatar/avatarStore";
 import { focusElement } from "../../helpers/ui/focus";
-import { isMobileLikeUi } from "../../helpers/ui/mobileLike";
 import type { AppState, ThemeMode } from "../../stores/types";
 
 export interface ProfilePageActions {
@@ -31,7 +30,6 @@ export interface ProfilePage {
 }
 
 export function createProfilePage(actions: ProfilePageActions): ProfilePage {
-  const mobileUi = isMobileLikeUi();
   const title = el("div", { class: "chat-title" }, ["Профиль"]);
 
   const profileName = el("div", { class: "profile-name" }, ["—"]);
@@ -184,11 +182,6 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
   const btnOpenSessions = el("button", { class: "btn", type: "button" }, ["Открыть устройства"]);
   const sessionsActions = el("div", { class: "profile-actions" }, [btnOpenSessions]);
 
-  const btnSave = el("button", { class: "btn btn-primary", type: "button" }, ["Сохранить"]);
-  const btnRefresh = el("button", { class: "btn", type: "button" }, ["Обновить"]);
-  const actionsRow = el("div", { class: "page-actions" }, [btnSave, btnRefresh]);
-
-  const hint = mobileUi ? null : el("div", { class: "msg msg-sys page-hint" }, ["Enter — сохранить · Esc — назад"]);
   const field = (label: HTMLElement, control: HTMLElement, extraClass = ""): HTMLElement =>
     el("div", { class: `profile-field-control${extraClass ? ` ${extraClass}` : ""}` }, [label, control]);
 
@@ -248,8 +241,6 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     notifications,
     sessionsCard,
     pwaCard,
-    actionsRow,
-    ...(hint ? [hint] : []),
   ]);
 
   function draft() {
@@ -260,8 +251,6 @@ export function createProfilePage(actions: ProfilePageActions): ProfilePage {
     actions.onSave(draft());
   }
 
-  btnSave.addEventListener("click", () => save());
-  btnRefresh.addEventListener("click", () => actions.onRefresh());
   profileIdValue.addEventListener("click", () => actions.onCopyId());
   btnCopyId.addEventListener("click", () => actions.onCopyId());
   btnShareId.addEventListener("click", () => actions.onShareId());

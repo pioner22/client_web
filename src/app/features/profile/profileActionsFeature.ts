@@ -1,6 +1,8 @@
 import type { Store } from "../../../stores/store";
 import type { AppState, SearchResultEntry } from "../../../stores/types";
 
+type ProfileDraft = { displayName: string; handle: string; bio: string; status: string };
+
 interface AvatarFeatureLike {
   setProfileAvatar: (file: File | null) => void;
   clearProfileAvatar: () => void;
@@ -14,12 +16,13 @@ export interface ProfileActionsFeatureDeps {
   tryAppendShareTextToSelected: (text: string) => boolean;
   copyText: (text: string) => boolean | Promise<boolean>;
   getAvatarFeature: () => AvatarFeatureLike | null;
+  profileAutosaveDelayMs?: number;
 }
 
 export interface ProfileActionsFeature {
-  onProfileDraftChange: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
+  onProfileDraftChange: (draft: ProfileDraft) => void;
   onSearchServerForward: (items: SearchResultEntry[]) => void;
-  onProfileSave: (draft: { displayName: string; handle: string; bio: string; status: string }) => void;
+  onProfileSave: (draft: ProfileDraft) => void;
   onProfileRefresh: () => void;
   onProfileCopyId: () => void;
   onProfileShareId: () => void;
@@ -29,10 +32,82 @@ export interface ProfileActionsFeature {
   onProfileAvatarClear: () => void;
 }
 
+const PROFILE_AUTOSAVE_DELAY_MS = 650;
+
+function normalizeProfileDraft(draft: ProfileDraft) {
+  const display_name = draft.displayName.trim();
+  const handle = draft.handle.trim();
+  const bio = draft.bio.trim();
+  const status = draft.status.trim();
+  return {
+    display_name: display_name || null,
+    handle: handle || null,
+    bio: bio || null,
+    status: status || null,
+  };
+}
+
+function profilePayloadSignature(payload: ReturnType<typeof normalizeProfileDraft>): string {
+  return JSON.stringify([payload.display_name, payload.handle, payload.bio, payload.status]);
+}
+
 export function createProfileActionsFeature(deps: ProfileActionsFeatureDeps): ProfileActionsFeature {
   const { store, send, markUserInput, buildSearchServerShareText, tryAppendShareTextToSelected, copyText, getAvatarFeature } = deps;
+  const autosaveDelayMs = Math.max(0, Math.trunc(Number(deps.profileAutosaveDelayMs ?? PROFILE_AUTOSAVE_DELAY_MS) || 0));
+  let profileAutosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let scheduledProfileSignature = "";
+  let lastSentProfileSignature = "";
 
-  const onProfileDraftChange = (draft: { displayName: string; handle: string; bio: string; status: string }) => {
+  const currentProfileSignature = (): string => {
+    const st = store.get();
+    const selfId = String(st.selfId || "").trim();
+    const me = selfId ? st.profiles?.[selfId] : null;
+    if (!me) return "";
+    return profilePayloadSignature(
+      normalizeProfileDraft({
+        displayName: String(me.display_name ?? ""),
+        handle: String(me.handle ?? ""),
+        bio: String(me.bio ?? ""),
+        status: String(me.status ?? ""),
+      })
+    );
+  };
+
+  const sendProfileDraft = (draft: ProfileDraft, source: "manual" | "auto"): boolean => {
+    const payload = normalizeProfileDraft(draft);
+    const signature = profilePayloadSignature(payload);
+    if (source === "auto" && (signature === lastSentProfileSignature || signature === currentProfileSignature())) {
+      return false;
+    }
+    lastSentProfileSignature = signature;
+    send({ type: "profile_set", ...payload });
+    store.set({ status: source === "auto" ? "Профиль сохраняется автоматически…" : "Сохранение профиля…" });
+    return true;
+  };
+
+  const scheduleProfileAutosave = (draft: ProfileDraft) => {
+    const payload = normalizeProfileDraft(draft);
+    const signature = profilePayloadSignature(payload);
+    if (signature === lastSentProfileSignature || signature === currentProfileSignature()) {
+      if (profileAutosaveTimer) {
+        clearTimeout(profileAutosaveTimer);
+        profileAutosaveTimer = null;
+      }
+      scheduledProfileSignature = "";
+      return;
+    }
+    scheduledProfileSignature = signature;
+    if (profileAutosaveTimer) clearTimeout(profileAutosaveTimer);
+    profileAutosaveTimer = setTimeout(() => {
+      profileAutosaveTimer = null;
+      const scheduled = scheduledProfileSignature;
+      scheduledProfileSignature = "";
+      if (!scheduled || scheduled !== profilePayloadSignature(normalizeProfileDraft(draft))) return;
+      sendProfileDraft(draft, "auto");
+    }, autosaveDelayMs);
+  };
+
+  const onProfileDraftChange = (draft: ProfileDraft) => {
     markUserInput();
     store.set({
       profileDraftDisplayName: draft.displayName,
@@ -40,6 +115,7 @@ export function createProfileActionsFeature(deps: ProfileActionsFeatureDeps): Pr
       profileDraftBio: draft.bio,
       profileDraftStatus: draft.status,
     });
+    scheduleProfileAutosave(draft);
   };
 
   const onSearchServerForward = (items: SearchResultEntry[]) => {
@@ -51,19 +127,13 @@ export function createProfileActionsFeature(deps: ProfileActionsFeatureDeps): Pr
     copyText(text);
   };
 
-  const onProfileSave = (draft: { displayName: string; handle: string; bio: string; status: string }) => {
-    const display_name = draft.displayName.trim();
-    const handle = draft.handle.trim();
-    const bio = draft.bio.trim();
-    const status = draft.status.trim();
-    send({
-      type: "profile_set",
-      display_name: display_name || null,
-      handle: handle || null,
-      bio: bio || null,
-      status: status || null,
-    });
-    store.set({ status: "Сохранение профиля…" });
+  const onProfileSave = (draft: ProfileDraft) => {
+    if (profileAutosaveTimer) {
+      clearTimeout(profileAutosaveTimer);
+      profileAutosaveTimer = null;
+    }
+    scheduledProfileSignature = "";
+    sendProfileDraft(draft, "manual");
   };
 
   const onProfileRefresh = () => {
