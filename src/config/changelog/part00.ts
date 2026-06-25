@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.930",
+    date: "2026-06-25",
+    improved: [
+      "Выпущено диагностическое Web/PWA-обновление для проверки чистого ярлыка: проверяем, что новая установка полноэкранная, без нижнего бордюра и корректно получает свежий build.",
+    ],
+  },
+  {
     version: "0.1.929",
     date: "2026-06-25",
     fixed: [
