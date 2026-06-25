@@ -105,6 +105,24 @@ test("mobile safe-area: profile pages paint the physical bottom without a white 
   );
 });
 
+test("mobile safe-area: profile pages reserve bottom scroll clearance", async () => {
+  const css = await readFile(path.resolve("src/scss/polish.css"), "utf8");
+
+  assert.match(css, /W-1038:\s*profile pages keep the last card above the mobile bottom well/);
+  assert.match(
+    css,
+    /--profile-bottom-clearance:\s*max\(\s*104px\s*,\s*var\(--app-frame-bottom-inset,\s*0px\),\s*var\(--app-bottom-inset,\s*0px\),\s*var\(--safe-bottom-pad,\s*0px\),\s*env\(safe-area-inset-bottom\)\s*\)\s*;/
+  );
+  assert.match(
+    css,
+    /html\.has-profile-surface:not\(\.has-auth-pages\)\s+\.chat\.chat-page\s+\.chat-host\s*\{[\s\S]*?scroll-padding-bottom:\s*var\(--profile-bottom-clearance\);/
+  );
+  assert.match(
+    css,
+    /html\.has-profile-surface:not\(\.has-auth-pages\)\s+\.chat\.chat-page\s+\.page\.page-profile,[\s\S]*?html\.has-profile-surface:not\(\.has-auth-pages\)\s+\.chat\.chat-page\s+\.page\.page-sessions\s*\{[\s\S]*?padding-bottom:\s*calc\(12px\s*\+\s*var\(--profile-bottom-clearance\)\)\s*;/
+  );
+});
+
 test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays visual", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /--app-logged-frame-vh:\s*max\(/);

@@ -477,6 +477,30 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   }
 }
 
+/* W-1038: profile pages keep the last card above the mobile bottom well. */
+@media (max-width: 600px) {
+  html.has-profile-surface:not(.has-auth-pages),
+  html.has-profile-surface:not(.has-auth-pages) body,
+  html.has-profile-surface:not(.has-auth-pages) #app {
+    --profile-bottom-clearance: max(
+      104px,
+      var(--app-frame-bottom-inset, 0px),
+      var(--app-bottom-inset, 0px),
+      var(--safe-bottom-pad, 0px),
+      env(safe-area-inset-bottom)
+    );
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .chat-host {
+    scroll-padding-bottom: var(--profile-bottom-clearance);
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-profile,
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-sessions {
+    padding-bottom: calc(12px + var(--profile-bottom-clearance));
+  }
+}
+
 /* W-0976: visual stability repair after W-0975 real-device screenshots. */
 .chat:not(.chat-board) .msg:not(.msg-sys) .msg-body {
   transition:
