@@ -324,6 +324,23 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
       store.set({ status: MISSING_FILE_STATUS });
       return true;
     }
+    const canOpenThumbNow = Boolean(fileId && thumbUrl && mediaKind === "image");
+    if (canOpenThumbNow) {
+      debugHook("file.viewer.open.thumb", { chatKey, msgIdx, fileId, hasThumb: true });
+      store.set({ modal: buildModalState({ fileId, url: thumbUrl as string, name, size, mime: viewerMime, caption, autoplay: false, chatKey, msgIdx }) });
+      maybePrefetchNeighbors(chatKey, msgIdx);
+      queueViewerDownload({
+        fileId: fileId as string,
+        name,
+        size,
+        mime: viewerMime,
+        caption,
+        chatKey,
+        msgIdx,
+        reason: "thumb_prefetch_upgrade",
+      });
+      return true;
+    }
     if (
       fileId &&
       !terminalMissingVisual &&
@@ -341,23 +358,6 @@ export function createFileViewerFeature(deps: FileViewerFeatureDeps): FileViewer
         reason: "ios_inline_stream_open",
       })
     ) {
-      return true;
-    }
-    const canOpenThumbNow = Boolean(fileId && thumbUrl && mediaKind === "image");
-    if (canOpenThumbNow) {
-      debugHook("file.viewer.open.thumb", { chatKey, msgIdx, fileId, hasThumb: true });
-      store.set({ modal: buildModalState({ fileId, url: thumbUrl as string, name, size, mime: viewerMime, caption, autoplay: false, chatKey, msgIdx }) });
-      maybePrefetchNeighbors(chatKey, msgIdx);
-      queueViewerDownload({
-        fileId: fileId as string,
-        name,
-        size,
-        mime: viewerMime,
-        caption,
-        chatKey,
-        msgIdx,
-        reason: "thumb_prefetch_upgrade",
-      });
       return true;
     }
     if (!fileId) {

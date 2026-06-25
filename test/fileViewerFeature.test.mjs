@@ -137,6 +137,113 @@ test("fileViewerFeature: iOS standalone media opens via inline stream instead of
   }
 });
 
+test("fileViewerFeature: iOS standalone image with thumb opens preview immediately before stream", async () => {
+  const prevWindow = globalThis.window;
+  const prevNavigator = globalThis.navigator;
+  const helper = await loadFeature();
+  try {
+    const enqueued = [];
+    const pending = [];
+    const statuses = [];
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        matchMedia(query) {
+          return { matches: query === "(display-mode: standalone)" };
+        },
+        setTimeout() {
+          return 1;
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+        standalone: true,
+        maxTouchPoints: 5,
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const storeState = {
+      conn: "connected",
+      authed: true,
+      selfId: "111",
+      selected: { kind: "dm", id: "222" },
+      conversations: {
+        "dm:222": [
+          {
+            kind: "in",
+            from: "222",
+            ts: 1,
+            text: "[file]",
+            attachment: {
+              kind: "file",
+              fileId: "f-thumb",
+              name: "photo.jpg",
+              size: 123,
+              mime: "image/jpeg",
+            },
+          },
+        ],
+      },
+      fileOffersIn: [],
+      fileTransfers: [],
+      fileThumbs: {
+        "f-thumb": { url: "blob:thumb-f-thumb", mime: "image/jpeg", ts: 1000 },
+      },
+      modal: null,
+      status: "",
+    };
+
+    const feature = helper.createFileViewerFeature({
+      store: {
+        get() {
+          return storeState;
+        },
+        set(patch) {
+          if (patch && typeof patch === "object") {
+            if (typeof patch.status === "string") statuses.push(patch.status);
+            Object.assign(storeState, patch);
+          }
+        },
+      },
+      closeModal() {},
+      jumpToChatMsgIdx() {},
+      async tryOpenFileViewerFromCache() {
+        throw new Error("thumb path should open before cache lookup");
+      },
+      enqueueFileGet(fileId) {
+        enqueued.push(String(fileId));
+      },
+      beginViewerStream() {
+        throw new Error("thumb path should not start inline stream");
+      },
+      setPendingFileViewer(state) {
+        pending.push(state);
+      },
+    });
+
+    const opened = await feature.openFromMessageIndex("dm:222", 0);
+
+    assert.equal(opened, true);
+    assert.equal(storeState.modal?.kind, "file_viewer");
+    assert.equal(storeState.modal?.url, "blob:thumb-f-thumb");
+    assert.equal(storeState.modal?.fileId, "f-thumb");
+    assert.deepEqual(enqueued, ["f-thumb"]);
+    assert.equal(pending[0]?.fileId, "f-thumb");
+    assert.ok(statuses.includes("Скачивание: photo.jpg"));
+  } finally {
+    if (prevWindow === undefined) delete globalThis.window;
+    else Object.defineProperty(globalThis, "window", { value: prevWindow, configurable: true, writable: true });
+    if (prevNavigator === undefined) delete globalThis.navigator;
+    else Object.defineProperty(globalThis, "navigator", { value: prevNavigator, configurable: true, writable: true });
+    await helper.cleanup();
+  }
+});
+
 test("fileViewerFeature: explicit visual open accepts pending file offer before file_get", async () => {
   const helper = await loadFeature();
   try {

@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.915",
+    date: "2026-06-25",
+    fixed: [
+      "iOS/PWA fullscreen viewer для фото с уже загруженным превью теперь сразу показывает это превью и параллельно догружает полный файл, вместо зависания на inline stream с бесконечной загрузкой.",
+    ],
+  },
+  {
     version: "0.1.914",
     date: "2026-06-16",
     improved: [
