@@ -30,6 +30,7 @@ export interface ClientUpdateConnectionReadiness {
 export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
   startDeferredBoot: () => void;
   applyPwaUpdateNow: (opts?: { mode?: "auto" | "manual"; buildId?: string }) => Promise<void>;
+  deferPwaUpdate: () => void;
   forceUpdateReload: (reason?: string) => void;
   forcePwaUpdate: () => Promise<void>;
   scheduleAutoApplyPwaUpdate: (delayMs?: number) => void;
@@ -63,7 +64,7 @@ export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
     const needsLatest = Boolean(updateLatest && shouldReloadForBuild(currentBuildId, updateLatest));
     const needsRuntime = Boolean(runtimeBuildId && shouldReloadForBuild(currentBuildId, runtimeBuildId));
     const hasPendingManualUpdate = needsLatest || needsRuntime || Boolean(st.pwaUpdateAvailable && buildId);
-    if (busy) return { connect: false, reason: `update_${runtimeStage}`, buildId, stage: runtimeStage };
+    if (busy) return { connect: true, reason: "update_busy_nonblocking", buildId, stage: runtimeStage };
     if (hasPendingManualUpdate) return { connect: true, reason: "update_pending_nonblocking", buildId, stage: runtimeStage };
     return { connect: true, reason, buildId: buildId && !shouldReloadForBuild(currentBuildId, buildId) ? buildId : null, stage: runtimeStage };
   }
@@ -164,6 +165,14 @@ export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
     await feature.applyPwaUpdateNow(opts);
   }
 
+  function deferPwaUpdate(): void {
+    void ensureRuntimeLoaded()
+      .then((feature) => {
+        if (typeof feature.deferPwaUpdate === "function") feature.deferPwaUpdate();
+      })
+      .catch(() => {});
+  }
+
   function forceUpdateReload(reason?: string): void {
     void ensureRuntimeLoaded()
       .then((feature) => {
@@ -203,6 +212,7 @@ export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
   return {
     startDeferredBoot,
     applyPwaUpdateNow,
+    deferPwaUpdate,
     forceUpdateReload,
     forcePwaUpdate,
     scheduleAutoApplyPwaUpdate,

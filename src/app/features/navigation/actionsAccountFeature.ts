@@ -13,6 +13,7 @@ type AuthUiActions = Pick<
   | "onDismissUpdate"
   | "onReloadUpdate"
   | "onApplyPwaUpdate"
+  | "onDeferPwaUpdate"
   | "onSkinChange"
   | "onThemeChange"
 >;

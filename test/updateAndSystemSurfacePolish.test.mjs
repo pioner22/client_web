@@ -15,7 +15,10 @@ test("pwa update modal has a dedicated mobile-safe update overlay", async () => 
   assert.match(modalSrc, /data-update-stage/);
   assert.match(modalSrc, /pwa-update-progress/);
   assert.match(modalSrc, /pwa-update-steps/);
-  assert.match(modalSrc, /остальные клавиши не закрывают окно/);
+  assert.match(modalSrc, /Esc — отложить, остальные клавиши не закрывают окно/);
+  assert.match(modalSrc, /const btnLater = el\("button", \{ class: "btn pwa-update-later", type: "button" \}/);
+  assert.match(modalSrc, /btnLater\.addEventListener\("click", \(\) => \{\s*actions\.onDismiss\(\);\s*\}\);/);
+  assert.match(modalSrc, /if \(!busy && e\.key === "Enter"\)/);
   assert.match(surfaceSrc, /overlay-update/);
   assert.match(css, /\.overlay\.overlay-update/);
   assert.match(css, /\.modal\.modal-pwa-update/);

@@ -14,6 +14,7 @@ export interface AuthUiActionsFeatureDeps {
   closeModal: () => void;
   forceUpdateReload: (reason: string) => void;
   applyPwaUpdateNow: () => Promise<void> | void;
+  deferPwaUpdate: () => void;
   setSkin: (skinId: string) => void;
   setTheme: (theme: ThemeMode) => void;
 }
@@ -30,6 +31,7 @@ export interface AuthUiActionsFeature {
   onDismissUpdate: () => void;
   onReloadUpdate: () => void;
   onApplyPwaUpdate: () => void;
+  onDeferPwaUpdate: () => void;
   onSkinChange: (skinId: string) => void;
   onThemeChange: (theme: ThemeMode) => void;
 }
@@ -66,6 +68,7 @@ export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): Auth
     closeModal,
     forceUpdateReload,
     applyPwaUpdateNow,
+    deferPwaUpdate,
     setSkin,
     setTheme,
   } = deps;
@@ -120,6 +123,10 @@ export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): Auth
     void applyPwaUpdateNow();
   };
 
+  const onDeferPwaUpdate = () => {
+    deferPwaUpdate();
+  };
+
   const onSkinChange = (skinId: string) => setSkin(skinId);
 
   const onThemeChange = (theme: ThemeMode) => setTheme(theme);
@@ -136,6 +143,7 @@ export function createAuthUiActionsFeature(deps: AuthUiActionsFeatureDeps): Auth
     onDismissUpdate,
     onReloadUpdate,
     onApplyPwaUpdate,
+    onDeferPwaUpdate,
     onSkinChange,
     onThemeChange,
   };

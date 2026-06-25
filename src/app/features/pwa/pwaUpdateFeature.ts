@@ -30,6 +30,7 @@ export interface PwaUpdateFeature {
   installEventListeners: () => void;
   dispose: () => void;
   applyPwaUpdateNow: (opts?: { mode?: PwaUpdateMode; buildId?: string }) => Promise<void>;
+  deferPwaUpdate: () => void;
   forceUpdateReload: (reason?: string) => void;
   forcePwaUpdate: () => Promise<void>;
   scheduleAutoApplyPwaUpdate: (delayMs?: number) => void;
@@ -66,6 +67,8 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
   const PWA_AUTO_APPLY_RETRY_MS = 20 * 1000;
   const PWA_AUTO_APPLY_LOG_LIMIT = 24;
   const PWA_AUTO_APPLY_STATUS = "Получено обновление веб-клиента. Откройте обновление вручную, когда приложение не используется.";
+  const PWA_MANUAL_PROMPT_DETAIL = "Можно обновить сейчас или отложить до перезапуска. Подключение к серверу продолжит работать.";
+  const PWA_DEFERRED_STATUS = "Обновление веб-клиента отложено до перезапуска.";
   const PWA_MANUAL_CHECK_TIMEOUT_MS = 3500;
   const PWA_FORCE_WATCHDOG_MS = 12_000;
   const PWA_RESET_STEP_TIMEOUT_MS = 4_500;
@@ -269,10 +272,30 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     const needsRuntime = Boolean(runtimeBuildId && shouldReloadForBuild(currentBuildId, runtimeBuildId));
     const needsPending = Boolean(pendingBuildId && shouldReloadForBuild(currentBuildId, pendingBuildId));
     const hasPendingManualUpdate = needsLatest || needsRuntime || needsPending || Boolean(st.pwaUpdateAvailable && buildId);
-    if (busy) return { connect: false, reason: `update_${runtimeStage}`, buildId, stage: runtimeStage };
+    if (busy) {
+      restoreManualPwaUpdatePrompt(buildId);
+      return { connect: true, reason: "update_busy_nonblocking", buildId, stage: runtimeStage };
+    }
     if (hasPendingManualUpdate) return { connect: true, reason: "update_pending_nonblocking", buildId, stage: runtimeStage };
     return { connect: true, reason, buildId: buildId && !shouldReloadForBuild(currentBuildId, buildId) ? buildId : null, stage: runtimeStage };
   };
+
+  function restoreManualPwaUpdatePrompt(buildId: string | null) {
+    const id = String(buildId || "").trim();
+    const opts: Parameters<typeof setPwaUpdateRuntime>[1] = {
+      buildId: id || null,
+      message: "Получено обновление веб-клиента",
+      detail: PWA_MANUAL_PROMPT_DETAIL,
+      userDecision: "pending",
+      error: null,
+      status: "Обновление веб-клиента готово. Можно обновить сейчас или отложить до перезапуска.",
+      available: true,
+      modal: "open",
+    };
+    if (id) opts.updateLatest = id;
+    setPwaUpdateRuntime("available", opts);
+    logPwaUpdate("busy_stage_recovered", id || "unknown");
+  }
 
   const logPwaUpdate = (event: string, detail?: string) => {
     const storage = getStorage("local");
@@ -708,6 +731,37 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     navigateForUpdateReload(mode === "manual" ? "manual" : "auto");
   }
 
+  function deferPwaUpdate() {
+    if (pwaAutoApplyTimer !== null) {
+      try {
+        window.clearTimeout(pwaAutoApplyTimer);
+      } catch {
+        // ignore
+      }
+      pwaAutoApplyTimer = null;
+    }
+    const st = store.get();
+    const buildId = String(st.updateLatest || (st as any).pwaUpdate?.buildId || pwaPendingBuildId || "").trim();
+    logPwaUpdate("manual_defer", buildId || "unknown");
+    store.set((prev) => {
+      const id = String(prev.updateLatest || (prev as any).pwaUpdate?.buildId || buildId || "").trim();
+      return {
+        ...prev,
+        status: PWA_DEFERRED_STATUS,
+        pwaUpdateAvailable: Boolean(prev.pwaUpdateAvailable || id),
+        pwaUpdate: mergePwaUpdateState((prev as any).pwaUpdate, "available", {
+          buildId: id || null,
+          message: "Обновление отложено",
+          detail: "Обновление отложено до перезапуска. Можно обновить вручную позже.",
+          userDecision: "later",
+          error: null,
+        }),
+        ...(id && !prev.updateLatest ? { updateLatest: id } : {}),
+        ...(prev.modal?.kind === "pwa_update" ? { modal: null } : {}),
+      };
+    });
+  }
+
   async function forcePwaUpdate() {
     if (pwaForceInFlight) {
       setPwaUpdateRuntime("checking", {
@@ -946,13 +1000,29 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     clearPwaAutoApplyGuard();
     store.set((prev) => {
       if (!prev.pwaUpdateAvailable) return prev;
+      if ((prev as any).pwaUpdate?.userDecision === "later") {
+        const id = String(prev.updateLatest || (prev as any).pwaUpdate?.buildId || buildId || "").trim();
+        if (prev.status === PWA_DEFERRED_STATUS && prev.modal?.kind !== "pwa_update") return prev;
+        return {
+          ...prev,
+          status: PWA_DEFERRED_STATUS,
+          pwaUpdate: mergePwaUpdateState((prev as any).pwaUpdate, "available", {
+            buildId: id || null,
+            message: "Обновление отложено",
+            detail: "Обновление отложено до перезапуска. Можно обновить вручную позже.",
+            userDecision: "later",
+            error: null,
+          }),
+          ...(prev.modal?.kind === "pwa_update" ? { modal: null } : {}),
+        };
+      }
       return {
         ...prev,
         status: PWA_AUTO_APPLY_STATUS,
         pwaUpdate: mergePwaUpdateState((prev as any).pwaUpdate, "available", {
           buildId: buildId || String(prev.updateLatest || "").trim() || null,
           message: "Получено обновление веб-клиента",
-          detail: "Откройте обновление вручную, когда приложение не используется.",
+          detail: PWA_MANUAL_PROMPT_DETAIL,
           userDecision: "pending",
           error: null,
         }),
@@ -1104,6 +1174,7 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     installEventListeners,
     dispose,
     applyPwaUpdateNow,
+    deferPwaUpdate,
     forceUpdateReload,
     forcePwaUpdate,
     scheduleAutoApplyPwaUpdate,

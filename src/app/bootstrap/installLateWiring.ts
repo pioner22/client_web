@@ -177,6 +177,10 @@ export function installLateWiring(deps: any) {
     await pwaUpdateRuntime.applyPwaUpdateNow(opts);
   }
 
+  function deferPwaUpdate() {
+    pwaUpdateRuntime.deferPwaUpdate();
+  }
+
   function forceUpdateReload(reason?: string) {
     pwaUpdateRuntime.forceUpdateReload(reason);
   }
@@ -307,6 +311,7 @@ export function installLateWiring(deps: any) {
     closeModal,
     forceUpdateReload,
     applyPwaUpdateNow: () => applyPwaUpdateNow({ mode: "manual" }),
+    deferPwaUpdate,
     setSkin,
     setTheme,
   });

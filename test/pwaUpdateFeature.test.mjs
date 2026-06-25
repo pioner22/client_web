@@ -771,7 +771,7 @@ test("pwaUpdateFeature: pending manual update does not block connection readines
   }
 });
 
-test("pwaUpdateFeature: active update stage still blocks connection readiness", async () => {
+test("pwaUpdateFeature: stale active update stage falls back to a nonblocking manual prompt", async () => {
   const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
   const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
   const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
@@ -865,9 +865,15 @@ test("pwaUpdateFeature: active update stage still blocks connection readiness", 
 
     const readiness = await feature.whenClientReadyForConnection();
 
-    assert.equal(readiness.connect, false);
-    assert.equal(readiness.reason, "update_applying");
+    assert.equal(readiness.connect, true);
+    assert.equal(readiness.reason, "update_busy_nonblocking");
     assert.equal(readiness.buildId, "0.1.792-abcdef123456");
+    assert.equal(readiness.stage, "applying");
+    assert.equal(store.state.pwaUpdateAvailable, true);
+    assert.deepEqual(store.state.modal, { kind: "pwa_update" });
+    assert.equal(store.state.pwaUpdate.stage, "available");
+    assert.equal(store.state.pwaUpdate.userDecision, "pending");
+    assert.match(store.state.pwaUpdate.detail, /отложить до перезапуска/);
   } finally {
     if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
     else delete globalThis.window;
@@ -880,6 +886,115 @@ test("pwaUpdateFeature: active update stage still blocks connection readiness", 
     if (prevSessionStorageDesc) Object.defineProperty(globalThis, "sessionStorage", prevSessionStorageDesc);
     else delete globalThis.sessionStorage;
     globalThis.fetch = prevFetch;
+    await helper.cleanup();
+  }
+});
+
+test("pwaUpdateFeature: deferred manual update stays deferred and does not reopen prompt", async () => {
+  const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const prevLocalStorageDesc = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const prevSessionStorageDesc = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const helper = await loadFeature();
+  try {
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    const pendingTimers = [];
+    const windowStub = {
+      localStorage,
+      sessionStorage,
+      location: { href: "https://yagodka.org/web/", protocol: "https:" },
+      setTimeout(fn, _ms) {
+        pendingTimers.push(fn);
+        return pendingTimers.length;
+      },
+      clearTimeout() {},
+    };
+    Object.defineProperty(globalThis, "window", { value: windowStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "document", {
+      value: { visibilityState: "visible", activeElement: null },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
+
+    const store = {
+      state: {
+        authed: true,
+        conn: "connected",
+        selfId: "111",
+        clientVersion: "0.1.791-27ef803b5f72",
+        updateLatest: "0.1.792-abcdef123456",
+        pwaUpdateAvailable: true,
+        pwaUpdate: {
+          stage: "available",
+          buildId: "0.1.792-abcdef123456",
+          message: "Получено обновление веб-клиента",
+          detail: "Можно обновить сейчас или позже.",
+          progress: 16,
+          error: null,
+          userDecision: "pending",
+          updatedAt: Date.now(),
+        },
+        status: "",
+        fileTransfers: [],
+        historyLoading: {},
+        modal: { kind: "pwa_update" },
+        editing: null,
+        replyDraft: null,
+        forwardDraft: null,
+        chatSelection: null,
+      },
+      get() {
+        return this.state;
+      },
+      set(patch) {
+        this.state =
+          typeof patch === "function"
+            ? patch(this.state)
+            : {
+                ...this.state,
+                ...patch,
+              };
+      },
+    };
+
+    const feature = helper.createPwaUpdateFeature({
+      store,
+      send: () => {},
+      flushBeforeReload: () => {},
+      getLastUserInputAt: () => 0,
+      hasPendingHistoryActivityForUpdate: () => false,
+      hasPendingPreviewActivityForUpdate: () => false,
+      hasPendingFileActivityForUpdate: () => false,
+    });
+
+    feature.deferPwaUpdate();
+    assert.equal(store.state.pwaUpdateAvailable, true);
+    assert.equal(store.state.modal, null);
+    assert.equal(store.state.pwaUpdate.stage, "available");
+    assert.equal(store.state.pwaUpdate.userDecision, "later");
+    assert.match(store.state.status, /отложено до перезапуска/);
+
+    feature.scheduleAutoApplyPwaUpdate(1);
+    assert.equal(pendingTimers.length, 0);
+    assert.equal(store.state.modal, null);
+    assert.equal(store.state.pwaUpdate.userDecision, "later");
+    assert.match(store.state.status, /отложено до перезапуска/);
+  } finally {
+    if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
+    else delete globalThis.window;
+    if (prevDocumentDesc) Object.defineProperty(globalThis, "document", prevDocumentDesc);
+    else delete globalThis.document;
+    if (prevNavigatorDesc) Object.defineProperty(globalThis, "navigator", prevNavigatorDesc);
+    else delete globalThis.navigator;
+    if (prevLocalStorageDesc) Object.defineProperty(globalThis, "localStorage", prevLocalStorageDesc);
+    else delete globalThis.localStorage;
+    if (prevSessionStorageDesc) Object.defineProperty(globalThis, "sessionStorage", prevSessionStorageDesc);
+    else delete globalThis.sessionStorage;
     await helper.cleanup();
   }
 });

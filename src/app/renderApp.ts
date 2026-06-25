@@ -317,6 +317,7 @@ export interface RenderActions {
   onDismissUpdate: () => void;
   onReloadUpdate: () => void;
   onApplyPwaUpdate: () => void;
+  onDeferPwaUpdate: () => void;
   onDesktopUpdateCheck: () => void;
   onDesktopUpdateDownload: () => void;
   onDesktopUpdateInstall: () => void;
@@ -713,6 +714,7 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
     onDismissUpdate: actions.onDismissUpdate,
     onReloadUpdate: actions.onReloadUpdate,
     onApplyPwaUpdate: actions.onApplyPwaUpdate,
+    onDeferPwaUpdate: actions.onDeferPwaUpdate,
     onDesktopUpdateCheck: actions.onDesktopUpdateCheck,
     onDesktopUpdateDownload: actions.onDesktopUpdateDownload,
     onDesktopUpdateInstall: actions.onDesktopUpdateInstall,

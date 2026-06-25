@@ -204,6 +204,7 @@ export interface ModalActions {
   onDismissUpdate: () => void;
   onReloadUpdate: () => void;
   onApplyPwaUpdate: () => void;
+  onDeferPwaUpdate: () => void;
   onDesktopUpdateCheck: () => void;
   onDesktopUpdateDownload: () => void;
   onDesktopUpdateInstall: () => void;
@@ -274,7 +275,7 @@ export function renderModal(state: AppState, actions: ModalActions): HTMLElement
   }
   if (kind === "pwa_update") {
     return renderPwaUpdateModal(state.clientVersion, state.updateLatest ?? "", state.pwaUpdate, {
-      onDismiss: actions.onClose,
+      onDismiss: actions.onDeferPwaUpdate,
       onApply: actions.onApplyPwaUpdate,
     });
   }

@@ -63,13 +63,13 @@ export function renderPwaUpdateModal(
     { class: "btn btn-primary pwa-update-apply", type: "button", ...(busy ? { disabled: "true" } : {}) },
     [stage === "error" ? "Повторить" : busy ? "Обновляем..." : "Обновить"]
   );
-  const btnLater = el("button", { class: "btn pwa-update-later", type: "button", ...(busy ? { disabled: "true" } : {}) }, ["Позже"]);
+  const btnLater = el("button", { class: "btn pwa-update-later", type: "button" }, ["Отложить"]);
   const buttons = el("div", { class: "modal-actions pwa-update-actions" }, [btnApply, btnLater]);
   btnApply.addEventListener("click", () => {
     if (!busy) actions.onApply();
   });
   btnLater.addEventListener("click", () => {
-    if (!busy) actions.onDismiss();
+    actions.onDismiss();
   });
 
   box.append(
@@ -96,17 +96,16 @@ export function renderPwaUpdateModal(
       ? []
       : [
           el("div", { class: "modal-line pwa-update-hint" }, ["Enter — обновить"]),
-          el("div", { class: "modal-line pwa-update-hint" }, ["Esc — позже, остальные клавиши не закрывают окно"]),
+          el("div", { class: "modal-line pwa-update-hint" }, ["Esc — отложить, остальные клавиши не закрывают окно"]),
         ]),
     buttons
   );
   box.addEventListener("keydown", (e) => {
-    if (busy) return;
     if (e.key === "Escape") {
       e.preventDefault();
       actions.onDismiss();
     }
-    if (e.key === "Enter") {
+    if (!busy && e.key === "Enter") {
       e.preventDefault();
       actions.onApply();
     }
