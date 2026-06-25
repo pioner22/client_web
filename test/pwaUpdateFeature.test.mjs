@@ -516,6 +516,92 @@ test("pwaUpdateFeature: pending prompt opens after another modal closes", async 
   }
 });
 
+test("pwaUpdateFeature: already visible manual prompt scheduling is idempotent", async () => {
+  const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const prevLocalStorageDesc = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const prevSessionStorageDesc = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const helper = await loadFeature();
+  try {
+    const localStorage = makeStorage();
+    const sessionStorage = makeStorage();
+    const windowStub = {
+      localStorage,
+      sessionStorage,
+      location: { href: "https://yagodka.org/web/", protocol: "https:" },
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    };
+    Object.defineProperty(globalThis, "window", { value: windowStub, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorage, configurable: true, writable: true });
+
+    const initialState = {
+      authed: true,
+      conn: "connected",
+      selfId: "111",
+      clientVersion: "0.1.927-4bd24aed1adc",
+      updateLatest: "0.1.928-loop-guard",
+      pwaUpdateAvailable: true,
+      pwaUpdate: {
+        stage: "available",
+        buildId: "0.1.928-loop-guard",
+        message: "Получено обновление веб-клиента",
+        detail: "Можно обновить сейчас или отложить до перезапуска. Подключение к серверу продолжит работать.",
+        progress: 16,
+        error: null,
+        userDecision: "pending",
+        updatedAt: Date.now(),
+      },
+      status: "Получено обновление веб-клиента. Откройте обновление вручную, когда приложение не используется.",
+      fileTransfers: [],
+      historyLoading: {},
+      modal: { kind: "pwa_update" },
+      editing: null,
+      replyDraft: null,
+      forwardDraft: null,
+      chatSelection: null,
+    };
+    const store = {
+      state: initialState,
+      notifications: 0,
+      get() {
+        return this.state;
+      },
+      set(patch) {
+        const prev = this.state;
+        const next = typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
+        if (Object.is(next, prev)) return;
+        this.state = next;
+        this.notifications += 1;
+      },
+    };
+
+    const feature = helper.createPwaUpdateFeature({
+      store,
+      send: () => {},
+      flushBeforeReload: () => {},
+      getLastUserInputAt: () => 0,
+      hasPendingHistoryActivityForUpdate: () => false,
+      hasPendingPreviewActivityForUpdate: () => false,
+      hasPendingFileActivityForUpdate: () => false,
+    });
+
+    feature.scheduleAutoApplyPwaUpdate();
+
+    assert.equal(store.notifications, 0);
+    assert.equal(store.state, initialState);
+    assert.deepEqual(store.state.modal, { kind: "pwa_update" });
+  } finally {
+    if (prevWindowDesc) Object.defineProperty(globalThis, "window", prevWindowDesc);
+    else delete globalThis.window;
+    if (prevLocalStorageDesc) Object.defineProperty(globalThis, "localStorage", prevLocalStorageDesc);
+    else delete globalThis.localStorage;
+    if (prevSessionStorageDesc) Object.defineProperty(globalThis, "sessionStorage", prevSessionStorageDesc);
+    else delete globalThis.sessionStorage;
+    await helper.cleanup();
+  }
+});
+
 test("pwaUpdateFeature: active full BUILD_ID is treated as current and does not auto-reload", async () => {
   const prevWindowDesc = Object.getOwnPropertyDescriptor(globalThis, "window");
   const prevDocumentDesc = Object.getOwnPropertyDescriptor(globalThis, "document");

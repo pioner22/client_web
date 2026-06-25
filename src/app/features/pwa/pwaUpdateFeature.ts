@@ -1041,13 +1041,14 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
     clearPwaAutoApplyGuard();
     store.set((prev) => {
       if (!prev.pwaUpdateAvailable) return prev;
+      const runtime = (prev as any).pwaUpdate;
       if ((prev as any).pwaUpdate?.userDecision === "later") {
-        const id = String(prev.updateLatest || (prev as any).pwaUpdate?.buildId || buildId || "").trim();
+        const id = String(prev.updateLatest || runtime?.buildId || buildId || "").trim();
         if (prev.status === PWA_DEFERRED_STATUS && prev.modal?.kind !== "pwa_update") return prev;
         return {
           ...prev,
           status: PWA_DEFERRED_STATUS,
-          pwaUpdate: mergePwaUpdateState((prev as any).pwaUpdate, "available", {
+          pwaUpdate: mergePwaUpdateState(runtime, "available", {
             buildId: id || null,
             message: "Обновление отложено",
             detail: "Обновление отложено до перезапуска. Можно обновить вручную позже.",
@@ -1057,17 +1058,26 @@ export function createPwaUpdateFeature(deps: PwaUpdateFeatureDeps): PwaUpdateFea
           ...(prev.modal?.kind === "pwa_update" ? { modal: null } : {}),
         };
       }
+      const id = String(buildId || prev.updateLatest || "").trim();
+      const shouldOpenPrompt = shouldOpenPwaUpdatePrompt(prev);
+      const alreadyManualPrompt =
+        prev.status === PWA_AUTO_APPLY_STATUS &&
+        runtime?.stage === "available" &&
+        runtime?.userDecision === "pending" &&
+        String(runtime?.buildId || "").trim() === id &&
+        (prev.modal?.kind === "pwa_update" || !shouldOpenPrompt);
+      if (alreadyManualPrompt) return prev;
       return {
         ...prev,
         status: PWA_AUTO_APPLY_STATUS,
-        pwaUpdate: mergePwaUpdateState((prev as any).pwaUpdate, "available", {
-          buildId: buildId || String(prev.updateLatest || "").trim() || null,
+        pwaUpdate: mergePwaUpdateState(runtime, "available", {
+          buildId: id || null,
           message: "Получено обновление веб-клиента",
           detail: PWA_MANUAL_PROMPT_DETAIL,
           userDecision: "pending",
           error: null,
         }),
-        ...(shouldOpenPwaUpdatePrompt(prev) ? { modal: { kind: "pwa_update" as const } } : {}),
+        ...(shouldOpenPrompt ? { modal: { kind: "pwa_update" as const } } : {}),
       };
     });
   }

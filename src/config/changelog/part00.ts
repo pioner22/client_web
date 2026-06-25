@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.929",
+    date: "2026-06-25",
+    fixed: [
+      "Исправлен hard-freeze Web/PWA после появления окна обновления: повторное планирование уже открытого prompt теперь не меняет состояние и не запускает бесконечный render/update цикл.",
+    ],
+  },
+  {
     version: "0.1.928",
     date: "2026-06-25",
     fixed: [
