@@ -331,3 +331,29 @@ html.viewer-surface-open .overlay.overlay-viewer {
     max-height: calc(var(--viewer-w1019-bottom-pad) - 38px);
   }
 }
+
+/* W-1033: lift mobile album rail above bottom chrome. The rail has its own
+   thumbnail row plus the counter row, so the bottom reserve must include a
+   real safe-area lift instead of clipping the rail inside the footer shell. */
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1033-rail-lift: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+    --viewer-w1019-bottom-pad: clamp(136px, 22dvh, 176px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-footer-shell {
+    padding-bottom: var(--viewer-w1033-rail-lift);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-rail {
+    padding: 7px 12px 0;
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    min-height: 63px;
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1033-rail-lift) - 30px);
+    align-items: center;
+  }
+}

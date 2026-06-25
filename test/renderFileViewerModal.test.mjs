@@ -427,3 +427,17 @@ test("renderFileViewerModal: W-1019 final viewer layer separates single-photo an
   assert.match(css, /padding:\s*var\(--viewer-w1019-top-pad\)\s+0\s+var\(--viewer-w1019-bottom-pad\)\s*!important;/);
   assert.match(css, /max-height:\s*calc\(var\(--app-vh,\s*100dvh\)\s*-\s*var\(--viewer-w1019-top-pad\)\s*-\s*var\(--viewer-w1019-bottom-pad\)\s*-\s*8px\)\s*!important;/);
 });
+
+test("renderFileViewerModal: W-1033 mobile rail is lifted above the bottom safe area", async () => {
+  const css = await readFile(path.resolve("src/scss/w1014-media-viewer.css"), "utf8");
+
+  assert.match(css, /W-1033:\s*lift mobile album rail above bottom chrome/);
+  assert.match(css, /--viewer-w1033-rail-lift:\s*max\(18px,\s*env\(safe-area-inset-bottom\)\);/);
+  assert.match(css, /\.viewer-has-rail\s*\{[\s\S]*?--viewer-w1019-bottom-pad:\s*clamp\(136px,\s*22dvh,\s*176px\);/);
+  assert.match(css, /\.viewer-footer-shell\s*\{[\s\S]*?padding-bottom:\s*var\(--viewer-w1033-rail-lift\);/);
+  assert.match(css, /\.viewer-rail\s*\{[\s\S]*?padding:\s*7px\s+12px\s+0;[\s\S]*?min-height:\s*63px;[\s\S]*?max-height:\s*calc\(var\(--viewer-w1019-bottom-pad\)\s*-\s*var\(--viewer-w1033-rail-lift\)\s*-\s*30px\);/);
+
+  const w1019Index = css.indexOf("W-1019: final mobile viewer allocation");
+  const w1033Index = css.indexOf("W-1033: lift mobile album rail above bottom chrome");
+  assert.ok(w1019Index >= 0 && w1033Index > w1019Index, "W-1033 rail lift must override the older W-1019 allocation");
+});
