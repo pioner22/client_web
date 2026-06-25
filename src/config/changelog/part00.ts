@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.922",
+    date: "2026-06-25",
+    fixed: [
+      "На мобильной странице профиля и странице устройств убран белый нижний подвал после удаления кнопок сохранения: нижняя safe-area теперь красится фоном профиля.",
+    ],
+  },
+  {
     version: "0.1.921",
     date: "2026-06-25",
     improved: [

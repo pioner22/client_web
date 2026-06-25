@@ -83,6 +83,28 @@ test("mobile safe-area: pages have bottom padding for home indicator", async () 
   assert.match(css, /\.page\s*\{[\s\S]*?padding-bottom:\s*calc\(\s*var\(--sp-4\)\s*\+\s*var\(--safe-bottom-layout-pad\)\s*\)\s*;/);
 });
 
+test("mobile safe-area: profile pages paint the physical bottom without a white footer", async () => {
+  const renderAppSrc = await readFile(path.resolve("src/app/renderApp.ts"), "utf8");
+  const css = await readFile(path.resolve("src/scss/polish.css"), "utf8");
+
+  assert.match(renderAppSrc, /const profileSurfaceActive = state\.page === "profile" \|\| state\.page === "sessions";/);
+  assert.match(renderAppSrc, /document\.documentElement\.classList\.toggle\("has-profile-surface",\s*profileSurfaceActive\)/);
+  assert.match(renderAppSrc, /document\.body\.classList\.toggle\("has-profile-surface",\s*profileSurfaceActive\)/);
+  assert.match(css, /W-1037:\s*profile page owns mobile bottom canvas/);
+  assert.match(
+    css,
+    /html\.has-profile-surface:not\(\.has-auth-pages\),[\s\S]*?html\.has-profile-surface:not\(\.has-auth-pages\)\s+body,[\s\S]*?html\.has-profile-surface:not\(\.has-auth-pages\)\s+#app\s*\{[\s\S]*?--safe-area-bg:\s*var\(--profile-surface-bg\);[\s\S]*?--app-host-canvas-bg:\s*var\(--profile-surface-bg\);/
+  );
+  assert.match(
+    css,
+    /html\.has-profile-surface:not\(\.has-auth-pages\)\s+body::after,[\s\S]*?html\.has-profile-surface:not\(\.has-auth-pages\)\s+#app\.app-frame::after\s*\{[\s\S]*?background:\s*var\(--profile-surface-bg\);/
+  );
+  assert.match(
+    css,
+    /html\.has-profile-surface:not\(\.has-auth-pages\)\s+\.chat\.chat-page,[\s\S]*?html\.has-profile-surface:not\(\.has-auth-pages\)\s+\.chat\.chat-page\s+\.chat-host,[\s\S]*?html\.has-profile-surface:not\(\.has-auth-pages\)\s+\.chat\.chat-page\s+\.page\.page-profile\s*\{[\s\S]*?background-color:\s*var\(--profile-surface-bg\);/
+  );
+});
+
 test("mobile safe-area: iOS standalone fixed frame owns shell while viewer stays visual", async () => {
   const css = await readFile(path.resolve("src/scss/responsive.css"), "utf8");
   assert.match(css, /--app-logged-frame-vh:\s*max\(/);

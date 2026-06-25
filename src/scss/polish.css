@@ -446,6 +446,37 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   }
 }
 
+/* W-1037: profile page owns mobile bottom canvas after removing the manual footer buttons. */
+@media (max-width: 600px) {
+  html.has-profile-surface:not(.has-auth-pages),
+  html.has-profile-surface:not(.has-auth-pages) body,
+  html.has-profile-surface:not(.has-auth-pages) #app {
+    --profile-surface-bg: var(--chat-bg);
+    --safe-area-bg: var(--profile-surface-bg);
+    --app-frame-safe-bg: var(--profile-surface-bg);
+    --app-host-canvas-bg: var(--profile-surface-bg);
+    background-color: var(--profile-surface-bg);
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) body::after,
+  html.has-profile-surface:not(.has-auth-pages) #app.app-frame::after {
+    background: var(--profile-surface-bg);
+    background-color: var(--profile-surface-bg);
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page,
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .chat-host,
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-profile {
+    background-color: var(--profile-surface-bg);
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-profile {
+    background:
+      radial-gradient(140% 80% at 12% 0%, color-mix(in srgb, var(--focus), transparent 92%), transparent 55%),
+      var(--profile-surface-bg);
+  }
+}
+
 /* W-0976: visual stability repair after W-0975 real-device screenshots. */
 .chat:not(.chat-board) .msg:not(.msg-sys) .msg-body {
   transition:

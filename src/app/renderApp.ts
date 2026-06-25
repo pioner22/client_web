@@ -402,10 +402,13 @@ export function renderApp(layout: Layout, state: AppState, actions: RenderAction
   const rightTarget = getRightPanelTarget(state);
   const showRightPanel = shouldShowRightPanel(state, { fullScreenActive, mobileUi });
   const authModalVisible = modalPresentation.authModalVisible;
+  const profileSurfaceActive = state.page === "profile" || state.page === "sessions";
   if (typeof document !== "undefined") {
     document.body.classList.toggle("has-right-col", showRightPanel);
     document.body.classList.toggle("has-auth-pages", fullScreenActive);
     document.documentElement.classList.toggle("has-auth-pages", fullScreenActive);
+    document.documentElement.classList.toggle("has-profile-surface", profileSurfaceActive);
+    document.body.classList.toggle("has-profile-surface", profileSurfaceActive);
     layout.root?.classList.toggle("app-frame-auth", fullScreenActive);
     layout.root?.classList.toggle("app-frame-main", !fullScreenActive);
     layout.root?.classList.toggle("has-message-context-menu", messageContextMenuOpen);
