@@ -385,3 +385,15 @@ html.viewer-surface-open .overlay.overlay-viewer {
     max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1035-footer-lift) - 34px);
   }
 }
+
+/* W-1039: keep visual viewer header chrome off the photo top edge.
+   The action buttons remain visible on their own dark circles, but the header
+   row itself must not paint a gradient or blur strip over the media. */
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header {
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}

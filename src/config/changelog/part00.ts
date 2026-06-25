@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.924",
+    date: "2026-06-25",
+    fixed: [
+      "В полноэкранном просмотре фото убрана верхняя размытая/градиентная полоска: панель действий больше не рисует фон поверх верхней части изображения.",
+    ],
+  },
+  {
     version: "0.1.923",
     date: "2026-06-25",
     fixed: [

@@ -461,3 +461,17 @@ test("renderFileViewerModal: W-1035 mobile rail shell is lifted above the screen
   const w1035Index = css.indexOf("W-1035: screenshot remediation lifts the whole mobile album rail shell");
   assert.ok(w1033Index >= 0 && w1035Index > w1033Index, "W-1035 shell lift must override W-1033 inner padding");
 });
+
+test("renderFileViewerModal: W-1039 visual header does not draw a blurred top strip over photos", async () => {
+  const css = await readFile(path.resolve("src/scss/w1014-media-viewer.css"), "utf8");
+
+  assert.match(css, /W-1039:\s*keep visual viewer header chrome off the photo top edge/);
+  assert.match(
+    css,
+    /\.overlay\.overlay-viewer\s+\.modal\.modal-viewer\.viewer-visual\[data-viewer-fit="stage"\]\s+\.viewer-header\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?background-color:\s*transparent;[\s\S]*?background-image:\s*none;[\s\S]*?-webkit-backdrop-filter:\s*none;[\s\S]*?backdrop-filter:\s*none;[\s\S]*?box-shadow:\s*none;/
+  );
+
+  const w1035Index = css.indexOf("W-1035: screenshot remediation lifts the whole mobile album rail shell");
+  const w1039Index = css.indexOf("W-1039: keep visual viewer header chrome off the photo top edge");
+  assert.ok(w1035Index >= 0 && w1039Index > w1035Index, "W-1039 header cleanup must override earlier viewer header gradients");
+});
