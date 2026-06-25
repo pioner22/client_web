@@ -107,6 +107,20 @@ test("messenger surface polish: W-1012 keeps visible media free of stale progres
   assert.match(css, /\.chat-jump\[data-jump-unread="0"\]\s+\.chat-jump-badge,[\s\S]*?\.chat-jump\[data-jump-unread="0"\]\s+\.chat-jump-label\s*\{[\s\S]*?display:\s*none\s*!important/);
 });
 
+test("messenger surface polish: W-1040 media overlay shell does not blur the photo top edge", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+
+  assert.match(css, /W-1040:\s*chat media overlay controls must not blur the photo top edge/);
+  assert.match(
+    css,
+    /\.chat:not\(\.chat-board\)\s+\.msg-attach\s+\.file-row-chat\.file-row-image\s+\.file-actions,\s*\.chat:not\(\.chat-board\)\s+\.chat-media-overlay-controls\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?-webkit-backdrop-filter:\s*none;[\s\S]*?backdrop-filter:\s*none;[\s\S]*?box-shadow:\s*none;/
+  );
+
+  const blurRuleIndex = css.indexOf("blur(12px) saturate(135%)");
+  const cleanupIndex = css.lastIndexOf("W-1040: chat media overlay controls must not blur the photo top edge");
+  assert.ok(blurRuleIndex >= 0 && cleanupIndex > blurRuleIndex, "W-1040 cleanup must override the earlier overlay-container blur rule");
+});
+
 test("messenger surface polish: W-0978 keeps Android bubbles and context menu bounded", async () => {
   const css = await readCssWithImports("src/scss/style.css");
 

@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.925",
+    date: "2026-06-25",
+    fixed: [
+      "В истории чата убрана верхняя размытая полоса поверх фото-превью: общий overlay-контейнер кнопок больше не размывает верх изображения.",
+    ],
+  },
+  {
     version: "0.1.924",
     date: "2026-06-25",
     fixed: [

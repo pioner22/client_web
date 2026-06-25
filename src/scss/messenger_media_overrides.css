@@ -980,6 +980,16 @@ html[data-theme="dark"] .chat:not(.chat-board) {
   backdrop-filter: none;
 }
 
+/* W-1040: chat media overlay controls must not blur the photo top edge.
+   Keep the transparent shell off the image; individual buttons keep their own chrome. */
+.chat:not(.chat-board) .msg-attach .file-row-chat.file-row-image .file-actions,
+.chat:not(.chat-board) .chat-media-overlay-controls {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
 .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .msg-body,
 .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-surface,
 .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"][data-msg-album-layout="mosaic"] .chat-album-grid {
