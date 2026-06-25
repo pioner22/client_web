@@ -21,7 +21,7 @@ import {
   type FileDownloadFeature,
   type FileDownloadFeatureDeps,
 } from "./fileDownloadTypes";
-
+import { resolveViewerPreviewFallbackUrl } from "./fileViewerUpgradeFallback";
 export {
   getSilentFileUrlPlan,
   shouldHydrateSilentFullBlob,
@@ -30,7 +30,6 @@ export {
   type FileDownloadFeature,
   type FileDownloadFeatureDeps,
 } from "./fileDownloadTypes";
-
 export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDownloadFeature {
   const {
     store,
@@ -256,6 +255,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
           const viewerMime = finalMime || pv.mime || null;
           const currentModal = store.get().modal;
           if (shouldApplyPendingFileViewerResult(currentModal, { fileId: fid, chatKey: pv.chatKey, msgIdx: pv.msgIdx })) {
+            const fallbackUrl = resolveViewerPreviewFallbackUrl({ currentModal, nextUrl: objectUrl, name: viewerName, mime: viewerMime, resolveAutoDownloadKind });
             store.set({
               modal: buildFileViewerModalState({
                 fileId: fid,
@@ -264,6 +264,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
                 size: viewerSize,
                 mime: viewerMime,
                 caption: pv.caption || null,
+                fallbackUrl,
                 chatKey: pv.chatKey,
                 msgIdx: pv.msgIdx,
               }),
@@ -766,6 +767,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
         const viewerMime = finalMime || pv.mime || null;
         const currentModal = store.get().modal;
         if (shouldApplyPendingFileViewerResult(currentModal, { fileId, chatKey: pv.chatKey, msgIdx: pv.msgIdx })) {
+          const fallbackUrl = resolveViewerPreviewFallbackUrl({ currentModal, nextUrl: objectUrl, name: viewerName, mime: viewerMime, resolveAutoDownloadKind });
           store.set({
             modal: buildFileViewerModalState({
               fileId,
@@ -774,6 +776,7 @@ export function createFileDownloadFeature(deps: FileDownloadFeatureDeps): FileDo
               size: viewerSize,
               mime: viewerMime,
               caption: pv.caption || null,
+              fallbackUrl,
               chatKey: pv.chatKey,
               msgIdx: pv.msgIdx,
             }),

@@ -125,6 +125,7 @@ export interface FileDownloadFeatureDeps {
     size: number;
     mime: string | null;
     caption: string | null;
+    fallbackUrl?: string | null;
     chatKey: string | null;
     msgIdx: number | null;
   }) => FileViewerModalState;

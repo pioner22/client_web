@@ -49,6 +49,24 @@ type FileThumbEntry = {
   mediaH?: number | null;
 };
 
+function activeViewerUsesUrl(state: AppState, fileId: string, url: string): boolean {
+  const fid = String(fileId || "").trim();
+  const targetUrl = String(url || "").trim();
+  const modal = state.modal;
+  if (!fid || !targetUrl || !modal || modal.kind !== "file_viewer") return false;
+  return String(modal.fileId || "").trim() === fid && String(modal.url || "").trim() === targetUrl;
+}
+
+function revokeThumbUrlIfUnused(state: AppState, fileId: string, url: string): void {
+  const targetUrl = String(url || "").trim();
+  if (!targetUrl || activeViewerUsesUrl(state, fileId, targetUrl)) return;
+  try {
+    URL.revokeObjectURL(targetUrl);
+  } catch {
+    // ignore
+  }
+}
+
 export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): LocalVideoThumbFeature {
   const {
     store,
@@ -80,11 +98,7 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
     store.set((prev) => {
       const existing = prev.fileThumbs?.[fid] || null;
       if (!existing) return prev;
-      try {
-        if (existing.url) URL.revokeObjectURL(existing.url);
-      } catch {
-        // ignore
-      }
+      revokeThumbUrlIfUnused(prev, fid, existing.url);
       const nextThumbs = { ...(prev.fileThumbs || {}) };
       delete nextThumbs[fid];
       return { ...prev, fileThumbs: nextThumbs };
@@ -105,11 +119,7 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
     store.set((prev) => {
       const existing = prev.fileThumbs?.[fid] || null;
       if (existing?.url && existing.url !== nextUrl) {
-        try {
-          URL.revokeObjectURL(existing.url);
-        } catch {
-          // ignore
-        }
+        revokeThumbUrlIfUnused(prev, fid, existing.url);
       }
       let nextThumbs: Record<string, FileThumbEntry> = {
         ...(prev.fileThumbs || {}),
@@ -138,11 +148,7 @@ export function createLocalVideoThumbFeature(deps: LocalVideoThumbFeatureDeps): 
           for (const key of drop) {
             const entry = nextThumbs[key];
             if (entry?.url) {
-              try {
-                URL.revokeObjectURL(entry.url);
-              } catch {
-                // ignore
-              }
+              revokeThumbUrlIfUnused(prev, key, entry.url);
             }
             delete nextThumbs[key];
           }

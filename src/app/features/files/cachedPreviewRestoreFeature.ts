@@ -24,6 +24,24 @@ type PreviewTransferItem = {
   room: string | null;
 };
 
+function activeViewerUsesUrl(state: AppState, fileId: string, url: string): boolean {
+  const fid = String(fileId || "").trim();
+  const targetUrl = String(url || "").trim();
+  const modal = state.modal;
+  if (!fid || !targetUrl || !modal || modal.kind !== "file_viewer") return false;
+  return String(modal.fileId || "").trim() === fid && String(modal.url || "").trim() === targetUrl;
+}
+
+function revokePreviewUrlIfUnused(state: AppState, fileId: string, url: string): void {
+  const targetUrl = String(url || "").trim();
+  if (!targetUrl || activeViewerUsesUrl(state, fileId, targetUrl)) return;
+  try {
+    URL.revokeObjectURL(targetUrl);
+  } catch {
+    // ignore
+  }
+}
+
 export interface CachedPreviewRestoreFeatureDeps {
   store: Store<AppState>;
   thumbCacheId: (fileId: string) => string;
@@ -62,11 +80,7 @@ export function createCachedPreviewRestoreFeature(
     for (const key of drop) {
       const entry = next[key];
       if (entry?.url) {
-        try {
-          URL.revokeObjectURL(entry.url);
-        } catch {
-          // ignore
-        }
+        revokePreviewUrlIfUnused(store.get(), key, entry.url);
       }
       delete next[key];
     }
@@ -148,11 +162,7 @@ export function createCachedPreviewRestoreFeature(
         if (!nextUrl) continue;
         const existing = nextThumbs[fid];
         if (existing?.url && existing.url !== nextUrl) {
-          try {
-            URL.revokeObjectURL(existing.url);
-          } catch {
-            // ignore
-          }
+          revokePreviewUrlIfUnused(prev, fid, existing.url);
         }
         nextThumbs[fid] = {
           url: nextUrl,

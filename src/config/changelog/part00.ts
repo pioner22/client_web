@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.916",
+    date: "2026-06-25",
+    fixed: [
+      "Fullscreen viewer больше не теряет уже показанное превью фото во время догрузки оригинала: активный thumbnail не отзывается, а полный файл подменяет preview только с fallback без пустого кадра.",
+    ],
+  },
+  {
     version: "0.1.915",
     date: "2026-06-25",
     fixed: [

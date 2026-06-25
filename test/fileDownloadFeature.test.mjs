@@ -555,3 +555,136 @@ test("fileDownloadFeature: audio file_url waits for PWA controller instead of fu
     await helper.cleanup();
   }
 });
+
+test("fileDownloadFeature: fullscreen image upgrade keeps current preview as fallback", async () => {
+  const helper = await loadFeature();
+  const prevUrl = globalThis.URL;
+  try {
+    globalThis.URL = { ...(prevUrl || {}), createObjectURL: () => "blob:full-img" };
+    const state = {
+      authed: true,
+      conn: "connected",
+      netLeader: true,
+      selfId: "u1",
+      status: "idle",
+      fileThumbs: { "img-1": { url: "blob:thumb-img", mime: "image/jpeg", ts: 1 } },
+      fileTransfers: [
+        {
+          localId: "ft-img",
+          id: "img-1",
+          name: "photo.jpg",
+          size: 4,
+          mime: "image/jpeg",
+          direction: "in",
+          peer: "u2",
+          status: "downloading",
+          progress: 50,
+        },
+      ],
+      modal: {
+        kind: "file_viewer",
+        fileId: "img-1",
+        url: "blob:thumb-img",
+        name: "photo.jpg",
+        size: 4,
+        mime: "image/jpeg",
+        caption: null,
+        chatKey: "dm:u2",
+        msgIdx: 3,
+      },
+    };
+    const downloadByFileId = new Map([
+      [
+        "img-1",
+        {
+          fileId: "img-1",
+          name: "photo.jpg",
+          size: 4,
+          from: "u2",
+          room: null,
+          mime: "image/jpeg",
+          chunks: [new Uint8Array([1, 2, 3, 4]).buffer],
+          received: 4,
+          lastProgress: 100,
+        },
+      ],
+    ]);
+    const pendingViewer = {
+      fileId: "img-1",
+      name: "photo.jpg",
+      size: 4,
+      mime: "image/jpeg",
+      caption: null,
+      chatKey: "dm:u2",
+      msgIdx: 3,
+    };
+    let pendingTaken = 0;
+    const store = {
+      get: () => state,
+      set: (patch) => Object.assign(state, typeof patch === "function" ? patch(state) : { ...state, ...patch }),
+      subscribe: () => {},
+    };
+    const noop = () => {};
+    const feature = helper.createFileDownloadFeature({
+      store,
+      send: noop,
+      deviceCaps: { constrained: false, slowNetwork: false, prefetchAllowed: true },
+      downloadByFileId,
+      disableFileHttp: noop,
+      nextTransferId: () => "ft-next",
+      updateTransferByFileId: (fileId, apply) => {
+        state.fileTransfers = state.fileTransfers.map((entry) => (entry.id === fileId ? apply(entry) : entry));
+      },
+      scheduleSaveFileTransfers: noop,
+      resolveFileMeta: () => ({ name: "photo.jpg", size: 4, mime: "image/jpeg" }),
+      shouldCacheFile: () => false,
+      shouldCachePreview: () => false,
+      enforceFileCachePolicy: async () => {},
+      thumbCacheId: (fileId) => `thumb:${fileId}`,
+      canAutoDownloadFullFile: () => true,
+      resolveAutoDownloadKind: () => "image",
+      isSilentFileGet: () => false,
+      clearSilentFileGet: noop,
+      clearFileAcceptRetry: noop,
+      clearFileGetNotFoundRetry: noop,
+      scheduleFileGetNotFoundRetry: () => false,
+      finishFileGet: noop,
+      touchFileGetTimeout: noop,
+      dropFileGetQueue: noop,
+      tryResolveHttpFileUrlWaiter: () => false,
+      requestFreshHttpDownloadUrl: async () => ({ url: "https://example.invalid/file" }),
+      rejectHttpFileUrlWaiter: noop,
+      scheduleThumbPollRetry: noop,
+      clearThumbPollRetry: noop,
+      setFileThumb: noop,
+      maybeSetVideoPosterFromBlob: noop,
+      probeImageDimensions: async () => ({ w: null, h: null }),
+      pendingFileDownloads: new Map(),
+      triggerBrowserDownload: noop,
+      takePendingFileViewer: () => {
+        pendingTaken += 1;
+        return pendingViewer;
+      },
+      clearPendingFileViewer: noop,
+      buildFileViewerModalState: (params) => ({ kind: "file_viewer", ...params }),
+      postStreamChunk: () => true,
+      postStreamEnd: noop,
+      postStreamError: noop,
+      clearCachedPreviewAttempt: noop,
+      clearPreviewPrefetchAttempt: noop,
+      isUploadActive: () => false,
+      abortUploadByFileId: noop,
+    });
+
+    assert.equal(feature.handleMessage({ type: "file_download_complete", file_id: "img-1" }), true);
+    assert.equal(pendingTaken, 1);
+    assert.equal(state.modal?.kind, "file_viewer");
+    assert.equal(state.modal?.url, "blob:full-img");
+    assert.equal(state.modal?.fallbackUrl, "blob:thumb-img");
+    assert.equal(state.modal?.fileId, "img-1");
+  } finally {
+    if (prevUrl === undefined) delete globalThis.URL;
+    else globalThis.URL = prevUrl;
+    await helper.cleanup();
+  }
+});

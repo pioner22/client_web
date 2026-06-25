@@ -648,8 +648,12 @@ export function renderFileViewerModal(
         }
       });
     };
+    const primaryUrl = safeHref;
+    const initialFallbackUrl = fallbackUrl && fallbackUrl !== primaryUrl ? fallbackUrl : "";
     let preloaderSettled = false;
-    let fallbackTried = false;
+    let fallbackTried = Boolean(initialFallbackUrl);
+    let displayingFallback = Boolean(initialFallbackUrl);
+    let primaryPreloadStarted = false;
     let preloaderStallTimer: ReturnType<typeof setTimeout> | null = null;
     const clearPreloaderStallTimer = () => {
       if (preloaderStallTimer === null) return;
@@ -683,8 +687,46 @@ export function renderFileViewerModal(
       }
       return true;
     };
+    const preloadPrimaryImage = () => {
+      if (!initialFallbackUrl || primaryPreloadStarted) return;
+      primaryPreloadStarted = true;
+      const ImageCtor = (globalThis as any).Image;
+      if (typeof ImageCtor !== "function") return;
+      try {
+        const preload = new ImageCtor();
+        const applyPrimary = () => {
+          const apply = () => {
+            displayingFallback = false;
+            img.src = primaryUrl;
+          };
+          try {
+            const decoded = typeof preload.decode === "function" ? preload.decode() : null;
+            if (decoded && typeof decoded.then === "function") {
+              void decoded.then(apply, apply);
+              return;
+            }
+          } catch {
+            // ignore and swap after onload
+          }
+          apply();
+        };
+        preload.onload = applyPrimary;
+        preload.onerror = () => {
+          if (actions.onRecover) {
+            try {
+              actions.onRecover();
+            } catch {
+              // ignore
+            }
+          }
+        };
+        preload.src = primaryUrl;
+      } catch {
+        // ignore
+      }
+    };
     const onLoaded = () => {
-      if (preloaderSettled) return;
+      if (preloaderSettled && !displayingFallback) return;
       if (!img.naturalWidth) {
         onFailed();
         return;
@@ -695,9 +737,19 @@ export function renderFileViewerModal(
       resetImageViewport();
       img.classList.add("viewer-img-loaded");
       preloader.classList.add("hidden");
+      if (displayingFallback) preloadPrimaryImage();
     };
     const onFailed = () => {
       if (preloaderSettled) return;
+      if (displayingFallback) {
+        displayingFallback = false;
+        setViewerLoadState("loading");
+        preloader.classList.remove("viewer-preloader-failed");
+        preloaderText.textContent = "Загрузка…";
+        armPreloaderStallTimer();
+        img.src = primaryUrl;
+        return;
+      }
       if (tryFallbackImage()) return;
       preloaderSettled = true;
       clearPreloaderStallTimer();
@@ -717,7 +769,8 @@ export function renderFileViewerModal(
     img.addEventListener("error", onFailed);
     setViewerLoadState("loading");
     armPreloaderStallTimer();
-    img.src = safeHref;
+    if (initialFallbackUrl) preloaderText.textContent = "Показываем превью…";
+    img.src = initialFallbackUrl || primaryUrl;
     if (img.complete) {
       if (img.naturalWidth > 0) onLoaded();
       else onFailed();
