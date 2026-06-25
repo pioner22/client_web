@@ -357,3 +357,31 @@ html.viewer-surface-open .overlay.overlay-viewer {
     align-items: center;
   }
 }
+
+/* W-1035: screenshot remediation lifts the whole mobile album rail shell.
+   W-1033 only added an inner safe-area reserve, but the footer itself stayed
+   anchored to bottom:0. Keep the reserved stage area and the visual shell in
+   the same band, then move the entire counter/thumbnail rail above the bottom
+   well seen in the real iPhone screenshot. */
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1035-footer-lift: clamp(76px, 12dvh, 132px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+    --viewer-w1019-bottom-pad: clamp(214px, 34dvh, 292px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-footer-shell {
+    bottom: var(--viewer-w1035-footer-lift);
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1035-footer-lift));
+    padding-bottom: 0;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-rail {
+    padding: 7px 12px 4px;
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1035-footer-lift) - 34px);
+  }
+}

@@ -441,3 +441,23 @@ test("renderFileViewerModal: W-1033 mobile rail is lifted above the bottom safe 
   const w1033Index = css.indexOf("W-1033: lift mobile album rail above bottom chrome");
   assert.ok(w1019Index >= 0 && w1033Index > w1019Index, "W-1033 rail lift must override the older W-1019 allocation");
 });
+
+test("renderFileViewerModal: W-1035 mobile rail shell is lifted above the screenshot bottom well", async () => {
+  const css = await readFile(path.resolve("src/scss/w1014-media-viewer.css"), "utf8");
+
+  assert.match(css, /W-1035:\s*screenshot remediation lifts the whole mobile album rail shell/);
+  assert.match(css, /--viewer-w1035-footer-lift:\s*clamp\(76px,\s*12dvh,\s*132px\);/);
+  assert.match(css, /\.viewer-has-rail\s*\{[\s\S]*?--viewer-w1019-bottom-pad:\s*clamp\(214px,\s*34dvh,\s*292px\);/);
+  assert.match(
+    css,
+    /\.viewer-footer-shell\s*\{[\s\S]*?bottom:\s*var\(--viewer-w1035-footer-lift\);[\s\S]*?max-height:\s*calc\(var\(--viewer-w1019-bottom-pad\)\s*-\s*var\(--viewer-w1035-footer-lift\)\);[\s\S]*?padding-bottom:\s*0;/
+  );
+  assert.match(
+    css,
+    /\.viewer-rail\s*\{[\s\S]*?padding:\s*7px\s+12px\s+4px;[\s\S]*?max-height:\s*calc\(var\(--viewer-w1019-bottom-pad\)\s*-\s*var\(--viewer-w1035-footer-lift\)\s*-\s*34px\);/
+  );
+
+  const w1033Index = css.indexOf("W-1033: lift mobile album rail above bottom chrome");
+  const w1035Index = css.indexOf("W-1035: screenshot remediation lifts the whole mobile album rail shell");
+  assert.ok(w1033Index >= 0 && w1035Index > w1033Index, "W-1035 shell lift must override W-1033 inner padding");
+});
