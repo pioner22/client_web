@@ -50,7 +50,7 @@ function makeStore(initial = {}) {
   return store;
 }
 
-test("clientConnectionWorker: blocks gateway connect while client update is pending", async () => {
+test("clientConnectionWorker: blocks gateway connect when client update readiness is not connectable", async () => {
   const helper = await loadWorker();
   try {
     const store = makeStore();
@@ -67,9 +67,9 @@ test("clientConnectionWorker: blocks gateway connect while client update is pend
       updateWorker: {
         whenClientReadyForConnection: async () => ({
           connect: false,
-          reason: "update_pending",
+          reason: "update_error",
           buildId: "0.1.912-next",
-          stage: "available",
+          stage: "error",
         }),
       },
     });
@@ -79,9 +79,9 @@ test("clientConnectionWorker: blocks gateway connect while client update is pend
 
     assert.equal(connectCalls, 0);
     assert.equal(store.state.conn, "disconnected");
-    assert.equal(store.state.pwaUpdateAvailable, true);
-    assert.deepEqual(store.state.modal, { kind: "pwa_update" });
-    assert.match(store.state.status, /Доступно обновление клиента/);
+    assert.equal(store.state.pwaUpdateAvailable, false);
+    assert.deepEqual(store.state.modal, { kind: "auth" });
+    assert.match(store.state.status, /Обновление клиента выполняется/);
   } finally {
     await helper.cleanup();
   }

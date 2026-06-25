@@ -2,6 +2,13 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.917",
+    date: "2026-06-25",
+    fixed: [
+      "Pending PWA-обновление больше не блокирует подключение к серверу и авторизацию: клиент продолжает работать с ручным prompt обновления, а gateway ждёт только реальные активные стадии установки.",
+    ],
+  },
+  {
     version: "0.1.916",
     date: "2026-06-25",
     fixed: [

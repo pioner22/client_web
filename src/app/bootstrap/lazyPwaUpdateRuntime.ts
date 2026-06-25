@@ -62,10 +62,9 @@ export function createLazyPwaUpdateRuntime(deps: LazyPwaUpdateRuntimeDeps): {
     const busy = isPwaUpdateBusy(runtimeStage);
     const needsLatest = Boolean(updateLatest && shouldReloadForBuild(currentBuildId, updateLatest));
     const needsRuntime = Boolean(runtimeBuildId && shouldReloadForBuild(currentBuildId, runtimeBuildId));
+    const hasPendingManualUpdate = needsLatest || needsRuntime || Boolean(st.pwaUpdateAvailable && buildId);
     if (busy) return { connect: false, reason: `update_${runtimeStage}`, buildId, stage: runtimeStage };
-    if (needsLatest || needsRuntime || Boolean(st.pwaUpdateAvailable && buildId)) {
-      return { connect: false, reason: "update_pending", buildId, stage: runtimeStage };
-    }
+    if (hasPendingManualUpdate) return { connect: true, reason: "update_pending_nonblocking", buildId, stage: runtimeStage };
     return { connect: true, reason, buildId: buildId && !shouldReloadForBuild(currentBuildId, buildId) ? buildId : null, stage: runtimeStage };
   }
 
