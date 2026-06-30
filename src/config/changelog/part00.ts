@@ -2,6 +2,16 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.937",
+    date: "2026-06-30",
+    fixed: [
+      "Telegram (точный): профиль в тёмной теме больше не получает светлую/белую шапку, а в светлой теме profile cards и header стали чистыми Telegram-white вместо грязного бежевого слоя.",
+    ],
+    improved: [
+      "Profile/user/room surfaces в Telegram skin теперь имеют отдельные light/dark tokens для canvas, header, cards и ID-блока, чтобы общий polish layer не перебивал тему.",
+    ],
+  },
+  {
     version: "0.1.936",
     date: "2026-06-30",
     fixed: [
