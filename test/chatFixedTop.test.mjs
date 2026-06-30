@@ -346,6 +346,13 @@ test("renderChat: закреп/поиск рендерятся в chatTop (не 
       const search = findFirst(chatTop, (n) => n && typeof n.className === "string" && n.className.split(/\s+/).includes("chat-search"));
       assert.ok(search, "search bar should be in chatTop");
 
+      const searchToggle = findFirst(
+        chatTop,
+        (n) => n && typeof n.className === "string" && n.className.split(/\s+/).includes("chat-search-toggle")
+      );
+      assert.ok(searchToggle, "chat search toggle should be discoverable in the chat title");
+      assert.equal(searchToggle.getAttribute("aria-label"), "Поиск в чате");
+
       const pinnedInHost = findFirst(chatHost, (n) => n && typeof n.className === "string" && n.className.split(/\s+/).includes("chat-pinned"));
       assert.equal(pinnedInHost, null, "pinned bar must not be inside chatHost/history");
 
@@ -406,7 +413,7 @@ test("renderChat: mobile virtual history сохраняет явный start=0 �
   }
 });
 
-test("renderChat: без выбранного чата область чата пустая, composer/placeholder не рендерим", async () => {
+test("renderChat: без выбранного чата desktop показывает empty state, composer/placeholder не рендерим", async () => {
   const helper = await loadRenderChat();
   try {
     withDomStubs(() => {
@@ -436,7 +443,12 @@ test("renderChat: без выбранного чата область чата �
       );
 
       assert.equal(chatTop._children.length, 0);
-      assert.equal(chatHost._children.length, 0);
+      const emptyState = findFirst(
+        chatHost,
+        (n) => n && typeof n.className === "string" && n.className.split(/\s+/).includes("chat-empty-state")
+      );
+      assert.ok(emptyState, "desktop chat should render a resting empty state");
+      assert.equal(emptyState.getAttribute("aria-label"), "Чат не выбран");
       assert.equal(chatJump.classList.contains("hidden"), true);
     });
   } finally {

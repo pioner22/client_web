@@ -36,6 +36,7 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
     class: "input",
     rows: "1",
     placeholder: "Сообщение",
+    "aria-label": "Сообщение",
     "data-ios-assistant": "composer",
     // iOS PWA (standalone) иногда показывает системную панель Undo/Redo/✓ вместо подсказок.
     // Для композера включаем “обычный” режим клавиатуры, чтобы снизить шанс появления панели.
@@ -145,10 +146,10 @@ export function createLayout(root: HTMLElement, opts?: { iosStandalone?: boolean
   ]);
 
   const boardEditorToolbar = el("div", { class: "board-editor-toolbar", role: "toolbar", "aria-label": "Форматирование новости" }, [
-    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-heading", title: "Заголовок (#)" }, ["H"]),
-    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-list", title: "Список (•)" }, ["•"]),
-    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-quote", title: "Цитата (>)" }, ["❝"]),
-    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-divider", title: "Разделитель (—)" }, ["—"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-heading", title: "Заголовок (#)", "aria-label": "Добавить заголовок" }, ["H"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-list", title: "Список (•)", "aria-label": "Добавить список" }, ["•"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-quote", title: "Цитата (>)", "aria-label": "Добавить цитату" }, ["❝"]),
+    el("button", { class: "btn board-editor-tool", type: "button", "data-action": "board-tool-divider", title: "Разделитель (—)", "aria-label": "Добавить разделитель" }, ["—"]),
     el("span", { class: "board-editor-sep", "aria-hidden": "true" }, [""]),
     el(
       "button",

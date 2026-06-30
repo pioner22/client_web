@@ -237,10 +237,24 @@ export function renderChat(layout: Layout, state: AppState) {
   scrollHost.setAttribute("data-chat-key", key);
   if (!key && viewportRuntime.linesObserver) disconnectChatHistoryViewportObserver(scrollHost);
 
-  // No selected chat: keep the main area empty (mobile starts from the sidebar tabs).
+  // No selected chat: mobile starts from the sidebar tabs; desktop gets a composed resting state.
   if (!key) {
     layout.chatTop.replaceChildren();
-    scrollHost.replaceChildren();
+    if (mobileUi) {
+      scrollHost.replaceChildren();
+    } else {
+      scrollHost.replaceChildren(
+        el("div", { class: "chat-lines chat-lines-empty" }, [
+          el("section", { class: "chat-empty-state", "aria-label": "Чат не выбран" }, [
+            el("div", { class: "chat-empty-state-mark", "aria-hidden": "true" }, ["Я"]),
+            el("div", { class: "chat-empty-state-copy" }, [
+              el("div", { class: "chat-empty-state-title" }, ["Ягодка"]),
+              el("div", { class: "chat-empty-state-text" }, ["Выберите диалог слева. Здесь появится переписка."]),
+            ]),
+          ]),
+        ])
+      );
+    }
     layout.chatJump.classList.add("hidden");
     layout.chatSearchResults.classList.add("hidden");
     layout.chatSearchResults.replaceChildren();
@@ -524,7 +538,7 @@ export function renderChat(layout: Layout, state: AppState) {
   const isEmptyState = historySurface.isEmptyState;
   const titleChildren: Array<string | HTMLElement> = [...chatTitleNodes(state)];
   const chatSearchEnabled = !mobileUi;
-  const showChatSearchToggle = false;
+  const showChatSearchToggle = chatSearchEnabled;
   if (activeConversation) {
     const infoActive = isRightPanelActiveForSelected(state);
     titleChildren.push(el("span", { class: "chat-title-spacer", "aria-hidden": "true" }, [""]));

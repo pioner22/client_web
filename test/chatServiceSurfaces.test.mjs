@@ -207,6 +207,11 @@ test("service surfaces css: pinned/jump/header-status/composer badges are covere
   const createLayout = await readFile(path.resolve("src/components/layout/createLayout.ts"), "utf8");
   const mountApp = await readFile(path.resolve("src/app/mountApp.ts"), "utf8");
   assert.match(createLayout, /chatJumpLabel/);
+  assert.match(createLayout, /placeholder:\s*"Сообщение",\s*\n\s*"aria-label":\s*"Сообщение"/);
+  assert.match(createLayout, /data-action":\s*"board-tool-heading"[\s\S]*?"aria-label":\s*"Добавить заголовок"/);
+  assert.match(createLayout, /data-action":\s*"board-tool-list"[\s\S]*?"aria-label":\s*"Добавить список"/);
+  assert.match(createLayout, /data-action":\s*"board-tool-quote"[\s\S]*?"aria-label":\s*"Добавить цитату"/);
+  assert.match(createLayout, /data-action":\s*"board-tool-divider"[\s\S]*?"aria-label":\s*"Добавить разделитель"/);
   assert.match(mountApp, /data-jump-unread/);
   assert.match(mountApp, /К непрочитанным/);
 
