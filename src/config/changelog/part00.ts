@@ -2,6 +2,18 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.938",
+    date: "2026-06-30",
+    fixed: [
+      "Yagodka Modern: верхняя PWA/status surface больше не остаётся тёмной на светлом профиле, чате и меню; light/dark chrome tokens теперь заданы явно.",
+      "Мобильные sticky header/search/menu surfaces стали непрозрачными и больше не дают контенту/разделителям просвечивать под шапкой.",
+    ],
+    improved: [
+      "Вкладки Контакты/Группы/Каналы/Меню перерисованы как современный Telegram-like segmented dock с иконками, активной капсулой, мягкими тенями и reduced-motion guard.",
+      "Меню, поиск и строки сайдбара получили premium glass/pill surfaces, аккуратные hover/press-анимации и смягчённые hairline-разделители.",
+    ],
+  },
+  {
     version: "0.1.937",
     date: "2026-06-30",
     fixed: [
